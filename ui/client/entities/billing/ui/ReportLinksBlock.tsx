@@ -34,6 +34,14 @@ export interface ReportLinksBlockProps {
 	monthName: string;
 	/** False on an archived client, which offers no writes. */
 	writable?: boolean;
+	/**
+	 * Open or shut, when the caller owns the state: the Clients page's panel
+	 * header carries the control, so the block draws no disclosure of its
+	 * own. Left out, the block keeps its own disclosure as before. Either
+	 * way it reads nothing until it is open.
+	 */
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
 }
 
 const LABEL = "font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground";
@@ -135,11 +143,19 @@ export function ReportLinksBlock({
 	tz,
 	monthName,
 	writable = true,
+	open: openProp,
+	onOpenChange,
 }: ReportLinksBlockProps) {
 	// Closed until asked for, and only then read. The Clients page draws a
 	// panel per client, and a list fetched for each on load would be one
 	// request per client for something most months nobody opens.
-	const [open, setOpen] = useState(false);
+	const [ownOpen, setOwnOpen] = useState(false);
+	const controlled = openProp !== undefined;
+	const open = controlled ? openProp : ownOpen;
+	const toggle = () => {
+		if (!controlled) setOwnOpen((wasOpen) => !wasOpen);
+		onOpenChange?.(!open);
+	};
 	const { data: links, isError } = useReportLinks(clientId, { enabled: open });
 	const create = useCreateReportLink();
 	const remove = useDeleteReportLink();
@@ -217,21 +233,25 @@ export function ReportLinksBlock({
 
 	return (
 		<section aria-label={`${clientName}'s shared reports`} className="mt-3">
-			<button
-				type="button"
-				aria-expanded={open}
-				onClick={() => setOpen((wasOpen) => !wasOpen)}
-				className={cn(
-					LABEL,
-					"inline-flex items-center gap-1 rounded-full hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-				)}
-			>
-				<ChevronRight
-					className={cn("w-3 h-3 transition-transform", open && "rotate-90")}
-					aria-hidden="true"
-				/>
-				Shared reports
-			</button>
+			{controlled ? (
+				open && <h3 className={LABEL}>Shared reports</h3>
+			) : (
+				<button
+					type="button"
+					aria-expanded={open}
+					onClick={toggle}
+					className={cn(
+						LABEL,
+						"inline-flex items-center gap-1 rounded-full hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+					)}
+				>
+					<ChevronRight
+						className={cn("w-3 h-3 transition-transform", open && "rotate-90")}
+						aria-hidden="true"
+					/>
+					Shared reports
+				</button>
+			)}
 			{!open ? null : (
 				<>
 					{list}

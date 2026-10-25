@@ -1,9 +1,18 @@
 /**
  * Clients Page — `/clients`: what is billable in a month, per client
- * (docs/billing.md). The sentence first (`summary.ts`), then one panel per
- * client with its lines and entries (`ClientPanel`), then the freelance
- * hours no client is billed for. The month is the URL's `?month=`, stepped
- * with ‹ ›, and the current month is month to date.
+ * (docs/billing.md). A page bar first — the heading, the month and the one
+ * primary action, on a card rather than bare on the sky — then the month's
+ * totals (`MonthTotals`), then the index to the panels beside the sentence
+ * (`ClientsOverview`, `summary.ts`), then one panel per client with its
+ * lines and entries (`ClientPanel`), then the freelance hours no client is
+ * billed for. The month is the URL's `?month=`, stepped with ‹ ›, and the
+ * current month is month to date.
+ *
+ * The overview's rows are plain fragment links to the panels below
+ * (`anchors.ts`), not a `?client=` that shows one at a time: the month is
+ * read by comparing clients, so the figures must all stay on the page, and
+ * a link costs no state, keeps the back button, and does not throw away a
+ * panel's open reports list on every move.
  *
  * The month's figures are the API's (`/api/billing/month`, in the browser's
  * zone), never added up here; the page only names them. In the current
@@ -44,6 +53,8 @@ import { describeError } from "@/shared/api";
 import { browserTimeZone, cn, hoursText, todayIso as readToday, useNow } from "@/shared/lib";
 import { Button, Panel, useConfirm } from "@/shared/ui";
 import { ClientPanel } from "./ClientPanel";
+import { ClientsOverview } from "./ClientsOverview";
+import { MonthTotals } from "./MonthTotals";
 import { describeMonth, monthName } from "./summary";
 import { useOpenMonth } from "./useOpenMonth";
 
@@ -51,8 +62,8 @@ type Editor = { mode: "new" } | { mode: "edit"; client: Client };
 
 const LINKISH =
 	"text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
-/** The ‹ › on the sky: the card is their ground, since a wash would vanish there. */
-const SKY_NAV =
+/** The ‹ ›, now inside the page bar's card, where a wash reads. */
+const MONTH_NAV =
 	"grid place-items-center w-8 h-8 rounded-full text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
 /** "October 2026". */
@@ -147,35 +158,27 @@ export default function Clients() {
 	};
 
 	return (
-		<div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-5 pb-24">
-			<header className="flex items-center gap-3 flex-wrap">
+		<div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-3.5 pb-24">
+			{/* The page bar (docs/mockups/ux-refresh.html, `.pagebar`): the
+			    heading, the month it is reading, and the one primary action, all
+			    on a card. The heading used to sit bare on the sky, and the month
+			    stepper floated below it in a pill strip of its own. */}
+			<Panel padding="px-5 py-3" className="flex items-center gap-x-3 gap-y-2 flex-wrap">
 				<Briefcase className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
-				<h1 className="font-heading text-2xl font-extrabold tracking-[-0.02em] text-foreground">
+				<h1 className="font-heading text-[19px] font-extrabold tracking-[-0.02em] text-foreground">
 					Clients
 				</h1>
-				<Button
-					type="button"
-					size="sm"
-					className="ml-auto"
-					onClick={() => setEditor({ mode: "new" })}
-				>
-					<Plus className="w-3.5 h-3.5" aria-hidden="true" />
-					New client
-				</Button>
-			</header>
-
-			<div className="flex items-center gap-3 flex-wrap">
-				<div className="inline-flex items-center gap-1 rounded-full bg-sidebar shadow-soft p-1">
+				<div className="inline-flex items-center gap-1">
 					<button
 						type="button"
 						onClick={() => setMonth(prevMonth(month))}
 						aria-label="Previous month"
-						className={SKY_NAV}
+						className={MONTH_NAV}
 					>
 						<ChevronLeft className="w-4 h-4" aria-hidden="true" />
 					</button>
 					<h2
-						className="px-2 font-heading text-[15px] font-extrabold text-foreground whitespace-nowrap"
+						className="px-1 font-heading text-[15px] font-extrabold text-foreground whitespace-nowrap"
 						aria-live="polite"
 					>
 						{monthTitle(month)}
@@ -188,7 +191,7 @@ export default function Clients() {
 						onClick={() => setMonth(nextMonth(month))}
 						disabled={current}
 						aria-label="Next month"
-						className={SKY_NAV}
+						className={MONTH_NAV}
 					>
 						<ChevronRight className="w-4 h-4" aria-hidden="true" />
 					</button>
@@ -197,12 +200,21 @@ export default function Clients() {
 					<button
 						type="button"
 						onClick={() => setMonth(monthOf(today))}
-						className={cn(LINKISH, "rounded-full bg-sidebar shadow-soft px-3 py-1.5")}
+						className={cn(LINKISH, "rounded-full bg-secondary px-3 py-1.5")}
 					>
 						This month
 					</button>
 				)}
-			</div>
+				<Button
+					type="button"
+					size="sm"
+					className="ml-auto"
+					onClick={() => setEditor({ mode: "new" })}
+				>
+					<Plus className="w-3.5 h-3.5" aria-hidden="true" />
+					New client
+				</Button>
+			</Panel>
 
 			{monthQuery.error ? (
 				<Panel role="alert" padding="px-6 py-[22px]">
@@ -244,18 +256,32 @@ export default function Clients() {
 				</>
 			) : (
 				<>
-					{summary && (
-						<Panel role="region" aria-label="Summary" padding="px-6 py-[22px]">
-							<p className="font-heading text-xl font-extrabold tracking-[-0.01em] text-foreground leading-snug">
-								{summary.headline}
-							</p>
-							{summary.notes.length > 0 && (
-								<p className="mt-1.5 text-[13px] text-muted-foreground font-medium leading-normal">
-									{summary.notes.join(" ")}
+					<MonthTotals report={report} current={current} monthName={name} />
+
+					{/* The mockup's `.gridmain` 3:2: the index to the panels beside
+					    the sentence that reads the same month. */}
+					<div className="grid gap-3.5 items-start [grid-template-columns:minmax(0,1fr)] lg:[grid-template-columns:minmax(0,3fr)_minmax(18rem,2fr)]">
+						{report.clients.length > 0 && (
+							<ClientsOverview
+								clients={report.clients}
+								budgets={budgets}
+								now={now}
+								monthName={name}
+							/>
+						)}
+						{summary && (
+							<Panel role="region" aria-label="Summary" padding="px-6 py-[22px]">
+								<p className="font-heading text-lg font-extrabold tracking-[-0.01em] text-foreground leading-snug">
+									{summary.headline}
 								</p>
-							)}
-						</Panel>
-					)}
+								{summary.notes.length > 0 && (
+									<p className="mt-1.5 text-[13px] text-muted-foreground font-medium leading-normal">
+										{summary.notes.join(" ")}
+									</p>
+								)}
+							</Panel>
+						)}
+					</div>
 
 					{report.clients.map((billing) => {
 						const client = records.get(billing.clientId);

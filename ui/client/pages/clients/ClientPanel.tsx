@@ -17,8 +17,8 @@
  * panel offers a quiet "Set a budget", and nothing more.
  */
 
-import { ChevronRight, Pencil } from "lucide-react";
-import { type Ref, useRef, useState } from "react";
+import { ChevronRight, Gauge, Pencil, Share2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import type {
@@ -48,7 +48,8 @@ import {
 	parseIsoDate,
 	parseUtcIso,
 } from "@/shared/lib";
-import { Button, Panel } from "@/shared/ui";
+import { Button, Chip, Panel } from "@/shared/ui";
+import { clientSectionId } from "./anchors";
 
 export interface ClientPanelProps {
 	billing: ClientBilling;
@@ -89,6 +90,9 @@ interface BudgetEditor {
 const LABEL = "font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground";
 const LINKISH =
 	"text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+/** A quiet pill: the per-client actions, out of the disclosures and into the header. */
+const PILL =
+	"inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 font-heading text-[12.5px] font-bold text-foreground hover:bg-sidebar-accent transition-colors disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const OP =
 	"grid place-items-center w-[22px] h-[22px] rounded-full text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 const TH =
@@ -191,11 +195,12 @@ export function ClientPanel({
 	const unarchive = useUnarchiveClient();
 	const remove = useDeleteClient();
 	const [entriesOpen, setEntriesOpen] = useState(false);
+	const [linksOpen, setLinksOpen] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [budgetEditor, setBudgetEditor] = useState<BudgetEditor | null>(null);
-	// Whichever of the client's budget controls is on the page — "Set a
-	// budget", its pencil, "Set a budget for …" — takes focus back when a
-	// save or a remove has taken the one that opened the dialog away.
+	// The header's Budget control is the client's own, whether it is setting
+	// the first one or editing the one there is, so it takes focus back when
+	// a save or a remove has taken the dialog's opener away.
 	const clientBudgetButton = useRef<HTMLButtonElement>(null);
 
 	const { currency, minorUnits } = billing;
@@ -242,15 +247,12 @@ export function ClientPanel({
 	// An archived client's budgets are shown, and offer no write: archived
 	// clients are in no picker, and its budgets never alert.
 	const writable = !billing.archived;
-	const pencil = (name: string, onClick: () => void, ref?: Ref<HTMLButtonElement>) =>
+	// A budget is read as of today, so a month already over offers none, and
+	// neither does an archived client or a reading that failed.
+	const budgetOffered = writable && !budgetsFailed && budgets !== undefined;
+	const pencil = (name: string, onClick: () => void) =>
 		writable && (
-			<button
-				ref={ref}
-				type="button"
-				onClick={onClick}
-				aria-label={`Edit ${name}'s budget`}
-				className={OP}
-			>
+			<button type="button" onClick={onClick} aria-label={`Edit ${name}'s budget`} className={OP}>
 				<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
 			</button>
 		);
@@ -264,6 +266,8 @@ export function ClientPanel({
 			tz={tz}
 			monthName={monthName}
 			writable={writable}
+			open={linksOpen}
+			onOpenChange={setLinksOpen}
 		/>
 	);
 
@@ -271,31 +275,13 @@ export function ClientPanel({
 		<p className="mt-3 text-[12.5px] text-muted-foreground font-medium">
 			Budgets aren't available right now.
 		</p>
-	) : budgets === undefined ? null : budgets.length === 0 ? (
-		writable && (
-			<p className="mt-2.5">
-				<button
-					ref={clientBudgetButton}
-					type="button"
-					onClick={editClientBudget}
-					className={LINKISH}
-				>
-					Set a budget
-				</button>
-			</p>
-		)
-	) : (
+	) : budgets === undefined || budgets.length === 0 ? null : (
 		<section aria-label={`${billing.name}'s budgets`} className="mt-3">
 			<h3 className={LABEL}>Budget</h3>
 			<ul className="mt-1 flex flex-col">
 				{ownBudget && (
 					<li className="py-2">
-						<BillingBudgetRow
-							status={ownBudget}
-							now={now}
-							title={billing.name}
-							actions={pencil(billing.name, editClientBudget, clientBudgetButton)}
-						/>
+						<BillingBudgetRow status={ownBudget} now={now} title={billing.name} />
 					</li>
 				)}
 				{projectBudgets.map((status) => (
@@ -317,16 +303,6 @@ export function ClientPanel({
 					</li>
 				))}
 			</ul>
-			{!ownBudget && writable && (
-				<button
-					ref={clientBudgetButton}
-					type="button"
-					onClick={editClientBudget}
-					className={LINKISH}
-				>
-					Set a budget for {billing.name}
-				</button>
-			)}
 		</section>
 	);
 
@@ -347,16 +323,20 @@ export function ClientPanel({
 		});
 
 	return (
-		<Panel role="region" aria-label={billing.name} padding="px-6 py-[22px]">
-			<div className="flex items-start gap-x-3 gap-y-1 flex-wrap">
+		<Panel
+			role="region"
+			aria-label={billing.name}
+			padding="px-6 py-[22px]"
+			// What the overview's row jumps to; the margin keeps the heading
+			// clear of the page bar above it.
+			id={clientSectionId(billing.clientId)}
+			className="scroll-mt-4"
+		>
+			<div className="flex items-start gap-x-3 gap-y-2 flex-wrap">
 				<div className="min-w-0">
 					<h2 className="font-heading text-xl font-extrabold tracking-[-0.01em] text-foreground flex items-center gap-2 flex-wrap">
 						{billing.name}
-						{billing.archived && (
-							<span className="font-body text-[9.5px] font-bold tracking-[0.1em] uppercase px-[9px] py-0.5 rounded-full bg-tint-other text-tint-other-ink">
-								Archived
-							</span>
-						)}
+						{billing.archived && <Chip tone="wait">Archived</Chip>}
 					</h2>
 					<p className="text-[12.5px] text-muted-foreground font-medium mt-0.5">
 						{[
@@ -369,7 +349,7 @@ export function ClientPanel({
 							.join(" · ")}
 					</p>
 				</div>
-				<div className="ml-auto flex items-center gap-3">
+				<div className="ml-auto flex items-center gap-2 flex-wrap">
 					{confirmingDelete ? (
 						<span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium">
 							Delete {billing.name}?
@@ -395,9 +375,35 @@ export function ClientPanel({
 						</span>
 					) : (
 						<>
-							<button type="button" onClick={onEdit} disabled={!client} className={LINKISH}>
+							<button type="button" onClick={onEdit} disabled={!client} className={PILL}>
+								<Pencil className="w-3 h-3" aria-hidden="true" />
 								Edit
 							</button>
+							{/* The reports were prose at the bottom of the panel; the
+							    control is here, and the list still reads nothing
+							    until it is opened. */}
+							<button
+								type="button"
+								aria-expanded={linksOpen}
+								aria-label={`Shared reports for ${billing.name}`}
+								onClick={() => setLinksOpen((open) => !open)}
+								className={PILL}
+							>
+								<Share2 className="w-3 h-3" aria-hidden="true" />
+								Share a report
+							</button>
+							{budgetOffered && (
+								<button
+									ref={clientBudgetButton}
+									type="button"
+									aria-label={`${ownBudget ? "Edit" : "Set"} ${billing.name}'s budget`}
+									onClick={editClientBudget}
+									className={PILL}
+								>
+									<Gauge className="w-3 h-3" aria-hidden="true" />
+									Budget
+								</button>
+							)}
 							<button type="button" onClick={handleArchive} disabled={pending} className={LINKISH}>
 								{billing.archived ? "Restore" : "Archive"}
 							</button>
