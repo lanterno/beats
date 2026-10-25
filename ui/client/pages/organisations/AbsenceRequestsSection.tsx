@@ -18,8 +18,9 @@ import {
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { formatDateOnly } from "@/shared/lib";
-import { Button, Dialog, Panel } from "@/shared/ui";
-import { FIELD, HEADING, HEADING_ICON, LABEL, LEAD, LIST } from "./styles";
+import { Button, Dialog } from "@/shared/ui";
+import { Section } from "./Section";
+import { FIELD, LABEL, LEAD, LIST } from "./styles";
 
 function DecisionDialog({
 	request,
@@ -107,62 +108,56 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 		);
 
 	return (
-		<section aria-label="Absence requests" className="mb-8">
-			<h2 className={HEADING}>
-				<CalendarClock className={HEADING_ICON} />
-				Absence requests
-			</h2>
-			<p className={`${LEAD} -mt-1 mb-3`}>
-				The note is addressed to you — the record never shows it.
-			</p>
-			<Panel padding="px-5 py-1">
-				{requests.error ? (
-					<p className={`${LEAD} py-3`} role="alert">
-						{describeError(requests.error, "The requests could not be read.")}
-					</p>
-				) : !requests.data ? (
-					<p className={`${LEAD} py-3`}>Loading…</p>
-				) : requests.data.length === 0 ? (
-					<p className={`${LEAD} py-3`}>Nothing waiting.</p>
-				) : (
-					<ul className={LIST}>
-						{requests.data.map((request) => (
-							<li key={request.id} className="py-2.5 text-[12.5px] space-y-1">
-								<div className="flex items-center gap-2 flex-wrap">
-									<span className="font-bold text-foreground">{memberName(request.userId)}</span>
-									<span className="text-muted-foreground">
-										{projectName(request.projectId)} · {formatDateOnly(request.date)} ·{" "}
-										{request.type}
-										{request.halfDay && " · half day"}
-									</span>
-									<span className="ml-auto flex items-center gap-2">
-										<Button
-											type="button"
-											size="sm"
-											className="h-7 px-2.5 text-xs"
-											onClick={() => setOpen({ request, approve: true })}
-											disabled={decide.isPending}
-										>
-											Approve
-										</Button>
-										<Button
-											type="button"
-											variant="secondary"
-											size="sm"
-											className="h-7 px-2.5 text-xs hover:text-destructive-ink"
-											onClick={() => setOpen({ request, approve: false })}
-											disabled={decide.isPending}
-										>
-											Decline
-										</Button>
-									</span>
-								</div>
-								{request.note && <p className="text-muted-foreground">“{request.note}”</p>}
-							</li>
-						))}
-					</ul>
-				)}
-			</Panel>
+		<Section
+			label="Absence requests"
+			icon={CalendarClock}
+			lead="The note is addressed to you — the record never shows it."
+		>
+			{requests.error ? (
+				<p className={`${LEAD} py-3`} role="alert">
+					{describeError(requests.error, "The requests could not be read.")}
+				</p>
+			) : !requests.data ? (
+				<p className={`${LEAD} py-3`}>Loading…</p>
+			) : requests.data.length === 0 ? (
+				<p className={`${LEAD} py-3`}>Nothing waiting.</p>
+			) : (
+				<ul className={LIST}>
+					{requests.data.map((request) => (
+						<li key={request.id} className="py-2.5 text-[12.5px] space-y-1">
+							<div className="flex items-center gap-2 flex-wrap">
+								<span className="font-bold text-foreground">{memberName(request.userId)}</span>
+								<span className="text-muted-foreground">
+									{projectName(request.projectId)} · {formatDateOnly(request.date)} · {request.type}
+									{request.halfDay && " · half day"}
+								</span>
+								<span className="ml-auto flex items-center gap-2">
+									<Button
+										type="button"
+										size="sm"
+										className="h-7 px-2.5 text-xs"
+										onClick={() => setOpen({ request, approve: true })}
+										disabled={decide.isPending}
+									>
+										Approve
+									</Button>
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										className="h-7 px-2.5 text-xs hover:text-destructive-ink"
+										onClick={() => setOpen({ request, approve: false })}
+										disabled={decide.isPending}
+									>
+										Decline
+									</Button>
+								</span>
+							</div>
+							{request.note && <p className="text-muted-foreground">“{request.note}”</p>}
+						</li>
+					))}
+				</ul>
+			)}
 			{open && (
 				<DecisionDialog
 					key={`${open.request.id}-${open.approve}`}
@@ -174,6 +169,6 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 					busy={decide.isPending}
 				/>
 			)}
-		</section>
+		</Section>
 	);
 }

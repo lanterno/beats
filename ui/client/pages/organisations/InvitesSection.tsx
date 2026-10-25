@@ -19,19 +19,9 @@ import {
 } from "@/entities/organisation";
 import { apiFieldErrors, describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
-import { Button, Dialog, Panel } from "@/shared/ui";
-import {
-	ERROR,
-	FIELD,
-	HEADING,
-	HEADING_ICON,
-	LABEL,
-	LEAD,
-	LINKISH,
-	LIST,
-	REMOVE,
-	ROW,
-} from "./styles";
+import { Button, Dialog } from "@/shared/ui";
+import { Section } from "./Section";
+import { ERROR, FIELD, LABEL, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
 /** The roles an invite gives: the owner role is given by an owner to a member, never by invite. */
 const INVITE_ROLES: OrgRole[] = ["member", "admin"];
@@ -253,60 +243,55 @@ export function InvitesSection({ organisationId }: { organisationId: string }) {
 		});
 
 	return (
-		<section aria-label="Invites" className="mb-8">
-			<h2 className={HEADING}>
-				<Mail className={HEADING_ICON} />
-				Invites
-				<button type="button" onClick={() => setCreating(true)} className={`${LINKISH} ml-auto`}>
+		<Section
+			label="Invites"
+			icon={Mail}
+			action={
+				<button type="button" onClick={() => setCreating(true)} className={LINKISH}>
 					<Plus className="w-3 h-3 inline-block mr-1" aria-hidden="true" />
 					New invite
 				</button>
-			</h2>
-			<Panel padding="px-5 py-1">
-				{invites.error ? (
-					<p className={`${LEAD} py-3`} role="alert">
-						{describeError(invites.error, "The invites could not be read.")}
-					</p>
-				) : !invites.data ? (
-					<p className={`${LEAD} py-3`}>Loading…</p>
-				) : invites.data.length === 0 ? (
-					<p className={`${LEAD} py-3`}>No open invites.</p>
-				) : (
-					<ul className={LIST}>
-						{invites.data.map((invite) => (
-							<li key={invite.id} className={ROW}>
-								<div className="min-w-0 flex-1">
-									<p className="font-bold text-foreground truncate">{invite.email ?? "Link"}</p>
-									<p className="text-muted-foreground truncate">
-										{ROLE_LABELS[invite.role]}
-										{invite.requiresApproval && " · needs approval"} · expires{" "}
-										{formatDate(invite.expiresAt)}
-									</p>
-								</div>
-								<button
-									type="button"
-									onClick={() => void copyLink(invite.token)}
-									className={LINKISH}
-								>
-									Copy link
-								</button>
-								<button
-									type="button"
-									onClick={() => revokeInvite(invite)}
-									disabled={revoke.isPending}
-									aria-label={`Revoke the invite ${invite.email ? `to ${invite.email}` : "link"}`}
-									className={REMOVE}
-								>
-									<X className="w-3.5 h-3.5" aria-hidden="true" />
-								</button>
-							</li>
-						))}
-					</ul>
-				)}
-			</Panel>
+			}
+		>
+			{invites.error ? (
+				<p className={`${LEAD} py-3`} role="alert">
+					{describeError(invites.error, "The invites could not be read.")}
+				</p>
+			) : !invites.data ? (
+				<p className={`${LEAD} py-3`}>Loading…</p>
+			) : invites.data.length === 0 ? (
+				<p className={`${LEAD} py-3`}>No open invites.</p>
+			) : (
+				<ul className={LIST}>
+					{invites.data.map((invite) => (
+						<li key={invite.id} className={ROW}>
+							<div className="min-w-0 flex-1">
+								<p className="font-bold text-foreground truncate">{invite.email ?? "Link"}</p>
+								<p className="text-muted-foreground truncate">
+									{ROLE_LABELS[invite.role]}
+									{invite.requiresApproval && " · needs approval"} · expires{" "}
+									{formatDate(invite.expiresAt)}
+								</p>
+							</div>
+							<button type="button" onClick={() => void copyLink(invite.token)} className={LINKISH}>
+								Copy link
+							</button>
+							<button
+								type="button"
+								onClick={() => revokeInvite(invite)}
+								disabled={revoke.isPending}
+								aria-label={`Revoke the invite ${invite.email ? `to ${invite.email}` : "link"}`}
+								className={REMOVE}
+							>
+								<X className="w-3.5 h-3.5" aria-hidden="true" />
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
 			{creating && (
 				<NewInviteDialog organisationId={organisationId} onClose={() => setCreating(false)} />
 			)}
-		</section>
+		</Section>
 	);
 }

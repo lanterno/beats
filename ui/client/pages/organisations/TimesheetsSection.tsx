@@ -20,8 +20,9 @@ import {
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { cn, hoursText } from "@/shared/lib";
-import { Button, Dialog, Panel } from "@/shared/ui";
-import { FIELD, HEADING, HEADING_ICON, LABEL, LEAD, LINKISH, LIST } from "./styles";
+import { Button, Dialog } from "@/shared/ui";
+import { Section } from "./Section";
+import { FIELD, LABEL, LEAD, LINKISH, LIST } from "./styles";
 
 export const STATUS_LABELS: Record<Timesheet["status"], string> = {
 	submitted: "Submitted",
@@ -193,83 +194,76 @@ export function TimesheetsSection({
 	const rows = [...(sheets.data ?? [])].sort((a, b) => b.month.localeCompare(a.month));
 
 	return (
-		<section aria-label="Timesheets" className="mb-8">
-			<h2 className={HEADING}>
-				<ClipboardCheck className={HEADING_ICON} />
-				Timesheets
-			</h2>
-			<p className={`${LEAD} -mt-1 mb-3`}>
-				Approval freezes a month's figures and locks its days until it is reopened.
-			</p>
-			<Panel padding="px-5 py-1">
-				{sheets.error ? (
-					<p className={`${LEAD} py-3`} role="alert">
-						{describeError(sheets.error, "The timesheets could not be read.")}
-					</p>
-				) : !sheets.data ? (
-					<p className={`${LEAD} py-3`}>Loading…</p>
-				) : rows.length === 0 ? (
-					<p className={`${LEAD} py-3`}>No months submitted yet.</p>
-				) : (
-					<ul className={LIST}>
-						{rows.map((sheet) => (
-							<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
-								<div className="flex items-center gap-2 flex-wrap">
-									<span className="font-bold text-foreground">{memberName(sheet.userId)}</span>
-									<span className="text-muted-foreground">
-										{projectName(sheet.projectId)} · {sheetMonthTitle(sheet.month)}
-									</span>
-									<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
-										{STATUS_LABELS[sheet.status]}
-									</span>
-									{mayDecide && (
-										<span className="ml-auto flex items-center gap-2">
-											{sheet.status === "approved" ? (
-												<button
+		<Section
+			label="Timesheets"
+			icon={ClipboardCheck}
+			lead="Approval freezes a month's figures and locks its days until it is reopened."
+		>
+			{sheets.error ? (
+				<p className={`${LEAD} py-3`} role="alert">
+					{describeError(sheets.error, "The timesheets could not be read.")}
+				</p>
+			) : !sheets.data ? (
+				<p className={`${LEAD} py-3`}>Loading…</p>
+			) : rows.length === 0 ? (
+				<p className={`${LEAD} py-3`}>No months submitted yet.</p>
+			) : (
+				<ul className={LIST}>
+					{rows.map((sheet) => (
+						<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
+							<div className="flex items-center gap-2 flex-wrap">
+								<span className="font-bold text-foreground">{memberName(sheet.userId)}</span>
+								<span className="text-muted-foreground">
+									{projectName(sheet.projectId)} · {sheetMonthTitle(sheet.month)}
+								</span>
+								<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
+									{STATUS_LABELS[sheet.status]}
+								</span>
+								{mayDecide && (
+									<span className="ml-auto flex items-center gap-2">
+										{sheet.status === "approved" ? (
+											<button
+												type="button"
+												onClick={() => setAction({ sheet, kind: "reopen" })}
+												disabled={busy}
+												className={LINKISH}
+											>
+												Reopen…
+											</button>
+										) : (
+											<>
+												<Button
 													type="button"
-													onClick={() => setAction({ sheet, kind: "reopen" })}
+													size="sm"
+													className="h-7 px-2.5 text-xs"
+													onClick={() => setAction({ sheet, kind: "approve" })}
 													disabled={busy}
-													className={LINKISH}
 												>
-													Reopen…
-												</button>
-											) : (
-												<>
-													<Button
-														type="button"
-														size="sm"
-														className="h-7 px-2.5 text-xs"
-														onClick={() => setAction({ sheet, kind: "approve" })}
-														disabled={busy}
-													>
-														Approve
-													</Button>
-													<Button
-														type="button"
-														variant="secondary"
-														size="sm"
-														className="h-7 px-2.5 text-xs"
-														onClick={() => setAction({ sheet, kind: "changes" })}
-														disabled={busy}
-													>
-														Ask for changes
-													</Button>
-												</>
-											)}
-										</span>
-									)}
-								</div>
-								{sheet.status === "approved" && sheet.frozen && (
-									<p className="text-foreground font-medium font-mono">
-										{frozenText(sheet.frozen)}
-									</p>
+													Approve
+												</Button>
+												<Button
+													type="button"
+													variant="secondary"
+													size="sm"
+													className="h-7 px-2.5 text-xs"
+													onClick={() => setAction({ sheet, kind: "changes" })}
+													disabled={busy}
+												>
+													Ask for changes
+												</Button>
+											</>
+										)}
+									</span>
 								)}
-								{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
-							</li>
-						))}
-					</ul>
-				)}
-			</Panel>
+							</div>
+							{sheet.status === "approved" && sheet.frozen && (
+								<p className="text-foreground font-medium font-mono">{frozenText(sheet.frozen)}</p>
+							)}
+							{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
+						</li>
+					))}
+				</ul>
+			)}
 			{action && (
 				<ActionDialog
 					key={`${action.sheet.id}-${action.kind}`}
@@ -280,6 +274,6 @@ export function TimesheetsSection({
 					busy={busy}
 				/>
 			)}
-		</section>
+		</Section>
 	);
 }

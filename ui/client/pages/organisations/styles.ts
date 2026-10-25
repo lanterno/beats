@@ -55,3 +55,32 @@ export const SKY_NAV =
 
 /** The page's title. */
 export const TITLE = "font-heading text-2xl font-extrabold tracking-[-0.02em] text-foreground";
+
+/**
+ * The page's container. Wide, because the sidebar already takes 18rem and a
+ * single narrow column wastes the rest; the grids below use the width.
+ */
+export const PAGE = "max-w-6xl mx-auto px-4 sm:px-6 py-4 space-y-4 pb-24";
+
+/**
+ * `.pagebar` — a Panel strip at the top of a page: the mark, the title or
+ * breadcrumb, the status chips, the tabs and the one primary action. The
+ * sky is the least readable surface in the app, so nothing a page is read
+ * by sits on it.
+ */
+export const PAGEBAR = "flex items-center gap-x-3 gap-y-2 flex-wrap";
+
+/** `.pagebar h1` — smaller than a bare sky title, since it sits on the card. */
+export const PAGE_TITLE =
+	"font-heading text-[19px] font-extrabold tracking-[-0.02em] text-foreground";
+
+/** `.crumbs` — the trail back, muted, with the current page in the ink. */
+export const CRUMB =
+	"text-[13px] text-muted-foreground hover:underline underline-offset-[3px] rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+
+/** A heading inside its panel, above the hairline that separates it from the body. */
+export const PANEL_HEADING =
+	"font-heading text-[15.5px] font-extrabold tracking-[-0.01em] text-foreground flex items-center gap-2 min-w-0";
+
+/** A column of digits: one width, so figures line up without `tnum`. */
+export const FIGURE = "font-mono font-bold text-foreground";

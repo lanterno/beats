@@ -20,12 +20,13 @@ import {
 	useUnassignMember,
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
-import { Button, Panel, useConfirm } from "@/shared/ui";
+import { Button, useConfirm } from "@/shared/ui";
 import { EnterTimeDialog } from "./EnterTimeDialog";
 import { KIND_LABELS } from "./kinds";
 import { ManagedContractDialog } from "./ManagedContractDialog";
 import { OrgProjectDialog } from "./OrgProjectDialog";
-import { CHIP, HEADING, HEADING_ICON, LEAD, LINKISH, LIST, SELECT } from "./styles";
+import { Section } from "./Section";
+import { CHIP, LEAD, LINKISH, LIST, SELECT } from "./styles";
 
 type Editor = { mode: "new" } | { mode: "edit"; project: OrgProject };
 
@@ -82,135 +83,130 @@ export function ProjectsSection({
 	};
 
 	return (
-		<section aria-label="Projects" className="mb-8">
-			<h2 className={HEADING}>
-				<Layers className={HEADING_ICON} />
-				Projects
-				<button
-					type="button"
-					onClick={() => setEditor({ mode: "new" })}
-					className={`${LINKISH} ml-auto`}
-				>
+		<Section
+			label="Projects"
+			icon={Layers}
+			action={
+				<button type="button" onClick={() => setEditor({ mode: "new" })} className={LINKISH}>
 					<Plus className="w-3 h-3 inline-block mr-1" aria-hidden="true" />
 					New project
 				</button>
-			</h2>
-			<Panel padding="px-5 py-1">
-				{projects.error ? (
-					<p className={`${LEAD} py-3`} role="alert">
-						{describeError(projects.error, "The projects could not be read.")}
-					</p>
-				) : !projects.data ? (
-					<p className={`${LEAD} py-3`}>Loading…</p>
-				) : projects.data.length === 0 ? (
-					<p className={`${LEAD} py-3`}>
-						No projects yet. A member tracks on one once they are assigned to it.
-					</p>
-				) : (
-					<ul className={LIST}>
-						{projects.data.map((project) => {
-							const onIt = project.members.filter((a) => !a.endedAt);
-							const assigned = new Set(onIt.map((a) => a.userId));
-							const free = (members.data ?? []).filter((m) => !m.leftAt && !assigned.has(m.userId));
-							return (
-								<li key={project.id} className="py-3 space-y-2">
-									<div className="flex items-center gap-2 text-[12.5px]">
-										<span
-											className="w-2.5 h-2.5 rounded-full shrink-0"
-											style={{ backgroundColor: project.color ?? "var(--color-muted-foreground)" }}
-											aria-hidden="true"
-										/>
-										<span className="font-bold text-foreground truncate">{project.name}</span>
-										<span className="text-muted-foreground">{KIND_LABELS[project.kind]}</span>
-										{project.archived && <span className="text-muted-foreground">· archived</span>}
-										<Button
-											type="button"
-											variant="secondary"
-											size="sm"
-											className="ml-auto h-7 px-2.5 text-xs"
-											onClick={() => setEditor({ mode: "edit", project })}
-										>
-											<Pencil className="w-3 h-3" aria-hidden="true" />
-											Edit
-										</Button>
-									</div>
-									<div className="flex flex-wrap items-center gap-1.5">
-										{onIt.map((a) => (
-											<span key={a.userId} className={CHIP}>
-												{a.name ?? "Member"}
-												<span className="font-medium text-muted-foreground">
-													{describeShareFrom(a.sharedFrom)}
-												</span>
-												<button
-													type="button"
-													onClick={() => void takeOff(project, a.userId, a.name ?? "this member")}
-													disabled={unassign.isPending}
-													aria-label={`Take ${a.name ?? "this member"} off ${project.name}`}
-													className="grid place-items-center w-4 h-4 rounded-full text-muted-foreground hover:text-destructive-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-												>
-													<X className="w-3 h-3" aria-hidden="true" />
-												</button>
-												{mayDecide && (
-													<>
-														<button
-															type="button"
-															onClick={() =>
-																setAct({
-																	kind: "contract",
-																	projectId: project.id,
-																	projectName: project.name,
-																	userId: a.userId,
-																	memberName: a.name ?? "this member",
-																})
-															}
-															aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
-															className={LINKISH}
-														>
-															Contract…
-														</button>
-														<button
-															type="button"
-															onClick={() =>
-																setAct({
-																	kind: "time",
-																	projectId: project.id,
-																	projectName: project.name,
-																	userId: a.userId,
-																	memberName: a.name ?? "this member",
-																})
-															}
-															aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
-															className={LINKISH}
-														>
-															Enter time…
-														</button>
-													</>
-												)}
+			}
+		>
+			{projects.error ? (
+				<p className={`${LEAD} py-3`} role="alert">
+					{describeError(projects.error, "The projects could not be read.")}
+				</p>
+			) : !projects.data ? (
+				<p className={`${LEAD} py-3`}>Loading…</p>
+			) : projects.data.length === 0 ? (
+				<p className={`${LEAD} py-3`}>
+					No projects yet. A member tracks on one once they are assigned to it.
+				</p>
+			) : (
+				<ul className={LIST}>
+					{projects.data.map((project) => {
+						const onIt = project.members.filter((a) => !a.endedAt);
+						const assigned = new Set(onIt.map((a) => a.userId));
+						const free = (members.data ?? []).filter((m) => !m.leftAt && !assigned.has(m.userId));
+						return (
+							<li key={project.id} className="py-3 space-y-2">
+								<div className="flex items-center gap-2 text-[12.5px]">
+									<span
+										className="w-2.5 h-2.5 rounded-full shrink-0"
+										style={{ backgroundColor: project.color ?? "var(--color-muted-foreground)" }}
+										aria-hidden="true"
+									/>
+									<span className="font-bold text-foreground truncate">{project.name}</span>
+									<span className="text-muted-foreground">{KIND_LABELS[project.kind]}</span>
+									{project.archived && <span className="text-muted-foreground">· archived</span>}
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										className="ml-auto h-7 px-2.5 text-xs"
+										onClick={() => setEditor({ mode: "edit", project })}
+									>
+										<Pencil className="w-3 h-3" aria-hidden="true" />
+										Edit
+									</Button>
+								</div>
+								<div className="flex flex-wrap items-center gap-1.5">
+									{onIt.map((a) => (
+										<span key={a.userId} className={CHIP}>
+											{a.name ?? "Member"}
+											<span className="font-medium text-muted-foreground">
+												{describeShareFrom(a.sharedFrom)}
 											</span>
-										))}
-										{free.length > 0 && (
-											<select
-												value=""
-												onChange={(e) => e.target.value && assignTo(project, e.target.value)}
-												disabled={assign.isPending}
-												aria-label={`Assign a member to ${project.name}`}
-												className={SELECT}
+											<button
+												type="button"
+												onClick={() => void takeOff(project, a.userId, a.name ?? "this member")}
+												disabled={unassign.isPending}
+												aria-label={`Take ${a.name ?? "this member"} off ${project.name}`}
+												className="grid place-items-center w-4 h-4 rounded-full text-muted-foreground hover:text-destructive-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 											>
-												<option value="">Assign…</option>
-												{free.map((m) => (
-													<option key={m.userId} value={m.userId}>
-														{m.name}
-													</option>
-												))}
-											</select>
-										)}
-									</div>
-								</li>
-							);
-						})}
-					</ul>
-				)}
-			</Panel>
+												<X className="w-3 h-3" aria-hidden="true" />
+											</button>
+											{mayDecide && (
+												<>
+													<button
+														type="button"
+														onClick={() =>
+															setAct({
+																kind: "contract",
+																projectId: project.id,
+																projectName: project.name,
+																userId: a.userId,
+																memberName: a.name ?? "this member",
+															})
+														}
+														aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
+														className={LINKISH}
+													>
+														Contract…
+													</button>
+													<button
+														type="button"
+														onClick={() =>
+															setAct({
+																kind: "time",
+																projectId: project.id,
+																projectName: project.name,
+																userId: a.userId,
+																memberName: a.name ?? "this member",
+															})
+														}
+														aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
+														className={LINKISH}
+													>
+														Enter time…
+													</button>
+												</>
+											)}
+										</span>
+									))}
+									{free.length > 0 && (
+										<select
+											value=""
+											onChange={(e) => e.target.value && assignTo(project, e.target.value)}
+											disabled={assign.isPending}
+											aria-label={`Assign a member to ${project.name}`}
+											className={SELECT}
+										>
+											<option value="">Assign…</option>
+											{free.map((m) => (
+												<option key={m.userId} value={m.userId}>
+													{m.name}
+												</option>
+											))}
+										</select>
+									)}
+								</div>
+							</li>
+						);
+					})}
+				</ul>
+			)}
 			{editor && (
 				<OrgProjectDialog
 					key={editor.mode === "edit" ? editor.project.id : "new"}
@@ -242,6 +238,6 @@ export function ProjectsSection({
 				/>
 			)}
 			{confirmDialog}
-		</section>
+		</Section>
 	);
 }

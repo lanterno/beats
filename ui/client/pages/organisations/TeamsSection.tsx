@@ -10,19 +10,9 @@ import { toast } from "sonner";
 import type { Team, TeamInput } from "@/entities/organisation";
 import { useDeleteTeam, useMembers, useSaveTeam, useTeams } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
-import { Button, Dialog, Panel, useConfirm } from "@/shared/ui";
-import {
-	CHIP,
-	ERROR,
-	FIELD,
-	HEADING,
-	HEADING_ICON,
-	LABEL,
-	LEAD,
-	LINKISH,
-	LIST,
-	REMOVE,
-} from "./styles";
+import { Button, Dialog, useConfirm } from "@/shared/ui";
+import { Section } from "./Section";
+import { CHIP, ERROR, FIELD, LABEL, LEAD, LINKISH, LIST, REMOVE } from "./styles";
 
 function TeamDialog({
 	organisationId,
@@ -168,71 +158,66 @@ export function TeamsSection({ organisationId }: { organisationId: string }) {
 	};
 
 	return (
-		<section aria-label="Teams" className="mb-8">
-			<h2 className={HEADING}>
-				<UsersRound className={HEADING_ICON} />
-				Teams
-				<button
-					type="button"
-					onClick={() => setEditor({ mode: "new" })}
-					className={`${LINKISH} ml-auto`}
-				>
+		<Section
+			label="Teams"
+			icon={UsersRound}
+			action={
+				<button type="button" onClick={() => setEditor({ mode: "new" })} className={LINKISH}>
 					<Plus className="w-3 h-3 inline-block mr-1" aria-hidden="true" />
 					New team
 				</button>
-			</h2>
-			<Panel padding="px-5 py-1">
-				{teams.error ? (
-					<p className={`${LEAD} py-3`} role="alert">
-						{describeError(teams.error, "The teams could not be read.")}
-					</p>
-				) : !teams.data ? (
-					<p className={`${LEAD} py-3`}>Loading…</p>
-				) : teams.data.length === 0 ? (
-					<p className={`${LEAD} py-3`}>
-						A team gives a manager their scope: they decide absences and timesheets for its members.
-					</p>
-				) : (
-					<ul className={LIST}>
-						{teams.data.map((team) => (
-							<li key={team.id} className="py-3 space-y-2">
-								<div className="flex items-center gap-2 text-[12.5px]">
-									<span className="font-bold text-foreground truncate">{team.name}</span>
-									<Button
-										type="button"
-										variant="secondary"
-										size="sm"
-										className="ml-auto h-7 px-2.5 text-xs"
-										onClick={() => setEditor({ mode: "edit", team })}
-									>
-										Edit
-									</Button>
-									<button
-										type="button"
-										onClick={() => void remove(team)}
-										disabled={deleteTeam.isPending}
-										aria-label={`Delete ${team.name}`}
-										className={REMOVE}
-									>
-										<X className="w-3.5 h-3.5" aria-hidden="true" />
-									</button>
-								</div>
-								<div className="flex flex-wrap items-center gap-1.5">
-									{team.memberIds.length === 0 ? (
-										<span className={LEAD}>Nobody on it yet.</span>
-									) : (
-										team.memberIds.map((userId) => (
-											<span key={userId} className={CHIP}>
-												{names.get(userId) ?? "Member"}
-											</span>
-										))
-									)}
-								</div>
-							</li>
-						))}
-					</ul>
-				)}
-			</Panel>
+			}
+		>
+			{teams.error ? (
+				<p className={`${LEAD} py-3`} role="alert">
+					{describeError(teams.error, "The teams could not be read.")}
+				</p>
+			) : !teams.data ? (
+				<p className={`${LEAD} py-3`}>Loading…</p>
+			) : teams.data.length === 0 ? (
+				<p className={`${LEAD} py-3`}>
+					A team gives a manager their scope: they decide absences and timesheets for its members.
+				</p>
+			) : (
+				<ul className={LIST}>
+					{teams.data.map((team) => (
+						<li key={team.id} className="py-3 space-y-2">
+							<div className="flex items-center gap-2 text-[12.5px]">
+								<span className="font-bold text-foreground truncate">{team.name}</span>
+								<Button
+									type="button"
+									variant="secondary"
+									size="sm"
+									className="ml-auto h-7 px-2.5 text-xs"
+									onClick={() => setEditor({ mode: "edit", team })}
+								>
+									Edit
+								</Button>
+								<button
+									type="button"
+									onClick={() => void remove(team)}
+									disabled={deleteTeam.isPending}
+									aria-label={`Delete ${team.name}`}
+									className={REMOVE}
+								>
+									<X className="w-3.5 h-3.5" aria-hidden="true" />
+								</button>
+							</div>
+							<div className="flex flex-wrap items-center gap-1.5">
+								{team.memberIds.length === 0 ? (
+									<span className={LEAD}>Nobody on it yet.</span>
+								) : (
+									team.memberIds.map((userId) => (
+										<span key={userId} className={CHIP}>
+											{names.get(userId) ?? "Member"}
+										</span>
+									))
+								)}
+							</div>
+						</li>
+					))}
+				</ul>
+			)}
 			{editor && (
 				<TeamDialog
 					key={editor.mode === "edit" ? editor.team.id : "new"}
@@ -242,6 +227,6 @@ export function TeamsSection({ organisationId }: { organisationId: string }) {
 				/>
 			)}
 			{confirmDialog}
-		</section>
+		</Section>
 	);
 }

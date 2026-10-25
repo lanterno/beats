@@ -9,6 +9,11 @@
  * value reads as the first the role can see. The API resolves the caller's
  * membership first on every route here, so a 404 is "not a member", and
  * the archive is what remains of one that ended.
+ *
+ * The title, the role chip, the tablist and the page's destinations — the
+ * record, and one's own archive — sit together in a page bar (the mockup's
+ * `.pagebar`), a Panel: the sky is the least readable surface the app has,
+ * and nothing a page is read by belongs on it.
  */
 
 import { Eye, LogOut, Settings } from "lucide-react";
@@ -27,7 +32,7 @@ import {
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
-import { Button, Panel, TabPanel, Tabs, useConfirm } from "@/shared/ui";
+import { Button, Chip, Panel, TabPanel, Tabs, useConfirm } from "@/shared/ui";
 import { AbsenceRequestsSection } from "./AbsenceRequestsSection";
 import { AuditSection } from "./AuditSection";
 import { InvitesSection } from "./InvitesSection";
@@ -36,16 +41,21 @@ import { MembersSection } from "./MembersSection";
 import { MyTimesheetsSection } from "./MyTimesheetsSection";
 import { OrganisationForm } from "./OrganisationForm";
 import { ProjectsSection } from "./ProjectsSection";
-import { HEADING, HEADING_ICON, LEAD, LINKISH, TITLE } from "./styles";
+import { Section } from "./Section";
+import { CRUMB, LEAD, LINKISH, PAGE, PAGE_TITLE, PAGEBAR } from "./styles";
 import { TeamsSection } from "./TeamsSection";
 import { TimesheetsSection } from "./TimesheetsSection";
 
 const DANGER_HOVER = "hover:text-destructive-ink";
 
-type TabValue = "people" | "projects" | "approvals" | "timesheets" | "audit" | "settings";
+export type TabValue = "people" | "projects" | "approvals" | "timesheets" | "audit" | "settings";
 
-/** The tabs this role can see, in order; the first is the default. */
-function tabsFor(role: OrgRole): { value: TabValue; label: string }[] {
+/**
+ * The tabs this role can see, in order; the first is the default. The index
+ * page reads the same list to deep-link its cards, so what a card offers and
+ * what the page then shows cannot drift apart.
+ */
+export function tabsFor(role: OrgRole): { value: TabValue; label: string }[] {
 	const admin = canAdminister(role);
 	const tabs: { value: TabValue; label: string }[] = [];
 	if (admin) {
@@ -66,20 +76,14 @@ function SettingsSection({ membership }: { membership: Membership }) {
 		toast.success("Settings saved");
 	};
 	return (
-		<section aria-label="Settings" className="mb-8">
-			<h2 className={HEADING}>
-				<Settings className={HEADING_ICON} />
-				Settings
-			</h2>
-			<Panel padding="p-5">
-				<OrganisationForm
-					key={membership.organisation.createdAt}
-					initial={membership.organisation}
-					onSave={save}
-					submitLabel="Save"
-				/>
-			</Panel>
-		</section>
+		<Section label="Settings" icon={Settings} bodyClassName="p-5">
+			<OrganisationForm
+				key={membership.organisation.createdAt}
+				initial={membership.organisation}
+				onSave={save}
+				submitLabel="Save"
+			/>
+		</Section>
 	);
 }
 
@@ -93,7 +97,7 @@ export default function Organisation() {
 
 	if (membership.error) {
 		return (
-			<div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+			<div className={PAGE}>
 				<Panel role="alert" padding="px-6 py-[22px]">
 					<p className="font-heading text-lg font-extrabold text-foreground">
 						You're not a member of this organisation.
@@ -145,16 +149,11 @@ export default function Organisation() {
 	};
 
 	const leaveSection = (
-		<section aria-label="Leave" className="mb-8">
-			<h2 className={HEADING}>
-				<LogOut className={HEADING_ICON} />
-				Leave
-			</h2>
-			<Panel padding="p-5" className="flex items-start gap-3 flex-wrap">
-				<p className={cn(LEAD, "flex-1 min-w-[200px]")}>
-					Tracking to {org.name}'s projects stops, it keeps its working-time record, and a read-only
-					archive of your hours remains.
-				</p>
+		<Section
+			label="Leave"
+			icon={LogOut}
+			bodyClassName="p-5"
+			action={
 				<Button
 					type="button"
 					variant="secondary"
@@ -166,34 +165,50 @@ export default function Organisation() {
 					<LogOut aria-hidden="true" />
 					Leave {org.name}
 				</Button>
-			</Panel>
-		</section>
+			}
+		>
+			<p className={LEAD}>
+				Tracking to {org.name}'s projects stops, it keeps its working-time record, and a read-only
+				archive of your hours remains.
+			</p>
+		</Section>
 	);
 
 	return (
-		<div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 pb-24">
-			<header className="flex items-center gap-3 flex-wrap mb-8">
+		<div className={PAGE}>
+			<Panel padding="px-5 py-3" className={PAGEBAR}>
 				<OrganisationMark name={org.name} logoUrl={org.logoUrl} size="md" tileOnly />
-				<h1 className={TITLE}>{org.name}</h1>
-				<span className="text-sm font-medium text-foreground/90">{ROLE_LABELS[data.role]}</span>
+				<div className="min-w-0">
+					<Link to="/organisations" className={CRUMB}>
+						Organisations
+					</Link>
+					<h1 className={cn(PAGE_TITLE, "truncate")}>{org.name}</h1>
+				</div>
+				<Chip tone={admin ? "ok" : "wait"}>{ROLE_LABELS[data.role]}</Chip>
+				<Tabs
+					tabs={tabs}
+					value={tab}
+					onChange={openTab}
+					label="Organisation sections"
+					className="ml-auto"
+				/>
 				{readsRecord(data.role) && (
-					<Link to={`/organisations/${id}/record`} className={`${LINKISH} ml-auto`}>
+					<Link to={`/organisations/${id}/record`} className={`${LINKISH} whitespace-nowrap`}>
 						This month's record
 					</Link>
 				)}
-			</header>
-
-			<Tabs
-				tabs={tabs}
-				value={tab}
-				onChange={openTab}
-				label="Organisation sections"
-				className="mb-8"
-			/>
+				<Link
+					to={`/organisations/${id}/archive`}
+					className={`${LINKISH} whitespace-nowrap`}
+					aria-label="Your hours in this organisation"
+				>
+					Your hours
+				</Link>
+			</Panel>
 
 			{admin && (
 				<TabPanel value="people" current={tab}>
-					<div className="grid gap-x-6 lg:grid-cols-[3fr_2fr]">
+					<div className="grid gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
 						<div>
 							<MembersSection organisationId={id} />
 						</div>
@@ -214,37 +229,44 @@ export default function Organisation() {
 
 			{(decides(data.role) || data.role === "viewer") && (
 				<TabPanel value="approvals" current={tab}>
-					{decides(data.role) && <AbsenceRequestsSection organisationId={id} />}
-					<TimesheetsSection organisationId={id} role={data.role} />
+					<div className="grid gap-4 items-start xl:grid-cols-2">
+						{decides(data.role) && <AbsenceRequestsSection organisationId={id} />}
+						<TimesheetsSection organisationId={id} role={data.role} />
+					</div>
 				</TabPanel>
 			)}
 
 			<TabPanel value="timesheets" current={tab}>
-				<MyTimesheetsSection organisationId={id} role={data.role} />
+				<div className="grid gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
+					<MyTimesheetsSection organisationId={id} role={data.role} />
 
-				<section aria-label={`What ${org.name} can see`} className="mb-8">
-					<h2 className={HEADING}>
-						<Eye className={HEADING_ICON} />
-						What {org.name} can see
-					</h2>
-					<Panel padding="p-5" className="space-y-2.5">
-						<p className="text-[13px] leading-normal font-medium text-foreground">
-							On its own projects, {org.name} sees your finished entries — start, end, duration and
-							the note — and your absences as a date, a type and whether it was a half day. Where
-							you have a contract on one, it sees the balance.
-						</p>
-						<p className="text-[13px] leading-normal font-medium text-foreground">
-							It never sees your flow scores, apps, repositories or idle time; your biometrics, the
-							coach, your calendar or insights; your tags; or any personal project. Nothing about
-							now crosses: a running timer is not in its figures.
-						</p>
-						<Link to={`/organisations/${id}/visible`} className={LINKISH}>
-							See the actual data
-						</Link>
-					</Panel>
-				</section>
+					<div>
+						<Section
+							label={`What ${org.name} can see`}
+							title={`What ${org.name} can see`}
+							icon={Eye}
+							bodyClassName="p-5 space-y-2.5"
+							action={
+								<Link to={`/organisations/${id}/visible`} className={LINKISH}>
+									See the actual data
+								</Link>
+							}
+						>
+							<p className="text-[13px] leading-normal font-medium text-foreground">
+								On its own projects, {org.name} sees your finished entries — start, end, duration
+								and the note — and your absences as a date, a type and whether it was a half day.
+								Where you have a contract on one, it sees the balance.
+							</p>
+							<p className="text-[13px] leading-normal font-medium text-foreground">
+								It never sees your flow scores, apps, repositories or idle time; your biometrics,
+								the coach, your calendar or insights; your tags; or any personal project. Nothing
+								about now crosses: a running timer is not in its figures.
+							</p>
+						</Section>
 
-				{!admin && leaveSection}
+						{!admin && leaveSection}
+					</div>
+				</div>
 			</TabPanel>
 
 			{admin && (

@@ -17,8 +17,9 @@ import { useProjects } from "@/entities/project";
 import { useAuth } from "@/features/auth";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
-import { Button, Panel } from "@/shared/ui";
-import { HEADING, HEADING_ICON, LABEL, LEAD, LIST, SELECT } from "./styles";
+import { Button } from "@/shared/ui";
+import { Section } from "./Section";
+import { LABEL, LEAD, LIST, SELECT } from "./styles";
 import { frozenText, STATUS_LABELS, sheetMonthTitle } from "./TimesheetsSection";
 
 const STATUS_TONE: Record<Timesheet["status"], string> = {
@@ -81,92 +82,86 @@ export function MyTimesheetsSection({
 	};
 
 	return (
-		<section aria-label="Your timesheets" className="mb-8">
-			<h2 className={HEADING}>
-				<FileClock className={HEADING_ICON} />
-				Your timesheets
-			</h2>
-			<p className={`${LEAD} -mt-1 mb-3`}>
-				Submit a month once it has ended; approval freezes its figures and locks its days.
-			</p>
-			<Panel padding="px-5 py-3" className="space-y-3">
-				{mine.length > 0 && (
-					<div className="flex items-end gap-2 flex-wrap">
-						<div>
-							<label htmlFor={`${id}-month`} className={LABEL}>
-								Month
-							</label>
-							<select
-								id={`${id}-month`}
-								value={month}
-								onChange={(e) => setMonth(e.target.value)}
-								className={SELECT}
-							>
-								{months.map((m) => (
-									<option key={m} value={m}>
-										{sheetMonthTitle(`${m}-01`)}
-									</option>
-								))}
-							</select>
-						</div>
-						<div>
-							<label htmlFor={`${id}-project`} className={LABEL}>
-								Project
-							</label>
-							<select
-								id={`${id}-project`}
-								value={projectId}
-								onChange={(e) => setProjectId(e.target.value)}
-								className={SELECT}
-							>
-								<option value="">Choose…</option>
-								{mine.map((p) => (
-									<option key={p.id} value={p.id}>
-										{p.name}
-									</option>
-								))}
-							</select>
-						</div>
-						<Button
-							type="button"
-							size="sm"
-							onClick={submitNow}
-							disabled={!projectId || submit.isPending}
+		<Section
+			label="Your timesheets"
+			icon={FileClock}
+			lead="Submit a month once it has ended; approval freezes its figures and locks its days."
+			bodyClassName="px-5 py-3 space-y-3"
+		>
+			{mine.length > 0 && (
+				<div className="flex items-end gap-2 flex-wrap">
+					<div>
+						<label htmlFor={`${id}-month`} className={LABEL}>
+							Month
+						</label>
+						<select
+							id={`${id}-month`}
+							value={month}
+							onChange={(e) => setMonth(e.target.value)}
+							className={SELECT}
 						>
-							{submit.isPending ? "Submitting…" : "Submit"}
-						</Button>
+							{months.map((m) => (
+								<option key={m} value={m}>
+									{sheetMonthTitle(`${m}-01`)}
+								</option>
+							))}
+						</select>
 					</div>
-				)}
-				{sheets.error ? (
-					<p className={LEAD} role="alert">
-						{describeError(sheets.error, "Your timesheets could not be read.")}
-					</p>
-				) : !sheets.data ? (
-					<p className={LEAD}>Loading…</p>
-				) : rows.length === 0 ? (
-					<p className={LEAD}>No months submitted yet.</p>
-				) : (
-					<ul className={LIST}>
-						{rows.map((sheet) => (
-							<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
-								<div className="flex items-center gap-2 flex-wrap">
-									<span className="font-bold text-foreground">{sheetMonthTitle(sheet.month)}</span>
-									<span className="text-muted-foreground">{projectName(sheet.projectId)}</span>
-									<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
-										{STATUS_LABELS[sheet.status]}
-									</span>
-								</div>
-								{sheet.status === "approved" && sheet.frozen && (
-									<p className="text-foreground font-medium font-mono">
-										{frozenText(sheet.frozen)}
-									</p>
-								)}
-								{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
-							</li>
-						))}
-					</ul>
-				)}
-			</Panel>
-		</section>
+					<div>
+						<label htmlFor={`${id}-project`} className={LABEL}>
+							Project
+						</label>
+						<select
+							id={`${id}-project`}
+							value={projectId}
+							onChange={(e) => setProjectId(e.target.value)}
+							className={SELECT}
+						>
+							<option value="">Choose…</option>
+							{mine.map((p) => (
+								<option key={p.id} value={p.id}>
+									{p.name}
+								</option>
+							))}
+						</select>
+					</div>
+					<Button
+						type="button"
+						size="sm"
+						onClick={submitNow}
+						disabled={!projectId || submit.isPending}
+					>
+						{submit.isPending ? "Submitting…" : "Submit"}
+					</Button>
+				</div>
+			)}
+			{sheets.error ? (
+				<p className={LEAD} role="alert">
+					{describeError(sheets.error, "Your timesheets could not be read.")}
+				</p>
+			) : !sheets.data ? (
+				<p className={LEAD}>Loading…</p>
+			) : rows.length === 0 ? (
+				<p className={LEAD}>No months submitted yet.</p>
+			) : (
+				<ul className={LIST}>
+					{rows.map((sheet) => (
+						<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
+							<div className="flex items-center gap-2 flex-wrap">
+								<span className="font-bold text-foreground">{sheetMonthTitle(sheet.month)}</span>
+								<span className="text-muted-foreground">{projectName(sheet.projectId)}</span>
+								<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
+									{STATUS_LABELS[sheet.status]}
+								</span>
+							</div>
+							{sheet.status === "approved" && sheet.frozen && (
+								<p className="text-foreground font-medium font-mono">{frozenText(sheet.frozen)}</p>
+							)}
+							{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
+						</li>
+					))}
+				</ul>
+			)}
+		</Section>
 	);
 }
