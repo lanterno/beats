@@ -18,6 +18,7 @@ export { Panel, type PanelProps } from "./panel";
 export { SkyBackdrop } from "./sky-backdrop";
 export { Toaster } from "./sonner";
 export { SyncStatus } from "./sync-status";
+export { type TabItem, TabPanel, Tabs } from "./tabs";
 export {
 	Tooltip,
 	TooltipContent,
