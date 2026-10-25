@@ -86,14 +86,55 @@ describe("Organisations", () => {
 		expect(within(invitations).queryByRole("button")).not.toBeInTheDocument();
 		expect(invitations).toHaveTextContent(/Open the invite link you were sent/);
 
+		// The card's name opens the first tab the role can see, not a landing
+		// page the reader then has to leave again.
 		expect(screen.getByRole("link", { name: "Kite Studio" })).toHaveAttribute(
 			"href",
-			"/organisations/o2",
+			"/organisations/o2?tab=people",
 		);
 		expect(screen.getByRole("link", { name: "Acme (left)" })).toHaveAttribute(
 			"href",
 			"/organisations/o1/archive",
 		);
+	});
+
+	it("a card links straight to the tabs the role can reach, and to no others", () => {
+		state.invitations = [];
+		state.memberships = [KITE];
+		renderPage();
+
+		const card = screen.getByRole("region", { name: "Your organisations" });
+		const hrefs = within(card)
+			.getAllByRole("link")
+			.map((a) => a.getAttribute("href"));
+		// An owner sees every tab; each is one click from here.
+		expect(hrefs).toEqual([
+			"/organisations/o2?tab=people",
+			"/organisations/o2?tab=people",
+			"/organisations/o2?tab=projects",
+			"/organisations/o2?tab=approvals",
+			"/organisations/o2?tab=timesheets",
+			"/organisations/o2?tab=audit",
+			"/organisations/o2?tab=settings",
+			// An owner reads the record, so that is what the card offers.
+			"/organisations/o2/record",
+		]);
+	});
+
+	it("a plain member's card offers only their one tab, and their own half of the record", () => {
+		state.invitations = [];
+		state.memberships = [{ ...KITE, role: "member" }];
+		renderPage();
+
+		const card = screen.getByRole("region", { name: "Your organisations" });
+		const hrefs = within(card)
+			.getAllByRole("link")
+			.map((a) => a.getAttribute("href"));
+		expect(hrefs).toEqual([
+			"/organisations/o2?tab=timesheets",
+			"/organisations/o2?tab=timesheets",
+			"/organisations/o2/visible",
+		]);
 	});
 
 	it("with nothing yet, says what an organisation is for", () => {

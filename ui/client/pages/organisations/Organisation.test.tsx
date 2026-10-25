@@ -121,6 +121,12 @@ describe("Organisation", () => {
 		expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Your timesheets" })).toBeInTheDocument();
 		expect(screen.queryByRole("link", { name: "This month's record" })).not.toBeInTheDocument();
+		// The archive used to be reachable only from the index, or from the
+		// 404; it is a control in the page bar now.
+		expect(screen.getByRole("link", { name: "Your hours in this organisation" })).toHaveAttribute(
+			"href",
+			"/organisations/o1/archive",
+		);
 	});
 
 	it("as a manager, lands on the approvals but has no admin tabs", () => {
