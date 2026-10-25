@@ -1992,8 +1992,10 @@ export interface paths {
         };
         /**
          * List Invitations
-         * @description The open invitations addressed to the caller's own email address.
-         *     Nothing is sent anywhere: this is where an invitation is found.
+         * @description The open invitations addressed to the caller's own email address —
+         *     who has invited them, and as what. Without the token: an address is
+         *     not verified at sign-up, so the way in stays the link the inviter passed
+         *     on, and `/join/{token}` checks it against the address as well.
          */
         get: operations["list_invitations_api_organisations_invitations_get"];
         put?: never;
@@ -2059,6 +2061,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organisations/{organisation_id}/absence-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Absence Requests
+         * @description A member's own requests; a decider's whole scope — an owner's or
+         *     admin's everyone, a manager's their teams.
+         */
+        get: operations["list_absence_requests_api_organisations__organisation_id__absence_requests_get"];
+        put?: never;
+        /**
+         * Request Absence
+         * @description Ask for a day off on a managed assignment. The note is addressed to
+         *     the decider; the organisation's record never carries it (rule 3). On an
+         *     unmanaged assignment the member books directly, as ever (409
+         *     NOT_MANAGED here).
+         */
+        post: operations["request_absence_api_organisations__organisation_id__absence_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/absence-requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw Absence Request
+         * @description Take a pending request of one's own back; a decided one stays.
+         */
+        delete: operations["withdraw_absence_request_api_organisations__organisation_id__absence_requests__request_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/absence-requests/{request_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Absence Request
+         * @description Approve — which books the absence, stamped as the organisation's — or
+         *     decline with a comment. Once: a second decision answers 409.
+         */
+        post: operations["decide_absence_request_api_organisations__organisation_id__absence_requests__request_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organisations/{organisation_id}/archive": {
         parameters: {
             query?: never;
@@ -2093,6 +2164,49 @@ export interface paths {
          * @description `/archive` as CSV, a row per entry, for the person to keep.
          */
         get: operations["read_archive_csv_api_organisations__organisation_id__archive_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Audit
+         * @description The audit log, newest first — written since the first organisation
+         *     existed, readable from stage 4 on. Owners and admins.
+         */
+        get: operations["read_audit_api_organisations__organisation_id__audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/compliance.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Compliance Csv
+         * @description The compliance record (docs/organisations.md, stage 3): per member,
+         *     per day — first start, last end, breaks, total — the shape a
+         *     working-time authority asks for. Whoever reads the record.
+         */
+        get: operations["read_compliance_csv_api_organisations__organisation_id__compliance_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2318,6 +2432,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enter Adjustment
+         * @description A balance adjustment — a payout, a reset, a cap — on a managed
+         *     assignment: the employer's act, audited, on the member's own balance.
+         *     The member's route answers 409 CONTRACT_MANAGED there; this one answers
+         *     409 NOT_MANAGED where the member still writes their own.
+         */
+        post: operations["enter_adjustment_api_organisations__organisation_id__projects__project_id__members__member_user_id__adjustments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}/contract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Managed Contract
+         * @description The assignment's contract, for the decider editing it.
+         */
+        get: operations["read_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_get"];
+        /**
+         * Set Managed Contract
+         * @description Write the employer's contract on an assignment, or hand it back
+         *     (docs/organisations.md, stage 3). Taking a contract under management
+         *     starts from the terms the member recorded — nothing is rewritten
+         *     silently — and from then on the member's own contract, absence and
+         *     adjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for
+         *     their teams.
+         */
+        put: operations["set_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/projects/{project_id}/members/{member_user_id}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enter Time
+         * @description Enter a finished session for a member (docs/organisations.md, stage
+         *     3): the entry lands on the member's own timeline, stamped as the
+         *     organisation's record and marked with who entered it, and the act is in
+         *     the audit log. Refused inside an approved month.
+         */
+        post: operations["enter_time_api_organisations__organisation_id__projects__project_id__members__member_user_id__entries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organisations/{organisation_id}/record": {
         parameters: {
             query?: never;
@@ -2331,9 +2520,30 @@ export interface paths {
          *     entries started in `month` in `tz` (start, end, hours, note), the
          *     absences (date, type, half day), the all-time totals, and where the
          *     member has a contract its balance as of today. Nothing else, and nothing
-         *     about now. Admins.
+         *     about now. Owners, admins and viewers whole; a manager their teams'.
          */
         get: operations["read_record_api_organisations__organisation_id__record_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/record.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Record Csv
+         * @description The month's record as CSV, a row per entry — the report an accountant
+         *     files. Whoever reads the record; a manager's is their teams'.
+         */
+        get: operations["read_record_csv_api_organisations__organisation_id__record_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2376,6 +2586,128 @@ export interface paths {
          * @description Approve or decline a join request; approving makes the member. Admins.
          */
         post: operations["decide_request_api_organisations__organisation_id__requests__request_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Teams
+         * @description The teams, for anyone who reads the record — a manager's scope is the
+         *     teams they are in.
+         */
+        get: operations["list_teams_api_organisations__organisation_id__teams_get"];
+        put?: never;
+        /**
+         * Create Team
+         * @description A team: a name and who is in it. Ids that are not active members are
+         *     dropped. Admins.
+         */
+        post: operations["create_team_api_organisations__organisation_id__teams_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/teams/{team_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Team
+         * @description Replace a team's name and members. Admins.
+         */
+        put: operations["update_team_api_organisations__organisation_id__teams__team_id__put"];
+        post?: never;
+        /**
+         * Delete Team
+         * @description Delete a team: its managers lose that scope, nothing else changes. Admins.
+         */
+        delete: operations["delete_team_api_organisations__organisation_id__teams__team_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/timesheets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Timesheets
+         * @description A member's own sheets; a decider's or viewer's whole scope.
+         */
+        get: operations["list_timesheets_api_organisations__organisation_id__timesheets_get"];
+        put?: never;
+        /**
+         * Submit Timesheet
+         * @description Submit a month of one's own on an organisation project, once it has
+         *     ended in the organisation's timezone (409 MONTH_NOT_ENDED before). A
+         *     sheet sent back or reopened resubmits the same way; an approved one is
+         *     refused until reopened (409 TIMESHEET_APPROVED).
+         */
+        post: operations["submit_timesheet_api_organisations__organisation_id__timesheets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/timesheets/{sheet_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Timesheet
+         * @description Approve — freezing the month's figures as they stand and locking every
+         *     write dated inside it — or send the sheet back with a comment. Approval
+         *     waits while a stamped timer still runs in the month (409
+         *     PERIOD_APPROVED names it). Deciders.
+         */
+        post: operations["decide_timesheet_api_organisations__organisation_id__timesheets__sheet_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/timesheets/{sheet_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Timesheet
+         * @description Lift an approved month's lock, with a reason, recorded in the sheet's
+         *     history and the audit log. The frozen figures go with it; re-approval
+         *     freezes afresh. Deciders.
+         */
+        post: operations["reopen_timesheet_api_organisations__organisation_id__timesheets__sheet_id__reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3398,6 +3730,55 @@ export interface components {
             note?: string | null;
             type: components["schemas"]["AbsenceType"];
         };
+        /** AbsenceRequestBody */
+        AbsenceRequestBody: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Half Day
+             * @default false
+             */
+            half_day: boolean;
+            /** Note */
+            note?: string | null;
+            /** Project Id */
+            project_id: string;
+            type: components["schemas"]["AbsenceType"];
+        };
+        /** AbsenceRequestResponse */
+        AbsenceRequestResponse: {
+            /** Comment */
+            comment: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            /** Half Day */
+            half_day: boolean;
+            /** Id */
+            id: string;
+            /** Note */
+            note: string | null;
+            /** Project Id */
+            project_id: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            status: components["schemas"]["RequestStatus"];
+            type: components["schemas"]["AbsenceType"];
+            /** User Id */
+            user_id: string;
+        };
         /**
          * AbsenceResponse
          * @description Response schema for an absence. `organisation_id` is set on one
@@ -3462,6 +3843,8 @@ export interface components {
         };
         /** ArchiveProjectResponse */
         ArchiveProjectResponse: {
+            /** Absences */
+            absences: components["schemas"]["RecordAbsenceResponse"][];
             /** Color */
             color: string | null;
             /** Entries */
@@ -3513,6 +3896,26 @@ export interface components {
             shared_from: string;
             /** User Id */
             user_id: string;
+        };
+        /** AuditEventResponse */
+        AuditEventResponse: {
+            /** Actor User Id */
+            actor_user_id: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Event */
+            event: string;
+            /** Project Id */
+            project_id: string | null;
+            /** Subject User Id */
+            subject_user_id: string | null;
         };
         /** AutoTimerSuggestion */
         AutoTimerSuggestion: {
@@ -4316,6 +4719,13 @@ export interface components {
         DecideRequest: {
             decision: components["schemas"]["JoinDecision"];
         };
+        /** DecisionBody */
+        DecisionBody: {
+            /** Approve */
+            approve: boolean;
+            /** Comment */
+            comment?: string | null;
+        };
         /** DeleteSignalsResponse */
         DeleteSignalsResponse: {
             /** Deleted Summaries */
@@ -4451,6 +4861,21 @@ export interface components {
             /** Duration */
             duration: string;
         };
+        /** EnterTimeRequest */
+        EnterTimeRequest: {
+            /**
+             * End
+             * Format: date-time
+             */
+            end: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
         /** FlowWindowResponse */
         FlowWindowResponse: {
             /** Active Project Id */
@@ -4523,6 +4948,27 @@ export interface components {
             };
             /** Score */
             score: number;
+        };
+        /**
+         * FrozenMonth
+         * @description What approval freezes (docs/organisations.md, stage 3): the figures
+         *     as they stood, stored for the first time anywhere in the system. The
+         *     live arithmetic goes on; an approved month's edits are refused, so the
+         *     two cannot drift silently, and a reopen is the recorded way to change
+         *     one. `balance_end` is None where the record withholds the balance
+         *     (decision 16) or no term owes hours.
+         */
+        FrozenMonth: {
+            /** Absence Days */
+            absence_days: number;
+            /** Balance End */
+            balance_end: number | null;
+            /** Entries */
+            entries: number;
+            /** Expected */
+            expected: number | null;
+            /** Worked */
+            worked: number;
         };
         /** GenerateBriefRequest */
         GenerateBriefRequest: {
@@ -4735,7 +5181,10 @@ export interface components {
         };
         /**
          * InvitationResponse
-         * @description An open invitation addressed to the caller's own address.
+         * @description An open invitation addressed to the caller's own address: who, and as
+         *     what. Not the token — an address is not verified at sign-up, so the way
+         *     in is the link the inviter passed on, which the join route then checks
+         *     against the address too.
          */
         InvitationResponse: {
             /**
@@ -4745,8 +5194,6 @@ export interface components {
             expires_at: string;
             organisation: components["schemas"]["OrganisationCardResponse"];
             role: components["schemas"]["OrgRole"];
-            /** Token */
-            token: string;
         };
         /** InvitePreviewResponse */
         InvitePreviewResponse: {
@@ -4987,6 +5434,27 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
+        /**
+         * ManagedContractRequest
+         * @description The employer's contract on an assignment. `managed` true takes the
+         *     terms under the organisation's hand; false hands them back. `contract`
+         *     left null keeps what the assignment has.
+         */
+        ManagedContractRequest: {
+            contract?: components["schemas"]["Contract"] | null;
+            /** Managed */
+            managed: boolean;
+        };
+        /** ManagedContractResponse */
+        ManagedContractResponse: {
+            contract: components["schemas"]["Contract"] | null;
+            /** Managed */
+            managed: boolean;
+            /** Project Id */
+            project_id: string;
+            /** User Id */
+            user_id: string;
+        };
         /** MemberBalanceResponse */
         MemberBalanceResponse: {
             /** Adjusted */
@@ -5053,6 +5521,7 @@ export interface components {
         /**
          * MemberTotals
          * @description What one member's finished entries on one project add up to, all time.
+         *     Mongo hands the instants back naive; this makes them UTC like every other.
          */
         MemberTotals: {
             /**
@@ -5192,11 +5661,17 @@ export interface components {
         };
         /**
          * OrgRole
-         * @description What a member may do in an organisation. Each role includes the ones
-         *     below it: an owner is an admin, an admin is a member.
+         * @description What a member may do in an organisation.
+         *
+         *     Owner and admin run it; a **manager** decides absences and timesheets
+         *     for the members of their teams and reads their slice of the record; a
+         *     **viewer** (an accountant, a works council seat) reads the whole record
+         *     and changes nothing; a member tracks. The ladder (`at_least`) orders
+         *     them for the owner/admin checks; what the middle roles may do is the
+         *     three capabilities below, not the ladder.
          * @enum {string}
          */
-        OrgRole: "owner" | "admin" | "member";
+        OrgRole: "owner" | "admin" | "manager" | "viewer" | "member";
         /**
          * OrganisationCardResponse
          * @description An organisation as a joiner sees it before joining: the name and logo.
@@ -5497,6 +5972,11 @@ export interface components {
          *     theirs, and the moment of assignment otherwise.
          */
         ProjectOrganisation: {
+            /**
+             * Contract Managed
+             * @default false
+             */
+            contract_managed: boolean;
             /** Id */
             id: string;
             /** Logo Url */
@@ -5792,6 +6272,11 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
+        /** ReopenBody */
+        ReopenBody: {
+            /** Reason */
+            reason: string;
+        };
         /**
          * ReportEntryResponse
          * @description One billable entry: the local day it started on, when it ran, and how
@@ -5942,6 +6427,11 @@ export interface components {
             unpriced_hours: number | null;
         };
         /**
+         * RequestStatus
+         * @enum {string}
+         */
+        RequestStatus: "pending" | "approved" | "declined";
+        /**
          * RhythmSlotResponse
          * @description Response schema for a half-hour slot in the daily rhythm chart.
          */
@@ -6039,6 +6529,16 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** SubmitTimesheetBody */
+        SubmitTimesheetBody: {
+            /**
+             * Month
+             * Format: date
+             */
+            month: string;
+            /** Project Id */
+            project_id: string;
+        };
         /**
          * SuggestionResponse
          * @description Response schema for a daily plan suggestion.
@@ -6053,6 +6553,22 @@ export interface components {
             /** Suggested Minutes */
             suggested_minutes: number;
         };
+        /** TeamRequest */
+        TeamRequest: {
+            /** Member Ids */
+            member_ids?: string[];
+            /** Name */
+            name: string;
+        };
+        /** TeamResponse */
+        TeamResponse: {
+            /** Id */
+            id: string;
+            /** Member Ids */
+            member_ids: string[];
+            /** Name */
+            name: string;
+        };
         /** TimerStatusResponse */
         TimerStatusResponse: {
             /** Project Category */
@@ -6062,6 +6578,61 @@ export interface components {
             /** Timer Running */
             timer_running: boolean;
         };
+        /**
+         * TimesheetEvent
+         * @description One step of a timesheet's history: submitted, approved, changes
+         *     requested, reopened — each with who and, where one was given, why.
+         */
+        TimesheetEvent: {
+            action: components["schemas"]["TimesheetStatus"];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By */
+            by: string;
+            /** Comment */
+            comment?: string | null;
+        };
+        /**
+         * TimesheetResponse
+         * @description A timesheet as both sides read it. `frozen` is set only while
+         *     approved: the figures as approval saw them, which the lock then keeps.
+         */
+        TimesheetResponse: {
+            /** Comment */
+            comment: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Decided By */
+            decided_by: string | null;
+            frozen: components["schemas"]["FrozenMonth"] | null;
+            /** History */
+            history: components["schemas"]["TimesheetEvent"][];
+            /** Id */
+            id: string;
+            /**
+             * Month
+             * Format: date
+             */
+            month: string;
+            /** Project Id */
+            project_id: string;
+            status: components["schemas"]["TimesheetStatus"];
+            /**
+             * Submitted At
+             * Format: date-time
+             */
+            submitted_at: string;
+            /** User Id */
+            user_id: string;
+        };
+        /**
+         * TimesheetStatus
+         * @enum {string}
+         */
+        TimesheetStatus: "submitted" | "approved" | "changes_requested" | "reopened";
         /**
          * TopBucket
          * @description One bucket from a leaderboard within FlowWindowSummaryResponse.
@@ -9688,6 +10259,169 @@ export interface operations {
             };
         };
     };
+    list_absence_requests_api_organisations__organisation_id__absence_requests_get: {
+        parameters: {
+            query?: {
+                /** @description Only the undecided ones. */
+                pending?: boolean;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceRequestResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_absence_api_organisations__organisation_id__absence_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceRequestBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceRequestResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_absence_request_api_organisations__organisation_id__absence_requests__request_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_absence_request_api_organisations__organisation_id__absence_requests__request_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceRequestResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_archive_api_organisations__organisation_id__archive_get: {
         parameters: {
             query?: {
@@ -9744,6 +10478,91 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The archive as CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_audit_api_organisations__organisation_id__audit_get: {
+        parameters: {
+            query?: {
+                /** @description Only events before this instant; for paging. */
+                before?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_compliance_csv_api_organisations__organisation_id__compliance_csv_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's compliance record as CSV. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10291,6 +11110,178 @@ export interface operations {
             };
         };
     };
+    enter_adjustment_api_organisations__organisation_id__projects__project_id__members__member_user_id__adjustments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BalanceAdjustmentFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdjustmentResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedContractResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManagedContractRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManagedContractResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enter_time_api_organisations__organisation_id__projects__project_id__members__member_user_id__entries_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+                member_user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnterTimeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_record_api_organisations__organisation_id__record_get: {
         parameters: {
             query: {
@@ -10314,6 +11305,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_record_csv_api_organisations__organisation_id__record_csv_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The month's record as CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Not found */
@@ -10395,6 +11429,334 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JoinRequestResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_teams_api_organisations__organisation_id__teams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_team_api_organisations__organisation_id__teams_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_team_api_organisations__organisation_id__teams__team_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_team_api_organisations__organisation_id__teams__team_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_timesheets_api_organisations__organisation_id__timesheets_get: {
+        parameters: {
+            query?: {
+                month?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_timesheet_api_organisations__organisation_id__timesheets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitTimesheetBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_timesheet_api_organisations__organisation_id__timesheets__sheet_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_timesheet_api_organisations__organisation_id__timesheets__sheet_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                sheet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimesheetResponse"];
                 };
             };
             /** @description Not found */

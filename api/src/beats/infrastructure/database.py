@@ -76,6 +76,18 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.org_assignments.create_index([("user_id", 1), ("ended_at", 1)])
     await db.org_assignments.create_index("organisation_id")
     await db.org_audit.create_index([("organisation_id", 1), ("at", -1)])
+    # Stage 3: one timesheet per member per project per month — a project is
+    # one organisation's, so the organisation needs no place in the key —
+    # and the lock check reads the same three fields plus the status.
+    await db.org_timesheets.create_index(
+        [("project_id", 1), ("user_id", 1), ("month", 1)], unique=True
+    )
+    await db.org_timesheets.create_index("organisation_id")
+    # The deciders' list of what is waiting, and a member's own requests.
+    await db.org_absence_requests.create_index([("organisation_id", 1), ("status", 1)])
+    await db.org_absence_requests.create_index("user_id")
+    # Stage 4: a manager's scope is the teams they are in.
+    await db.org_teams.create_index([("organisation_id", 1), ("member_ids", 1)])
     await db.clients.create_index("user_id")
     # One billing per project: a second write replaces the first. By client
     # too, for the reads that ask what is billed to one.

@@ -57,8 +57,8 @@ showing the actual data held.
 |---|---|---|
 | **1** | Clients for freelancers | **Done** — on `main` |
 | **2** | Foundations: organisations, membership, org projects, leaving | **Done** — the decisions and the model are in [docs/organisations.md](organisations.md) |
-| **3** | Employment: employer contracts, leave requests, timesheet approval | Not started; depends on 2 |
-| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | Not started; depends on 2 and 3 |
+| **3** | Employment: employer contracts, leave requests, timesheet approval | **Done** — decisions 21–24 and 26–27 in [docs/organisations.md](organisations.md) |
+| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **Partly done** — teams, manager and viewer roles, the audit read and the report CSVs are built (decision 25); money permission, verified domains, per-org SSO, SCIM, retention and seats are recorded as open, each with its reason, in the same doc |
 
 Stage 2 is the only one that changes the data model. Stages 3 and 4 are
 additive on top of it. That makes the sequencing question simple: get the
@@ -166,11 +166,13 @@ Four things, each cheaper to settle now than to migrate out of later:
 
 ---
 
-## Stage 3 — Employment
+## Stage 3 — Employment · **Done**
 
 **Goal:** turn the day-job contract we already have into something two parties
-agree on. Section 3 of the epic. Depends on stage 2 — there is no employer to
-own a contract until organisations exist.
+agree on. Section 3 of the epic. Built; the decisions are
+[docs/organisations.md](organisations.md) 21–24 and 26–27, and the sections
+below stand as the record of what was asked. The frozen-close question this
+stage flagged was answered "refused, with a recorded reopen".
 
 ### Scope
 
@@ -223,11 +225,15 @@ approved periods in the database.
 
 ---
 
-## Stage 4 — Scale
+## Stage 4 — Scale · **Partly done**
 
 **Goal:** everything that only matters once organisations have more than a
-handful of people in them. Sections 1, 5 and 7 of the epic. Expect this to
-split into several issues when it starts — it is a bucket, not a unit of work.
+handful of people in them. Sections 1, 5 and 7 of the epic. The structural
+half is built — teams with manager scope, the viewer role, the audit log
+read, the record and compliance CSVs ([docs/organisations.md](organisations.md),
+decision 25). The rest is recorded there under *Stage 4 items deliberately
+not built*, each with the dependency that blocks it (email infrastructure,
+the session-door decision, a payment provider, the deletion machinery).
 
 ### Scope
 
@@ -287,8 +293,8 @@ how, and the notes under them are kept as the reasoning.
 | Does an organisation see an entry's **note**? Do personal **tags** cross? | **Settled:** note yes, tags no. No surface writes a note today, so the marker goes where a note is shown; any note input brought back ships it | 2 |
 | Can a manager see that a **timer is running now**? | **Settled: no, in any stage.** The record takes finished entries only and carries no running flag | 2 |
 | What does **account deletion** do to records an employer must legally keep? | **Settled:** the stamped working-time rows, the balance's inputs and the name on the membership stay under a tombstone; everything else is erased (`erasure.py`) | 2 |
-| What does **"day job"** mean once an employer can be an entity? | Personal day jobs stay exactly as they are; nothing forces anyone into an organisation. Stage 2 keeps the contract the member's, on their assignment | 3 |
-| Who wins when the **employer's contract terms differ** from the employee's? | — open — | 3 |
+| What does **"day job"** mean once an employer can be an entity? | **Settled:** personal day jobs stay exactly as they are; on an organisation project the contract lives on the assignment, the member's until the employer takes it under management (decision 21) | 3 |
+| Who wins when the **employer's contract terms differ** from the employee's? | **Settled:** management starts from the terms the member recorded; the employer's changes are audited acts, never silent recomputation (decision 21) | 3 |
 | **Pricing**: seat price, free tier, whether contractors count as seats | — open — | 4 |
 
 ### Notes and tags

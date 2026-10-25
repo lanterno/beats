@@ -19,8 +19,11 @@
  */
 
 import { type Ref, useState } from "react";
+import { toast } from "sonner";
 import type { Absence, AbsenceType } from "@/entities/absence";
 import { ABSENCE_TYPE_LABELS, useAbsences } from "@/entities/absence";
+import type { AbsenceRequest } from "@/entities/organisation";
+import { useAbsenceRequests, useWithdrawAbsenceRequest } from "@/entities/organisation";
 import type { Holiday, ProjectWithDuration, VacationYearWords } from "@/entities/project";
 import {
 	describeVacationYear,
@@ -34,6 +37,7 @@ import { addIsoDays, cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
 import type { AbsenceBooking } from "./AbsenceDialog";
 import { isWeekdayIso, longDate, shortDate } from "./dates";
+import { RequestAbsenceDialog } from "./RequestAbsenceDialog";
 import { LABEL, LINKISH, SUB, TINT, TINT_PILL } from "./styles";
 
 interface AbsenceRun {
@@ -163,6 +167,80 @@ function VacationTally({
 	);
 }
 
+/** "pending", "approved", "declined" — a request's word in its tint. */
+const REQUEST_TINT: Record<AbsenceRequest["status"], keyof typeof TINT> = {
+	pending: "other",
+	approved: "holiday",
+	declined: "sick",
+};
+
+/** Shown of my requests on this project, newest first. */
+const REQUESTS_SHOWN = 5;
+
+/**
+ * My requests on this project, newest first: a pending one with Withdraw, a
+ * decided one with its status and the decider's comment. An approved request
+ * is also a real absence by then, so its day appears in the list above too.
+ */
+function RequestList({ organisationId, projectId }: { organisationId: string; projectId: string }) {
+	const { data: requests } = useAbsenceRequests(organisationId);
+	const withdraw = useWithdrawAbsenceRequest(organisationId);
+	const mine = (requests ?? [])
+		.filter((r) => r.projectId === projectId)
+		.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
+		.slice(0, REQUESTS_SHOWN);
+	if (mine.length === 0) return null;
+
+	return (
+		<div className="mt-2.5 pt-2.5 border-t border-border">
+			<h4 className={LABEL}>Requests</h4>
+			<ul className="mt-1 flex flex-col" aria-label="Time off requests">
+				{mine.map((r) => {
+					const what = [
+						`${ABSENCE_TYPE_LABELS[r.type]}${r.halfDay ? " ½" : ""}`,
+						r.status === "pending" ? null : r.status,
+						r.comment ? `“${r.comment}”` : null,
+					]
+						.filter((part): part is string => part !== null)
+						.join(" · ");
+					return (
+						<li
+							key={r.id}
+							className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center py-[7px] border-t border-border first:border-t-0 text-[12.5px]"
+						>
+							<span className="min-w-0 text-foreground">
+								<b className="font-extrabold">{shortDate(r.date)}</b>
+								<small className="block text-muted-foreground text-[11.5px] font-medium">
+									{what}
+								</small>
+							</span>
+							<span className="inline-flex items-center gap-2">
+								<span className={cn(TINT_PILL, TINT[REQUEST_TINT[r.status]])}>{r.status}</span>
+								{r.status === "pending" && (
+									<button
+										type="button"
+										disabled={withdraw.isPending}
+										onClick={() =>
+											withdraw.mutate(r.id, {
+												onSuccess: () => toast.success("Request withdrawn"),
+												onError: (err) =>
+													toast.error(describeError(err, "Failed to withdraw the request")),
+											})
+										}
+										className={LINKISH}
+									>
+										Withdraw
+									</button>
+								)}
+							</span>
+						</li>
+					);
+				})}
+			</ul>
+		</div>
+	);
+}
+
 export function TimeOff({
 	project,
 	todayIso,
@@ -172,6 +250,10 @@ export function TimeOff({
 	bookButtonRef,
 }: TimeOffProps) {
 	const [expanded, setExpanded] = useState(false);
+	// On a managed assignment the contract is the organisation's to write:
+	// booking and changing give way to a request a decider approves.
+	const managed = project.organisation?.contractManaged === true ? project.organisation : null;
+	const [asking, setAsking] = useState(false);
 	const year = Number(todayIso.slice(0, 4));
 	// "Fri Jan 1, 2027" under "Fri Dec 25": the list crosses into next year.
 	const dateOf = (iso: string) => (iso.startsWith(`${year}-`) ? shortDate(iso) : longDate(iso));
@@ -226,10 +308,10 @@ export function TimeOff({
 				<button
 					ref={bookButtonRef}
 					type="button"
-					onClick={onBook}
+					onClick={() => (managed ? setAsking(true) : onBook())}
 					className={cn(LINKISH, "ml-auto")}
 				>
-					+ Book
+					{managed ? "Ask for time off" : "+ Book"}
 				</button>
 			</div>
 
@@ -281,29 +363,41 @@ export function TimeOff({
 								.join(" · ");
 							tint = entry.type;
 						}
+						const face = (
+							<>
+								<span className="min-w-0 text-foreground">
+									<b className="font-extrabold">
+										{prefix}
+										{when}
+									</b>
+									<small className="block text-muted-foreground text-[11.5px] font-medium">
+										{what}
+									</small>
+								</span>
+								<span className={cn(TINT_PILL, TINT[tint])}>{tint}</span>
+							</>
+						);
 						return (
 							<li key={`${entry.kind}-${start}`} className="border-t border-border">
-								<button
-									type="button"
-									onClick={() =>
-										entry.kind === "holiday"
-											? onOpenWeek(entry.date)
-											: onOpenAbsence(bookingOf(entry))
-									}
-									title={entry.kind === "holiday" ? "Open its week" : "Change or remove"}
-									className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center py-[9px] px-1.5 -mx-1.5 text-left text-[12.5px] rounded-xl hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-								>
-									<span className="min-w-0 text-foreground">
-										<b className="font-extrabold">
-											{prefix}
-											{when}
-										</b>
-										<small className="block text-muted-foreground text-[11.5px] font-medium">
-											{what}
-										</small>
-									</span>
-									<span className={cn(TINT_PILL, TINT[tint])}>{tint}</span>
-								</button>
+								{managed && entry.kind === "absence" ? (
+									// A managed absence is the organisation's to change: no dialog.
+									<div className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center py-[9px] px-1.5 -mx-1.5 text-left text-[12.5px]">
+										{face}
+									</div>
+								) : (
+									<button
+										type="button"
+										onClick={() =>
+											entry.kind === "holiday"
+												? onOpenWeek(entry.date)
+												: onOpenAbsence(bookingOf(entry))
+										}
+										title={entry.kind === "holiday" ? "Open its week" : "Change or remove"}
+										className="w-full grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center py-[9px] px-1.5 -mx-1.5 text-left text-[12.5px] rounded-xl hover:bg-secondary transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+									>
+										{face}
+									</button>
+								)}
 							</li>
 						);
 					})}
@@ -342,6 +436,15 @@ export function TimeOff({
 				<p className="mt-1 text-xs text-muted-foreground font-medium leading-normal">
 					Public holidays appear once the contract has a region.
 				</p>
+			)}
+			{managed && <RequestList organisationId={managed.id} projectId={project.id} />}
+			{managed && asking && (
+				<RequestAbsenceDialog
+					organisationId={managed.id}
+					projectId={project.id}
+					defaultDate={tomorrow}
+					onClose={() => setAsking(false)}
+				/>
 			)}
 		</Panel>
 	);

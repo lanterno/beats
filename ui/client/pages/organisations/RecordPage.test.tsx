@@ -1,7 +1,7 @@
 /**
  * The record page over one member's slice: the entries as rows, the
  * balance as a sentence, and — since the component is parameterised by
- * the read — the same page says "Admins only" when the read is refused.
+ * the read — the same page says who may read it when the read is refused.
  */
 import type { UseQueryResult } from "@tanstack/react-query";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -105,8 +105,10 @@ describe("RecordPage", () => {
 		).toBeInTheDocument();
 	});
 
-	it("tells a member the record is an admin's when the read is refused", () => {
+	it("tells a member who may read the record when the read is refused", () => {
 		renderPage("record", { error: new ApiError(403, "Admins only") });
-		expect(screen.getByRole("alert")).toHaveTextContent("Admins only.");
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			"Owners, admins, managers and viewers only.",
+		);
 	});
 });

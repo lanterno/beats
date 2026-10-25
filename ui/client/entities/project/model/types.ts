@@ -30,6 +30,8 @@ export interface ProjectOrganisation {
 	name: string;
 	logoUrl?: string;
 	sharedFrom: string; // ISO datetime
+	/** Stage 3: the contract, absences and adjustments are the employer's to write. */
+	contractManaged: boolean;
 }
 
 /**

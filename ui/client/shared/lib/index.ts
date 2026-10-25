@@ -71,6 +71,7 @@ export type {
 	HttpMethod,
 	PendingMutation,
 } from "./mutationQueue";
+export { rememberReturnTo, takeReturnTo } from "./returnTo";
 // Hooks
 export { type CommandContext, useCommandActions } from "./useCommandActions";
 export { useFavicon } from "./useFavicon";

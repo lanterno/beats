@@ -2,13 +2,16 @@
  * Organisation Mappers — wire ↔ domain.
  */
 import type {
+	ApiAbsenceRequest,
 	ApiArchive,
 	ApiAssignment,
+	ApiAuditEvent,
 	ApiInvitation,
 	ApiInvite,
 	ApiInvitePreview,
 	ApiJoin,
 	ApiJoinRequest,
+	ApiManagedContract,
 	ApiMember,
 	ApiMemberRecord,
 	ApiMembership,
@@ -16,16 +19,21 @@ import type {
 	ApiOrgProject,
 	ApiRecord,
 	ApiRecordEntry,
+	ApiTeam,
+	ApiTimesheet,
 } from "@/shared/api";
 import type {
+	AbsenceRequest,
 	Archive,
 	Assignment,
+	AuditEvent,
 	Invitation,
 	Invite,
 	InviteInput,
 	InvitePreview,
 	JoinRequest,
 	JoinResult,
+	ManagedContract,
 	Member,
 	MemberRecord,
 	Membership,
@@ -36,6 +44,9 @@ import type {
 	OrgProjectInput,
 	OrgRecord,
 	RecordEntry,
+	Team,
+	TeamInput,
+	Timesheet,
 } from "./types";
 
 export function toOrganisation(api: ApiOrganisation): Organisation {
@@ -111,7 +122,6 @@ export function toApiInviteInput(input: InviteInput) {
 
 export function toInvitation(api: ApiInvitation): Invitation {
 	return {
-		token: api.token,
 		role: api.role,
 		expiresAt: api.expires_at,
 		organisation: toCard(api.organisation),
@@ -252,6 +262,83 @@ export function toArchive(api: ApiArchive): Archive {
 			color: p.color ?? undefined,
 			hours: p.hours,
 			entries: p.entries.map(toEntry),
+			absences: p.absences.map((a) => ({ date: a.date, type: a.type, halfDay: a.half_day })),
 		})),
+	};
+}
+
+// Employment (stages 3 and 4).
+
+export function toTeam(api: ApiTeam): Team {
+	return { id: api.id, name: api.name, memberIds: api.member_ids };
+}
+
+export function toApiTeamInput(input: TeamInput) {
+	return { name: input.name, member_ids: input.memberIds };
+}
+
+export function toAbsenceRequest(api: ApiAbsenceRequest): AbsenceRequest {
+	return {
+		id: api.id,
+		projectId: api.project_id,
+		userId: api.user_id,
+		date: api.date,
+		type: api.type,
+		halfDay: api.half_day,
+		note: api.note ?? undefined,
+		status: api.status,
+		requestedAt: api.requested_at,
+		decidedAt: api.decided_at ?? undefined,
+		decidedBy: api.decided_by ?? undefined,
+		comment: api.comment ?? undefined,
+	};
+}
+
+export function toTimesheet(api: ApiTimesheet): Timesheet {
+	return {
+		id: api.id,
+		projectId: api.project_id,
+		userId: api.user_id,
+		month: api.month,
+		status: api.status,
+		submittedAt: api.submitted_at,
+		decidedAt: api.decided_at ?? undefined,
+		decidedBy: api.decided_by ?? undefined,
+		comment: api.comment ?? undefined,
+		frozen: api.frozen
+			? {
+					worked: api.frozen.worked,
+					expected: api.frozen.expected,
+					balanceEnd: api.frozen.balance_end,
+					entries: api.frozen.entries,
+					absenceDays: api.frozen.absence_days,
+				}
+			: undefined,
+		history: api.history.map((h) => ({
+			at: h.at,
+			by: h.by,
+			action: h.action,
+			comment: h.comment ?? undefined,
+		})),
+	};
+}
+
+export function toManagedContract(api: ApiManagedContract): ManagedContract {
+	return {
+		projectId: api.project_id,
+		userId: api.user_id,
+		managed: api.managed,
+		contract: api.contract ?? null,
+	};
+}
+
+export function toAuditEvent(api: ApiAuditEvent): AuditEvent {
+	return {
+		at: api.at,
+		actorUserId: api.actor_user_id ?? undefined,
+		event: api.event,
+		subjectUserId: api.subject_user_id ?? undefined,
+		projectId: api.project_id ?? undefined,
+		details: api.details,
 	};
 }

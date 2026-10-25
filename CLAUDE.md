@@ -336,8 +336,16 @@ nothing.
   a project hands the document over and stamps history from the chosen day; leaving ends
   the assignments so the project is not found, and both sides keep the stamped rows.
   Erasing an account (`infrastructure/erasure.py`, `scripts/erase_account.py`) keeps
-  those rows under a tombstone and deletes everything else. Roles are owner ≥ admin ≥
-  member; `/api/organisations` is reachable by no device token.
+  those rows — and the timesheets — under a tombstone and deletes everything else.
+  Employment (stages 3–4, `domain/employment.py`): the employer can manage an
+  assignment's contract (member writes answer 409 `CONTRACT_MANAGED`; absences become
+  requests a decider approves), a submitted month is approved into a stored
+  `FrozenMonth` — the one stored derived figure, by decision — after which every write
+  dated inside it answers 409 `PERIOD_APPROVED` until a recorded reopen; teams scope the
+  `manager` role, `viewer` reads the record only, and the audit log is readable by
+  admins. Roles are owner ≥ admin ≥ manager ≥ viewer ≥ member, with the real rules on
+  the role's capabilities (`administers`, `decides`, `reads_record`);
+  `/api/organisations` is reachable by no device token.
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
   (`:root[data-theme="dusk"]`), picked in Settings beside the density. `useTheme.ts` owns the
   storage keys, and a stored value that is neither hour reads as afternoon. Behind the app and
@@ -460,6 +468,6 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials, logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
-| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join/{token}` (preview, join or request); per organisation its settings, `/members` (role, removal), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments, `/connect` (one of my projects, from a day; `tz` required), `/record?month=&tz=` (what the organisation sees: finished entries, absences, totals, a contract's balance — admins), `/visible` (the same read, narrowed to me), `/archive` and `/archive.csv` (my own rows that are its record). No device token |
+| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join/{token}`; per organisation its settings, `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments, `/connect`, `/record` (readers; a manager their teams), `/visible`, `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
 | `/api/reports` | **Public.** `GET /{token}`: one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |

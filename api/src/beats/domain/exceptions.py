@@ -579,3 +579,90 @@ class CoachNotConfigured(DomainException):
     status_code = 503
     message = "The coach is not set up on this server: no ANTHROPIC_API_KEY is configured"
     code = "COACH_NOT_CONFIGURED"
+
+
+# Employment (docs/organisations.md, stage 3)
+class ContractManaged(DomainException):
+    """The employer owns this assignment's contract: the contract, the
+    absences and the balance adjustments are written through the
+    organisation's routes, and an absence is asked for, not booked."""
+
+    status_code = 409
+    message = "The organisation manages this contract"
+    code = "CONTRACT_MANAGED"
+
+
+class NotManaged(DomainException):
+    """An absence request on an assignment the employer does not manage:
+    the member books absences directly there."""
+
+    status_code = 409
+    message = "This assignment's contract is not managed by the organisation"
+    code = "NOT_MANAGED"
+
+
+class PeriodApproved(DomainException):
+    """A write dated inside an approved timesheet month. The figure was
+    frozen on approval; changing what it was made of needs the sheet
+    reopened first, with a reason, by a decider."""
+
+    status_code = 409
+    message = "This month's timesheet is approved; ask for it to be reopened"
+    code = "PERIOD_APPROVED"
+
+    def __init__(self, month: date | None = None):
+        if month is not None:
+            super().__init__(
+                f"The timesheet for {_spoken_month(month)} is approved; ask for it to be reopened"
+            )
+        else:
+            super().__init__()
+
+
+class MonthNotEnded(DomainException):
+    """A timesheet is submitted once its month is over."""
+
+    status_code = 409
+    message = "This month has not ended yet"
+    code = "MONTH_NOT_ENDED"
+
+
+class TimesheetNotFound(DomainException):
+    status_code = 404
+    message = "Timesheet not found"
+    code = "TIMESHEET_NOT_FOUND"
+
+
+class TimesheetAlreadyApproved(DomainException):
+    """Submitted or decided again while approved: reopen it first."""
+
+    status_code = 409
+    message = "This timesheet is approved; reopen it first"
+    code = "TIMESHEET_APPROVED"
+
+
+class AbsenceRequestNotFound(DomainException):
+    status_code = 404
+    message = "Absence request not found"
+    code = "ABSENCE_REQUEST_NOT_FOUND"
+
+
+class RequestAlreadyDecided(DomainException):
+    status_code = 409
+    message = "This request has already been decided"
+    code = "REQUEST_DECIDED"
+
+
+class TeamNotFound(DomainException):
+    status_code = 404
+    message = "Team not found"
+    code = "TEAM_NOT_FOUND"
+
+
+class OutsideManagerScope(DomainException):
+    """A manager deciding or reading for someone not in their teams. An
+    admin is never scoped; a manager's scope is their teams' members."""
+
+    status_code = 403
+    message = "This member is not in one of your teams"
+    code = "OUTSIDE_MANAGER_SCOPE"

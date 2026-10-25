@@ -11,10 +11,10 @@ import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import { archiveCsvUrl, useArchive } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
-import { downloadFile, formatDate, hoursText } from "@/shared/lib";
+import { downloadFile, formatDate, formatDateOnly, hoursText } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { EntriesTable } from "./EntriesTable";
-import { LEAD, LINKISH, TITLE } from "./styles";
+import { LABEL, LEAD, LINKISH, TITLE } from "./styles";
 
 export default function ArchivePage() {
 	const { id = "" } = useParams<{ id: string }>();
@@ -105,6 +105,19 @@ export default function ArchivePage() {
 							<p className={LEAD}>No entries.</p>
 						) : (
 							<EntriesTable entries={project.entries} label={`Entries on ${project.name}`} />
+						)}
+						{project.absences.length > 0 && (
+							<div className="mt-3">
+								<p className={LABEL}>Absences</p>
+								<ul className="text-[12.5px] text-foreground space-y-0.5">
+									{project.absences.map((absence) => (
+										<li key={`${absence.date}-${absence.type}`}>
+											{formatDateOnly(absence.date)} · {absence.type}
+											{absence.halfDay && " · half day"}
+										</li>
+									))}
+								</ul>
+							</div>
 						)}
 					</Panel>
 				))

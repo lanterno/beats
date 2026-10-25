@@ -481,7 +481,9 @@ export function Standing(props: StandingProps) {
 				: null;
 
 	const label = weekLabel(openWeekOf, todayIso);
-	const canBookTimeOff = dayJob && !!contract;
+	// A managed assignment's absences are the organisation's to write: the
+	// member asks in the rail's Time off panel instead of booking here.
+	const canBookTimeOff = dayJob && !!contract && project.organisation?.contractManaged !== true;
 	const canEditGoal = !dayJob || !isTimeBasedOn(contract, todayIso);
 
 	return (

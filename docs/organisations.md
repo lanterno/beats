@@ -141,13 +141,16 @@ Then the model's own:
     nor be demoted (409 `LAST_OWNER`). A non-member and an unknown
     organisation read the same, 404 `ORGANISATION_NOT_FOUND`; a member
     without the role is 403 `ORGANISATION_ROLE_REQUIRED`.
-11. **The API sends no email.** An invitation to an address is a token the
-    inviter passes on; the invitee also finds it at sign-in under
-    `/invitations`, matched on their account's address, and only that
-    account can take it (anyone else gets 404). An invite link has no
-    address, is reusable until it expires or is revoked, and with
-    `requires_approval` makes a join request for an admin instead of a
-    member. Every token is 32 URL-safe bytes, stored as read, as 1c's are.
+11. **The API sends no email, and hands out no token.** An invitation to an
+    address is a token the inviter passes on, and only the account holding
+    that address can take it (anyone else gets 404). The invitee also finds
+    at sign-in, under `/invitations`, *who* has invited them and as what —
+    but not the token: an address is not verified at sign-up, so whoever
+    registered it first must not be handed the way in. Joining takes both
+    the link and the address. An invite link has no address, is reusable
+    until it expires or is revoked, and with `requires_approval` makes a
+    join request for an admin instead of a member. Every token is 32
+    URL-safe bytes, stored as read, as 1c's are.
 12. **The audit log is written from the start and read by nothing.**
     `org_audit` records every membership, role, invite, request, project,
     assignment and connection event, and an account's erasure. Stage 4 reads
@@ -170,6 +173,32 @@ Then the model's own:
 15. **The coach stays the member's.** It reads the member's merged projects
     (so it names their day job) and is given no organisation port: nothing in
     it reads another member.
+16. **A balance is shown only when the record is whole.** A balance sums
+    every hour since the contract began, so on a connected project with
+    entries or absences before the day the member chose to share from it
+    would carry what rule 4 keeps back. The record withholds it
+    (`has_unshared`, a yes-or-no read that shows nothing) and shows it only
+    when every entry and absence on the project is the organisation's —
+    where it equals the member's own figure to the hundredth.
+17. **Reassigning keeps the member's half; only a connect replaces it.** An
+    ended assignment reopened by an admin keeps the goal, repo paths and
+    contract it had, since the contract is behind a balance the
+    organisation already read.
+18. **The stamp on a restored beat is never the file's.** A beat the account
+    already holds keeps the stamp it has; one new to the account takes the
+    one the project as it stands gives — an organisation's, and started on
+    or after the member's `shared_from`. A backup from before a connect
+    cannot strip the record, and an edited one cannot plant it.
+19. **The rows stay the person's to edit, in this stage.** A member can
+    still delete or move an entry that is an organisation's record, before
+    and after leaving: rule 1 says the data is theirs, and nothing here is
+    approved or closed yet. Stage 3's locked periods are where an employer's
+    guarantee begins; the erasure pass keeps the record against the account
+    going, not against the person's own edits.
+20. **The last-owner check is made twice.** The count before a demotion,
+    leave or removal is not atomic with the write, so after the write the
+    count is read again and the write undone (409 `LAST_OWNER`) if it left
+    no owner. Two owners leaving at once are both refused.
 
 ---
 
@@ -226,7 +255,7 @@ device token. "Admins" means owner or admin.
 |---|---|---|
 | `GET /` | anyone | My memberships, ended ones included |
 | `POST /` | anyone | Create; I am its owner |
-| `GET /invitations` | anyone | Open invitations addressed to my account's email |
+| `GET /invitations` | anyone | Who has invited my account's email, and as what — no token |
 | `GET /join/{token}`, `POST /join/{token}` | anyone | Preview, then join (`joined`) or request (`pending`) |
 | `GET /{id}`, `PUT /{id}` | members / admins | The organisation and my standing; its settings |
 | `GET /{id}/members` | members | Active members, by the name and address they joined under |
@@ -239,7 +268,15 @@ device token. "Admins" means owner or admin.
 | `POST /{id}/connect` (`tz` required) | members | Connect one of my own projects from `share_from`, or null for now |
 | `GET /{id}/record?month=&tz=` | admins | What the organisation sees |
 | `GET /{id}/visible?month=&tz=` | members, former members | What it sees of me — the same read |
-| `GET /{id}/archive`, `/archive.csv` | members, former members | My own rows that are its record |
+| `GET /{id}/archive`, `/archive.csv` | members, former members | My own entries and absences that are its record |
+| `GET`, `POST /{id}/teams`, `PUT`, `DELETE /{id}/teams/{tid}` | readers / admins | Teams: a manager's scope |
+| `GET`, `PUT /{id}/projects/{pid}/members/{uid}/contract` | deciders | The employer's contract on an assignment; `managed` takes or returns the pen |
+| `POST /{id}/projects/{pid}/members/{uid}/adjustments` | deciders | A payout, reset or cap on a managed assignment |
+| `POST /{id}/projects/{pid}/members/{uid}/entries` | deciders | Enter a finished session for a member, marked `entered_by` |
+| `POST`, `GET /{id}/absence-requests`, `POST …/{rid}/decision`, `DELETE /{rid}` | members / deciders | Ask, list, decide (approve books the absence), withdraw |
+| `POST`, `GET /{id}/timesheets`, `POST …/{tid}/decision`, `POST …/{tid}/reopen` | members / deciders | Submit a month; approve (freeze) or send back; reopen with a reason |
+| `GET /{id}/audit?before=&limit=` | admins | The audit log, newest first |
+| `GET /{id}/record.csv`, `/compliance.csv?month=` | record readers | The month flat, and per day with breaks |
 
 The record's shape is written field by field (`RecordResponse`), as the
 public report's is, so what crosses cannot grow by inheritance: per project,
@@ -251,7 +288,11 @@ per member, `shared_from`, `active`, the month's `hours`, `entries` (`day`,
 `INVITE_NOT_FOUND` 404, `INVITE_EXPIRED` 410, `ALREADY_A_MEMBER` 409,
 `JOIN_REQUEST_PENDING` 409, `JOIN_REQUEST_NOT_FOUND` 404, `MEMBER_NOT_FOUND`
 404, `LAST_OWNER` 409, `OWNER_ROLE_RESERVED` 403, `NOT_ASSIGNED` 404,
-`SHARE_FROM_IN_FUTURE` 409.
+`SHARE_FROM_IN_FUTURE` 409; stage 3 adds `CONTRACT_MANAGED` 409,
+`NOT_MANAGED` 409, `PERIOD_APPROVED` 409, `MONTH_NOT_ENDED` 409,
+`TIMESHEET_NOT_FOUND` 404, `TIMESHEET_APPROVED` 409,
+`ABSENCE_REQUEST_NOT_FOUND` 404, `REQUEST_DECIDED` 409, `TEAM_NOT_FOUND`
+404, `OUTSIDE_MANAGER_SCOPE` 403.
 
 On the member's own routes, a `Project` gains `organisation` (`id`, `name`,
 `logo_url`, `shared_from`), a beat and an absence `organisation_id`, and
@@ -289,16 +330,105 @@ project that does not exist.
 
 ---
 
-## Left out of stage 2
+## Employment (stage 3) and scale (stage 4)
 
-Each is a later stage's, and adds to this model without moving data:
+Stage 3 turns the contract into something two parties agree on; stage 4 adds
+what only matters past a handful of people. Decisions 21–27:
 
-- **Employment** (stage 3): the employer as the contract's writer, absences
-  as requests, timesheet approval and the frozen close, reminders,
-  admin-entered time, the compliance record.
-- **Scale** (stage 4): teams, manager and viewer roles, money as a
-  permission, verified domains, SSO per organisation, SCIM, reading the
-  audit log, retention settings, seats, reports.
+21. **The contract stays on the assignment; management is a flag.** The
+    employer takes an assignment's contract under its hand
+    (`contract_managed`, written through `PUT …/members/{uid}/contract`),
+    **starting from the terms the member recorded** — the roadmap's
+    "contract disagreement" answer: the employer's terms arrive as an
+    audited act, never as a silent recomputation of a balance the member
+    relied on. While managed, the member's own contract, absence and
+    adjustment writes answer 409 `CONTRACT_MANAGED`; their week, ledger,
+    balance and vacation reads are untouched. Handing back
+    (`managed: false`) returns the pen. Personal day jobs are exactly as
+    they were — nothing forces anyone into an organisation
+    (`docs/work-contracts.md` decision 1 stands, read through the
+    assignment).
+22. **An absence on a managed assignment is a request.** The member asks
+    (`org_absence_requests` — date, type, half day, and a note *addressed to
+    the decider*, which the record never shows); an owner, admin or scoped
+    manager approves — which books the absence, stamped, through the
+    member's own repository — or declines with a comment. A pending request
+    can be withdrawn; a decided one is decided once (409
+    `REQUEST_DECIDED`), atomically, so two deciders cannot both book it.
+    Unmanaged assignments book directly, as before (409 `NOT_MANAGED` on a
+    request there).
+23. **Approval freezes, and a frozen month refuses edits.** A member submits
+    a month once it has ended in the organisation's timezone
+    (`org_timesheets`, one per project · member · month, with a history). A
+    decider approves — storing `FrozenMonth`: worked, expected, entries,
+    absence days and the balance at the close, **the first stored derived
+    figure in the system** — or asks for changes with a comment. From
+    approval on, every write dated inside the month answers 409
+    `PERIOD_APPROVED`: beat create, edit (either end of the move), delete,
+    a back-dated timer start, absences, adjustments, and the employer's own
+    entries alike (`MongoPeriodLocks`, checked in the member-side services).
+    Approval itself refuses while a stamped timer still runs inside the
+    month — its hours are in no figure yet. Reopening needs a reason, is
+    recorded in the sheet's history and the audit log, lifts the lock and
+    drops the frozen figures; re-approval freezes afresh. Of the roadmap's
+    three options (refused / flagged / amendment), this is "refused with a
+    recorded way back", the only one a works council can sign.
+24. **Admin-entered time is marked.** A decider logs a finished session for
+    a member (`entered_by` on the beat): it lands on the member's own
+    timeline marked "entered for you", is stamped as the organisation's,
+    and is in the audit log — the "member notified" of the roadmap is the
+    member's own timeline showing it, since every surface reads it.
+25. **Teams are a manager's scope.** A team (`org_teams`) is a name and its
+    members. The **manager** role decides requests and timesheets, writes
+    managed contracts and enters time for the members of the teams the
+    manager is in — and for nobody else (403 `OUTSIDE_MANAGER_SCOPE`) — and
+    reads the record narrowed to them. The **viewer** role (an accountant,
+    a works council seat) reads the whole record, the CSVs and the teams,
+    and changes nothing. The capabilities are properties on the role
+    (`administers`, `decides`, `reads_record`), not the ladder.
+26. **The compliance record is a read, not a store.** `GET
+    /{id}/compliance.csv?month=` derives, per member and day: first start,
+    last end, the breaks between entries, and the total — the shape a
+    working-time authority asks for. `record.csv` is the same month as flat
+    entry rows. Rest-period and maximum-daily-hours warnings are later
+    work, as the roadmap says.
+27. **Reminders are the surfaces, not emails.** The API sends no email
+    (decision 11); what is missing or waiting shows where people already
+    look — the member's timesheet list says which months are unsubmitted or
+    sent back, the decider's sections say what waits. A digest or push is
+    later work.
+
+The audit log, written since stage 2, is now readable: `GET /{id}/audit`
+(owners and admins), newest first, paged by instant.
+
+### Stage 4 items deliberately not built
+
+Recorded here so they are decisions, not omissions:
+
+- **Money as a permission**: there is still no organisation-side money —
+  billing stayed personal (decision on `ORGANISATION_PROJECT` in billing) —
+  so there is nothing for the permission to guard yet. When organisation
+  money arrives, lean on the collection boundary as the roadmap says.
+- **Verified email domains**: needs the email infrastructure the API
+  deliberately does not have (decision 11). Without verification, a domain
+  rule would hand memberships to whoever registers an address — the exact
+  hole decision 11 closed for invitations.
+- **SSO per organisation, and "required to enter"**: sessions deliberately
+  do not record which door was used (PRIVACY.md: "nothing downstream knows
+  which door"). Requiring SSO per organisation needs that recorded, which
+  is a privacy decision to make on its own, not a feature to slip in.
+- **SCIM** provisioning: its own protocol surface and credential story.
+- **Retention settings**: nothing in LifePete auto-deletes (DATA.md); a
+  stored setting nothing enforces would be a false promise. Decide the
+  deletion machinery first.
+- **Per-seat billing**: the first money flowing *to us* — a payment
+  provider, tax, invoices, dunning — its own project, as the roadmap says.
+
+## Left out, still
+
 - **Merging** a connected project into one the organisation already has.
 - **Deleting an organisation**; archiving its projects is the way out today.
 - **A note input** on any surface, and with it the marker on the input.
+- **Term editing in the employer's dialog**: the SPA's managed-contract
+  dialog toggles management; the employer edits terms through the API until
+  the contract form grows an employer mode.

@@ -12,10 +12,10 @@ from pydantic import AfterValidator
 from beats.domain.analytics import AnalyticsService
 from beats.domain.billing_service import BillingService
 from beats.domain.calendar import CalendarService
+from beats.domain.employment import EmploymentService
 from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
-from beats.domain.organisations import OrganisationService
 from beats.domain.oura import OuraService
 from beats.domain.services import BeatService, ContractService, ProjectService, TimerService
 from beats.infrastructure.database import Database
@@ -50,6 +50,7 @@ from beats.infrastructure.repositories import (
     MongoOuraIntegrationRepository,
     MongoPairingCodeRepository,
     MongoPendingSuggestionRepository,
+    MongoPeriodLocks,
     MongoProjectBillingRepository,
     MongoProjectRepository,
     MongoReportLinkLookup,
@@ -232,13 +233,24 @@ get_report_link_repository = _user_scoped(MongoReportLinkRepository, "report_lin
 get_report_link_lookup = _unscoped(MongoReportLinkLookup, "report_links")
 
 
+def get_period_locks(user_id: CurrentUserId) -> MongoPeriodLocks:
+    """Stage 3's lock: whether an approved timesheet month covers a write."""
+    return MongoPeriodLocks(Database.get_db(), user_id)
+
+
+PeriodLocksDep = Annotated[MongoPeriodLocks, Depends(get_period_locks)]
+
+
 def get_timer_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
     flow_repo: Annotated[FlowWindowRepository, Depends(get_flow_window_repository)],
+    locks: PeriodLocksDep,
 ) -> TimerService:
     """Get the timer service with injected repositories."""
-    return TimerService(beat_repo=beat_repo, project_repo=project_repo, flow_repo=flow_repo)
+    return TimerService(
+        beat_repo=beat_repo, project_repo=project_repo, flow_repo=flow_repo, locks=locks
+    )
 
 
 def get_beat_service(
@@ -246,13 +258,18 @@ def get_beat_service(
     override_repo: Annotated[BillableOverrideRepository, Depends(get_billable_override_repository)],
     flow_repo: Annotated[FlowWindowRepository, Depends(get_flow_window_repository)],
     project_repo: Annotated[ProjectRepository, Depends(get_project_repository)],
+    locks: PeriodLocksDep,
 ) -> BeatService:
     """Get the beat service with injected repositories. The billable
     overrides are there for the delete: a beat's override goes with it. The
     projects are there for the organisation stamp: a beat written against an
     organisation's project is that organisation's record."""
     return BeatService(
-        beat_repo=beat_repo, overrides=override_repo, flow_repo=flow_repo, projects=project_repo
+        beat_repo=beat_repo,
+        overrides=override_repo,
+        flow_repo=flow_repo,
+        projects=project_repo,
+        locks=locks,
     )
 
 
@@ -267,6 +284,7 @@ def get_contract_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     absence_repo: Annotated[AbsenceRepository, Depends(get_absence_repository)],
     adjustment_repo: Annotated[AdjustmentRepository, Depends(get_adjustment_repository)],
+    locks: PeriodLocksDep,
 ) -> ContractService:
     """Get the contract service with injected repositories."""
     return ContractService(
@@ -274,6 +292,7 @@ def get_contract_service(
         beat_repo=beat_repo,
         absence_repo=absence_repo,
         adjustment_repo=adjustment_repo,
+        locks=locks,
     )
 
 
@@ -343,7 +362,7 @@ def billing_service_for(user_id: str) -> BillingService:
 
 def get_organisation_service(
     billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
-) -> OrganisationService:
+) -> EmploymentService:
     """The organisation service. Its store and its records reader are the
     two classes in the system not scoped by `user_id`
     (`infrastructure/organisations.py`); every read they make names an
@@ -351,7 +370,7 @@ def get_organisation_service(
     caller's own billing is there for connecting a project: one billed to a
     client stays personal."""
     db = Database.get_db()
-    return OrganisationService(
+    return EmploymentService(
         store=MongoOrganisationStore(db),
         records=MongoOrganisationRecords(db),
         users=MongoUserRepository(db.users),
@@ -359,7 +378,23 @@ def get_organisation_service(
     )
 
 
-OrganisationServiceDep = Annotated[OrganisationService, Depends(get_organisation_service)]
+OrganisationServiceDep = Annotated[EmploymentService, Depends(get_organisation_service)]
+
+
+def beat_repository_for(user_id: str) -> MongoBeatRepository:
+    """A beat repository bound to someone other than the caller — the target
+    of an admin-entered session. Built here, never in the domain."""
+    return MongoBeatRepository(Database.get_db().timeLogs, user_id=user_id)
+
+
+def absence_repository_for(user_id: str) -> MongoAbsenceRepository:
+    """As above, for an approved absence request's write."""
+    return MongoAbsenceRepository(Database.get_db().absences, user_id=user_id)
+
+
+def adjustment_repository_for(user_id: str) -> MongoAdjustmentRepository:
+    """As above, for an employer-entered balance adjustment."""
+    return MongoAdjustmentRepository(Database.get_db().balance_adjustments, user_id=user_id)
 
 
 def get_analytics_service(

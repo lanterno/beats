@@ -24,8 +24,9 @@ What survives, and in what shape:
 - **The membership**: the name and address the organisation knew the person
   by stay, as the employer's record; the membership ends with reason
   `erased`.
-- **The audit log**: the organisation's, so it stays; the person's id in it
-  becomes the tombstone.
+- **The audit log**, and every other column in the organisation that names
+  the person — who created it, who made an invite, who assigned, who decided
+  a request: the organisation's, so they stay; the id becomes the tombstone.
 
 Everything else keyed to the user — personal projects and their beats, flow
 windows, biometrics, the coach and its memory, clients and billing, devices,
@@ -110,6 +111,23 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
             )
             keep("balance_adjustments", adjustments.modified_count)
 
+        # The timesheets are the employer's record of the approvals; the
+        # absence requests are not — the absence itself is kept, the request
+        # (whose note was addressed to a decider) goes with the account.
+        sheets = await db.org_timesheets.update_many(
+            {"organisation_id": org_id, "user_id": user_id}, {"$set": {"user_id": stone}}
+        )
+        keep("org_timesheets", sheets.modified_count)
+        await db.org_timesheets.update_many(
+            {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
+        )
+        await db.org_absence_requests.update_many(
+            {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
+        )
+        await db.org_teams.update_many(
+            {"organisation_id": org_id}, {"$pull": {"member_ids": user_id}}
+        )
+
         assignments = await db.org_assignments.update_many(
             {"organisation_id": org_id, "user_id": user_id},
             [
@@ -138,6 +156,19 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
         )
         keep("org_members", 1)
 
+        # Every other column that names the person inside this organisation.
+        await db.organisations.update_one(
+            {"_id": ObjectId(org_id), "created_by": user_id}, {"$set": {"created_by": stone}}
+        )
+        await db.org_invites.update_many(
+            {"organisation_id": org_id, "created_by": user_id}, {"$set": {"created_by": stone}}
+        )
+        await db.org_assignments.update_many(
+            {"organisation_id": org_id, "assigned_by": user_id}, {"$set": {"assigned_by": stone}}
+        )
+        await db.org_join_requests.update_many(
+            {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
+        )
         await db.org_audit.update_many(
             {"organisation_id": org_id, "actor_user_id": user_id},
             {"$set": {"actor_user_id": stone}},

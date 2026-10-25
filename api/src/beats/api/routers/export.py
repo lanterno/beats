@@ -28,7 +28,12 @@ from beats.api.dependencies import (
 )
 from beats.api.errors import error_code
 from beats.api.schemas import ImportCounts, ImportResponse, ImportSkip
-from beats.domain.exceptions import BackupOfAnotherAccount, DomainException, ProjectNotFound
+from beats.domain.exceptions import (
+    BackupOfAnotherAccount,
+    BeatNotFound,
+    DomainException,
+    ProjectNotFound,
+)
 from beats.domain.models import (
     PERSONAL_FIELDS,
     Absence,
@@ -41,6 +46,7 @@ from beats.domain.models import (
     Project,
     ProjectBilling,
 )
+from beats.domain.utils import normalize_tz
 from beats.infrastructure.repositories import (
     BeatRepository,
     ClientRepository,
@@ -469,7 +475,32 @@ async def import_full_json(
         await billing_service.restore_billing_budget(budget)
         counts.billing_budgets += 1
 
+    # A beat's stamp is never the file's. One the account already holds keeps
+    # the stamp it has — so a backup from before a connect does not strip the
+    # record, and one edited by hand cannot plant it. One new to the account
+    # takes the stamp the project as it stands gives: an organisation's, and
+    # started on or after the day this member shares from.
+    stamps: dict[str, tuple[str, datetime] | None] = {}
     for beat in backup.beats:
+        stored = None
+        if beat.id is not None:
+            try:
+                stored = await beat_repo.get_by_id(beat.id)
+            except BeatNotFound:
+                stored = None
+        if stored is not None:
+            beat.organisation_id = stored.organisation_id
+        else:
+            if beat.project_id not in stamps:
+                try:
+                    owner = (await project_repo.get_by_id(beat.project_id)).organisation
+                except ProjectNotFound:
+                    owner = None
+                stamps[beat.project_id] = (owner.id, owner.shared_from) if owner else None
+            stamp = stamps[beat.project_id]
+            beat.organisation_id = (
+                stamp[0] if stamp and normalize_tz(beat.start) >= normalize_tz(stamp[1]) else None
+            )
         await beat_repo.restore(beat)
         counts.beats += 1
 

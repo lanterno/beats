@@ -262,6 +262,10 @@ export function WeekDays({
 	// The zone the API buckets the report in, so the pill counts the day it does.
 	const tz = browserTimeZone();
 
+	// On a managed assignment the absences are the organisation's to write:
+	// no booking or changing here, only the request flow in the rail.
+	const managed = project.organisation?.contractManaged === true;
+
 	const [open, setOpen] = useState<Record<string, boolean>>({});
 	const [editing, setEditing] = useState<string | null>(null);
 	const [confirming, setConfirming] = useState<string | null>(null);
@@ -374,7 +378,7 @@ export function WeekDays({
 									</>
 								)}
 							</span>
-							{day.off.absence && (
+							{day.off.absence && !managed && (
 								<button
 									type="button"
 									data-booking=""
@@ -434,7 +438,7 @@ export function WeekDays({
 							)}
 							<div className="text-[12.5px] text-muted-foreground font-medium flex gap-2 items-center min-w-0 flex-wrap @max-[560px]/content:flex-nowrap @max-[560px]/content:overflow-x-clip @max-[560px]/content:whitespace-nowrap">
 								{mid}
-								{day.bookable && onBookTimeOff && (
+								{day.bookable && onBookTimeOff && !managed && (
 									// On a hover device it waits for the row's hover or its own focus;
 									// by keyboard it is the next stop after the day's toggle. Its box
 									// is 24 px tall, and 24 px wide once only the "+" shows, without
@@ -498,6 +502,14 @@ export function WeekDays({
 													{session.note && project.organisation && (
 														<span className="text-[10.5px] font-medium text-muted-foreground shrink-0 whitespace-nowrap">
 															{project.organisation.name} can read this note
+														</span>
+													)}
+													{session.enteredBy && (
+														<span
+															className="text-[10.5px] font-medium text-muted-foreground shrink-0 whitespace-nowrap"
+															title="Entered by an organisation admin or manager; it is in the audit log"
+														>
+															entered for you
 														</span>
 													)}
 													{session.tags.map((tag) => (

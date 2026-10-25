@@ -22,6 +22,8 @@ from beats.domain.exceptions import (
     AdjustmentBeforeStart,
     AdjustmentNotFound,
     AdjustmentOutsideBalance,
+    BeatNotFound,
+    ContractManaged,
     InvalidEndTime,
     MonthOutsideContract,
     NoActiveTimer,
@@ -30,6 +32,7 @@ from beats.domain.exceptions import (
     NotADayJob,
     NoVacationEntitlement,
     OrganisationProject,
+    PeriodApproved,
     ProjectHasBilling,
     ProjectNotFound,
     TimerAlreadyRunning,
@@ -67,6 +70,7 @@ from beats.domain.ports import (
     BillingPresence,
     ContractAdjustments,
     FlowWindowReader,
+    PeriodLocks,
     ProjectBeatReader,
     ProjectReader,
     ProjectStore,
@@ -119,6 +123,34 @@ def organisation_of(project: Project) -> str | None:
     return project.organisation.id if project.organisation is not None else None
 
 
+def _refuse_managed(project: Project) -> None:
+    """The member's write to a contract the employer manages (stage 3): the
+    contract, the absences and the adjustments are the organisation's to
+    change, and an absence is asked for through a request."""
+    if project.organisation is not None and project.organisation.contract_managed:
+        raise ContractManaged()
+
+
+async def refuse_locked(
+    locks: PeriodLocks | None, project: Project, instant: datetime | None, day: date | None = None
+) -> None:
+    """Refuse a write dated inside an approved timesheet month on an
+    organisation's project (docs/organisations.md, stage 3). Personal
+    projects, and services built without the locks (the tests' bare fakes),
+    pass through."""
+    if locks is None or project.organisation is None:
+        return
+    if project.id is None:
+        return
+    month = None
+    if instant is not None:
+        month = await locks.locked_instant(project.id, instant)
+    if month is None and day is not None:
+        month = await locks.locked_day(project.id, day)
+    if month is not None:
+        raise PeriodApproved(month)
+
+
 def check_organisation_fields(existing: Project, project: Project) -> None:
     """What a member's write to an organisation's project must leave alone:
     every field in `ORGANISATION_FIELDS`, which only the organisation's admins
@@ -147,10 +179,15 @@ class TimerService:
         beat_repo: TimerBeatStore,
         project_repo: TimerProjectReader,
         flow_repo: FlowWindowReader | None = None,
+        locks: PeriodLocks | None = None,
     ):
         self.beat_repo = beat_repo
         self.project_repo = project_repo
         self.flow_repo = flow_repo
+        # Stage 3: a timer started with a back-dated time must not land in an
+        # approved month (`refuse_locked`). Stopping is never checked — the
+        # approval itself refuses to freeze around a running timer.
+        self.locks = locks
 
     async def start_timer(self, project_id: str, start_time: datetime | None = None) -> Beat:
         """Start a new timer for a project.
@@ -183,6 +220,7 @@ class TimerService:
         # Create new beat, stamped as the organisation's record when the
         # project is an organisation's (docs/organisations.md).
         start = start_time or datetime.now(UTC)
+        await refuse_locked(self.locks, project, start)
         beat = Beat(project_id=project_id, start=start, organisation_id=organisation_of(project))
         return await self.beat_repo.create(beat)
 
@@ -265,10 +303,14 @@ class BeatService:
         overrides: BillableOverrideRemover,
         flow_repo: FlowWindowReader | None = None,
         projects: ProjectReader | None = None,
+        locks: PeriodLocks | None = None,
     ):
         self.beat_repo = beat_repo
         self.overrides = overrides
         self.flow_repo = flow_repo
+        # Stage 3: a create, edit or delete dated inside an approved
+        # timesheet month on an organisation's project is refused.
+        self.locks = locks
         # For the organisation stamp: a beat written against an
         # organisation's project is that organisation's record, and one
         # moved to a personal project is nobody's but the member's. Given
@@ -282,6 +324,7 @@ class BeatService:
             return beat
         project = await self.projects.get_by_id(beat.project_id)
         beat.organisation_id = organisation_of(project)
+        await refuse_locked(self.locks, project, beat.start)
         return beat
 
     async def create_beat(self, beat: Beat) -> Beat:
@@ -314,6 +357,14 @@ class BeatService:
                 raise InvalidEndTime()
         written = {"project_id", "start", "end"}
         if self.projects is not None:
+            # The stored beat's own month must be open too: moving an entry
+            # out of an approved month changes the frozen figure as surely as
+            # moving one in.
+            if self.locks is not None and beat.id is not None:
+                stored = await self.beat_repo.get_by_id(beat.id)
+                if stored.organisation_id is not None:
+                    stored_project = await self.projects.get_by_id(stored.project_id)
+                    await refuse_locked(self.locks, stored_project, stored.start)
             await self._stamped(beat)
             written.add("organisation_id")
         if self.flow_repo is not None and beat.end is not None:
@@ -326,7 +377,16 @@ class BeatService:
     async def delete_beat(self, beat_id: str) -> bool:
         """Delete a beat by ID, and its billable override with it. The
         override goes whether or not the beat was there: one left without
-        its beat is a leftover either way."""
+        its beat is a leftover either way. One inside an approved timesheet
+        month is refused: the frozen figure was made of it."""
+        if self.locks is not None and self.projects is not None:
+            try:
+                stored = await self.beat_repo.get_by_id(beat_id)
+            except BeatNotFound:
+                stored = None
+            if stored is not None and stored.organisation_id is not None:
+                project = await self.projects.get_by_id(stored.project_id)
+                await refuse_locked(self.locks, project, stored.start)
         deleted = await self.beat_repo.delete(beat_id)
         await self.overrides.delete(beat_id)
         return deleted
@@ -438,6 +498,12 @@ class ProjectService:
         if project.id is not None:
             existing = await self.project_repo.get_by_id(project.id)
             check_organisation_fields(existing, project)
+            if (
+                existing.organisation is not None
+                and existing.organisation.contract_managed
+                and project.contract != existing.contract
+            ):
+                raise ContractManaged()
         if (
             project.kind is not ProjectKind.FREELANCE
             and project.id is not None
@@ -698,11 +764,15 @@ class ContractService:
         absence_repo: AbsenceStore,
         adjustment_repo: AdjustmentStore,
         now: Callable[[ZoneInfo], datetime] = datetime.now,
+        locks: PeriodLocks | None = None,
     ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
         self.absence_repo = absence_repo
         self.adjustment_repo = adjustment_repo
+        # Stage 3: absence and adjustment writes dated inside an approved
+        # timesheet month are refused, like a beat's.
+        self.locks = locks
         # The one clock every read here uses: which week is open, which day
         # the balance is as of, which year the calendar defaults to are all
         # "today in the request timezone", and a test hands in a fixed instant
@@ -1019,14 +1089,20 @@ class ContractService:
     async def record_absence(self, absence: Absence) -> Absence:
         """Record an absence; one already on that date is replaced. On an
         organisation's project it is stamped as that organisation's record,
-        as a beat there is."""
+        as a beat there is. Where the employer manages the contract the
+        member asks instead (409 CONTRACT_MANAGED), and a date inside an
+        approved month is refused."""
         project = await self._day_job(absence.project_id)
+        _refuse_managed(project)
+        await refuse_locked(self.locks, project, None, absence.date)
         absence.organisation_id = organisation_of(project)
         return await self.absence_repo.upsert(absence)
 
     async def remove_absence(self, project_id: str, absence_id: str) -> None:
-        """Remove an absence; one that is not on this project is not found."""
-        await self._day_job(project_id)
+        """Remove an absence; one that is not on this project is not found.
+        On a managed assignment the days off are the employer's to change."""
+        project = await self._day_job(project_id)
+        _refuse_managed(project)
         if not await self.absence_repo.delete(project_id, absence_id):
             raise AbsenceNotFound(absence_id)
 
@@ -1040,6 +1116,8 @@ class ContractService:
         future one would move a balance nobody can see yet. After `ended_on`
         is allowed: that is how a final balance is paid out."""
         project = await self._day_job(adjustment.project_id)
+        _refuse_managed(project)
+        await refuse_locked(self.locks, project, None, adjustment.date)
         contract = project.contract
         if contract is None:
             raise NoContract()
@@ -1050,8 +1128,9 @@ class ContractService:
 
     async def remove_adjustment(self, project_id: str, adjustment_id: str) -> None:
         """Remove a balance adjustment; one that is not on this project is
-        not found."""
-        await self._day_job(project_id)
+        not found. On a managed assignment they are the employer's."""
+        project = await self._day_job(project_id)
+        _refuse_managed(project)
         if not await self.adjustment_repo.delete(project_id, adjustment_id):
             raise AdjustmentNotFound(adjustment_id)
 

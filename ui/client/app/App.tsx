@@ -5,7 +5,7 @@
 import "../global.css";
 
 import { useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import { initializeAuth, useAuth } from "@/features/auth";
 import Clients from "@/pages/clients";
 import Coach from "@/pages/coach/Coach";
@@ -28,6 +28,7 @@ import ProjectsIndex from "@/pages/projects-index";
 import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
+import { rememberReturnTo, takeReturnTo } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
@@ -38,6 +39,7 @@ import { QueryProvider } from "./providers";
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
 	const { isAuthenticated, isLoading } = useAuth();
+	const location = useLocation();
 
 	if (isLoading) {
 		return (
@@ -48,6 +50,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 	}
 
 	if (!isAuthenticated) {
+		// Kept for after sign-in: an invite URL or a project link opened while
+		// signed out must not be lost on the way to the homepage.
+		rememberReturnTo(location.pathname + location.search);
 		return <Navigate to="/" replace />;
 	}
 
@@ -72,7 +77,7 @@ function HomeOrDashboard() {
 		return <HomePage />;
 	}
 
-	return <Navigate to="/app" replace />;
+	return <Navigate to={takeReturnTo() ?? "/app"} replace />;
 }
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {

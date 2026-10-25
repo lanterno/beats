@@ -812,9 +812,11 @@ class OrganisationCardResponse(BaseModel):
 
 
 class InvitationResponse(BaseModel):
-    """An open invitation addressed to the caller's own address."""
+    """An open invitation addressed to the caller's own address: who, and as
+    what. Not the token — an address is not verified at sign-up, so the way
+    in is the link the inviter passed on, which the join route then checks
+    against the address too."""
 
-    token: str
     role: OrgRole
     expires_at: datetime
     organisation: OrganisationCardResponse
@@ -947,6 +949,7 @@ class ArchiveProjectResponse(BaseModel):
     color: str | None
     hours: float
     entries: list[RecordEntryResponse]
+    absences: list[RecordAbsenceResponse]
 
 
 class ArchiveResponse(BaseModel):

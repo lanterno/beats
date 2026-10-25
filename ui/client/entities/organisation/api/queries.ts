@@ -10,33 +10,49 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
 import { organisationsRootKey } from "@/shared/api";
-import type { InviteInput, OrganisationInput, OrgProjectInput, OrgRole } from "../model";
+import type { InviteInput, OrganisationInput, OrgProjectInput, OrgRole, TeamInput } from "../model";
 import {
 	assignMember,
 	connectProject,
 	createInvite,
 	createOrganisation,
 	createOrgProject,
+	createTeam,
+	decideAbsenceRequest,
 	decideJoinRequest,
+	decideTimesheet,
+	deleteTeam,
+	enterTime,
+	fetchAbsenceRequests,
 	fetchArchive,
+	fetchAuditLog,
 	fetchInvitations,
 	fetchInvitePreview,
 	fetchInvites,
 	fetchJoinRequests,
+	fetchManagedContract,
 	fetchMembers,
 	fetchMembership,
 	fetchMemberships,
 	fetchOrgProjects,
 	fetchRecord,
+	fetchTeams,
+	fetchTimesheets,
 	fetchVisible,
 	joinOrganisation,
 	leaveOrganisation,
 	removeMember,
+	reopenTimesheet,
+	requestAbsence,
 	revokeInvite,
+	setManagedContract,
 	setMemberRole,
+	submitTimesheet,
 	unassignMember,
 	updateOrganisation,
 	updateOrgProject,
+	updateTeam,
+	withdrawAbsenceRequest,
 } from "./organisationApi";
 
 export const organisationKeys = {
@@ -50,6 +66,14 @@ export const organisationKeys = {
 	requests: (id: string) => [...organisationKeys.one(id), "requests"] as const,
 	projects: (id: string) => [...organisationKeys.one(id), "projects"] as const,
 	record: (id: string, month: string) => [...organisationKeys.one(id), "record", month] as const,
+	teams: (id: string) => [...organisationKeys.one(id), "teams"] as const,
+	absenceRequests: (id: string, pending: boolean) =>
+		[...organisationKeys.one(id), "absence-requests", pending ? "pending" : "all"] as const,
+	timesheets: (id: string, month: string | undefined) =>
+		[...organisationKeys.one(id), "timesheets", month ?? "all"] as const,
+	managedContract: (id: string, projectId: string, userId: string) =>
+		[...organisationKeys.one(id), "managed-contract", projectId, userId] as const,
+	audit: (id: string) => [...organisationKeys.one(id), "audit"] as const,
 	visible: (id: string, month: string) => [...organisationKeys.one(id), "visible", month] as const,
 	archive: (id: string) => [...organisationKeys.one(id), "archive"] as const,
 };
@@ -305,6 +329,197 @@ export function useConnectProject() {
 		}) => connectProject(organisationId, projectId, shareFrom),
 		onSuccess: invalidate,
 		// A 409 is an answer the dialog shows, not something to send twice.
+		retry: false,
+	});
+}
+
+// --- Employment (docs/organisations.md, stages 3 and 4) -----------------------
+
+export function useTeams(organisationId: string, options: { enabled?: boolean } = {}) {
+	return useQuery({
+		queryKey: organisationKeys.teams(organisationId),
+		queryFn: () => fetchTeams(organisationId),
+		enabled: options.enabled ?? true,
+		retry: false,
+	});
+}
+
+export function useSaveTeam(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: ({ teamId, input }: { teamId?: string; input: TeamInput }) =>
+			teamId ? updateTeam(organisationId, teamId, input) : createTeam(organisationId, input),
+		onSuccess: invalidate,
+	});
+}
+
+export function useDeleteTeam(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: (teamId: string) => deleteTeam(organisationId, teamId),
+		onSuccess: invalidate,
+	});
+}
+
+export function useManagedContract(
+	organisationId: string,
+	projectId: string,
+	userId: string,
+	options: { enabled?: boolean } = {},
+) {
+	return useQuery({
+		queryKey: organisationKeys.managedContract(organisationId, projectId, userId),
+		queryFn: () => fetchManagedContract(organisationId, projectId, userId),
+		enabled: options.enabled ?? true,
+		retry: false,
+	});
+}
+
+export function useSetManagedContract(organisationId: string) {
+	// The member's week and contract panels read the assignment's contract,
+	// so the project root refreshes too.
+	const invalidate = useInvalidateTimeline();
+	return useMutation({
+		mutationFn: ({
+			projectId,
+			userId,
+			contract,
+			managed,
+		}: {
+			projectId: string;
+			userId: string;
+			contract: unknown | null;
+			managed: boolean;
+		}) => setManagedContract(organisationId, projectId, userId, contract, managed),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useEnterTime(organisationId: string) {
+	const invalidate = useInvalidateTimeline();
+	return useMutation({
+		mutationFn: ({
+			projectId,
+			userId,
+			input,
+		}: {
+			projectId: string;
+			userId: string;
+			input: { start: string; end: string; note?: string };
+		}) => enterTime(organisationId, projectId, userId, input),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useAbsenceRequests(
+	organisationId: string,
+	options: { pending?: boolean; enabled?: boolean } = {},
+) {
+	const pending = options.pending ?? false;
+	return useQuery({
+		queryKey: organisationKeys.absenceRequests(organisationId, pending),
+		queryFn: () => fetchAbsenceRequests(organisationId, pending),
+		enabled: options.enabled ?? true,
+	});
+}
+
+export function useRequestAbsence(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: (input: {
+			projectId: string;
+			date: string;
+			type: "vacation" | "sick" | "other";
+			halfDay: boolean;
+			note?: string;
+		}) => requestAbsence(organisationId, input),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useDecideAbsenceRequest(organisationId: string) {
+	// Approval books the absence on the member's project: their panels read it.
+	const invalidate = useInvalidateTimeline();
+	return useMutation({
+		mutationFn: ({
+			requestId,
+			approve,
+			comment,
+		}: {
+			requestId: string;
+			approve: boolean;
+			comment?: string;
+		}) => decideAbsenceRequest(organisationId, requestId, approve, comment),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useWithdrawAbsenceRequest(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: (requestId: string) => withdrawAbsenceRequest(organisationId, requestId),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useTimesheets(
+	organisationId: string,
+	options: { month?: string; enabled?: boolean } = {},
+) {
+	return useQuery({
+		queryKey: organisationKeys.timesheets(organisationId, options.month),
+		queryFn: () => fetchTimesheets(organisationId, options.month),
+		enabled: options.enabled ?? true,
+	});
+}
+
+export function useSubmitTimesheet(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: ({ projectId, month }: { projectId: string; month: string }) =>
+			submitTimesheet(organisationId, projectId, month),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useDecideTimesheet(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: ({
+			sheetId,
+			approve,
+			comment,
+		}: {
+			sheetId: string;
+			approve: boolean;
+			comment?: string;
+		}) => decideTimesheet(organisationId, sheetId, approve, comment),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useReopenTimesheet(organisationId: string) {
+	const invalidate = useInvalidateOrganisation();
+	return useMutation({
+		mutationFn: ({ sheetId, reason }: { sheetId: string; reason: string }) =>
+			reopenTimesheet(organisationId, sheetId, reason),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useAuditLog(organisationId: string, options: { enabled?: boolean } = {}) {
+	return useQuery({
+		queryKey: organisationKeys.audit(organisationId),
+		queryFn: () => fetchAuditLog(organisationId),
+		enabled: options.enabled ?? true,
 		retry: false,
 	});
 }
