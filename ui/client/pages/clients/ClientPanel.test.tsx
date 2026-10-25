@@ -5,9 +5,10 @@
  * above it says a timer is running for the same client.
  *
  * And its billing budgets in the current month: a row for each, sentence
- * and meter, a quiet "Set a budget" while the client has none of its own,
+ * and meter, the header's Budget control setting the client's first one,
  * nothing at all in a month already over, and a line of its own when the
- * budgets cannot be read.
+ * budgets cannot be read. The header also carries the shared reports, which
+ * still read nothing until they are opened.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
@@ -104,6 +105,17 @@ describe("ClientPanel", () => {
 		expect(panel).toHaveTextContent("a timer is running");
 	});
 
+	it("opens the shared reports from the header, and shows nothing of them before", async () => {
+		const panel = renderPanel(KITE, { budgets: [] });
+		const share = within(panel).getByRole("button", { name: "Shared reports for Studio Kite" });
+		expect(share).toHaveAttribute("aria-expanded", "false");
+		expect(within(panel).queryByText("Shared reports")).toBeNull();
+
+		await userEvent.click(share);
+		expect(share).toHaveAttribute("aria-expanded", "true");
+		expect(within(panel).getByText("Shared reports")).toBeVisible();
+	});
+
 	it("draws each budget's row, and offers one for the client while it has none", () => {
 		const panel = renderPanel(KITE, { budgets: [WEBSITE_BUDGET], now: Date.now() });
 		const block = within(panel).getByRole("region", { name: "Studio Kite's budgets" });
@@ -113,20 +125,19 @@ describe("ClientPanel", () => {
 			"67",
 		);
 		expect(within(block).getByRole("button", { name: "Edit Website's budget" })).toBeVisible();
-		expect(
-			within(block).getByRole("button", { name: "Set a budget for Studio Kite" }),
-		).toBeVisible();
+		// The client's own budget is the header's control, not a pencil in the block.
+		expect(within(panel).getByRole("button", { name: "Set Studio Kite's budget" })).toBeVisible();
 	});
 
 	it("offers a budget and nothing more when there is none", () => {
 		const panel = renderPanel(KITE, { budgets: [] });
-		expect(within(panel).getByRole("button", { name: "Set a budget" })).toBeVisible();
+		expect(within(panel).getByRole("button", { name: "Set Studio Kite's budget" })).toBeVisible();
 		expect(within(panel).queryByRole("region", { name: "Studio Kite's budgets" })).toBeNull();
 	});
 
 	it("shows no budget in a month already over", () => {
 		const panel = renderPanel(KITE);
-		expect(within(panel).queryByRole("button", { name: /Set a budget/ })).toBeNull();
+		expect(within(panel).queryByRole("button", { name: /budget$/i })).toBeNull();
 		expect(within(panel).queryByRole("meter")).toBeNull();
 	});
 
@@ -134,7 +145,7 @@ describe("ClientPanel", () => {
 		const panel = renderPanel(KITE, { budgetsFailed: true });
 		expect(panel).toHaveTextContent("Budgets aren't available right now.");
 		expect(panel).toHaveTextContent("Nothing logged for Studio Kite in October.");
-		expect(within(panel).queryByRole("button", { name: /Set a budget/ })).toBeNull();
+		expect(within(panel).queryByRole("button", { name: /budget$/i })).toBeNull();
 	});
 
 	it("on an archived client, shows its budgets and offers no write", () => {
@@ -187,7 +198,7 @@ describe("ClientPanel", () => {
 		);
 		const { rerender } = render(panel([]));
 
-		await userEvent.click(screen.getByRole("button", { name: "Set a budget" }));
+		await userEvent.click(screen.getByRole("button", { name: "Set Studio Kite's budget" }));
 		expect(screen.getByRole("dialog")).toBeInTheDocument();
 		rerender(panel([own]));
 		await userEvent.keyboard("{Escape}");
@@ -198,6 +209,8 @@ describe("ClientPanel", () => {
 		await userEvent.click(screen.getByRole("button", { name: "Edit Studio Kite's budget" }));
 		rerender(panel([]));
 		await userEvent.keyboard("{Escape}");
-		await waitFor(() => expect(screen.getByRole("button", { name: "Set a budget" })).toHaveFocus());
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "Set Studio Kite's budget" })).toHaveFocus(),
+		);
 	});
 });

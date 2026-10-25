@@ -140,6 +140,33 @@ describe("Clients", () => {
 		);
 	});
 
+	it("reaches every client in one click from the overview, and says each one's state", () => {
+		const slate: ClientBilling = {
+			...KITE,
+			clientId: "c2",
+			name: "Slate Co",
+			billableHours: 3,
+			amountMinor: 25_500,
+		};
+		state.month = { data: month({ clients: [KITE, slate] }), error: null };
+		state.budgets = { data: [KITE_USED_UP], isError: false };
+		renderPage();
+
+		const overview = screen.getByRole("region", { name: /^Clients in / });
+		for (const client of [KITE, slate]) {
+			// The row's link and the panel's id are the same, so the jump lands.
+			expect(within(overview).getByRole("link", { name: client.name })).toHaveAttribute(
+				"href",
+				`#client-${client.clientId}`,
+			);
+			expect(screen.getByRole("region", { name: client.name }).getAttribute("id")).toBe(
+				`client-${client.clientId}`,
+			);
+		}
+		// Never state by colour alone: the budget's state is a word in the row.
+		expect(overview).toHaveTextContent("Used up");
+	});
+
 	it("keeps the API's words apart from its own when the month cannot be read", () => {
 		state.month = { data: undefined, error: new ApiError(404, "Not Found") };
 		renderPage();
