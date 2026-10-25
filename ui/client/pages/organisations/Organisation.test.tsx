@@ -38,7 +38,7 @@ vi.mock("@/entities/organisation", async () => {
 		useCreateInvite: idle,
 		useRevokeInvite: idle,
 		useDecideJoinRequest: idle,
-		useAssignMember: idle,
+		useAssignMembers: idle,
 		useUnassignMember: idle,
 		useCreateOrgProject: idle,
 		useUpdateOrgProject: idle,
