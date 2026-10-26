@@ -55,6 +55,17 @@ export function ConnectProjectDialog({
 	const [shareFrom, setShareFrom] = useState(todayIso);
 	const [error, setError] = useState<unknown>(null);
 
+	// An answer belongs to the inputs it answered: changing any clears it.
+	const choose =
+		<T,>(set: (v: T) => void) =>
+		(value: T) => {
+			setError(null);
+			set(value);
+		};
+	const pickShare = choose(setShare);
+	const pickShareFrom = choose(setShareFrom);
+	const pickOrganisation = choose(setOrganisationId);
+
 	const chosen = memberships.find((m) => m.organisation.id === organisationId);
 	const canSubmit = chosen !== undefined && (share === "fresh" || shareFrom !== "");
 
@@ -104,7 +115,7 @@ export function ConnectProjectDialog({
 					<select
 						id={`${id}-organisation`}
 						value={organisationId}
-						onChange={(e) => setOrganisationId(e.target.value)}
+						onChange={(e) => pickOrganisation(e.target.value)}
 						className={FIELD}
 						autoFocus
 					>
@@ -126,7 +137,7 @@ export function ConnectProjectDialog({
 								name={`${id}-share`}
 								value="fresh"
 								checked={share === "fresh"}
-								onChange={() => setShare("fresh")}
+								onChange={() => pickShare("fresh")}
 								className="mt-1 shrink-0"
 							/>
 							<span className="text-sm font-medium text-foreground">
@@ -139,7 +150,7 @@ export function ConnectProjectDialog({
 								name={`${id}-share`}
 								value="from"
 								checked={share === "from"}
-								onChange={() => setShare("from")}
+								onChange={() => pickShare("from")}
 								className="mt-1 shrink-0"
 							/>
 							<span className="flex-1 min-w-0 space-y-1.5">
@@ -150,7 +161,7 @@ export function ConnectProjectDialog({
 									value={shareFrom}
 									max={todayIso}
 									disabled={share !== "from"}
-									onChange={(e) => setShareFrom(e.target.value)}
+									onChange={(e) => pickShareFrom(e.target.value)}
 									className={`${FIELD} w-auto font-mono font-bold bg-card`}
 								/>
 							</span>
@@ -164,7 +175,10 @@ export function ConnectProjectDialog({
 
 				<p className="text-xs text-muted-foreground leading-normal">
 					The project becomes {chosen?.organisation.name ?? "the organisation"}'s: its name, colour
-					and kind become theirs to change. Your goal, local repo paths and contract stay yours.
+					and kind become theirs to change. Your goal, local repo paths and contract stay yours —
+					though a contract that began before the day you share from keeps its balance to you, since
+					a balance would carry what you kept back. There is no disconnect: the way out is leaving
+					the organisation, which keeps the hours already shared as its record.
 				</p>
 
 				{error !== null && (
