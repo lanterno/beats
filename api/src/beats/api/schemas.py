@@ -845,10 +845,14 @@ class JoinResponse(BaseModel):
 
 
 class JoinRequestResponse(BaseModel):
+    """A join request with the role approving it grants — the invite's, so
+    the admin decides knowing what they are handing over."""
+
     id: str
     user_id: str
     name: str
     email: str
+    role: OrgRole
     requested_at: datetime
 
 

@@ -522,22 +522,31 @@ class OrganisationService:
 
     # --- join requests ---------------------------------------------------------------
 
-    async def requests(self, organisation_id: str, actor: str) -> list[OrgJoinRequest]:
+    async def requests(
+        self, organisation_id: str, actor: str
+    ) -> list[tuple[OrgJoinRequest, OrgRole]]:
+        """Each waiting request with the role approving it would grant — the
+        invite's, the same rule `decide_request` applies — so the decision is
+        made knowing it, not discovered after."""
         await self._member(organisation_id, actor, OrgRole.ADMIN)
-        return await self.store.list_requests(organisation_id)
+        requests = await self.store.list_requests(organisation_id)
+        return [(r, await self._requested_role(organisation_id, r)) for r in requests]
+
+    async def _requested_role(self, organisation_id: str, request: OrgJoinRequest) -> OrgRole:
+        invite = await self.store.get_invite(organisation_id, request.invite_id)
+        return invite.role if invite is not None else OrgRole.MEMBER
 
     async def decide_request(
         self, organisation_id: str, actor: str, request_id: str, decision: JoinDecision
-    ) -> OrgJoinRequest:
+    ) -> tuple[OrgJoinRequest, OrgRole]:
         await self._member(organisation_id, actor, OrgRole.ADMIN)
         decided = await self.store.decide_request(
             organisation_id, request_id, decision, actor, self._now()
         )
         if decided is None:
             raise JoinRequestNotFound()
+        role = await self._requested_role(organisation_id, decided)
         if decision is JoinDecision.APPROVED:
-            invite = await self.store.get_invite(organisation_id, decided.invite_id)
-            role = invite.role if invite is not None else OrgRole.MEMBER
             await self.store.open_membership(
                 OrgMembership(
                     organisation_id=organisation_id,
@@ -551,7 +560,7 @@ class OrganisationService:
         await self._audit(
             organisation_id, actor, f"request.{decision.value}", subject_user_id=decided.user_id
         )
-        return decided
+        return decided, role
 
     # --- projects ----------------------------------------------------------------------
 

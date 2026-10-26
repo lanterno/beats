@@ -368,12 +368,14 @@ async def revoke_invite(
 async def list_requests(
     organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
 ):
-    """The join requests waiting on an invite link with an approval step. Admins."""
+    """The join requests waiting on an invite link with an approval step,
+    each with the role approving it would grant. Admins."""
     return [
         JoinRequestResponse(
-            **r.model_dump(include={"id", "user_id", "name", "email", "requested_at"})
+            **r.model_dump(include={"id", "user_id", "name", "email", "requested_at"}),
+            role=role,
         )
-        for r in await service.requests(organisation_id, user_id)
+        for r, role in await service.requests(organisation_id, user_id)
     ]
 
 
@@ -386,9 +388,12 @@ async def decide_request(
     service: OrganisationServiceDep,
 ):
     """Approve or decline a join request; approving makes the member. Admins."""
-    decided = await service.decide_request(organisation_id, user_id, request_id, request.decision)
+    decided, role = await service.decide_request(
+        organisation_id, user_id, request_id, request.decision
+    )
     return JoinRequestResponse(
-        **decided.model_dump(include={"id", "user_id", "name", "email", "requested_at"})
+        **decided.model_dump(include={"id", "user_id", "name", "email", "requested_at"}),
+        role=role,
     )
 
 
