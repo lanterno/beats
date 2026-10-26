@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Assignment, Member, OrgProject, OrgRole } from "@/entities/organisation";
+import type { Assignment, Member, OrgProject } from "@/entities/organisation";
 import { ProjectsSection } from "./ProjectsSection";
 
 const { state, assignMembers } = vi.hoisted(() => ({
@@ -55,11 +55,9 @@ function project(members: Assignment[]): OrgProject {
 }
 
 function renderSection() {
-	// Through a variable: a literal here reads to Biome as an ARIA role.
-	const role: OrgRole = "owner";
 	render(
 		<MemoryRouter>
-			<ProjectsSection organisationId="o1" role={role} />
+			<ProjectsSection organisationId="o1" />
 		</MemoryRouter>,
 	);
 }

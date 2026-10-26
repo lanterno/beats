@@ -51,7 +51,7 @@ vi.mock("@/entities/organisation", async () => {
 		useTeams: list,
 		useAbsenceRequests: list,
 		useTimesheets: list,
-		useAuditLog: list,
+		useAuditLog: () => ({ data: { pages: [[]] }, error: null }),
 		useManagedContract: list,
 		useSaveTeam: idle,
 		useDeleteTeam: idle,
