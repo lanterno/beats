@@ -3,21 +3,23 @@
  * to submit one: a month that has ended, on one of the organisation's
  * projects they are assigned to. For a member the API already answers with
  * their own sheets; a decider or viewer gets everyone's, so theirs are
- * picked out by the member row matching their address. Approval freezes
- * the month's figures; what the API refuses (409 MONTH_NOT_ENDED,
+ * picked out by `userId`, the membership's own — never by the address they
+ * joined under, which an account that has since changed its email, or came
+ * in through single sign-on, no longer matches. Approval freezes the
+ * month's figures; what the API refuses (409 MONTH_NOT_ENDED,
  * TIMESHEET_APPROVED) surfaces in its words.
  */
 
 import { FileClock } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
-import type { OrgRole, Timesheet } from "@/entities/organisation";
-import { useMembers, useSubmitTimesheet, useTimesheets } from "@/entities/organisation";
+import type { Timesheet } from "@/entities/organisation";
+import { useSubmitTimesheet, useTimesheets } from "@/entities/organisation";
 import { useProjects } from "@/entities/project";
-import { useAuth } from "@/features/auth";
 import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Button } from "@/shared/ui";
+import { projectLabel } from "./labels";
 import { Section } from "./Section";
 import { LABEL, LEAD, LIST, SELECT } from "./styles";
 import { frozenText, STATUS_LABELS, sheetMonthTitle } from "./TimesheetsSection";
@@ -41,17 +43,14 @@ export function endedMonths(n: number, today: Date = new Date()): string[] {
 
 export function MyTimesheetsSection({
 	organisationId,
-	role,
+	userId,
 }: {
 	organisationId: string;
-	role: OrgRole;
+	/** The caller's own, off their membership. */
+	userId: string;
 }) {
 	const id = useId();
-	const { user } = useAuth();
 	const sheets = useTimesheets(organisationId);
-	// A plain member may not list the members; their timesheets read is
-	// already only their own.
-	const members = useMembers(organisationId, { enabled: role !== "member" });
 	const projects = useProjects();
 	const submit = useSubmitTimesheet(organisationId);
 	const months = endedMonths(6);
@@ -59,15 +58,8 @@ export function MyTimesheetsSection({
 	const [projectId, setProjectId] = useState("");
 
 	const mine = (projects.data ?? []).filter((p) => p.organisation?.id === organisationId);
-	const myId =
-		role === "member"
-			? undefined
-			: (members.data ?? []).find((m) => user?.email !== undefined && m.email === user.email)
-					?.userId;
-	const own =
-		role === "member" ? (sheets.data ?? []) : (sheets.data ?? []).filter((s) => s.userId === myId);
+	const own = (sheets.data ?? []).filter((s) => s.userId === userId);
 	const rows = [...own].sort((a, b) => b.month.localeCompare(a.month));
-	const projectName = (pid: string) => mine.find((p) => p.id === pid)?.name ?? "a project";
 
 	const submitNow = () => {
 		if (!projectId) return;
@@ -149,7 +141,7 @@ export function MyTimesheetsSection({
 						<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
 							<div className="flex items-center gap-2 flex-wrap">
 								<span className="font-bold text-foreground">{sheetMonthTitle(sheet.month)}</span>
-								<span className="text-muted-foreground">{projectName(sheet.projectId)}</span>
+								<span className="text-muted-foreground">{projectLabel(sheet.projectName)}</span>
 								<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
 									{STATUS_LABELS[sheet.status]}
 								</span>

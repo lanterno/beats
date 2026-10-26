@@ -13,14 +13,13 @@ import type { OrgRole, Timesheet } from "@/entities/organisation";
 import {
 	decides,
 	useDecideTimesheet,
-	useMembers,
-	useOrgProjects,
 	useReopenTimesheet,
 	useTimesheets,
 } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { cn, hoursText } from "@/shared/lib";
 import { Button, Dialog } from "@/shared/ui";
+import { memberLabel, projectLabel } from "./labels";
 import { Section } from "./Section";
 import { FIELD, LABEL, LEAD, LINKISH, LIST } from "./styles";
 
@@ -153,18 +152,11 @@ export function TimesheetsSection({
 	role: OrgRole;
 }) {
 	const sheets = useTimesheets(organisationId);
-	const members = useMembers(organisationId);
-	const projects = useOrgProjects(organisationId);
 	const decide = useDecideTimesheet(organisationId);
 	const reopen = useReopenTimesheet(organisationId);
 	const [action, setAction] = useState<Action | null>(null);
 	const mayDecide = decides(role);
 	const busy = decide.isPending || reopen.isPending;
-
-	const memberName = (userId: string) =>
-		(members.data ?? []).find((m) => m.userId === userId)?.name ?? userId;
-	const projectName = (projectId: string) =>
-		(projects.data ?? []).find((p) => p.id === projectId)?.name ?? "a project";
 
 	const send = (act: Action, comment: string) => {
 		const done = {
@@ -212,9 +204,9 @@ export function TimesheetsSection({
 					{rows.map((sheet) => (
 						<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
 							<div className="flex items-center gap-2 flex-wrap">
-								<span className="font-bold text-foreground">{memberName(sheet.userId)}</span>
+								<span className="font-bold text-foreground">{memberLabel(sheet.memberName)}</span>
 								<span className="text-muted-foreground">
-									{projectName(sheet.projectId)} · {sheetMonthTitle(sheet.month)}
+									{projectLabel(sheet.projectName)} · {sheetMonthTitle(sheet.month)}
 								</span>
 								<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
 									{STATUS_LABELS[sheet.status]}
@@ -268,7 +260,7 @@ export function TimesheetsSection({
 				<ActionDialog
 					key={`${action.sheet.id}-${action.kind}`}
 					action={action}
-					title={`${memberName(action.sheet.userId)} · ${projectName(action.sheet.projectId)} · ${sheetMonthTitle(action.sheet.month)}.`}
+					title={`${memberLabel(action.sheet.memberName)} · ${projectLabel(action.sheet.projectName)} · ${sheetMonthTitle(action.sheet.month)}.`}
 					onClose={() => setAction(null)}
 					onSend={(comment) => send(action, comment)}
 					busy={busy}

@@ -27,10 +27,11 @@ import {
 	ROLE_LABELS,
 	readsRecord,
 	useLeaveOrganisation,
+	useMembers,
 	useMembership,
 	useUpdateOrganisation,
 } from "@/entities/organisation";
-import { describeError } from "@/shared/api";
+import { ApiError, describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Button, Chip, Panel, TabPanel, Tabs, useConfirm } from "@/shared/ui";
 import { AbsenceRequestsSection } from "./AbsenceRequestsSection";
@@ -92,28 +93,61 @@ export default function Organisation() {
 	const navigate = useNavigate();
 	const membership = useMembership(id);
 	const leave = useLeaveOrganisation(id);
+	// The last owner may not leave (409 LAST_OWNER), so an owner is told
+	// before trying rather than after. Only an owner can be the last one, so
+	// nobody else pays for the read.
+	const owners = useMembers(id, { enabled: membership.data?.role === "owner" });
 	const { confirm, confirmDialog } = useConfirm();
 	const [searchParams, setSearchParams] = useSearchParams();
 
 	if (membership.error) {
+		// Only a 404 is "not a member" — the API resolves the membership
+		// first on every route here. Anything else is the read failing, and
+		// sending someone to their archive over a 500 would be a lie.
+		const notAMember = membership.error instanceof ApiError && membership.error.isNotFound();
 		return (
 			<div className={PAGE}>
 				<Panel role="alert" padding="px-6 py-[22px]">
 					<p className="font-heading text-lg font-extrabold text-foreground">
-						You're not a member of this organisation.
+						{notAMember
+							? "You're not a member of this organisation."
+							: "This organisation couldn't be loaded."}
 					</p>
 					<p className={cn(LEAD, "mt-1")}>
-						If you were, your own hours on its projects are still yours to read.
+						{notAMember
+							? "If you were, your own hours on its projects are still yours to read."
+							: describeError(membership.error, "The read failed. It may be a connection.")}
 					</p>
-					<Link to={`/organisations/${id}/archive`} className={`${LINKISH} mt-3 inline-block`}>
-						Your hours
-					</Link>
+					{notAMember ? (
+						<Link to={`/organisations/${id}/archive`} className={`${LINKISH} mt-3 inline-block`}>
+							Your hours
+						</Link>
+					) : (
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							className="mt-3"
+							onClick={() => void membership.refetch()}
+							disabled={membership.isFetching}
+						>
+							{membership.isFetching ? "Trying…" : "Try again"}
+						</Button>
+					)}
 				</Panel>
 			</div>
 		);
 	}
 	const data = membership.data;
-	if (!data) return <p className="text-sm text-muted-foreground px-6 py-6">Loading…</p>;
+	if (!data) {
+		return (
+			<div className={PAGE}>
+				<Panel padding="px-5 py-3" className={PAGEBAR}>
+					<p className={LEAD}>Loading…</p>
+				</Panel>
+			</div>
+		);
+	}
 
 	const org = data.organisation;
 	const admin = canAdminister(data.role);
@@ -148,6 +182,13 @@ export default function Organisation() {
 		});
 	};
 
+	// Undefined while the roster is still coming: Leave stays live rather
+	// than flickering disabled on every load.
+	const soleOwner =
+		data.role === "owner" && owners.data
+			? owners.data.filter((m) => m.role === "owner" && !m.leftAt).length <= 1
+			: false;
+
 	const leaveSection = (
 		<Section
 			label="Leave"
@@ -160,7 +201,7 @@ export default function Organisation() {
 					size="sm"
 					className={DANGER_HOVER}
 					onClick={() => void leaveNow()}
-					disabled={leave.isPending}
+					disabled={leave.isPending || soleOwner}
 				>
 					<LogOut aria-hidden="true" />
 					Leave {org.name}
@@ -168,8 +209,21 @@ export default function Organisation() {
 			}
 		>
 			<p className={LEAD}>
-				Tracking to {org.name}'s projects stops, it keeps its working-time record, and a read-only
-				archive of your hours remains.
+				{soleOwner ? (
+					<>
+						You are {org.name}'s only owner, and an organisation is never left without one. Make
+						someone else an owner in{" "}
+						<button type="button" onClick={() => openTab("people")} className={LINKISH}>
+							People
+						</button>{" "}
+						first.
+					</>
+				) : (
+					<>
+						Tracking to {org.name}'s projects stops, it keeps its working-time record, and a
+						read-only archive of your hours remains.
+					</>
+				)}
 			</p>
 		</Section>
 	);
@@ -210,7 +264,7 @@ export default function Organisation() {
 				<TabPanel value="people" current={tab}>
 					<div className="grid gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
 						<div>
-							<MembersSection organisationId={id} />
+							<MembersSection organisationId={id} role={data.role} userId={data.userId} />
 						</div>
 						<div>
 							<TeamsSection organisationId={id} />
@@ -238,7 +292,7 @@ export default function Organisation() {
 
 			<TabPanel value="timesheets" current={tab}>
 				<div className="grid gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
-					<MyTimesheetsSection organisationId={id} role={data.role} />
+					<MyTimesheetsSection organisationId={id} userId={data.userId} />
 
 					<div>
 						<Section

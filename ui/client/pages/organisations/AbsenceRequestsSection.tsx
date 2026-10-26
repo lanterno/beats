@@ -10,15 +10,11 @@ import { CalendarClock } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 import type { AbsenceRequest } from "@/entities/organisation";
-import {
-	useAbsenceRequests,
-	useDecideAbsenceRequest,
-	useMembers,
-	useOrgProjects,
-} from "@/entities/organisation";
+import { useAbsenceRequests, useDecideAbsenceRequest } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { formatDateOnly } from "@/shared/lib";
 import { Button, Dialog } from "@/shared/ui";
+import { memberLabel, projectLabel } from "./labels";
 import { Section } from "./Section";
 import { FIELD, LABEL, LEAD, LIST } from "./styles";
 
@@ -84,15 +80,8 @@ function DecisionDialog({
 
 export function AbsenceRequestsSection({ organisationId }: { organisationId: string }) {
 	const requests = useAbsenceRequests(organisationId, { pending: true });
-	const members = useMembers(organisationId);
-	const projects = useOrgProjects(organisationId);
 	const decide = useDecideAbsenceRequest(organisationId);
 	const [open, setOpen] = useState<{ request: AbsenceRequest; approve: boolean } | null>(null);
-
-	const memberName = (userId: string) =>
-		(members.data ?? []).find((m) => m.userId === userId)?.name ?? userId;
-	const projectName = (projectId: string) =>
-		(projects.data ?? []).find((p) => p.id === projectId)?.name ?? "a project";
 
 	const decideNow = (request: AbsenceRequest, approve: boolean, comment: string) =>
 		decide.mutate(
@@ -126,9 +115,10 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 					{requests.data.map((request) => (
 						<li key={request.id} className="py-2.5 text-[12.5px] space-y-1">
 							<div className="flex items-center gap-2 flex-wrap">
-								<span className="font-bold text-foreground">{memberName(request.userId)}</span>
+								<span className="font-bold text-foreground">{memberLabel(request.memberName)}</span>
 								<span className="text-muted-foreground">
-									{projectName(request.projectId)} · {formatDateOnly(request.date)} · {request.type}
+									{projectLabel(request.projectName)} · {formatDateOnly(request.date)} ·{" "}
+									{request.type}
 									{request.halfDay && " · half day"}
 								</span>
 								<span className="ml-auto flex items-center gap-2">
@@ -163,7 +153,7 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 					key={`${open.request.id}-${open.approve}`}
 					request={open.request}
 					approve={open.approve}
-					who={memberName(open.request.userId)}
+					who={memberLabel(open.request.memberName)}
 					onClose={() => setOpen(null)}
 					onDecide={(comment) => decideNow(open.request, open.approve, comment)}
 					busy={decide.isPending}

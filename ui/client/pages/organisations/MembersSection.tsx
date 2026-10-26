@@ -2,9 +2,15 @@
  * MembersSection — the active members, by the name and address each
  * joined under, with a role to change and a way to remove. The caller's
  * own row has no controls: a role is given by someone else, and the way
- * out of one's own membership is Leave. The API keeps the rules — the
- * owner role moves only by an owner's hand (403), the last owner keeps it
- * (409) — and its detail is what a refusal shows.
+ * out of one's own membership is Leave. Found by `userId`, the
+ * membership's own, since the address a person joined under is not the one
+ * their account still has.
+ *
+ * The owner role moves only by an owner's hand (403 OWNER_ROLE_RESERVED on
+ * giving it, taking it, or removing an owner), so an admin is shown no
+ * control the API would refuse: no Owner to pick, and an owner's row
+ * read-only. The last owner keeping the role (409) stays the API's to
+ * refuse — it is a race, not a state the page can read.
  */
 
 import { Users, X } from "lucide-react";
@@ -17,7 +23,6 @@ import {
 	useRemoveMember,
 	useSetMemberRole,
 } from "@/entities/organisation";
-import { useAuth } from "@/features/auth";
 import { describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
 import { Chip, useConfirm } from "@/shared/ui";
@@ -26,12 +31,23 @@ import { LEAD, LIST, REMOVE, ROW, SELECT } from "./styles";
 
 const ROLES: OrgRole[] = ["member", "viewer", "manager", "admin", "owner"];
 
-export function MembersSection({ organisationId }: { organisationId: string }) {
-	const { user } = useAuth();
+export function MembersSection({
+	organisationId,
+	role: myRole,
+	userId,
+}: {
+	organisationId: string;
+	/** The caller's role: an owner's hand is what the owner role needs. */
+	role: OrgRole;
+	/** The caller's own id, off their membership. */
+	userId: string;
+}) {
 	const members = useMembers(organisationId);
 	const setRole = useSetMemberRole(organisationId);
 	const remove = useRemoveMember(organisationId);
 	const { confirm, confirmDialog } = useConfirm();
+	const iAmOwner = myRole === "owner";
+	const roles = iAmOwner ? ROLES : ROLES.filter((r) => r !== "owner");
 
 	const changeRole = (member: Member, role: OrgRole) =>
 		setRole.mutate(
@@ -70,7 +86,9 @@ export function MembersSection({ organisationId }: { organisationId: string }) {
 			) : (
 				<ul className={LIST}>
 					{members.data.map((member) => {
-						const me = user?.email !== undefined && member.email === user.email;
+						const me = member.userId === userId;
+						// An owner's row is an owner's to change; to anyone else it reads.
+						const readOnly = me || (member.role === "owner" && !iAmOwner);
 						return (
 							<li key={member.userId} className={ROW}>
 								<div className="min-w-0 flex-1">
@@ -82,7 +100,7 @@ export function MembersSection({ organisationId }: { organisationId: string }) {
 										{member.email} · since {formatDate(member.joinedAt)}
 									</p>
 								</div>
-								{me ? (
+								{readOnly ? (
 									<Chip className="shrink-0">{ROLE_LABELS[member.role]}</Chip>
 								) : (
 									<>
@@ -93,7 +111,7 @@ export function MembersSection({ organisationId }: { organisationId: string }) {
 											aria-label={`Role of ${member.name}`}
 											className={SELECT}
 										>
-											{ROLES.map((role) => (
+											{roles.map((role) => (
 												<option key={role} value={role} title={ROLE_HINTS[role]}>
 													{ROLE_LABELS[role]}
 												</option>
