@@ -843,6 +843,7 @@ export const ApiOrganisationSchema = z.object({
 export type ApiOrganisation = z.infer<typeof ApiOrganisationSchema>;
 
 export const ApiMembershipSchema = z.object({
+	user_id: z.string(),
 	organisation: ApiOrganisationSchema,
 	role: OrgRoleSchema,
 	joined_at: z.string(),
@@ -1025,7 +1026,9 @@ export const RequestStatusSchema = z.enum(["pending", "approved", "declined"]);
 export const ApiAbsenceRequestSchema = z.object({
 	id: z.string(),
 	project_id: z.string(),
+	project_name: z.string().nullable().optional(),
 	user_id: z.string(),
+	member_name: z.string().nullable().optional(),
 	date: z.string(),
 	type: z.enum(["vacation", "sick", "other"]),
 	half_day: z.boolean(),
@@ -1034,6 +1037,7 @@ export const ApiAbsenceRequestSchema = z.object({
 	requested_at: z.string(),
 	decided_at: z.string().nullable().optional(),
 	decided_by: z.string().nullable().optional(),
+	decided_by_name: z.string().nullable().optional(),
 	comment: z.string().nullable().optional(),
 });
 export type ApiAbsenceRequest = z.infer<typeof ApiAbsenceRequestSchema>;
@@ -1057,12 +1061,15 @@ const FrozenMonthSchema = z.object({
 export const ApiTimesheetSchema = z.object({
 	id: z.string(),
 	project_id: z.string(),
+	project_name: z.string().nullable().optional(),
 	user_id: z.string(),
+	member_name: z.string().nullable().optional(),
 	month: z.string(), // YYYY-MM-01
 	status: TimesheetStatusSchema,
 	submitted_at: z.string(),
 	decided_at: z.string().nullable().optional(),
 	decided_by: z.string().nullable().optional(),
+	decided_by_name: z.string().nullable().optional(),
 	comment: z.string().nullable().optional(),
 	frozen: FrozenMonthSchema.nullable().optional(),
 	history: z.array(

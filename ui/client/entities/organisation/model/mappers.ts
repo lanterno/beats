@@ -79,6 +79,7 @@ function toCard(api: { id: string; name: string; logo_url?: string | null }): Or
 
 export function toMembership(api: ApiMembership): Membership {
 	return {
+		userId: api.user_id,
 		organisation: toOrganisation(api.organisation),
 		role: api.role,
 		joinedAt: api.joined_at,
@@ -281,7 +282,9 @@ export function toAbsenceRequest(api: ApiAbsenceRequest): AbsenceRequest {
 	return {
 		id: api.id,
 		projectId: api.project_id,
+		projectName: api.project_name ?? undefined,
 		userId: api.user_id,
+		memberName: api.member_name ?? undefined,
 		date: api.date,
 		type: api.type,
 		halfDay: api.half_day,
@@ -290,6 +293,7 @@ export function toAbsenceRequest(api: ApiAbsenceRequest): AbsenceRequest {
 		requestedAt: api.requested_at,
 		decidedAt: api.decided_at ?? undefined,
 		decidedBy: api.decided_by ?? undefined,
+		decidedByName: api.decided_by_name ?? undefined,
 		comment: api.comment ?? undefined,
 	};
 }
@@ -298,12 +302,15 @@ export function toTimesheet(api: ApiTimesheet): Timesheet {
 	return {
 		id: api.id,
 		projectId: api.project_id,
+		projectName: api.project_name ?? undefined,
 		userId: api.user_id,
+		memberName: api.member_name ?? undefined,
 		month: api.month,
 		status: api.status,
 		submittedAt: api.submitted_at,
 		decidedAt: api.decided_at ?? undefined,
 		decidedBy: api.decided_by ?? undefined,
+		decidedByName: api.decided_by_name ?? undefined,
 		comment: api.comment ?? undefined,
 		frozen: api.frozen
 			? {

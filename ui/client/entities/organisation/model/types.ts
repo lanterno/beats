@@ -40,6 +40,8 @@ export type MembershipEnd = "left" | "removed" | "erased";
 
 /** One of the caller's organisations, with their standing in it. */
 export interface Membership {
+	/** The caller's own id: which member row, or which timesheet, is theirs. */
+	userId: string;
 	organisation: Organisation;
 	role: OrgRole;
 	joinedAt: string;
@@ -254,7 +256,10 @@ export type RequestStatus = "pending" | "approved" | "declined";
 export interface AbsenceRequest {
 	id: string;
 	projectId: string;
+	/** The names come with the row: a decider may not list the projects. */
+	projectName?: string;
 	userId: string;
+	memberName?: string;
 	date: string;
 	type: "vacation" | "sick" | "other";
 	halfDay: boolean;
@@ -263,6 +268,7 @@ export interface AbsenceRequest {
 	requestedAt: string;
 	decidedAt?: string;
 	decidedBy?: string;
+	decidedByName?: string;
 	comment?: string;
 }
 
@@ -288,12 +294,16 @@ export interface TimesheetEvent {
 export interface Timesheet {
 	id: string;
 	projectId: string;
+	/** As on `AbsenceRequest`: the row names itself. */
+	projectName?: string;
 	userId: string;
+	memberName?: string;
 	month: string; // YYYY-MM-01
 	status: TimesheetStatus;
 	submittedAt: string;
 	decidedAt?: string;
 	decidedBy?: string;
+	decidedByName?: string;
 	comment?: string;
 	frozen?: FrozenMonth;
 	history: TimesheetEvent[];
