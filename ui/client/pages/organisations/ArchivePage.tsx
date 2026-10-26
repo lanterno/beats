@@ -6,15 +6,16 @@
  * is here whether the membership is still open or ended.
  */
 
-import { Download } from "lucide-react";
+import { Archive, Download } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import { archiveCsvUrl, useArchive } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
-import { downloadFile, formatDate, formatDateOnly, hoursText } from "@/shared/lib";
+import { cn, downloadFile, formatDate, hoursText } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
+import { AbsenceList } from "./AbsenceList";
 import { EntriesTable } from "./EntriesTable";
-import { LABEL, LEAD, LINKISH, TITLE } from "./styles";
+import { CRUMB, LEAD, LINKISH, PAGE, PAGE_TITLE, PAGEBAR } from "./styles";
 
 export default function ArchivePage() {
 	const { id = "" } = useParams<{ id: string }>();
@@ -33,7 +34,7 @@ export default function ArchivePage() {
 
 	if (archive.error) {
 		return (
-			<div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
+			<div className={PAGE}>
 				<Panel role="alert" padding="px-6 py-[22px]">
 					<p className="font-heading text-lg font-extrabold text-foreground">
 						This archive could not be read.
@@ -48,13 +49,39 @@ export default function ArchivePage() {
 			</div>
 		);
 	}
-	if (!data) return <p className="text-sm text-muted-foreground px-6 py-6">Loading…</p>;
+	if (!data) {
+		return (
+			<div className={PAGE}>
+				<Panel padding="px-5 py-3" className={PAGEBAR}>
+					<p className={LEAD}>Loading…</p>
+				</Panel>
+			</div>
+		);
+	}
 
 	const name = data.organisation.name;
 	return (
-		<div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5 pb-24">
-			<header className="flex items-center gap-3 flex-wrap">
-				<h1 className={TITLE}>{data.leftAt ? `${name} (left)` : `${name} — your hours`}</h1>
+		<div className={PAGE}>
+			<Panel padding="px-5 py-3" className={PAGEBAR}>
+				<Archive className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden="true" />
+				<div className="min-w-0">
+					{data.leftAt ? (
+						<Link to="/organisations" className={CRUMB}>
+							Organisations
+						</Link>
+					) : (
+						<Link to={`/organisations/${id}`} className={CRUMB}>
+							{name}
+						</Link>
+					)}
+					<h1 className={cn(PAGE_TITLE, "truncate")}>
+						{data.leftAt ? `${name} (left)` : `${name} — your hours`}
+					</h1>
+				</div>
+				<span className="font-mono text-[13px] font-bold text-foreground whitespace-nowrap">
+					{hoursText(data.hours)}
+					<span className="font-body font-medium text-muted-foreground"> in total</span>
+				</span>
 				<Button
 					type="button"
 					variant="secondary"
@@ -65,15 +92,27 @@ export default function ArchivePage() {
 					<Download aria-hidden="true" />
 					Download CSV
 				</Button>
-			</header>
-			<p className="text-sm font-medium text-foreground/90">
-				Joined {formatDate(data.joinedAt)}
-				{data.leftAt && `, left ${formatDate(data.leftAt)}`}. {hoursText(data.hours)} in total.
-			</p>
-			<p className="text-[12.5px] font-medium text-foreground/80">
-				Read-only: these hours are {name}'s working-time record and your own copy of it. Nothing
-				here can be changed.
-			</p>
+			</Panel>
+			<Panel padding="px-5 py-3" className="space-y-1">
+				<p className="text-[13px] font-medium text-foreground">
+					Joined {formatDate(data.joinedAt)}
+					{data.leftAt && `, left ${formatDate(data.leftAt)}`}.
+				</p>
+				<p className={LEAD}>
+					{data.leftAt ? (
+						<>
+							These hours are {name}'s working-time record of your membership; this is your own read
+							of them, and {name} cannot change what it was given.
+						</>
+					) : (
+						<>
+							These hours are {name}'s working-time record — and still your own entries: editing or
+							deleting one on your timeline changes what {name} holds, except inside a month it has
+							approved.
+						</>
+					)}
+				</p>
+			</Panel>
 
 			{data.projects.length === 0 ? (
 				<Panel padding="px-6 py-[22px]">
@@ -106,19 +145,7 @@ export default function ArchivePage() {
 						) : (
 							<EntriesTable entries={project.entries} label={`Entries on ${project.name}`} />
 						)}
-						{project.absences.length > 0 && (
-							<div className="mt-3">
-								<p className={LABEL}>Absences</p>
-								<ul className="text-[12.5px] text-foreground space-y-0.5">
-									{project.absences.map((absence) => (
-										<li key={`${absence.date}-${absence.type}`}>
-											{formatDateOnly(absence.date)} · {absence.type}
-											{absence.halfDay && " · half day"}
-										</li>
-									))}
-								</ul>
-							</div>
-						)}
+						<AbsenceList absences={project.absences} label={`Absences on ${project.name}`} />
 					</Panel>
 				))
 			)}

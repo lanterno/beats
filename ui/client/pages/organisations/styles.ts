@@ -1,16 +1,12 @@
 /**
  * The organisation pages' idioms, in the settings page's voice
- * (`pages/settings/styles.ts`): a heading on the sky above each panel, the
- * small-caps label, the wash field, the hairline list, the round op button
- * and the small bold link. Pages do not import from one another, so the
- * constants are repeated here rather than reached across.
+ * (`pages/settings/styles.ts`): the small-caps label, the wash field, the
+ * hairline list, the round op button and the small bold link — headings
+ * live inside their panels now (`Section`). Pages do not import from one
+ * another, so the constants are repeated here rather than reached across.
  */
 
-/** A section's heading, on the sky above its panel. */
-export const HEADING =
-	"font-heading text-[15px] font-extrabold tracking-[-0.01em] text-foreground mb-3 flex items-center gap-2";
-
-/** The heading's icon is decoration: muted, never the accent. */
+/** A panel heading's icon is decoration: muted, never the accent. */
 export const HEADING_ICON = "w-4 h-4 text-muted-foreground";
 
 /** `.lbl` — 10.5 px, bold, letter-spaced, muted. */
@@ -83,5 +79,17 @@ export const CRUMB =
 export const PANEL_HEADING =
 	"font-heading text-[15.5px] font-extrabold tracking-[-0.01em] text-foreground flex items-center gap-2 min-w-0";
 
-/** A column of digits: one width, so figures line up without `tnum`. */
-export const FIGURE = "font-mono font-bold text-foreground";
+/** The ‹ › inside a page bar's card, where a wash reads (the Clients page's). */
+export const MONTH_NAV =
+	"grid place-items-center w-8 h-8 rounded-full text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
+
+/** An absence's kind on its tint — the project page's idiom, repeated here. */
+export const TINT: Record<"vacation" | "sick" | "holiday" | "other", string> = {
+	vacation: "bg-tint-vacation text-tint-vacation-ink",
+	sick: "bg-tint-sick text-tint-sick-ink",
+	holiday: "bg-tint-holiday text-tint-holiday-ink",
+	other: "bg-tint-other text-tint-other-ink",
+};
+
+export const TINT_PILL =
+	"inline-flex items-center gap-1 text-[11.5px] font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap";
