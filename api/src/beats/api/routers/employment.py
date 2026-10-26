@@ -546,6 +546,34 @@ async def read_record_csv(
 
 
 @router.get(
+    "/{organisation_id}/visible.csv",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "What the organisation sees of the caller, as CSV.",
+            "content": {"text/csv": {}},
+        }
+    },
+)
+async def read_visible_csv(
+    organisation_id: str,
+    month: MonthQuery,
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+    tz: TimezoneDep,
+) -> Response:
+    """The month the organisation holds about the caller, as the same CSV its
+    record exports — the person can always take away exactly what is seen of
+    them, not just read it. Members and former members, like `/visible`."""
+    record = await service.visible(organisation_id, user_id, month, tz)
+    return Response(
+        content=record_csv(record),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment"},
+    )
+
+
+@router.get(
     "/{organisation_id}/compliance.csv",
     response_class=Response,
     responses={
