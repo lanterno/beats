@@ -38,6 +38,7 @@ import {
 	useBillableOverrides,
 	useBillingBudgets,
 	useBillingMonth,
+	useOpenMonth,
 	useProjectBillings,
 	withPastConsent,
 } from "@/entities/billing";
@@ -57,7 +58,6 @@ import { ClientPanel } from "./ClientPanel";
 import { ClientsOverview } from "./ClientsOverview";
 import { MonthTotals } from "./MonthTotals";
 import { describeMonth, monthName } from "./summary";
-import { useOpenMonth } from "./useOpenMonth";
 
 type Editor = { mode: "new" } | { mode: "edit"; client: Client };
 

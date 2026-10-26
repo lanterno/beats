@@ -43,5 +43,6 @@ export type {
 	ReportLinkInput,
 	UnattachedHours,
 } from "./types";
+export { useOpenMonth } from "./useOpenMonth";
 // Ask before a write that changes a month already over
 export { withPastConsent } from "./withPastConsent";

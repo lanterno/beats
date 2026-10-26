@@ -1,15 +1,17 @@
 /**
- * The Clients page's month, as `?month=YYYY-MM` in the URL, the way the
- * project page holds its week (`useOpenWeek`). Absent, the current month; a
- * malformed value, or a month that has not started — which the API answers
- * 409 MONTH_NOT_STARTED — reads as the current month too. Set to the
- * current month the param is dropped, and every move replaces the history
- * entry.
+ * A month-reading page's `?month=YYYY-MM`, the way the project page holds
+ * its week (`useOpenWeek`). Absent, the current month; a malformed value,
+ * or a month that has not started — which the API answers 409
+ * MONTH_NOT_STARTED — reads as the current month too. Set to the current
+ * month the param is dropped, and every move replaces the history entry.
+ * The Clients page and the organisation record pages step the same way;
+ * each kept a copy of this until it moved here, beside the month
+ * arithmetic it is made of.
  */
 
 import { useCallback } from "react";
 import { useSearchParams } from "react-router";
-import { isFutureMonth, monthOf } from "@/entities/billing";
+import { isFutureMonth, monthOf } from "./billingMonth";
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 

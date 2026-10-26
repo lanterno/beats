@@ -18,7 +18,7 @@ import { Section } from "./Section";
 import { LEAD, LIST } from "./styles";
 
 /** "timesheet.approved" → "Timesheet approved" — words, not a code. */
-export function eventWords(event: string): string {
+function eventWords(event: string): string {
 	const words = event.split(".").join(" ").split("_").join(" ");
 	return words.charAt(0).toUpperCase() + words.slice(1);
 }

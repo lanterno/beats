@@ -60,6 +60,7 @@ export {
 	type ReportLink,
 	type ReportLinkInput,
 	type UnattachedHours,
+	useOpenMonth,
 	withPastConsent,
 } from "./model";
 export {

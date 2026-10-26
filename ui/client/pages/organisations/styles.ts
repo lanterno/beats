@@ -45,10 +45,6 @@ export const REMOVE =
 export const LINKISH =
 	"text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
-/** The ‹ › on the sky: the card is their ground, since a wash would vanish there. */
-export const SKY_NAV =
-	"grid place-items-center w-8 h-8 rounded-full text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
-
 /** The page's title. */
 export const TITLE = "font-heading text-2xl font-extrabold tracking-[-0.02em] text-foreground";
 
