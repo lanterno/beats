@@ -14,7 +14,7 @@ import type { Team, TeamInput } from "@/entities/organisation";
 import { useDeleteTeam, useMembers, useSaveTeam, useTeams } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { Button, Dialog, useConfirm } from "@/shared/ui";
-import { Section } from "./Section";
+import { QueryBody, Section } from "./Section";
 import { CHIP, ERROR, FIELD, LABEL, LEAD, LINKISH, LIST, REMOVE } from "./styles";
 
 function TeamDialog({
@@ -190,67 +190,65 @@ export function TeamsSection({
 				)
 			}
 		>
-			{teams.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(teams.error, "The teams could not be read.")}
-				</p>
-			) : !teams.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : teams.data.length === 0 ? (
-				<p className={`${LEAD} py-3`}>
-					A team gives a manager their scope: they decide absences and timesheets for its members.
-				</p>
-			) : (
-				<ul className={LIST}>
-					{teams.data.map((team) => (
-						<li key={team.id} className="py-3 space-y-2">
-							<div className="flex items-center gap-2 text-[12.5px]">
-								<span className="font-bold text-foreground truncate">{team.name}</span>
-								{!readOnly && (
-									<>
-										<Button
-											type="button"
-											variant="secondary"
-											size="sm"
-											className="ml-auto h-7 px-2.5 text-xs"
-											onClick={() => setEditor({ mode: "edit", team })}
-											aria-label={`Edit ${team.name}`}
-										>
-											Edit
-										</Button>
-										<button
-											type="button"
-											onClick={() => void remove(team)}
-											disabled={deleteTeam.isPending && deleteTeam.variables === team.id}
-											aria-label={`Delete ${team.name}`}
-											className={REMOVE}
-										>
-											<X className="w-3.5 h-3.5" aria-hidden="true" />
-										</button>
-									</>
-								)}
-							</div>
-							<div className="flex flex-wrap items-center gap-1.5">
-								{team.memberIds.length === 0 ? (
-									<span className={LEAD}>Nobody on it yet.</span>
-								) : (
-									team.memberIds.map((userId) => (
-										<span key={userId} className={CHIP}>
-											{names.get(userId) ?? "Member"}
-											{managerIds.has(userId) && (
-												<span className="font-medium text-muted-foreground">Manager</span>
-											)}
+			<QueryBody
+				query={teams}
+				errorText="The teams could not be read."
+				empty="A team gives a manager their scope: they decide absences and timesheets for its members."
+			>
+				{(rows) => (
+					<ul className={LIST}>
+						{rows.map((team) => (
+							<li key={team.id} className="py-3 space-y-2">
+								<div className="flex items-center gap-2 text-[12.5px]">
+									<span className="font-bold text-foreground truncate">{team.name}</span>
+									{!readOnly && (
+										<>
+											<Button
+												type="button"
+												variant="secondary"
+												size="sm"
+												className="ml-auto h-7 px-2.5 text-xs"
+												onClick={() => setEditor({ mode: "edit", team })}
+												aria-label={`Edit ${team.name}`}
+											>
+												Edit
+											</Button>
+											<button
+												type="button"
+												onClick={() => void remove(team)}
+												disabled={deleteTeam.isPending && deleteTeam.variables === team.id}
+												aria-label={`Delete ${team.name}`}
+												className={REMOVE}
+											>
+												<X className="w-3.5 h-3.5" aria-hidden="true" />
+											</button>
+										</>
+									)}
+								</div>
+								<div className="flex flex-wrap items-center gap-1.5">
+									{team.memberIds.length === 0 ? (
+										<span className={LEAD}>Nobody on it yet.</span>
+									) : (
+										team.memberIds.map((userId) => (
+											<span key={userId} className={CHIP}>
+												{names.get(userId) ?? "Member"}
+												{managerIds.has(userId) && (
+													<span className="font-medium text-muted-foreground">Manager</span>
+												)}
+											</span>
+										))
+									)}
+									{members.data && !team.memberIds.some((uid) => managerIds.has(uid)) && (
+										<span className={LEAD}>
+											No manager is in it — nobody decides for this team.
 										</span>
-									))
-								)}
-								{members.data && !team.memberIds.some((uid) => managerIds.has(uid)) && (
-									<span className={LEAD}>No manager is in it — nobody decides for this team.</span>
-								)}
-							</div>
-						</li>
-					))}
-				</ul>
-			)}
+									)}
+								</div>
+							</li>
+						))}
+					</ul>
+				)}
+			</QueryBody>
 			{members.data && teams.data && teamless.length > 0 && (
 				<p className={`${LEAD} py-2`}>
 					{teamless.map((uid) => names.get(uid) ?? "A manager").join(", ")}{" "}

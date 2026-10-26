@@ -12,9 +12,8 @@ import { Layers, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import type { OrgProject, OrgRole } from "@/entities/organisation";
+import type { OrgProject } from "@/entities/organisation";
 import {
-	decides,
 	describeShareFrom,
 	useMembers,
 	useOrgProjects,
@@ -41,13 +40,7 @@ type MemberAct = {
 	memberName: string;
 };
 
-export function ProjectsSection({
-	organisationId,
-	role,
-}: {
-	organisationId: string;
-	role: OrgRole;
-}) {
+export function ProjectsSection({ organisationId }: { organisationId: string }) {
 	const projects = useOrgProjects(organisationId);
 	const members = useMembers(organisationId);
 	const unassign = useUnassignMember(organisationId);
@@ -55,8 +48,8 @@ export function ProjectsSection({
 	const [editor, setEditor] = useState<Editor | null>(null);
 	const [act, setAct] = useState<MemberAct | null>(null);
 	const [assigning, setAssigning] = useState<string | null>(null);
-	const mayDecide = decides(role);
-	const active = (members.data ?? []).filter((m) => !m.leftAt);
+	// `/members` answers active members; this tab is an admin's, who decides.
+	const active = members.data ?? [];
 	// The open dialog reads the project off the query, so an assignment that
 	// lands while it is open narrows its list rather than going stale.
 	const assigningProject = (projects.data ?? []).find((p) => p.id === assigning);
@@ -142,42 +135,40 @@ export function ProjectsSection({
 											>
 												<X className="w-3 h-3" aria-hidden="true" />
 											</button>
-											{mayDecide && (
-												<>
-													<button
-														type="button"
-														onClick={() =>
-															setAct({
-																kind: "contract",
-																projectId: project.id,
-																projectName: project.name,
-																userId: a.userId,
-																memberName: a.name ?? "this member",
-															})
-														}
-														aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
-														className={LINKISH}
-													>
-														Contract…
-													</button>
-													<button
-														type="button"
-														onClick={() =>
-															setAct({
-																kind: "time",
-																projectId: project.id,
-																projectName: project.name,
-																userId: a.userId,
-																memberName: a.name ?? "this member",
-															})
-														}
-														aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
-														className={LINKISH}
-													>
-														Enter time…
-													</button>
-												</>
-											)}
+											<>
+												<button
+													type="button"
+													onClick={() =>
+														setAct({
+															kind: "contract",
+															projectId: project.id,
+															projectName: project.name,
+															userId: a.userId,
+															memberName: a.name ?? "this member",
+														})
+													}
+													aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
+													className={LINKISH}
+												>
+													Contract…
+												</button>
+												<button
+													type="button"
+													onClick={() =>
+														setAct({
+															kind: "time",
+															projectId: project.id,
+															projectName: project.name,
+															userId: a.userId,
+															memberName: a.name ?? "this member",
+														})
+													}
+													aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
+													className={LINKISH}
+												>
+													Enter time…
+												</button>
+											</>
 										</span>
 									))}
 									{free.length > 0 ? (

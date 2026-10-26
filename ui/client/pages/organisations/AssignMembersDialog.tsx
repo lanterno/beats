@@ -31,7 +31,8 @@ export function AssignMembersDialog({
 	const [error, setError] = useState<string | null>(null);
 
 	const onIt = new Set(project.members.filter((a) => !a.endedAt).map((a) => a.userId));
-	const free = (members.data ?? []).filter((m) => !m.leftAt && !onIt.has(m.userId));
+	// `/members` answers the active ones already.
+	const free = (members.data ?? []).filter((m) => !onIt.has(m.userId));
 	const chosen = free.filter((m) => picked.has(m.userId));
 
 	const toggle = (userId: string) => {

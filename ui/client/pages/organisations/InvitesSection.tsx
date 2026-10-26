@@ -21,8 +21,8 @@ import {
 import { apiFieldErrors, describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
 import { Button, Dialog, useConfirm } from "@/shared/ui";
-import { Section } from "./Section";
-import { ERROR, FIELD, LABEL, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
+import { QueryBody, Section } from "./Section";
+import { ERROR, FIELD, LABEL, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
 /** The roles an invite gives — every one but owner, which is given by an
  * owner to a member, never by invite (403 OWNER_ROLE_RESERVED). */
@@ -281,42 +281,44 @@ export function InvitesSection({ organisationId }: { organisationId: string }) {
 				</button>
 			}
 		>
-			{invites.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(invites.error, "The invites could not be read.")}
-				</p>
-			) : !invites.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : invites.data.length === 0 ? (
-				<p className={`${LEAD} py-3`}>No open invites.</p>
-			) : (
-				<ul className={LIST}>
-					{invites.data.map((invite) => (
-						<li key={invite.id} className={ROW}>
-							<div className="min-w-0 flex-1">
-								<p className="font-bold text-foreground truncate">{invite.email ?? "Link"}</p>
-								<p className="text-muted-foreground truncate">
-									{ROLE_LABELS[invite.role]}
-									{invite.requiresApproval && " · needs approval"} · expires{" "}
-									{formatDate(invite.expiresAt)}
-								</p>
-							</div>
-							<button type="button" onClick={() => void copyLink(invite.token)} className={LINKISH}>
-								Copy link
-							</button>
-							<button
-								type="button"
-								onClick={() => revokeInvite(invite)}
-								disabled={revoke.isPending}
-								aria-label={`Revoke the invite ${invite.email ? `to ${invite.email}` : "link"}`}
-								className={REMOVE}
-							>
-								<X className="w-3.5 h-3.5" aria-hidden="true" />
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
+			<QueryBody
+				query={invites}
+				errorText="The invites could not be read."
+				empty="No open invites."
+			>
+				{(rows) => (
+					<ul className={LIST}>
+						{rows.map((invite) => (
+							<li key={invite.id} className={ROW}>
+								<div className="min-w-0 flex-1">
+									<p className="font-bold text-foreground truncate">{invite.email ?? "Link"}</p>
+									<p className="text-muted-foreground truncate">
+										{ROLE_LABELS[invite.role]}
+										{invite.requiresApproval && " · needs approval"} · expires{" "}
+										{formatDate(invite.expiresAt)}
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => void copyLink(invite.token)}
+									className={LINKISH}
+								>
+									Copy link
+								</button>
+								<button
+									type="button"
+									onClick={() => revokeInvite(invite)}
+									disabled={revoke.isPending}
+									aria-label={`Revoke the invite ${invite.email ? `to ${invite.email}` : "link"}`}
+									className={REMOVE}
+								>
+									<X className="w-3.5 h-3.5" aria-hidden="true" />
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+			</QueryBody>
 			{creating && (
 				<NewInviteDialog organisationId={organisationId} onClose={() => setCreating(false)} />
 			)}

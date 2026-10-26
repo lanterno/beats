@@ -297,7 +297,7 @@ export default function Organisation() {
 
 			{admin && (
 				<TabPanel value="projects" current={tab}>
-					<ProjectsSection organisationId={id} role={data.role} />
+					<ProjectsSection organisationId={id} />
 				</TabPanel>
 			)}
 

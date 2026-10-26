@@ -13,8 +13,8 @@ import { ROLE_LABELS, useDecideJoinRequest, useJoinRequests } from "@/entities/o
 import { describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
 import { Button, Chip, useConfirm } from "@/shared/ui";
-import { Section } from "./Section";
-import { LEAD, LIST, ROW } from "./styles";
+import { QueryBody, Section } from "./Section";
+import { LIST, ROW } from "./styles";
 
 export function JoinRequestsSection({ organisationId }: { organisationId: string }) {
 	const requests = useJoinRequests(organisationId);
@@ -50,50 +50,48 @@ export function JoinRequestsSection({ organisationId }: { organisationId: string
 
 	return (
 		<Section label="Join requests" icon={UserPlus}>
-			{requests.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(requests.error, "The requests could not be read.")}
-				</p>
-			) : !requests.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : requests.data.length === 0 ? (
-				<p className={`${LEAD} py-3`}>Nobody is waiting.</p>
-			) : (
-				<ul className={LIST}>
-					{requests.data.map((request) => (
-						<li key={request.id} className={ROW}>
-							<div className="min-w-0 flex-1">
-								<p className="font-bold text-foreground truncate">{request.name}</p>
-								<p className="text-muted-foreground truncate">
-									{request.email} · asked {formatDate(request.requestedAt)}
-								</p>
-							</div>
-							<Chip tone={request.role === "member" ? "wait" : "warn"}>
-								{ROLE_LABELS[request.role]}
-							</Chip>
-							<Button
-								type="button"
-								size="sm"
-								variant="secondary"
-								disabled={deciding(request)}
-								onClick={() => void decline(request)}
-								aria-label={`Decline ${request.name}`}
-							>
-								Decline
-							</Button>
-							<Button
-								type="button"
-								size="sm"
-								disabled={deciding(request)}
-								onClick={() => answer(request, "approved")}
-								aria-label={`Approve ${request.name} as ${ROLE_LABELS[request.role].toLowerCase()}`}
-							>
-								Approve
-							</Button>
-						</li>
-					))}
-				</ul>
-			)}
+			<QueryBody
+				query={requests}
+				errorText="The requests could not be read."
+				empty="Nobody is waiting."
+			>
+				{(rows) => (
+					<ul className={LIST}>
+						{rows.map((request) => (
+							<li key={request.id} className={ROW}>
+								<div className="min-w-0 flex-1">
+									<p className="font-bold text-foreground truncate">{request.name}</p>
+									<p className="text-muted-foreground truncate">
+										{request.email} · asked {formatDate(request.requestedAt)}
+									</p>
+								</div>
+								<Chip tone={request.role === "member" ? "wait" : "warn"}>
+									{ROLE_LABELS[request.role]}
+								</Chip>
+								<Button
+									type="button"
+									size="sm"
+									variant="secondary"
+									disabled={deciding(request)}
+									onClick={() => void decline(request)}
+									aria-label={`Decline ${request.name}`}
+								>
+									Decline
+								</Button>
+								<Button
+									type="button"
+									size="sm"
+									disabled={deciding(request)}
+									onClick={() => answer(request, "approved")}
+									aria-label={`Approve ${request.name} as ${ROLE_LABELS[request.role].toLowerCase()}`}
+								>
+									Approve
+								</Button>
+							</li>
+						))}
+					</ul>
+				)}
+			</QueryBody>
 			{confirmDialog}
 		</Section>
 	);

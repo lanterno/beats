@@ -26,8 +26,8 @@ import {
 import { describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
 import { Chip, useConfirm } from "@/shared/ui";
-import { Section } from "./Section";
-import { LEAD, LIST, REMOVE, ROW, SELECT } from "./styles";
+import { QueryBody, Section } from "./Section";
+import { LIST, REMOVE, ROW, SELECT } from "./styles";
 
 const ROLES: OrgRole[] = ["member", "viewer", "manager", "admin", "owner"];
 
@@ -95,62 +95,58 @@ export function MembersSection({
 			icon={Users}
 			lead="Admins run the organisation; a manager decides for their teams; a viewer reads the record."
 		>
-			{members.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(members.error, "The members could not be read.")}
-				</p>
-			) : !members.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : (
-				<ul className={LIST}>
-					{members.data.map((member) => {
-						const me = member.userId === userId;
-						// An owner's row is an owner's to change; to anyone else it reads.
-						const readOnly = me || (member.role === "owner" && !iAmOwner);
-						return (
-							<li key={member.userId} className={ROW}>
-								<div className="min-w-0 flex-1">
-									<p className="font-bold text-foreground truncate">
-										{member.name}
-										{me && <span className="font-medium text-muted-foreground"> (you)</span>}
-									</p>
-									<p className="text-muted-foreground truncate">
-										{member.email} · since {formatDate(member.joinedAt)}
-									</p>
-								</div>
-								{readOnly ? (
-									<Chip className="shrink-0">{ROLE_LABELS[member.role]}</Chip>
-								) : (
-									<>
-										<select
-											value={member.role}
-											onChange={(e) => void changeRole(member, e.target.value as OrgRole)}
-											disabled={setRole.isPending && setRole.variables?.userId === member.userId}
-											aria-label={`Role of ${member.name}`}
-											className={SELECT}
-										>
-											{roles.map((role) => (
-												<option key={role} value={role} title={ROLE_HINTS[role]}>
-													{ROLE_LABELS[role]}
-												</option>
-											))}
-										</select>
-										<button
-											type="button"
-											onClick={() => void removeMember(member)}
-											disabled={remove.isPending && remove.variables === member.userId}
-											aria-label={`Remove ${member.name}`}
-											className={REMOVE}
-										>
-											<X className="w-3.5 h-3.5" aria-hidden="true" />
-										</button>
-									</>
-								)}
-							</li>
-						);
-					})}
-				</ul>
-			)}
+			<QueryBody query={members} errorText="The members could not be read." empty="Nobody yet.">
+				{(rows) => (
+					<ul className={LIST}>
+						{rows.map((member) => {
+							const me = member.userId === userId;
+							// An owner's row is an owner's to change; to anyone else it reads.
+							const readOnly = me || (member.role === "owner" && !iAmOwner);
+							return (
+								<li key={member.userId} className={ROW}>
+									<div className="min-w-0 flex-1">
+										<p className="font-bold text-foreground truncate">
+											{member.name}
+											{me && <span className="font-medium text-muted-foreground"> (you)</span>}
+										</p>
+										<p className="text-muted-foreground truncate">
+											{member.email} · since {formatDate(member.joinedAt)}
+										</p>
+									</div>
+									{readOnly ? (
+										<Chip className="shrink-0">{ROLE_LABELS[member.role]}</Chip>
+									) : (
+										<>
+											<select
+												value={member.role}
+												onChange={(e) => void changeRole(member, e.target.value as OrgRole)}
+												disabled={setRole.isPending && setRole.variables?.userId === member.userId}
+												aria-label={`Role of ${member.name}`}
+												className={SELECT}
+											>
+												{roles.map((role) => (
+													<option key={role} value={role} title={ROLE_HINTS[role]}>
+														{ROLE_LABELS[role]}
+													</option>
+												))}
+											</select>
+											<button
+												type="button"
+												onClick={() => void removeMember(member)}
+												disabled={remove.isPending && remove.variables === member.userId}
+												aria-label={`Remove ${member.name}`}
+												className={REMOVE}
+											>
+												<X className="w-3.5 h-3.5" aria-hidden="true" />
+											</button>
+										</>
+									)}
+								</li>
+							);
+						})}
+					</ul>
+				)}
+			</QueryBody>
 			{confirmDialog}
 		</Section>
 	);

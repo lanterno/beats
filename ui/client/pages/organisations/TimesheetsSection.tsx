@@ -27,7 +27,6 @@ import {
 	useReopenTimesheet,
 	useTimesheets,
 } from "@/entities/organisation";
-import { describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
 import { Button, Chip } from "@/shared/ui";
 import { CommentDialog } from "./CommentDialog";
@@ -35,7 +34,7 @@ import { EnterTimeDialog } from "./EnterTimeDialog";
 import { memberLabel, projectLabel } from "./labels";
 import { ManagedContractDialog } from "./ManagedContractDialog";
 import { RecordMonthLink } from "./RecordMonthLink";
-import { Section } from "./Section";
+import { QueryBody, Section } from "./Section";
 import { LEAD, LINKISH, LIST } from "./styles";
 
 type Action = { sheet: Timesheet; kind: "approve" | "changes" | "reopen" };
@@ -184,28 +183,26 @@ export function TimesheetsSection({
 			icon={ClipboardCheck}
 			lead="Approval freezes a month's figures and locks its days until it is reopened."
 		>
-			{sheets.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(sheets.error, "The timesheets could not be read.")}
-				</p>
-			) : !sheets.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : rows.length === 0 ? (
-				<p className={`${LEAD} py-3`}>No months submitted yet.</p>
-			) : (
-				GROUPS.map(({ key, title, of }) => {
-					const inGroup = rows.filter(of);
-					if (inGroup.length === 0) return null;
-					return (
-						<div key={key} className="py-1.5">
-							<h3 className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground pt-2">
-								{title}
-							</h3>
-							<ul className={LIST}>{inGroup.map(sheetRow)}</ul>
-						</div>
-					);
-				})
-			)}
+			<QueryBody
+				query={sheets}
+				errorText="The timesheets could not be read."
+				empty="No months submitted yet."
+			>
+				{() =>
+					GROUPS.map(({ key, title, of }) => {
+						const inGroup = rows.filter(of);
+						if (inGroup.length === 0) return null;
+						return (
+							<div key={key} className="py-1.5">
+								<h3 className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground pt-2">
+									{title}
+								</h3>
+								<ul className={LIST}>{inGroup.map(sheetRow)}</ul>
+							</div>
+						);
+					})
+				}
+			</QueryBody>
 			{action?.kind === "approve" && (
 				<CommentDialog
 					key={action.sheet.id}
