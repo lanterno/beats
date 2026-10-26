@@ -756,8 +756,14 @@ class OrganisationResponse(OrganisationFields):
 class MembershipResponse(BaseModel):
     """One of the caller's organisations, with their standing in it. A
     membership that ended (`left_at`) is listed too: the archive of the
-    person's own hours there is reached through it."""
+    person's own hours there is reached through it.
 
+    `user_id` is the caller's own, so a client can tell which row of
+    `/members` or which timesheet is theirs without matching on the address
+    they joined under — which an account that changed its email, or signed
+    in through a provider, no longer has."""
+
+    user_id: str
     organisation: OrganisationResponse
     role: OrgRole
     joined_at: datetime

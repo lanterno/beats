@@ -84,6 +84,15 @@ class ProjectMembers(NamedTuple):
     assignments: list[tuple[OrgAssignment, OrgMembership | None]]
 
 
+class OrgLabels(NamedTuple):
+    """The names a row is read by: projects by id, members by user id. The
+    members include those who have left, because a decided request, an
+    approved sheet and an audit line all outlive the membership they name."""
+
+    projects: dict[str, str]
+    members: dict[str, str]
+
+
 class RecordEntry(NamedTuple):
     id: str
     day: date
@@ -637,6 +646,19 @@ class OrganisationService:
         """The name a member joined under, for a response that lists them."""
         membership = await self.store.membership(organisation_id, user_id)
         return membership.name if membership else None
+
+    async def labels(self, organisation_id: str) -> OrgLabels:
+        """The names of the organisation's projects and members, for a
+        response that names a row the reader is already being shown. Like
+        `member_name` it checks nothing itself — the route resolved the
+        caller before it had a row to name — and it is how a decider reads a
+        project's name without the admin-only project list."""
+        projects = await self.store.list_projects(organisation_id)
+        members = await self.store.list_members(organisation_id, active_only=False)
+        return OrgLabels(
+            projects={p.id: p.name for p in projects if p.id is not None},
+            members={m.user_id: m.name for m in members},
+        )
 
     async def unassign(
         self, organisation_id: str, actor: str, project_id: str, user_id: str

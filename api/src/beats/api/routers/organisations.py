@@ -91,6 +91,7 @@ def _card(organisation: Organisation) -> OrganisationCardResponse:
 def _membership(member: Member) -> MembershipResponse:
     m = member.membership
     return MembershipResponse(
+        user_id=m.user_id,
         organisation=_organisation(member.organisation),
         role=m.role,
         joined_at=m.joined_at,
