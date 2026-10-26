@@ -15,8 +15,6 @@ import { RecordPage } from "./RecordPage";
 const RECORD: OrgRecord = {
 	organisation: { id: "o1", name: "Acme" },
 	month: "2026-10",
-	first: "2026-10-01",
-	last: "2026-10-24",
 	projects: [
 		{
 			project: { id: "p1", name: "Payroll", archived: false, kind: "day_job", color: "#4E93E3" },
