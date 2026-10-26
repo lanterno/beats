@@ -857,10 +857,13 @@ the `/api/projects` prefix, as they can the ledger. `PRIVACY.md` and
 
 ## Follow-ups and open questions
 
-Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Work
-contracts follow-ups* (AHM-30 to AHM-36): the companion's week card. A
-four-day full-time week is Decision 3, vacation entitlement Decision 14,
-the monthly timesheet "The timesheet", and the coach's view of the week
-"What leaves Beats".
+Tracked in [GitHub issues](https://github.com/lanterno/beats/issues). The
+*Work contracts follow-ups* milestone — the timesheet, the vacation
+entitlement, the ledger's write side, employer holidays, the coach and the
+companion seeing the balance — all shipped; what it left is the companion's
+proof of the balance missing its adjusted term,
+[#327](https://github.com/lanterno/beats/issues/327). A four-day full-time
+week is Decision 3, vacation entitlement Decision 14, the monthly timesheet
+"The timesheet", and the coach's view of the week "What leaves Beats".
 The balance ledger's read side was built by
 [project-page.md](project-page.md), its write side by Decision 13.

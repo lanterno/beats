@@ -7,7 +7,7 @@
 > projects to that timeline, marked, and shows the organisation the hours on
 > them and nothing else.
 
-This is stage 2 of the organisations epic (AHM-74): the foundations.
+This is stage 2 of the organisations epic (#353): the foundations.
 [organisations-roadmap.md](organisations-roadmap.md) holds the staging and
 the reasoning that led here; this file records what was built and the
 decisions it rests on, so later stages do not re-litigate them. Stage 1,

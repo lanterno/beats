@@ -20,21 +20,18 @@ docs/                         Cross-surface design docs
 
 ## Project Management
 
-Open work lives in Linear — the
-[LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), team `AHM`
-(the server is in `.mcp.json`). Docs and READMEs hold decisions and designs, never
-to-do lists. The `linear` skill (`.claude/skills/linear/`) has the layout and the
-loop: branch `<type>/ahm-<n>-<slug>`, `(AHM-n)` at the end of each commit subject,
-`Fixes AHM-n` in the PR body, and anything found along the way filed as an issue.
-GitHub issues are left to Renovate's Dependency Dashboard.
+Open work lives in [GitHub issues](https://github.com/lanterno/beats/issues). Docs
+and READMEs hold decisions and designs, never to-do lists. The `github-issues` skill
+(`.claude/skills/github-issues/`) has the layout and the loop: branch
+`<type>/<n>-<slug>`, `Fixes #n` in the PR body, no issue number in commit subjects,
+and anything found along the way filed as an issue. Milestones group the work, labels
+say the surface and what blocks it, and `decision` marks an open question. Until
+2026-10-26 the tracker was Linear, which is why older commit subjects end in `(AHM-n)`
+and a few test comments cite those ids.
 
-The one multi-stage epic in flight, **organisations** (AHM-74), has its plan in
-[docs/organisations-roadmap.md](docs/organisations-roadmap.md): the four stages,
-what each needs, and the decisions still open; stages 1 and 2 are built, and
-stage 2's decisions and model are in [docs/organisations.md](docs/organisations.md). It is a deliberate exception to
-the rule above, made while the Linear workspace is unreachable from the
-development environment; it says so at the top, and it gives way to issues once
-Linear is reachable again.
+The organisations epic is #353, with what it still owes as issues linked from it;
+[docs/organisations-roadmap.md](docs/organisations-roadmap.md) keeps its reasoning and
+[docs/organisations.md](docs/organisations.md) its decisions and model.
 
 ## Quick Start
 
