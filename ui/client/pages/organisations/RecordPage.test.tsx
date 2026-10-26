@@ -93,7 +93,9 @@ describe("RecordPage", () => {
 		// A header row and one per entry.
 		expect(within(table).getAllByRole("row")).toHaveLength(3);
 		expect(table).toHaveTextContent("Month end");
-		expect(ada).toHaveTextContent("Balance +4.5 h over");
+		// Today's balance, said as today's, with the four terms it is made of.
+		expect(ada).toHaveTextContent("Balance today: +4.5 h ahead");
+		expect(ada).toHaveTextContent("worked 100 h");
 		expect(ada).toHaveTextContent("half day");
 	});
 
