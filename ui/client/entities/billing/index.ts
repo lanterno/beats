@@ -48,6 +48,7 @@ export {
 	inForceOn,
 	isFutureMonth,
 	monthOf,
+	monthTitle,
 	nextMonth,
 	type ProjectBilling,
 	type ProjectBillingInput,

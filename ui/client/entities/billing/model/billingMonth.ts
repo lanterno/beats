@@ -32,3 +32,9 @@ export function nextMonth(month: string): string {
 export function isFutureMonth(month: string, todayIso: string): boolean {
 	return month > monthOf(todayIso);
 }
+
+/** "October 2026" — the word a month stepper shows. Clients and the record pages share it. */
+export function monthTitle(month: string): string {
+	const date = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1, 12);
+	return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
