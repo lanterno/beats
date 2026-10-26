@@ -1,7 +1,10 @@
 /**
  * TeamsSection — the organisation's teams, each a name and who is in it:
- * what gives a manager their scope. Deleting one takes nothing else with
- * it, which is what the confirmation says. Admins only.
+ * what gives a manager their scope, which is why each manager is marked on
+ * their chip, a team with no manager says nobody decides for it, and a
+ * manager in no team is named as seeing nothing. Deleting one takes
+ * nothing else with it, which is what the confirmation says. Admins edit;
+ * a manager reads it (`readOnly`) to see their own scope.
  */
 
 import { Plus, UsersRound, X } from "lucide-react";
@@ -29,7 +32,8 @@ function TeamDialog({
 	const [name, setName] = useState(team?.name ?? "");
 	const [memberIds, setMemberIds] = useState<Set<string>>(new Set(team?.memberIds ?? []));
 	const [error, setError] = useState("");
-	const active = (members.data ?? []).filter((m) => !m.leftAt);
+	// `/members` answers the active ones already.
+	const active = members.data ?? [];
 
 	const toggle = (userId: string) =>
 		setMemberIds((ids) => {
@@ -135,7 +139,14 @@ function TeamDialog({
 
 type Editor = { mode: "new" } | { mode: "edit"; team: Team };
 
-export function TeamsSection({ organisationId }: { organisationId: string }) {
+export function TeamsSection({
+	organisationId,
+	readOnly = false,
+}: {
+	organisationId: string;
+	/** A manager reads their scope here; only admins change it. */
+	readOnly?: boolean;
+}) {
 	const teams = useTeams(organisationId);
 	const members = useMembers(organisationId);
 	const deleteTeam = useDeleteTeam(organisationId);
@@ -143,12 +154,21 @@ export function TeamsSection({ organisationId }: { organisationId: string }) {
 	const [editor, setEditor] = useState<Editor | null>(null);
 
 	const names = new Map((members.data ?? []).map((m) => [m.userId, m.name]));
+	const managerIds = new Set(
+		(members.data ?? []).filter((m) => m.role === "manager").map((m) => m.userId),
+	);
+	// A manager in no team has an empty scope: they decide for nobody and
+	// their record shows nothing. Worth a line, since nothing else says it.
+	const teamless = [...managerIds].filter(
+		(uid) => !(teams.data ?? []).some((t) => t.memberIds.includes(uid)),
+	);
 
 	const remove = async (team: Team) => {
 		const ok = await confirm({
 			title: `Delete ${team.name}?`,
 			detail: "The team's managers lose that scope; nothing else changes.",
 			confirmLabel: "Delete",
+			tone: "danger",
 		});
 		if (!ok) return;
 		deleteTeam.mutate(team.id, {
@@ -162,10 +182,12 @@ export function TeamsSection({ organisationId }: { organisationId: string }) {
 			label="Teams"
 			icon={UsersRound}
 			action={
-				<button type="button" onClick={() => setEditor({ mode: "new" })} className={LINKISH}>
-					<Plus className="w-3 h-3 inline-block mr-1" aria-hidden="true" />
-					New team
-				</button>
+				readOnly ? undefined : (
+					<button type="button" onClick={() => setEditor({ mode: "new" })} className={LINKISH}>
+						<Plus className="w-3 h-3 inline-block mr-1" aria-hidden="true" />
+						New team
+					</button>
+				)
 			}
 		>
 			{teams.error ? (
@@ -184,24 +206,29 @@ export function TeamsSection({ organisationId }: { organisationId: string }) {
 						<li key={team.id} className="py-3 space-y-2">
 							<div className="flex items-center gap-2 text-[12.5px]">
 								<span className="font-bold text-foreground truncate">{team.name}</span>
-								<Button
-									type="button"
-									variant="secondary"
-									size="sm"
-									className="ml-auto h-7 px-2.5 text-xs"
-									onClick={() => setEditor({ mode: "edit", team })}
-								>
-									Edit
-								</Button>
-								<button
-									type="button"
-									onClick={() => void remove(team)}
-									disabled={deleteTeam.isPending}
-									aria-label={`Delete ${team.name}`}
-									className={REMOVE}
-								>
-									<X className="w-3.5 h-3.5" aria-hidden="true" />
-								</button>
+								{!readOnly && (
+									<>
+										<Button
+											type="button"
+											variant="secondary"
+											size="sm"
+											className="ml-auto h-7 px-2.5 text-xs"
+											onClick={() => setEditor({ mode: "edit", team })}
+											aria-label={`Edit ${team.name}`}
+										>
+											Edit
+										</Button>
+										<button
+											type="button"
+											onClick={() => void remove(team)}
+											disabled={deleteTeam.isPending && deleteTeam.variables === team.id}
+											aria-label={`Delete ${team.name}`}
+											className={REMOVE}
+										>
+											<X className="w-3.5 h-3.5" aria-hidden="true" />
+										</button>
+									</>
+								)}
 							</div>
 							<div className="flex flex-wrap items-center gap-1.5">
 								{team.memberIds.length === 0 ? (
@@ -210,13 +237,25 @@ export function TeamsSection({ organisationId }: { organisationId: string }) {
 									team.memberIds.map((userId) => (
 										<span key={userId} className={CHIP}>
 											{names.get(userId) ?? "Member"}
+											{managerIds.has(userId) && (
+												<span className="font-medium text-muted-foreground">Manager</span>
+											)}
 										</span>
 									))
+								)}
+								{members.data && !team.memberIds.some((uid) => managerIds.has(uid)) && (
+									<span className={LEAD}>No manager is in it — nobody decides for this team.</span>
 								)}
 							</div>
 						</li>
 					))}
 				</ul>
+			)}
+			{members.data && teams.data && teamless.length > 0 && (
+				<p className={`${LEAD} py-2`}>
+					{teamless.map((uid) => names.get(uid) ?? "A manager").join(", ")}{" "}
+					{teamless.length === 1 ? "manages" : "manage"} no team yet, so their scope is empty.
+				</p>
 			)}
 			{editor && (
 				<TeamDialog

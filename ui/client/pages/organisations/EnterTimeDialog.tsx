@@ -2,6 +2,9 @@
  * EnterTimeDialog — a decider enters worked time for a member: a date, a
  * start, an end and a note. It lands on the member's own timeline, marked
  * as entered by the decider, and in the audit log — which the dialog says.
+ * Times are read in the decider's own timezone, and the dialog says which,
+ * since the member may live in another; an end at or before the start
+ * means the shift ran past midnight and is entered as the next day.
  */
 
 import { useId, useState } from "react";
@@ -28,11 +31,14 @@ export function EnterTimeDialog({
 }) {
 	const id = useId();
 	const enter = useEnterTime(organisationId);
-	const [date, setDate] = useState("");
+	// Today, in the decider's zone — the one the times are read in.
+	const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"));
 	const [start, setStart] = useState("");
 	const [end, setEnd] = useState("");
 	const [note, setNote] = useState("");
 	const [error, setError] = useState("");
+	const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+	const overnight = Boolean(start && end && end <= start);
 
 	const submit = () => {
 		if (!date || !start || !end) {
@@ -41,8 +47,11 @@ export function EnterTimeDialog({
 		}
 		const startAt = new Date(`${date}T${start}`);
 		const endAt = new Date(`${date}T${end}`);
-		if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
-			setError("The end must come after the start.");
+		// A night shift: 22:00 to 02:00 ends the next day, and the form says
+		// so before it is sent rather than refusing the shape night work has.
+		if (endAt <= startAt) endAt.setDate(endAt.getDate() + 1);
+		if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+			setError("The date or a time could not be read.");
 			return;
 		}
 		setError("");
@@ -110,7 +119,7 @@ export function EnterTimeDialog({
 					</div>
 					<div>
 						<label htmlFor={`${id}-end`} className={LABEL}>
-							End
+							End{overnight && " — the next day"}
 						</label>
 						<input
 							id={`${id}-end`}
@@ -135,7 +144,8 @@ export function EnterTimeDialog({
 					/>
 				</div>
 				<p className={LEAD}>
-					Lands on {memberName}'s own timeline, marked as entered by you, and in the audit log.
+					Times are in your timezone ({timezone}). Lands on {memberName}'s own timeline, marked as
+					entered by you, and in the audit log.
 				</p>
 				{error && (
 					<p role="alert" className={ERROR}>

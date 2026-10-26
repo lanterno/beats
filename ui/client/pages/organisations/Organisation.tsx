@@ -26,9 +26,12 @@ import {
 	OrganisationMark,
 	ROLE_LABELS,
 	readsRecord,
+	useAbsenceRequests,
+	useJoinRequests,
 	useLeaveOrganisation,
 	useMembers,
 	useMembership,
+	useTimesheets,
 	useUpdateOrganisation,
 } from "@/entities/organisation";
 import { ApiError, describeError } from "@/shared/api";
@@ -62,7 +65,7 @@ export function tabsFor(role: OrgRole): { value: TabValue; label: string }[] {
 	if (admin) {
 		tabs.push({ value: "people", label: "People" }, { value: "projects", label: "Projects" });
 	}
-	if (decides(role) || role === "viewer") tabs.push({ value: "approvals", label: "Approvals" });
+	if (readsRecord(role)) tabs.push({ value: "approvals", label: "Approvals" });
 	tabs.push({ value: "timesheets", label: "Timesheets" });
 	if (admin) {
 		tabs.push({ value: "audit", label: "Audit" }, { value: "settings", label: "Settings" });
@@ -97,6 +100,15 @@ export default function Organisation() {
 	// before trying rather than after. Only an owner can be the last one, so
 	// nobody else pays for the read.
 	const owners = useMembers(id, { enabled: membership.data?.role === "owner" });
+	// What the tabs wear as counts: work waiting on the caller. The sections
+	// read the same queries, so an open tab costs nothing twice.
+	const role = membership.data?.role;
+	const waitingRequests = useJoinRequests(id, { enabled: role ? canAdminister(role) : false });
+	const waitingAbsences = useAbsenceRequests(id, {
+		pending: true,
+		enabled: role ? decides(role) : false,
+	});
+	const allSheets = useTimesheets(id, { enabled: role ? decides(role) : false });
 	const { confirm, confirmDialog } = useConfirm();
 	const [searchParams, setSearchParams] = useSearchParams();
 
@@ -151,7 +163,15 @@ export default function Organisation() {
 
 	const org = data.organisation;
 	const admin = canAdminister(data.role);
-	const tabs = tabsFor(data.role);
+	const waiting = {
+		people: waitingRequests.data?.length ?? 0,
+		approvals:
+			(waitingAbsences.data?.length ?? 0) +
+			(allSheets.data?.filter((s) => s.status === "submitted").length ?? 0),
+	};
+	const tabs = tabsFor(data.role).map((t) =>
+		t.value === "people" || t.value === "approvals" ? { ...t, count: waiting[t.value] } : t,
+	);
 	const asked = searchParams.get("tab");
 	const tab = tabs.find((t) => t.value === asked)?.value ?? tabs[0].value;
 	const openTab = (value: TabValue) =>
@@ -281,18 +301,22 @@ export default function Organisation() {
 				</TabPanel>
 			)}
 
-			{(decides(data.role) || data.role === "viewer") && (
+			{readsRecord(data.role) && (
 				<TabPanel value="approvals" current={tab}>
 					<div className="grid gap-4 items-start xl:grid-cols-2">
 						{decides(data.role) && <AbsenceRequestsSection organisationId={id} />}
-						<TimesheetsSection organisationId={id} role={data.role} />
+						<TimesheetsSection organisationId={id} role={data.role} userId={data.userId} />
+						{/* A manager's scope is their teams, which only the admin tab
+						    listed; read-only here, so they can see whose months and
+						    days are theirs to decide. */}
+						{!admin && <TeamsSection organisationId={id} readOnly />}
 					</div>
 				</TabPanel>
 			)}
 
 			<TabPanel value="timesheets" current={tab}>
 				<div className="grid gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
-					<MyTimesheetsSection organisationId={id} userId={data.userId} />
+					<MyTimesheetsSection organisationId={id} userId={data.userId} timezone={org.timezone} />
 
 					<div>
 						<Section

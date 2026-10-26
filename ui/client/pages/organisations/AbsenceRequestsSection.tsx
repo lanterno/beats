@@ -2,80 +2,29 @@
  * AbsenceRequestsSection — the days off waiting on the caller's decision.
  * The note is addressed to the decider and never enters the record, which
  * the lead says. Either decision may carry a comment back; the API's own
- * words surface when a decision is refused (409 PERIOD_APPROVED while the
- * month is locked).
+ * words surface inside the dialog when a decision is refused (409
+ * PERIOD_APPROVED while the month is locked). The names are the row's own:
+ * a manager may not list the organisation's projects.
  */
 
 import { CalendarClock } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { ABSENCE_TYPE_LABELS } from "@/entities/absence";
 import type { AbsenceRequest } from "@/entities/organisation";
 import { useAbsenceRequests, useDecideAbsenceRequest } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
-import { formatDateOnly } from "@/shared/lib";
-import { Button, Dialog } from "@/shared/ui";
+import { formatDate, formatDateOnly } from "@/shared/lib";
+import { Button } from "@/shared/ui";
+import { CommentDialog } from "./CommentDialog";
 import { memberLabel, projectLabel } from "./labels";
 import { Section } from "./Section";
-import { FIELD, LABEL, LEAD, LIST } from "./styles";
+import { LEAD, LIST } from "./styles";
 
-function DecisionDialog({
-	request,
-	approve,
-	who,
-	onClose,
-	onDecide,
-	busy,
-}: {
-	request: AbsenceRequest;
-	approve: boolean;
-	who: string;
-	onClose: () => void;
-	onDecide: (comment: string) => void;
-	busy: boolean;
-}) {
-	const id = useId();
-	const [comment, setComment] = useState("");
-	return (
-		<Dialog
-			open
-			onClose={() => !busy && onClose()}
-			title={approve ? "Approve this day off?" : "Decline this day off?"}
-			description={`${who} asked for ${formatDateOnly(request.date)} (${request.type}${request.halfDay ? ", half day" : ""}).`}
-			contentClassName="sm:w-full sm:max-w-[380px]"
-		>
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					onDecide(comment.trim());
-				}}
-				noValidate
-				className="space-y-3"
-			>
-				<div>
-					<label htmlFor={`${id}-comment`} className={LABEL}>
-						{approve ? "Comment (optional)" : "Comment (recommended)"}
-					</label>
-					<input
-						id={`${id}-comment`}
-						type="text"
-						value={comment}
-						onChange={(e) => setComment(e.target.value)}
-						maxLength={500}
-						autoFocus
-						className={FIELD}
-					/>
-				</div>
-				<div className="flex justify-end gap-2.5 pt-1">
-					<Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
-						Cancel
-					</Button>
-					<Button type="submit" size="sm" disabled={busy}>
-						{busy ? "Sending…" : approve ? "Approve" : "Decline"}
-					</Button>
-				</div>
-			</form>
-		</Dialog>
-	);
+/** "Nadia · Backend · Nov 3, 2026, vacation (half day)". */
+function asked(request: AbsenceRequest): string {
+	const kind = (ABSENCE_TYPE_LABELS[request.type] ?? request.type).toLowerCase();
+	return `${memberLabel(request.memberName)} · ${projectLabel(request.projectName)} · ${formatDateOnly(request.date)}, ${kind}${request.halfDay ? " (half day)" : ""}`;
 }
 
 export function AbsenceRequestsSection({ organisationId }: { organisationId: string }) {
@@ -83,18 +32,11 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 	const decide = useDecideAbsenceRequest(organisationId);
 	const [open, setOpen] = useState<{ request: AbsenceRequest; approve: boolean } | null>(null);
 
-	const decideNow = (request: AbsenceRequest, approve: boolean, comment: string) =>
-		decide.mutate(
-			{ requestId: request.id, approve, comment: comment || undefined },
-			{
-				onSuccess: () => {
-					setOpen(null);
-					toast.success(approve ? "Day off approved" : "Request declined");
-				},
-				// 409 PERIOD_APPROVED: the month is locked; the API's detail says so.
-				onError: (err) => toast.error(describeError(err, "The request could not be decided.")),
-			},
-		);
+	const decideNow = async (request: AbsenceRequest, approve: boolean, comment: string) => {
+		await decide.mutateAsync({ requestId: request.id, approve, comment: comment || undefined });
+		setOpen(null);
+		toast.success(approve ? "Day off approved" : "Request declined");
+	};
 
 	return (
 		<Section
@@ -118,8 +60,8 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 								<span className="font-bold text-foreground">{memberLabel(request.memberName)}</span>
 								<span className="text-muted-foreground">
 									{projectLabel(request.projectName)} · {formatDateOnly(request.date)} ·{" "}
-									{request.type}
-									{request.halfDay && " · half day"}
+									{(ABSENCE_TYPE_LABELS[request.type] ?? request.type).toLowerCase()}
+									{request.halfDay && " · half day"} · asked {formatDate(request.requestedAt)}
 								</span>
 								<span className="ml-auto flex items-center gap-2">
 									<Button
@@ -128,6 +70,7 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 										className="h-7 px-2.5 text-xs"
 										onClick={() => setOpen({ request, approve: true })}
 										disabled={decide.isPending}
+										aria-label={`Approve ${asked(request)}`}
 									>
 										Approve
 									</Button>
@@ -138,6 +81,7 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 										className="h-7 px-2.5 text-xs hover:text-destructive-ink"
 										onClick={() => setOpen({ request, approve: false })}
 										disabled={decide.isPending}
+										aria-label={`Decline ${asked(request)}`}
 									>
 										Decline
 									</Button>
@@ -149,14 +93,17 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 				</ul>
 			)}
 			{open && (
-				<DecisionDialog
+				<CommentDialog
 					key={`${open.request.id}-${open.approve}`}
-					request={open.request}
-					approve={open.approve}
-					who={memberLabel(open.request.memberName)}
+					title={open.approve ? "Approve this day off?" : "Decline this day off?"}
+					context={asked(open.request)}
+					hint={open.request.note ? <p className={LEAD}>“{open.request.note}”</p> : undefined}
+					commentLabel={open.approve ? "Comment (optional)" : "Comment (recommended)"}
+					confirmLabel={open.approve ? "Approve" : "Decline"}
+					busyLabel="Sending…"
+					danger={!open.approve}
 					onClose={() => setOpen(null)}
-					onDecide={(comment) => decideNow(open.request, open.approve, comment)}
-					busy={decide.isPending}
+					onSend={(comment) => decideNow(open.request, open.approve, comment)}
 				/>
 			)}
 		</Section>
