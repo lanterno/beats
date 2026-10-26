@@ -6,7 +6,7 @@
  * connecting a project — also invalidates the project list, since an
  * organisation's project is on it or not because of these.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
 import { organisationsRootKey } from "@/shared/api";
@@ -156,6 +156,12 @@ export function useOrgRecord(
 		queryKey: organisationKeys.record(organisationId, month),
 		queryFn: () => fetchRecord(organisationId, month),
 		enabled: options.enabled ?? true,
+		// The month stepper keeps the month it has while the next arrives,
+		// rather than emptying the page between two reads.
+		placeholderData: keepPreviousData,
+		// A refusal (403 to a member, 404 to a non-member) is an answer, not a
+		// hiccup: asking twice more only delays showing it.
+		retry: false,
 	});
 }
 
@@ -164,6 +170,8 @@ export function useVisible(organisationId: string, month: string) {
 	return useQuery({
 		queryKey: organisationKeys.visible(organisationId, month),
 		queryFn: () => fetchVisible(organisationId, month),
+		placeholderData: keepPreviousData,
+		retry: false,
 	});
 }
 
@@ -171,6 +179,7 @@ export function useArchive(organisationId: string) {
 	return useQuery({
 		queryKey: organisationKeys.archive(organisationId),
 		queryFn: () => fetchArchive(organisationId),
+		retry: false,
 	});
 }
 

@@ -119,6 +119,9 @@ export function RecordPage({ variant, useRecord }: RecordPageProps) {
 	const record = query.data;
 	const name = record?.organisation.name ?? "";
 	const title = variant === "visible" ? `What ${name} sees` : `${name}'s record`;
+	// What to call the page before the organisation has a name: the read may
+	// fail, and a heading stuck on "Loading…" over an error panel is a lie.
+	const pageTitle = variant === "visible" ? "What they see" : "The record";
 	const entriesInMonth = (record?.projects ?? []).some((p) =>
 		p.members.some((m) => m.entries.length > 0 || m.absences.length > 0),
 	);
@@ -138,9 +141,11 @@ export function RecordPage({ variant, useRecord }: RecordPageProps) {
 		body = (
 			<Panel role="alert" padding="px-6 py-[22px]">
 				<p className="font-heading text-lg font-extrabold text-foreground">
-					{forbidden
-						? "Owners, admins, managers and viewers only."
-						: "The record could not be read."}
+					{!forbidden
+						? "The record could not be read."
+						: variant === "record"
+							? "Owners, admins, managers and viewers only."
+							: "This organisation can see nothing of yours right now."}
 				</p>
 				{!forbidden && (
 					<p className="mt-1 text-xs text-muted-foreground">
@@ -196,7 +201,7 @@ export function RecordPage({ variant, useRecord }: RecordPageProps) {
 		<div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-5 pb-24">
 			<header className="space-y-1">
 				<div className="flex items-center gap-2 flex-wrap">
-					<h1 className={TITLE}>{record ? title : "Loading…"}</h1>
+					<h1 className={TITLE}>{record ? title : query.error ? pageTitle : `${pageTitle}…`}</h1>
 					{variant === "record" && record && (
 						<span className="ml-auto flex items-center gap-2">
 							<Button
