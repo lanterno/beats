@@ -114,6 +114,8 @@ export interface JoinRequest {
 	userId: string;
 	name: string;
 	email: string;
+	/** What approving grants: the invite's role. */
+	role: OrgRole;
 	requestedAt: string;
 }
 

@@ -911,6 +911,7 @@ export const ApiJoinRequestSchema = z.object({
 	user_id: z.string(),
 	name: z.string(),
 	email: z.string(),
+	role: OrgRoleSchema,
 	requested_at: z.string(),
 });
 export type ApiJoinRequest = z.infer<typeof ApiJoinRequestSchema>;

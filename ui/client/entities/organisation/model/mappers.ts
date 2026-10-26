@@ -152,6 +152,7 @@ export function toJoinRequest(api: ApiJoinRequest): JoinRequest {
 		userId: api.user_id,
 		name: api.name,
 		email: api.email,
+		role: api.role,
 		requestedAt: api.requested_at,
 	};
 }
