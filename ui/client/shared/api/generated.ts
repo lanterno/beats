@@ -3748,7 +3748,13 @@ export interface components {
             project_id: string;
             type: components["schemas"]["AbsenceType"];
         };
-        /** AbsenceRequestResponse */
+        /**
+         * AbsenceRequestResponse
+         * @description A request as its decider and its asker read it. The names come with
+         *     it: a decider reads a project's name here, having no right to the
+         *     organisation's project list, and a member who has since left is still
+         *     named rather than left as an id.
+         */
         AbsenceRequestResponse: {
             /** Comment */
             comment: string | null;
@@ -3761,14 +3767,20 @@ export interface components {
             decided_at: string | null;
             /** Decided By */
             decided_by: string | null;
+            /** Decided By Name */
+            decided_by_name: string | null;
             /** Half Day */
             half_day: boolean;
             /** Id */
             id: string;
+            /** Member Name */
+            member_name: string | null;
             /** Note */
             note: string | null;
             /** Project Id */
             project_id: string;
+            /** Project Name */
+            project_name: string | null;
             /**
              * Requested At
              * Format: date-time
@@ -5550,6 +5562,11 @@ export interface components {
          * @description One of the caller's organisations, with their standing in it. A
          *     membership that ended (`left_at`) is listed too: the archive of the
          *     person's own hours there is reached through it.
+         *
+         *     `user_id` is the caller's own, so a client can tell which row of
+         *     `/members` or which timesheet is theirs without matching on the address
+         *     they joined under — which an account that changed its email, or signed
+         *     in through a provider, no longer has.
          */
         MembershipResponse: {
             /**
@@ -5562,6 +5579,8 @@ export interface components {
             left_reason: components["schemas"]["MembershipEnd"] | null;
             organisation: components["schemas"]["OrganisationResponse"];
             role: components["schemas"]["OrgRole"];
+            /** User Id */
+            user_id: string;
         };
         /** MemoryResponse */
         MemoryResponse: {
@@ -6599,6 +6618,7 @@ export interface components {
          * TimesheetResponse
          * @description A timesheet as both sides read it. `frozen` is set only while
          *     approved: the figures as approval saw them, which the lock then keeps.
+         *     The names come with it, for the reasons `AbsenceRequestResponse` gives.
          */
         TimesheetResponse: {
             /** Comment */
@@ -6607,11 +6627,15 @@ export interface components {
             decided_at: string | null;
             /** Decided By */
             decided_by: string | null;
+            /** Decided By Name */
+            decided_by_name: string | null;
             frozen: components["schemas"]["FrozenMonth"] | null;
             /** History */
             history: components["schemas"]["TimesheetEvent"][];
             /** Id */
             id: string;
+            /** Member Name */
+            member_name: string | null;
             /**
              * Month
              * Format: date
@@ -6619,6 +6643,8 @@ export interface components {
             month: string;
             /** Project Id */
             project_id: string;
+            /** Project Name */
+            project_name: string | null;
             status: components["schemas"]["TimesheetStatus"];
             /**
              * Submitted At

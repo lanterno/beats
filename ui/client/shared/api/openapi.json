@@ -77,6 +77,7 @@
         "type": "object"
       },
       "AbsenceRequestResponse": {
+        "description": "A request as its decider and its asker read it. The names come with\nit: a decider reads a project's name here, having no right to the\norganisation's project list, and a member who has since left is still\nnamed rather than left as an id.",
         "properties": {
           "comment": {
             "anyOf": [
@@ -117,6 +118,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "half_day": {
             "title": "Half Day",
             "type": "boolean"
@@ -124,6 +136,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "member_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Name"
           },
           "note": {
             "anyOf": [
@@ -139,6 +162,17 @@
           "project_id": {
             "title": "Project Id",
             "type": "string"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
           },
           "requested_at": {
             "format": "date-time",
@@ -159,7 +193,9 @@
         "required": [
           "id",
           "project_id",
+          "project_name",
           "user_id",
+          "member_name",
           "date",
           "type",
           "half_day",
@@ -168,6 +204,7 @@
           "requested_at",
           "decided_at",
           "decided_by",
+          "decided_by_name",
           "comment"
         ],
         "title": "AbsenceRequestResponse",
@@ -4508,7 +4545,7 @@
         "type": "string"
       },
       "MembershipResponse": {
-        "description": "One of the caller's organisations, with their standing in it. A\nmembership that ended (`left_at`) is listed too: the archive of the\nperson's own hours there is reached through it.",
+        "description": "One of the caller's organisations, with their standing in it. A\nmembership that ended (`left_at`) is listed too: the archive of the\nperson's own hours there is reached through it.\n\n`user_id` is the caller's own, so a client can tell which row of\n`/members` or which timesheet is theirs without matching on the address\nthey joined under \u2014 which an account that changed its email, or signed\nin through a provider, no longer has.",
         "properties": {
           "joined_at": {
             "format": "date-time",
@@ -4542,9 +4579,14 @@
           },
           "role": {
             "$ref": "#/components/schemas/OrgRole"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
           }
         },
         "required": [
+          "user_id",
           "organisation",
           "role",
           "joined_at",
@@ -6937,7 +6979,7 @@
         "type": "object"
       },
       "TimesheetResponse": {
-        "description": "A timesheet as both sides read it. `frozen` is set only while\napproved: the figures as approval saw them, which the lock then keeps.",
+        "description": "A timesheet as both sides read it. `frozen` is set only while\napproved: the figures as approval saw them, which the lock then keeps.\nThe names come with it, for the reasons `AbsenceRequestResponse` gives.",
         "properties": {
           "comment": {
             "anyOf": [
@@ -6973,6 +7015,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "frozen": {
             "anyOf": [
               {
@@ -6994,6 +7047,17 @@
             "title": "Id",
             "type": "string"
           },
+          "member_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Name"
+          },
           "month": {
             "format": "date",
             "title": "Month",
@@ -7002,6 +7066,17 @@
           "project_id": {
             "title": "Project Id",
             "type": "string"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
           },
           "status": {
             "$ref": "#/components/schemas/TimesheetStatus"
@@ -7019,12 +7094,15 @@
         "required": [
           "id",
           "project_id",
+          "project_name",
           "user_id",
+          "member_name",
           "month",
           "status",
           "submitted_at",
           "decided_at",
           "decided_by",
+          "decided_by_name",
           "comment",
           "frozen",
           "history"
