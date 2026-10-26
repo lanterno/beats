@@ -1,7 +1,8 @@
 /**
  * An approved sheet shows what approval froze and the way to reopen it;
  * a submitted one waits on Approve or Ask for changes. A viewer reads the
- * same list with no buttons.
+ * same list with no buttons. The names come off the row — a manager and a
+ * viewer are shown this list and may not read the organisation's projects.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -20,22 +21,13 @@ vi.mock("@/entities/organisation", async () => {
 	return {
 		...actual,
 		useTimesheets: () => ({ data: state.sheets, error: null }),
-		useMembers: () => ({
-			data: [
-				{
-					userId: "u1",
-					name: "Nadia",
-					email: "n@example.com",
-					role: "member",
-					joinedAt: "2026-01-01T00:00:00Z",
-				},
-			],
-			error: null,
-		}),
-		useOrgProjects: () => ({
-			data: [{ id: "p1", name: "Backend", archived: false, kind: "day_job", members: [] }],
-			error: null,
-		}),
+		// Neither list is read any more: this section's readers may not have them.
+		useMembers: () => {
+			throw new Error("the members are not read here");
+		},
+		useOrgProjects: () => {
+			throw new Error("the projects are not read here");
+		},
 		useDecideTimesheet: idle,
 		useReopenTimesheet: idle,
 	};
@@ -45,7 +37,9 @@ function sheet(overrides: Partial<Timesheet>): Timesheet {
 	return {
 		id: "s1",
 		projectId: "p1",
+		projectName: "Backend",
 		userId: "u1",
+		memberName: "Nadia",
 		month: "2026-09-01",
 		status: "submitted",
 		submittedAt: "2026-10-01T09:00:00Z",
@@ -76,6 +70,7 @@ describe("TimesheetsSection", () => {
 		renderSection("admin");
 
 		expect(screen.getByText("Nadia")).toBeInTheDocument();
+		expect(screen.getByText(/Backend/)).toBeInTheDocument();
 		expect(
 			screen.getByText("42.5 h worked · 160 h expected · balance −12.3 h at the close"),
 		).toBeInTheDocument();
@@ -90,6 +85,14 @@ describe("TimesheetsSection", () => {
 		expect(screen.getByText("Submitted")).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "Ask for changes" })).toBeInTheDocument();
+	});
+
+	it("names a member the API could not, rather than showing their id", () => {
+		state.sheets = [sheet({ memberName: undefined, projectName: undefined })];
+		renderSection("admin");
+
+		expect(screen.getByText("A former member")).toBeInTheDocument();
+		expect(screen.queryByText("u1")).not.toBeInTheDocument();
 	});
 
 	it("shows a viewer the sheet with no actions", () => {

@@ -31,6 +31,7 @@ vi.mock("@/entities/organisation", async () => {
 });
 
 const ACME: Membership = {
+	userId: "u-me",
 	organisation: {
 		id: "o1",
 		name: "Acme",
@@ -45,6 +46,7 @@ const ACME: Membership = {
 };
 
 const KITE: Membership = {
+	userId: "u-me",
 	organisation: {
 		id: "o2",
 		name: "Kite Studio",
