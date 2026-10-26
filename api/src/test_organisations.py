@@ -1875,6 +1875,35 @@ class TestTeamsAndRoles:
             client.get(f"/api/organisations/{org['id']}/audit", headers=viewer).status_code == 403
         )
 
+    def test_a_member_takes_their_visible_month_away_as_csv(self, client, auth_headers):
+        """The person can always take away exactly what is seen of them —
+        their own rows, nobody else's, and no reader's role needed."""
+        org, project, _, (inside, _inside_id), (outside, _outside_id) = self._org_with_team(
+            client, auth_headers
+        )
+        _beat(client, inside, project["id"], "2026-03-03T09:00:00", 60)
+        _beat(client, outside, project["id"], "2026-03-03T11:00:00", 60)
+
+        mine = client.get(
+            f"/api/organisations/{org['id']}/visible.csv",
+            params={"month": "2026-03", "tz": "UTC"},
+            headers=inside,
+        )
+        assert mine.status_code == 200, mine.text
+        header, *rows = mine.text.splitlines()
+        assert header == "project,member,day,start,end,hours,note"
+        # One row: their own entry. The other member's is in no byte of it.
+        assert len(rows) == 1
+        outside_email = _me(client, outside)["email"]
+        assert outside_email not in mine.text
+        # The record's own CSV stays a reader's: a plain member is refused.
+        refused = client.get(
+            f"/api/organisations/{org['id']}/record.csv",
+            params={"month": "2026-03", "tz": "UTC"},
+            headers=inside,
+        )
+        assert refused.status_code == 403
+
     def test_compliance_counts_breaks_between_entries(self, client, auth_headers):
         member = _new_user()
         org, project, _member_id = _employed(client, auth_headers, member, managed=False)
