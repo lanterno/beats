@@ -265,17 +265,34 @@ class TestOrganisationLifecycle:
             f"/api/organisations/{org['id']}/requests", headers=auth_headers
         ).json()
         assert request["email"] == _me(client, applicant)["email"]
+        # The request says what approving it grants: the invite's role.
+        assert request["role"] == "member"
         decided = client.post(
             f"/api/organisations/{org['id']}/requests/{request['id']}",
             json={"decision": "approved"},
             headers=auth_headers,
         )
         assert decided.status_code == 200, decided.text
+        assert decided.json()["role"] == "member"
         [mine] = client.get("/api/organisations/", headers=applicant).json()
         assert mine["organisation"]["id"] == org["id"]
         assert (
             client.get(f"/api/organisations/{org['id']}/requests", headers=auth_headers).json()
             == []
+        )
+
+        # A link that grants more than membership says so on its requests.
+        admin_link = _invite(client, auth_headers, org["id"], requires_approval=True, role="admin")
+        hopeful = _new_user()
+        assert _join(client, hopeful, admin_link["token"]).json()["status"] == "pending"
+        [asking] = client.get(
+            f"/api/organisations/{org['id']}/requests", headers=auth_headers
+        ).json()
+        assert asking["role"] == "admin"
+        client.post(
+            f"/api/organisations/{org['id']}/requests/{asking['id']}",
+            json={"decision": "declined"},
+            headers=auth_headers,
         )
 
         # The link is reusable until revoked.
