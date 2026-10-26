@@ -6,7 +6,13 @@
  * connecting a project — also invalidates the project list, since an
  * organisation's project is on it or not because of these.
  */
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	keepPreviousData,
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
 import { organisationsRootKey } from "@/shared/api";
@@ -183,10 +189,23 @@ export function useArchive(organisationId: string) {
 	});
 }
 
-/** The organisation's own reads, after a write to it. */
-function useInvalidateOrganisation() {
+/**
+ * The organisation's own reads, after a write to it: that organisation's
+ * key and its children, plus the caller's membership list, whose rows wear
+ * the name and standing a write may have moved. With no id (creating,
+ * joining by token) everything under the root refreshes — the id is in the
+ * answer, not the call. Scoped, because every decision used to refetch
+ * every organisation's members, record months and audit log.
+ */
+function useInvalidateOrganisation(organisationId?: string) {
 	const queryClient = useQueryClient();
-	return () => queryClient.invalidateQueries({ queryKey: organisationKeys.all });
+	return () =>
+		Promise.all([
+			queryClient.invalidateQueries({
+				queryKey: organisationId ? organisationKeys.one(organisationId) : organisationKeys.all,
+			}),
+			queryClient.invalidateQueries({ queryKey: organisationKeys.memberships() }),
+		]);
 }
 
 /**
@@ -194,11 +213,12 @@ function useInvalidateOrganisation() {
  * organisation's reads, the project list (an organisation's project appears
  * or leaves it) and the sessions (an entry's stamp moves with its project).
  */
-function useInvalidateTimeline() {
+function useInvalidateTimeline(organisationId?: string) {
 	const queryClient = useQueryClient();
+	const organisation = useInvalidateOrganisation(organisationId);
 	return () =>
 		Promise.all([
-			queryClient.invalidateQueries({ queryKey: organisationKeys.all }),
+			organisation(),
 			queryClient.invalidateQueries({ queryKey: projectKeys.all }),
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all }),
 		]);
@@ -213,7 +233,7 @@ export function useCreateOrganisation() {
 }
 
 export function useUpdateOrganisation(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: (input: OrganisationInput) => updateOrganisation(organisationId, input),
 		// The name and logo mark every member's project list.
@@ -222,7 +242,7 @@ export function useUpdateOrganisation(organisationId: string) {
 }
 
 export function useSetMemberRole(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: ({ userId, role }: { userId: string; role: OrgRole }) =>
 			setMemberRole(organisationId, userId, role),
@@ -232,7 +252,7 @@ export function useSetMemberRole(organisationId: string) {
 }
 
 export function useRemoveMember(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: (userId: string) => removeMember(organisationId, userId),
 		onSuccess: invalidate,
@@ -241,7 +261,7 @@ export function useRemoveMember(organisationId: string) {
 }
 
 export function useLeaveOrganisation(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: () => leaveOrganisation(organisationId),
 		onSuccess: invalidate,
@@ -250,7 +270,7 @@ export function useLeaveOrganisation(organisationId: string) {
 }
 
 export function useCreateInvite(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: (input: InviteInput) => createInvite(organisationId, input),
 		onSuccess: invalidate,
@@ -258,7 +278,7 @@ export function useCreateInvite(organisationId: string) {
 }
 
 export function useRevokeInvite(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: (inviteId: string) => revokeInvite(organisationId, inviteId),
 		onSuccess: invalidate,
@@ -275,7 +295,7 @@ export function useJoinOrganisation() {
 }
 
 export function useDecideJoinRequest(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: ({
 			requestId,
@@ -289,7 +309,7 @@ export function useDecideJoinRequest(organisationId: string) {
 }
 
 export function useCreateOrgProject(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: (input: OrgProjectInput) => createOrgProject(organisationId, input),
 		onSuccess: invalidate,
@@ -297,7 +317,7 @@ export function useCreateOrgProject(organisationId: string) {
 }
 
 export function useUpdateOrgProject(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: ({ projectId, input }: { projectId: string; input: OrgProjectInput }) =>
 			updateOrgProject(organisationId, projectId, input),
@@ -306,7 +326,7 @@ export function useUpdateOrgProject(organisationId: string) {
 }
 
 export function useAssignMembers(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: async ({ projectId, userIds }: { projectId: string; userIds: string[] }) => {
 			// One PUT per member, in order. Assigning is idempotent on the
@@ -322,7 +342,7 @@ export function useAssignMembers(organisationId: string) {
 }
 
 export function useUnassignMember(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: ({ projectId, userId }: { projectId: string; userId: string }) =>
 			unassignMember(organisationId, projectId, userId),
@@ -361,7 +381,7 @@ export function useTeams(organisationId: string, options: { enabled?: boolean } 
 }
 
 export function useSaveTeam(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: ({ teamId, input }: { teamId?: string; input: TeamInput }) =>
 			teamId ? updateTeam(organisationId, teamId, input) : createTeam(organisationId, input),
@@ -370,7 +390,7 @@ export function useSaveTeam(organisationId: string) {
 }
 
 export function useDeleteTeam(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: (teamId: string) => deleteTeam(organisationId, teamId),
 		onSuccess: invalidate,
@@ -394,7 +414,7 @@ export function useManagedContract(
 export function useSetManagedContract(organisationId: string) {
 	// The member's week and contract panels read the assignment's contract,
 	// so the project root refreshes too.
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: ({
 			projectId,
@@ -413,7 +433,7 @@ export function useSetManagedContract(organisationId: string) {
 }
 
 export function useEnterTime(organisationId: string) {
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: ({
 			projectId,
@@ -442,7 +462,7 @@ export function useAbsenceRequests(
 }
 
 export function useRequestAbsence(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: (input: {
 			projectId: string;
@@ -458,7 +478,7 @@ export function useRequestAbsence(organisationId: string) {
 
 export function useDecideAbsenceRequest(organisationId: string) {
 	// Approval books the absence on the member's project: their panels read it.
-	const invalidate = useInvalidateTimeline();
+	const invalidate = useInvalidateTimeline(organisationId);
 	return useMutation({
 		mutationFn: ({
 			requestId,
@@ -475,7 +495,7 @@ export function useDecideAbsenceRequest(organisationId: string) {
 }
 
 export function useWithdrawAbsenceRequest(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: (requestId: string) => withdrawAbsenceRequest(organisationId, requestId),
 		onSuccess: invalidate,
@@ -495,7 +515,7 @@ export function useTimesheets(
 }
 
 export function useSubmitTimesheet(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: ({ projectId, month }: { projectId: string; month: string }) =>
 			submitTimesheet(organisationId, projectId, month),
@@ -505,7 +525,7 @@ export function useSubmitTimesheet(organisationId: string) {
 }
 
 export function useDecideTimesheet(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: ({
 			sheetId,
@@ -522,7 +542,7 @@ export function useDecideTimesheet(organisationId: string) {
 }
 
 export function useReopenTimesheet(organisationId: string) {
-	const invalidate = useInvalidateOrganisation();
+	const invalidate = useInvalidateOrganisation(organisationId);
 	return useMutation({
 		mutationFn: ({ sheetId, reason }: { sheetId: string; reason: string }) =>
 			reopenTimesheet(organisationId, sheetId, reason),
@@ -531,10 +551,17 @@ export function useReopenTimesheet(organisationId: string) {
 	});
 }
 
+/** The API pages the log at 100; a full page means there may be more. */
+const AUDIT_PAGE = 100;
+
 export function useAuditLog(organisationId: string, options: { enabled?: boolean } = {}) {
-	return useQuery({
+	return useInfiniteQuery({
 		queryKey: organisationKeys.audit(organisationId),
-		queryFn: () => fetchAuditLog(organisationId),
+		queryFn: ({ pageParam }) => fetchAuditLog(organisationId, pageParam),
+		initialPageParam: undefined as string | undefined,
+		// Newest first: the next page is everything before the oldest shown.
+		getNextPageParam: (lastPage) =>
+			lastPage.length === AUDIT_PAGE ? lastPage[lastPage.length - 1].at : undefined,
 		enabled: options.enabled ?? true,
 		retry: false,
 	});
