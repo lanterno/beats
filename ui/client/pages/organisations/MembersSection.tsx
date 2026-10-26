@@ -49,7 +49,24 @@ export function MembersSection({
 	const iAmOwner = myRole === "owner";
 	const roles = iAmOwner ? ROLES : ROLES.filter((r) => r !== "owner");
 
-	const changeRole = (member: Member, role: OrgRole) =>
+	const changeRole = async (member: Member, role: OrgRole) => {
+		// Granting or taking the owner role changes who the organisation
+		// answers to; a slipped select should not do that silently.
+		const touchesOwner = role === "owner" || member.role === "owner";
+		if (touchesOwner) {
+			const ok = await confirm({
+				title:
+					role === "owner"
+						? `Make ${member.name} an owner?`
+						: `Take the owner role from ${member.name}?`,
+				detail:
+					role === "owner"
+						? `${member.name} will run the organisation fully — members, roles, projects and settings — and only an owner can change that back.`
+						: `${member.name} becomes ${ROLE_LABELS[role].toLowerCase()}. The organisation keeps its other owners.`,
+				confirmLabel: role === "owner" ? "Make owner" : "Change role",
+			});
+			if (!ok) return;
+		}
 		setRole.mutate(
 			{ userId: member.userId, role },
 			{
@@ -57,6 +74,7 @@ export function MembersSection({
 				onError: (err) => toast.error(describeError(err, "The role could not be changed.")),
 			},
 		);
+	};
 
 	const removeMember = async (member: Member) => {
 		const ok = await confirm({
@@ -106,8 +124,8 @@ export function MembersSection({
 									<>
 										<select
 											value={member.role}
-											onChange={(e) => changeRole(member, e.target.value as OrgRole)}
-											disabled={setRole.isPending}
+											onChange={(e) => void changeRole(member, e.target.value as OrgRole)}
+											disabled={setRole.isPending && setRole.variables?.userId === member.userId}
 											aria-label={`Role of ${member.name}`}
 											className={SELECT}
 										>
@@ -120,7 +138,7 @@ export function MembersSection({
 										<button
 											type="button"
 											onClick={() => void removeMember(member)}
-											disabled={remove.isPending}
+											disabled={remove.isPending && remove.variables === member.userId}
 											aria-label={`Remove ${member.name}`}
 											className={REMOVE}
 										>
