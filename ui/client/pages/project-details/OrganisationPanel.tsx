@@ -16,14 +16,16 @@ import type { Timesheet, TimesheetStatus } from "@/entities/organisation";
 import {
 	ConnectProjectDialog,
 	describeShareFrom,
+	endedMonths,
 	OrganisationMark,
+	sheetMonthTitle,
 	useMemberships,
 	useSubmitTimesheet,
 	useTimesheets,
 } from "@/entities/organisation";
 import type { ProjectWithDuration } from "@/entities/project";
 import { describeError } from "@/shared/api";
-import { parseIsoDate } from "@/shared/lib";
+import { hoursText } from "@/shared/lib";
 import { Button, Panel } from "@/shared/ui";
 import { LABEL, LINKISH, SELECT_PILL } from "./styles";
 
@@ -32,12 +34,6 @@ export interface OrganisationPanelProps {
 	todayIso: string;
 	/** Billed to a client: the API refuses to connect it, so nothing is offered. */
 	billed?: boolean;
-}
-
-/** "September 2026" from a sheet month's "2026-09-01". */
-function monthLabel(month: string): string {
-	const d = parseIsoDate(month);
-	return d ? d.toLocaleDateString("en-US", { month: "long", year: "numeric" }) : month;
 }
 
 /** "approved · 42.5 h" with what approval froze, else the status in words. */
@@ -49,19 +45,9 @@ function sheetWords(sheet: Timesheet): string {
 		reopened: "reopened",
 	};
 	if (sheet.status === "approved" && sheet.frozen) {
-		return `approved · ${Math.round(sheet.frozen.worked * 10) / 10} h`;
+		return `approved · ${hoursText(sheet.frozen.worked)}`;
 	}
 	return words[sheet.status];
-}
-
-/** The last `n` ended months before the month `todayIso` sits in, newest first, as "YYYY-MM-01". */
-function endedMonths(todayIso: string, n: number): string[] {
-	const year = Number(todayIso.slice(0, 4));
-	const month = Number(todayIso.slice(5, 7));
-	return Array.from({ length: n }, (_, i) => {
-		const d = new Date(year, month - 1 - (i + 1), 1, 12);
-		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-	});
 }
 
 /**
@@ -103,7 +89,7 @@ function TimesheetsBlock({
 							key={sheet.id}
 							className="py-[5px] border-t border-border first:border-t-0 text-[12.5px] font-medium text-foreground"
 						>
-							{monthLabel(sheet.month)} — {sheetWords(sheet)}
+							{sheetMonthTitle(sheet.month)} — {sheetWords(sheet)}
 						</li>
 					))}
 				</ul>
@@ -121,7 +107,7 @@ function TimesheetsBlock({
 					>
 						{open.map((m) => (
 							<option key={m} value={m}>
-								{monthLabel(m)}
+								{sheetMonthTitle(m)}
 							</option>
 						))}
 					</select>
