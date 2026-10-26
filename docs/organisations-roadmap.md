@@ -13,15 +13,12 @@ employer can see any of it. Draw the wall correctly and we can sell what
 Hubstaff-style tools cannot: working-time records a works council can sign off
 on, *because* they cannot be used to watch anyone.
 
-**Where this document sits.** `CLAUDE.md` says open work lives in Linear and
-that docs hold decisions and designs, never to-do lists. This file is a
-deliberate exception while the Linear workspace is unreachable from the
-development environment: it holds the staging of the epic and the decisions
-still open, in one place, so the plan is legible without it. When Linear is
-reachable again each stage below becomes an issue under the epic, each open
-decision becomes a `decision` issue, and this file is trimmed to the design
-reasoning it records — the stage lists go, the decisions and the architecture
-notes stay.
+**Where this document sits.** The epic is GitHub issue
+[#353](https://github.com/lanterno/beats/issues/353); what it still owes is an
+issue each, listed there, and `CLAUDE.md` says open work lives in issues, not in
+docs. This file keeps what an issue cannot: the four rules, the reasoning behind
+each stage, the decisions and why they went the way they did, and what the code
+said before stage 2 changed it.
 
 ---
 
@@ -55,43 +52,28 @@ showing the actual data held.
 
 | Stage | What | State |
 |---|---|---|
-| **1** | Clients for freelancers | **Done** — on `main` |
-| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — the decisions and the model are in [docs/organisations.md](organisations.md) |
-| **3** | Employment: employer contracts, leave requests, timesheet approval | **Done** — decisions 21–24 and 26–27 in [docs/organisations.md](organisations.md) |
-| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **Partly done** — teams, manager and viewer roles, the audit read and the report CSVs are built (decision 25); money permission, verified domains, per-org SSO, SCIM, retention and seats are recorded as open, each with its reason, in the same doc |
+| **1** | Clients for freelancers | **Done** — [docs/billing.md](billing.md) |
+| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — [docs/organisations.md](organisations.md), decisions 1–20 |
+| **3** | Employment: employer contracts, leave requests, timesheet approval | **Done** — decisions 21–24 and 26–27 |
+| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **The structural half done** — teams, manager and viewer roles, the audit read and the report CSVs (decision 25). The rest waits, each item with its reason, as an issue under [#353](https://github.com/lanterno/beats/issues/353) |
 
-Stage 2 is the only one that changes the data model. Stages 3 and 4 are
-additive on top of it. That makes the sequencing question simple: get the
+Stage 2 was the only one that changed the data model. Stages 3 and 4 are
+additive on top of it, which is what made the sequencing simple: get the
 ownership model right and the rest is ordinary work.
 
 ---
 
-## Stage 1 — Clients for freelancers · **Done**
+## What each stage settled
+
+The lists of what each stage was asked for went with the stages; what stays is
+the reasoning that carried from one to the next.
+
+### Stage 1 — Clients for freelancers
 
 Section 4 of the epic without its client-organisation part. It needed no
 organisations, which is why it went first, and it sells to one of the two
-target groups on its own. The decisions are recorded in
-[docs/billing.md](billing.md); the summary here is only to say what exists.
-
-All three are on `main`.
-
-- **1a — clients and billing.** Clients as records in your own account, one
-  currency each, dated default rates; a freelance project billed to a client
-  under dated terms carrying both the billable flag and the rate; a billable
-  mark per entry; the month's report per client and per currency. Money is
-  integer minor units everywhere. The closed past is gated server-side
-  (`RETROACTIVE_CHANGE`).
-- **1b — billing budgets.** A limit on a client or a billed project, in hours
-  or money, monthly or in total. Only the limit is stored; spend, remaining,
-  state and projection are derived on every read.
-- **1c — report links.** A link naming one client and a fixed range, which the
-  client opens with no account. Amounts and per-entry rows are each opt-in.
-  Served by `assemble_client` from that client's inputs alone, through a
-  response schema written field by field, under the one public prefix that
-  serves user data.
-
-Three decisions from this stage carry forward into organisations, because they
-are the same problems one step smaller:
+target groups on its own. Three of its decisions carried into organisations,
+because they are the same problems one step smaller:
 
 - Billing lives in **its own collections**, never as fields of `Project` or
   `Beat`, so a contractor's rates stay on the far side of a collection
@@ -101,157 +83,57 @@ are the same problems one step smaller:
 - A report says **nothing about now**: no `running` flag, so an invoice's
   backing cannot be used to see whether someone is working at this moment.
 
----
+### Stage 2 — Foundations
 
-## Stage 2 — Foundations · **Done**
+Sections 1, 2 and 6 of the epic: an organisation can exist, have members, own
+projects that appear on each member's own timeline, and be left — with the
+wall of rule 3 enforced structurally rather than by vigilance. Four things were
+settled before any code, each cheaper to settle then than to migrate out of
+later: notes and tags, live presence, and deletion against legal retention
+(all below), and the index on `projects`. `ensure_indexes`
+(`api/src/beats/infrastructure/database.py`) covered eighteen collections and
+`projects` was not among them, so every project read was a collection scan
+filtered by `user_id` — harmless at one person's scale and wrong as soon as
+the read became "mine, plus every organisation project I am assigned to"
+across every tenant. `{user_id: 1, archived: 1}` matches what
+`MongoProjectRepository.list` asks for, and it went in first, measured rather
+than assumed.
 
-**Goal:** an organisation can exist, have members, own projects that appear on
-each member's own timeline, and be left — with the wall of rule 3 enforced
-structurally rather than by vigilance.
+The proof the stage was asked for, and has: an organisation sees hours on its
+own projects and nothing else, shown by tests in the shape of 1c's — another
+member's personal project, a tag, a flow score and a biometric are each
+unreachable *because the query is never made*.
 
-Sections 1, 2 and 6 of the epic. Built; the decisions it rests on, the data
-model, the HTTP contract and the UI's rules are in
-[docs/organisations.md](organisations.md). The scope and the "done when" below
-are kept as the record of what was asked; every item is in.
+### Stage 3 — Employment
 
-### Scope
-
-- Organisations: name, logo, week start, default holiday region, timezone.
-- Joining by **email invite** and by **invite link** with an optional approval
-  step. Verified domains, SSO and SCIM are stage 4.
-- Roles **Owner / Admin / Member**. Manager, Viewer and the money permission
-  are stage 4.
-- Organisation-owned projects, assigned to members, appearing in each member's
-  project list marked with the organisation's name and logo. Tracking works
-  exactly as it does today — timer, manual entries, auto-timer suggestions, the
-  companion, the menu bar and the wall clock make no distinction.
-- Filters over one timeline: *Everything · Personal · Acme*. Views, not
-  workspaces to switch between.
-- **Connecting an existing project**: a person already tracking their day job
-  personally picks the date from which past hours are shared, or starts fresh.
-- The **"What Acme can see"** page.
-- **Leaving and removal**: tracking to that organisation's projects stops, its
-  projects leave the active list, a read-only "Acme (left)" archive of the
-  person's own hours remains and is exportable, and the organisation keeps the
-  hours as its working-time record.
-
-### Before any code
-
-Four things, each cheaper to settle now than to migrate out of later:
-
-1. Decide **notes and tags** (below).
-2. Decide **live presence** (below).
-3. Decide **deletion against legal retention** (below) — it determines whether
-   "this beat is an organisation's working-time record" has to be a property of
-   the document rather than something inferred through a project.
-4. **Index the `projects` collection.** `ensure_indexes`
-   (`api/src/beats/infrastructure/database.py`) covers eighteen collections and
-   `projects` is not among them, so every project read is a collection scan
-   filtered by `user_id`. Harmless at one person's scale and wrong as soon as
-   the read becomes "mine, plus every organisation project I am assigned to"
-   across every tenant. `{user_id: 1, archived: 1}` matches what
-   `MongoProjectRepository.list` asks for. Measure before and after rather than
-   assuming — this was found by reading, not by chasing a slow query.
-
-### Done when
-
-- A member sees organisation projects beside their own and tracks on them from
-  every surface, unchanged.
-- An organisation sees hours on its own projects and nothing else — proven by
-  tests in the shape of 1c's: another member's personal project, a tag, a flow
-  score and a biometric are each unreachable *because the query is never made*.
-- Connecting a project shares history only from the chosen date.
-- Leaving stops tracking, keeps the organisation's record, and leaves the
-  person a read-only archive they can export.
-
----
-
-## Stage 3 — Employment · **Done**
-
-**Goal:** turn the day-job contract we already have into something two parties
-agree on. Section 3 of the epic. Built; the decisions are
-[docs/organisations.md](organisations.md) 21–24 and 26–27, and the sections
-below stand as the record of what was asked. The frozen-close question this
-stage flagged was answered "refused, with a recorded reopen".
-
-### Scope
-
-- **Contract terms belong to the employer**: weekly hours or percentage, start
-  and end, holiday region, opening balance. A personal weekly goal stays the
-  person's own.
-- **Absences become requests**: the employee asks, a manager approves.
-- **Timesheets**: submit a week or a month; approve, or ask for changes with a
-  comment; approval locks the period and freezes that week's balance;
-  reopening needs a reason and is recorded.
-- **Reminders** for missing hours, unsubmitted timesheets, pending approvals.
-- **Admin-entered time**, with the member notified and the change recorded.
-- **Compliance record**: per person, per day, start / end / breaks / total,
-  exportable and retained for the period local law requires. Rest-period and
-  maximum-daily-hours warnings (Germany's 10 h a day, 11 h rest) come later.
-
-### What already exists
-
-More than the epic's wording suggests — all of this is built and tested:
-`Contract` with dated terms, holiday region, opening balance and `ended_on`,
-and the arithmetic in `domain/contracts.py`; typed absences; balance
-adjustments; the monthly timesheet CSV (`domain/timesheet.py`); the vacation
-entitlement (`domain/vacation.py`); employer holidays with company additions
-and removals (`domain/holidays.py`).
-
-So this stage is mostly about **who owns these and who may approve them**, not
-about computing anything new. The compliance record is the one genuinely new
+Section 3 of the epic: turn the day-job contract into something two parties
+agree on. More of it existed than the epic's wording suggested — `Contract`
+with dated terms, holiday region, opening balance and `ended_on`, the
+arithmetic in `domain/contracts.py`, typed absences, balance adjustments, the
+monthly timesheet CSV, the vacation entitlement, employer holidays — so the
+stage was about **who owns these and who may approve them**, not about
+computing anything new. The compliance record was the one genuinely new
 artefact, and even it is close to the timesheet's shape with breaks added.
 
-### The one architectural change, worth knowing early
+**Locking a period stores a derived figure for the first time.** Nothing
+about a contract's standing was stored before: every week's closing balance is
+recomputed on each read from one running pass over worked time, absences,
+holidays and adjustments (`running_balance`), and the same principle holds
+deliberately across the codebase — billing budgets store only their limit, a
+report link stores no figure, the month's report is assembled per request.
+"Approval freezes the balance" breaks it on purpose: an edit after approval
+must not silently move an approved figure, so the system gains two answers to
+one question and every reader has to know which it wants. The stage decided
+deliberately what is frozen and what a later edit does — refused, with a
+recorded way back (decision 23) — because this is very hard to migrate out of
+once there are approved periods in the database.
 
-**Locking a period means storing a derived figure for the first time.**
+### Stage 4 — Scale
 
-Nothing about a contract's standing is stored today. Every week's closing
-balance is recomputed on each read from one running pass over worked time,
-absences, holidays and adjustments (`running_balance` in
-`domain/contracts.py`). The same principle holds deliberately across the
-codebase: billing budgets store only their limit, a report link stores no
-figure, the month's report is assembled per request.
-
-"Approval freezes that week's balance" breaks it. A frozen balance is a stored
-number the live arithmetic can then disagree with — which is the point, since
-an edit after approval must not silently move an approved figure — but it means
-the system gains two answers to one question and every reader has to know which
-it wants. Decide deliberately: what exactly is frozen, what a later edit to a
-locked period does (refused, allowed and flagged, or allowed into an
-amendment), and what the project page shows when the stored close and the
-recomputed one differ. This is very hard to migrate out of once there are
-approved periods in the database.
-
----
-
-## Stage 4 — Scale · **Partly done**
-
-**Goal:** everything that only matters once organisations have more than a
-handful of people in them. Sections 1, 5 and 7 of the epic. The structural
-half is built — teams with manager scope, the viewer role, the audit log
-read, the record and compliance CSVs ([docs/organisations.md](organisations.md),
-decision 25). The rest is recorded there under *Stage 4 items deliberately
-not built*, each with the dependency that blocks it (email infrastructure,
-the session-door decision, a payment provider, the deletion machinery).
-
-### Scope
-
-- **Teams** inside an organisation, giving managers a scope.
-- **Manager** and **Viewer / Accountant** roles.
-- **Seeing money as its own permission**, independent of role.
-- **Verified email domains**: join automatically, or ask to join.
-- **Single sign-on per organisation**, optionally required to enter it.
-- **SCIM** provisioning.
-- **Audit log**: membership, roles, contract changes, approvals, reopened
-  periods, admin edits.
-- **Retention settings** per organisation.
-- **Per-seat billing** paid by the organisation, separate from the person's own
-  plan, which joining or leaving never changes.
-- **Reports**: team overview, per project and per client, CSV / PDF / full
-  export.
-
-### What it builds on
+Sections 1, 5 and 7 of the epic: everything that only matters once
+organisations have more than a handful of people in them. Built: teams with
+manager scope, the viewer role, the audit log read, the record and compliance
+CSVs (decision 25). What it builds on, for the rest:
 
 - **OpenID Connect is built and tested** — discovery, code exchange with PKCE
   and a nonce, every ID-token check, identities keyed on issuer + subject,
@@ -264,7 +146,7 @@ the session-door decision, a payment provider, the deletion machinery).
   collections, outside every device prefix, with no coach port. The money
   permission has a real seam to attach to rather than needing one carved out.
 
-### Worth deciding before building, not during
+Worth deciding before building, not during:
 
 - **The money permission must not be bolted on.** Every other item here is
   additive; this one is a cross-cutting read rule, and the cheapest version —
@@ -274,19 +156,18 @@ the session-door decision, a payment provider, the deletion machinery).
   codebase handles payment. A provider, tax, invoices and dunning are a
   dependency well outside the shape of this epic, and probably their own
   project rather than a bullet here.
-- **The audit log is cheap to add late and expensive to backfill.** If stages 2
-  and 3 ship without it, every membership change, contract edit and approval
-  before it exists is unrecorded — and those are exactly the events a works
-  council asks about. Consider writing the log in stage 2 even if nothing reads
-  it until stage 4.
+- **The audit log is cheap to add late and expensive to backfill** — every
+  membership change, contract edit and approval before it exists is
+  unrecorded, and those are exactly the events a works council asks about.
+  So it was written from stage 2 on, and only read from stage 4.
 
 ---
 
-## Decisions still open
+## The decisions, and why
 
-Six, from the epic. The three that gated stage 2 are settled and recorded in
-[docs/organisations.md](organisations.md) (decisions 1–3); the rows below say
-how, and the notes under them are kept as the reasoning.
+Six, from the epic. Five are settled and recorded in
+[docs/organisations.md](organisations.md); the rows below say how, and the
+notes under them are kept as the reasoning. The sixth is an issue.
 
 | Decision | Settled / proposal | Gates |
 |---|---|---|
@@ -295,7 +176,7 @@ how, and the notes under them are kept as the reasoning.
 | What does **account deletion** do to records an employer must legally keep? | **Settled:** the stamped working-time rows, the balance's inputs and the name on the membership stay under a tombstone; everything else is erased (`erasure.py`) | 2 |
 | What does **"day job"** mean once an employer can be an entity? | **Settled:** personal day jobs stay exactly as they are; on an organisation project the contract lives on the assignment, the member's until the employer takes it under management (decision 21) | 3 |
 | Who wins when the **employer's contract terms differ** from the employee's? | **Settled:** management starts from the terms the member recorded; the employer's changes are audited acts, never silent recomputation (decision 21) | 3 |
-| **Pricing**: seat price, free tier, whether contractors count as seats | — open — | 4 |
+| **Pricing**: seat price, free tier, whether contractors count as seats | **Open:** [#345](https://github.com/lanterno/beats/issues/345) | 4 |
 
 ### Notes and tags
 
