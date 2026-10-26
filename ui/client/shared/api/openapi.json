@@ -3843,6 +3843,7 @@
         "type": "string"
       },
       "JoinRequestResponse": {
+        "description": "A join request with the role approving it grants \u2014 the invite's, so\nthe admin decides knowing what they are handing over.",
         "properties": {
           "email": {
             "title": "Email",
@@ -3861,6 +3862,9 @@
             "title": "Requested At",
             "type": "string"
           },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          },
           "user_id": {
             "title": "User Id",
             "type": "string"
@@ -3871,6 +3875,7 @@
           "user_id",
           "name",
           "email",
+          "role",
           "requested_at"
         ],
         "title": "JoinRequestResponse",
@@ -14077,7 +14082,7 @@
     },
     "/api/organisations/{organisation_id}/requests": {
       "get": {
-        "description": "The join requests waiting on an invite link with an approval step. Admins.",
+        "description": "The join requests waiting on an invite link with an approval step,\neach with the role approving it would grant. Admins.",
         "operationId": "list_requests_api_organisations__organisation_id__requests_get",
         "parameters": [
           {

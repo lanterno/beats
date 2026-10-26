@@ -2561,7 +2561,8 @@ export interface paths {
         };
         /**
          * List Requests
-         * @description The join requests waiting on an invite link with an approval step. Admins.
+         * @description The join requests waiting on an invite link with an approval step,
+         *     each with the role approving it would grant. Admins.
          */
         get: operations["list_requests_api_organisations__organisation_id__requests_get"];
         put?: never;
@@ -5269,7 +5270,11 @@ export interface components {
          * @enum {string}
          */
         JoinDecision: "approved" | "declined";
-        /** JoinRequestResponse */
+        /**
+         * JoinRequestResponse
+         * @description A join request with the role approving it grants — the invite's, so
+         *     the admin decides knowing what they are handing over.
+         */
         JoinRequestResponse: {
             /** Email */
             email: string;
@@ -5282,6 +5287,7 @@ export interface components {
              * Format: date-time
              */
             requested_at: string;
+            role: components["schemas"]["OrgRole"];
             /** User Id */
             user_id: string;
         };
