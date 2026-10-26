@@ -258,7 +258,8 @@ export default function Organisation() {
 					</Link>
 					<h1 className={cn(PAGE_TITLE, "truncate")}>{org.name}</h1>
 				</div>
-				<Chip tone={admin ? "ok" : "wait"}>{ROLE_LABELS[data.role]}</Chip>
+				{/* A role is not a state: the neutral wash, never ok/warn/bad. */}
+				<Chip>{ROLE_LABELS[data.role]}</Chip>
 				<Tabs
 					tabs={tabs}
 					value={tab}

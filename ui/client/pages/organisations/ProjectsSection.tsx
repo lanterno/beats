@@ -135,40 +135,39 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 											>
 												<X className="w-3 h-3" aria-hidden="true" />
 											</button>
-											<>
-												<button
-													type="button"
-													onClick={() =>
-														setAct({
-															kind: "contract",
-															projectId: project.id,
-															projectName: project.name,
-															userId: a.userId,
-															memberName: a.name ?? "this member",
-														})
-													}
-													aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
-													className={LINKISH}
-												>
-													Contract…
-												</button>
-												<button
-													type="button"
-													onClick={() =>
-														setAct({
-															kind: "time",
-															projectId: project.id,
-															projectName: project.name,
-															userId: a.userId,
-															memberName: a.name ?? "this member",
-														})
-													}
-													aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
-													className={LINKISH}
-												>
-													Enter time…
-												</button>
-											</>
+
+											<button
+												type="button"
+												onClick={() =>
+													setAct({
+														kind: "contract",
+														projectId: project.id,
+														projectName: project.name,
+														userId: a.userId,
+														memberName: a.name ?? "this member",
+													})
+												}
+												aria-label={`Contract of ${a.name ?? "this member"} on ${project.name}`}
+												className={LINKISH}
+											>
+												Contract…
+											</button>
+											<button
+												type="button"
+												onClick={() =>
+													setAct({
+														kind: "time",
+														projectId: project.id,
+														projectName: project.name,
+														userId: a.userId,
+														memberName: a.name ?? "this member",
+													})
+												}
+												aria-label={`Enter time for ${a.name ?? "this member"} on ${project.name}`}
+												className={LINKISH}
+											>
+												Enter time…
+											</button>
 										</span>
 									))}
 									{free.length > 0 ? (

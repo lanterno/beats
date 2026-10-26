@@ -68,9 +68,7 @@ function OrganisationCard({ membership }: { membership: Membership }) {
 						className="text-foreground"
 					/>
 				</Link>
-				<Chip tone={readsRecord(role) ? "ok" : "wait"} className="shrink-0">
-					{ROLE_LABELS[role]}
-				</Chip>
+				<Chip className="shrink-0">{ROLE_LABELS[role]}</Chip>
 				<span className="ml-auto text-[12.5px] font-mono text-muted-foreground whitespace-nowrap">
 					since {formatDate(membership.joinedAt)}
 				</span>
