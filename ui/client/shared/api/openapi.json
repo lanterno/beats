@@ -14742,6 +14742,80 @@
         ]
       }
     },
+    "/api/organisations/{organisation_id}/visible.csv": {
+      "get": {
+        "description": "The month the organisation holds about the caller, as the same CSV its\nrecord exports \u2014 the person can always take away exactly what is seen of\nthem, not just read it. Members and former members, like `/visible`.",
+        "operationId": "read_visible_csv_api_organisations__organisation_id__visible_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "What the organisation sees of the caller, as CSV."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Visible Csv",
+        "tags": [
+          "Employment"
+        ]
+      }
+    },
     "/api/oura/connect": {
       "post": {
         "description": "Connect Oura by validating a personal access token.",
