@@ -16,9 +16,9 @@ runs is in this repository.
 - **A security problem** — privately, as [SECURITY.md](SECURITY.md) describes. Never in
   an issue.
 
-The maintainer plans the work in Linear, so you'll see IDs like `AHM-17` at the end
-of commit subjects. You don't need access to it: issues and Discussions are the public
-side, and anything accepted from them is picked up there.
+The maintainer plans the work in this repo's issues too, so an issue you open sits
+beside the rest. Commits from before late October 2026 end in IDs like `(AHM-17)`:
+that was Linear, since moved here.
 
 ## Before you write code
 

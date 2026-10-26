@@ -1155,7 +1155,8 @@ and change none of them; "decision N" in this section means one of its own.
    minted keep showing what their owner saw when they minted them.
 7. **A link says nothing about now.** `running` is not in the response, so a
    client cannot learn from a report that a timer is on at this moment.
-   AHM-74 makes live presence a per-member consent decision, off by default;
+   Organisations settled live presence the same way — the record carries no
+   running flag, in any stage ([organisations-roadmap.md](organisations-roadmap.md));
    a report link is not the back door to it.
 8. **The public prefix is narrow, slow and uncached.** `/api/reports` is the
    only entry in `PUBLIC_PREFIXES` that serves a user's data, and it serves

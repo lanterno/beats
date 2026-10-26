@@ -699,7 +699,8 @@ rules of its own there. The accent is its running beat and primary button.
 
 ## Follow-ups and open questions
 
-Tracked in Linear — the [LifePete project](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), milestone *Project
-page follow-ups*. The companion's week card is under *Work contracts
-follow-ups*. The open
-question, `apple-mobile-web-app-status-bar-style` under the sky, is AHM-29.
+Tracked in [GitHub issues](https://github.com/lanterno/beats/issues). The
+*Project page follow-ups* milestone closed; what is left of it is the open
+question whether `apple-mobile-web-app-status-bar-style` still suits the sky,
+[#292](https://github.com/lanterno/beats/issues/292). The companion's week card
+shipped.
