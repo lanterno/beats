@@ -6,6 +6,7 @@
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Timesheet } from "@/entities/organisation";
 import { TimesheetsSection } from "./TimesheetsSection";
@@ -51,7 +52,9 @@ function sheet(overrides: Partial<Timesheet>): Timesheet {
 function renderSection(role: "admin" | "viewer" = "admin") {
 	render(
 		<QueryClientProvider client={new QueryClient()}>
-			<TimesheetsSection organisationId="o1" role={role} />
+			<MemoryRouter>
+				<TimesheetsSection organisationId="o1" role={role} userId="u-me" />
+			</MemoryRouter>
 		</QueryClientProvider>,
 	);
 }
@@ -74,8 +77,8 @@ describe("TimesheetsSection", () => {
 		expect(
 			screen.getByText("42.5 h worked · 160 h expected · balance −12.3 h at the close"),
 		).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Reopen…" })).toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Reopen/ })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Approve/ })).not.toBeInTheDocument();
 	});
 
 	it("renders Approve and Ask for changes on a submitted sheet", () => {
@@ -83,8 +86,9 @@ describe("TimesheetsSection", () => {
 		renderSection("admin");
 
 		expect(screen.getByText("Submitted")).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Ask for changes" })).toBeInTheDocument();
+		expect(screen.getByText("Waiting on you")).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Approve/ })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Ask for changes/ })).toBeInTheDocument();
 	});
 
 	it("names a member the API could not, rather than showing their id", () => {
@@ -100,6 +104,6 @@ describe("TimesheetsSection", () => {
 		renderSection("viewer");
 
 		expect(screen.getByText("Submitted")).toBeInTheDocument();
-		expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Approve/ })).not.toBeInTheDocument();
 	});
 });

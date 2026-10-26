@@ -52,7 +52,7 @@ describe("MyTimesheetsSection", () => {
 		];
 		render(
 			<QueryClientProvider client={new QueryClient()}>
-				<MyTimesheetsSection organisationId="o1" userId="u-me" />
+				<MyTimesheetsSection organisationId="o1" userId="u-me" timezone="Europe/Berlin" />
 			</QueryClientProvider>,
 		);
 

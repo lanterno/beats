@@ -152,7 +152,9 @@ describe("Organisation", () => {
 		expect(screen.getByRole("heading", { name: "Absence requests" })).toBeInTheDocument();
 		expect(screen.getByRole("heading", { name: "Timesheets" })).toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Members" })).not.toBeInTheDocument();
-		expect(screen.queryByRole("heading", { name: /Teams/ })).not.toBeInTheDocument();
+		// A manager reads the teams — their scope — but cannot edit them.
+		expect(screen.getByRole("heading", { name: /Teams/ })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /New team/ })).not.toBeInTheDocument();
 		expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
 	});
 

@@ -61,7 +61,8 @@ describe("AbsenceRequestsSection", () => {
 		expect(screen.getByText(/Backend/)).toBeInTheDocument();
 		expect(screen.getByText(/half day/)).toBeInTheDocument();
 		expect(screen.getByText(/Dentist in the morning/)).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+		// The accessible name carries the whole request, so rows tell apart.
+		expect(screen.getByRole("button", { name: /^Approve Nadia · Backend/ })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Decline Nadia · Backend/ })).toBeInTheDocument();
 	});
 });
