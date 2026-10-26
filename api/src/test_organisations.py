@@ -161,6 +161,13 @@ class TestOrganisationLifecycle:
             "test@example.com",
             "owner",
         )
+        # The membership says whose it is, so a client finds its own row
+        # without matching on the address the person joined under.
+        assert mine["user_id"] == owner["user_id"]
+        assert (
+            client.get(f"/api/organisations/{org['id']}", headers=auth_headers).json()["user_id"]
+            == owner["user_id"]
+        )
 
     def test_settings_are_checked_like_a_contracts(self, client, auth_headers):
         bad_region = client.post(
@@ -1728,6 +1735,88 @@ class TestTeamsAndRoles:
             ).status_code
             == 403
         )
+
+    def test_a_decider_reads_the_names_without_the_admins_project_list(self, client, auth_headers):
+        """A manager is shown the approvals but may not list the
+        organisation's projects. The rows name themselves, so the decision
+        does not have to be made against an id."""
+        org, project, (manager, _), (inside, inside_id), _ = self._org_with_team(
+            client, auth_headers
+        )
+        client.put(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{inside_id}/contract",
+            json={"contract": {"terms": FULL_TIME}, "managed": True},
+            headers=manager,
+        )
+        assert (
+            client.get(f"/api/organisations/{org['id']}/projects", headers=manager).status_code
+            == 403
+        )
+
+        asked = client.post(
+            f"/api/organisations/{org['id']}/absence-requests",
+            json={"project_id": project["id"], "date": "2026-03-06", "type": "vacation"},
+            headers=inside,
+        )
+        assert asked.status_code == 201, asked.text
+        [pending] = client.get(
+            f"/api/organisations/{org['id']}/absence-requests",
+            params={"pending": True},
+            headers=manager,
+        ).json()
+        name = _me(client, inside)["email"]
+        assert (pending["project_name"], pending["member_name"]) == (project["name"], name)
+
+        _submit(client, inside, org["id"], project["id"], "2026-03")
+        [sheet] = client.get(f"/api/organisations/{org['id']}/timesheets", headers=manager).json()
+        assert (sheet["project_name"], sheet["member_name"]) == (project["name"], name)
+
+    def test_a_decided_row_still_names_a_member_who_left(self, client, auth_headers):
+        """`/members` lists the active ones, so the name on a decision has to
+        outlive the membership: the record is read long after someone goes."""
+        member = _new_user()
+        org, project, member_id = _employed(client, auth_headers, member)
+        [listed] = [
+            m
+            for m in client.get(
+                f"/api/organisations/{org['id']}/members", headers=auth_headers
+            ).json()
+            if m["user_id"] == member_id
+        ]
+        asked = client.post(
+            f"/api/organisations/{org['id']}/absence-requests",
+            json={"project_id": project["id"], "date": "2026-03-06", "type": "vacation"},
+            headers=member,
+        )
+        request_id = asked.json()["id"]
+        client.post(
+            f"/api/organisations/{org['id']}/absence-requests/{request_id}/decision",
+            json={"approve": True},
+            headers=auth_headers,
+        )
+        _submit(client, member, org["id"], project["id"], "2026-03")
+        assert (
+            client.delete(
+                f"/api/organisations/{org['id']}/members/{member_id}", headers=auth_headers
+            ).status_code
+            == 204
+        )
+
+        assert not [
+            m
+            for m in client.get(
+                f"/api/organisations/{org['id']}/members", headers=auth_headers
+            ).json()
+            if m["user_id"] == member_id
+        ]
+        [gone] = client.get(
+            f"/api/organisations/{org['id']}/absence-requests", headers=auth_headers
+        ).json()
+        assert gone["member_name"] == listed["name"]
+        [sheet] = client.get(
+            f"/api/organisations/{org['id']}/timesheets", headers=auth_headers
+        ).json()
+        assert sheet["member_name"] == listed["name"]
 
     def test_a_viewer_reads_everything_and_changes_nothing(self, client, auth_headers):
         org, project, _, (inside, inside_id), (outside, outside_id) = self._org_with_team(
