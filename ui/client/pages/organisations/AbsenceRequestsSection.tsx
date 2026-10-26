@@ -7,14 +7,15 @@
  * a manager may not list the organisation's projects.
  */
 
-import { CalendarClock } from "lucide-react";
+import { CalendarClock, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ABSENCE_TYPE_LABELS } from "@/entities/absence";
 import type { AbsenceRequest } from "@/entities/organisation";
 import { useAbsenceRequests, useDecideAbsenceRequest } from "@/entities/organisation";
+import { describeError } from "@/shared/api";
 import { formatDate, formatDateOnly } from "@/shared/lib";
-import { Button } from "@/shared/ui";
+import { Button, Chip } from "@/shared/ui";
 import { CommentDialog } from "./CommentDialog";
 import { memberLabel, projectLabel } from "./labels";
 import { QueryBody, Section } from "./Section";
@@ -30,6 +31,11 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 	const requests = useAbsenceRequests(organisationId, { pending: true });
 	const decide = useDecideAbsenceRequest(organisationId);
 	const [open, setOpen] = useState<{ request: AbsenceRequest; approve: boolean } | null>(null);
+	// The decided ones, read only once asked for — a decider checking what
+	// was already answered, or who answered it.
+	const [showDecided, setShowDecided] = useState(false);
+	const everything = useAbsenceRequests(organisationId, { enabled: showDecided });
+	const decided = (everything.data ?? []).filter((r) => r.status !== "pending").slice(0, 20);
 
 	const decideNow = async (request: AbsenceRequest, approve: boolean, comment: string) => {
 		await decide.mutateAsync({ requestId: request.id, approve, comment: comment || undefined });
@@ -91,6 +97,47 @@ export function AbsenceRequestsSection({ organisationId }: { organisationId: str
 					</ul>
 				)}
 			</QueryBody>
+			<div className="py-2">
+				<button
+					type="button"
+					onClick={() => setShowDecided((o) => !o)}
+					aria-expanded={showDecided}
+					className="flex items-center gap-1.5 text-[12.5px] font-bold text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+				>
+					<ChevronDown
+						className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showDecided ? "" : "-rotate-90"}`}
+						aria-hidden="true"
+					/>
+					{showDecided ? "Hide the decided ones" : "Recently decided"}
+				</button>
+				{showDecided &&
+					(everything.error ? (
+						<p className={`${LEAD} py-2`} role="alert">
+							{describeError(everything.error, "The decided requests could not be read.")}
+						</p>
+					) : !everything.data ? (
+						<p className={`${LEAD} py-2`}>Loading…</p>
+					) : decided.length === 0 ? (
+						<p className={`${LEAD} py-2`}>Nothing decided yet.</p>
+					) : (
+						<ul className={`${LIST} mt-1`}>
+							{decided.map((request) => (
+								<li key={request.id} className="py-2 text-[12.5px] space-y-0.5">
+									<div className="flex items-center gap-2 flex-wrap">
+										<span className="text-muted-foreground">{asked(request)}</span>
+										<Chip tone={request.status === "approved" ? "ok" : "bad"}>
+											{request.status}
+										</Chip>
+										{request.decidedByName && (
+											<span className="text-muted-foreground">by {request.decidedByName}</span>
+										)}
+									</div>
+									{request.comment && <p className="text-muted-foreground">“{request.comment}”</p>}
+								</li>
+							))}
+						</ul>
+					))}
+			</div>
 			{open && (
 				<CommentDialog
 					key={`${open.request.id}-${open.approve}`}

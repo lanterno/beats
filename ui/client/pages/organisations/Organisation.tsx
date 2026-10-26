@@ -82,7 +82,18 @@ function SettingsSection({ membership }: { membership: Membership }) {
 	return (
 		<Section label="Settings" icon={Settings} bodyClassName="p-5">
 			<OrganisationForm
-				key={membership.organisation.createdAt}
+				// Keyed on the stored values: a save by another admin remounts
+				// the form with them, while typing (local state) never does.
+				// `createdAt` was the key before — a constant, so the form held
+				// stale values past any refetch.
+				key={[
+					membership.organisation.name,
+					membership.organisation.logoUrl,
+					membership.organisation.weekStart,
+					membership.organisation.timezone,
+					membership.organisation.holidayCountry,
+					membership.organisation.holidaySubdivision,
+				].join("|")}
 				initial={membership.organisation}
 				onSave={save}
 				submitLabel="Save"

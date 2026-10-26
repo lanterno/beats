@@ -101,6 +101,8 @@ export function EnterTimeDialog({
 						value={date}
 						onChange={(e) => setDate(e.target.value)}
 						autoFocus
+						aria-invalid={error && !date ? true : undefined}
+						aria-describedby={error ? `${id}-error` : undefined}
 						className={FIELD}
 					/>
 				</div>
@@ -114,6 +116,8 @@ export function EnterTimeDialog({
 							type="time"
 							value={start}
 							onChange={(e) => setStart(e.target.value)}
+							aria-invalid={error && !start ? true : undefined}
+							aria-describedby={error ? `${id}-error` : undefined}
 							className={FIELD}
 						/>
 					</div>
@@ -126,6 +130,8 @@ export function EnterTimeDialog({
 							type="time"
 							value={end}
 							onChange={(e) => setEnd(e.target.value)}
+							aria-invalid={error && !end ? true : undefined}
+							aria-describedby={error ? `${id}-error` : undefined}
 							className={FIELD}
 						/>
 					</div>
@@ -148,7 +154,7 @@ export function EnterTimeDialog({
 					entered by you, and in the audit log.
 				</p>
 				{error && (
-					<p role="alert" className={ERROR}>
+					<p id={`${id}-error`} role="alert" className={ERROR}>
 						{error}
 					</p>
 				)}
