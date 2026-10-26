@@ -81,7 +81,7 @@ steps:
   # Terraform init + apply, unless deploy-lock found a newer commit live. Exits 0
   # either way so deploy-unlock runs; the apply's status fails the build there.
   # -lock-timeout waits out a person running terraform from a workstation.
-  - name: 'hashicorp/terraform:1.16'
+  - name: 'hashicorp/terraform:1.17'
     id: 'terraform-apply'
     dir: 'terraform'
     entrypoint: sh
