@@ -5,7 +5,7 @@
  * member's project page while unmanaged, and the API while managed.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useManagedContract, useSetManagedContract } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
@@ -38,12 +38,14 @@ export function ManagedContractDialog({
 }) {
 	const read = useManagedContract(organisationId, projectId, userId);
 	const save = useSetManagedContract(organisationId);
-	const [managed, setManaged] = useState(false);
-	useEffect(() => {
-		if (read.data) setManaged(read.data.managed);
-	}, [read.data]);
+	// Derived, not synced: the stored value with the user's unsent answer
+	// over it. An effect copying the query in would overwrite the toggle on
+	// any refetch an invalidation causes.
+	const [override, setOverride] = useState<boolean | null>(null);
 
 	const data = read.data;
+	const managed = override ?? data?.managed ?? false;
+	const dirty = data !== undefined && managed !== data.managed;
 	const terms = data ? termCount(data.contract) : undefined;
 
 	const saveNow = () => {
@@ -89,14 +91,16 @@ export function ManagedContractDialog({
 						<input
 							type="checkbox"
 							checked={managed}
-							onChange={(e) => setManaged(e.target.checked)}
+							onChange={(e) => setOverride(e.target.checked)}
 							className="accent-accent"
 						/>
 						Managed by the organisation
 					</label>
 					<p className={LEAD}>
-						Terms are edited on the member's project page while unmanaged; managed terms change
-						through the API for now.
+						While managed, the contract is the organisation's hand: {memberName}'s own writes to its
+						terms, absences and adjustments are refused, and their days off become requests a
+						decider answers. Handing it back returns all of that to them. Terms are edited on the
+						member's project page while unmanaged; managed terms change through the API for now.
 					</p>
 					<div className="flex justify-end gap-2.5 pt-1">
 						<Button
@@ -108,7 +112,7 @@ export function ManagedContractDialog({
 						>
 							Cancel
 						</Button>
-						<Button type="button" size="sm" onClick={saveNow} disabled={save.isPending}>
+						<Button type="button" size="sm" onClick={saveNow} disabled={save.isPending || !dirty}>
 							{save.isPending ? "Saving…" : "Save"}
 						</Button>
 					</div>
