@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
-import { apiMutate, billingRootKey } from "@/shared/api";
+import { apiMutate, billingRootKey, organisationsRootKey } from "@/shared/api";
 import { notifySyncWork, parseUtcIso } from "@/shared/lib";
 import { fetchTimerStatus } from "../api";
 import type { TimerState } from "./types";
@@ -70,6 +70,8 @@ export function useTimer() {
 		const since = status.isBeating ? (status.since ?? null) : null;
 		if (seenSinceRef.current !== undefined && seenSinceRef.current !== since) {
 			queryClient.invalidateQueries({ queryKey: billingRootKey });
+			// A stop elsewhere finished an entry, which the organisation reads.
+			queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 		}
 		seenSinceRef.current = since;
 
@@ -158,6 +160,7 @@ export function useTimer() {
 				queryClient.invalidateQueries({ queryKey: timerStatusKey });
 				// A billing budget answers a running timer with the instants it crosses at.
 				queryClient.invalidateQueries({ queryKey: billingRootKey });
+				queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 			} else {
 				notifySyncWork();
 			}
@@ -189,6 +192,7 @@ export function useTimer() {
 				queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 				// A stopped timer is a finished entry: the month's billing counts it now.
 				queryClient.invalidateQueries({ queryKey: billingRootKey });
+				queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 			} else {
 				notifySyncWork();
 			}

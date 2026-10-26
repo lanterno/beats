@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
 import type { FlowWindow, FlowWindowSummary, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
-import { billingRootKey } from "@/shared/api";
+import { billingRootKey, organisationsRootKey } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -99,6 +99,8 @@ export function useUpdateSession() {
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 			// An entry's times and project are what the month's billing is made of.
 			queryClient.invalidateQueries({ queryKey: billingRootKey });
+			// And, on an organisation's project, what the organisation reads.
+			queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 		},
 	});
 }
@@ -117,6 +119,7 @@ export function useDeleteSession() {
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 			queryClient.invalidateQueries({ queryKey: billingRootKey });
+			queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 		},
 	});
 }
