@@ -214,8 +214,6 @@ export interface ProjectRecord {
 export interface OrgRecord {
 	organisation: OrganisationCard;
 	month: string; // YYYY-MM
-	first: string;
-	last: string;
 	projects: ProjectRecord[];
 }
 

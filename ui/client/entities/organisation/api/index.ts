@@ -1,4 +1,4 @@
-export { archiveCsvUrl, complianceCsvUrl, recordCsvUrl } from "./organisationApi";
+export { archiveCsvUrl, complianceCsvUrl, recordCsvUrl, visibleCsvUrl } from "./organisationApi";
 export {
 	organisationKeys,
 	useAbsenceRequests,

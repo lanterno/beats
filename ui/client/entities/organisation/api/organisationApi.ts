@@ -471,3 +471,9 @@ export function complianceCsvUrl(organisationId: string, month: string): string 
 	const params = new URLSearchParams({ month, tz: browserTimeZone() });
 	return `${BASE}/${organisationId}/compliance.csv?${params.toString()}`;
 }
+
+/** The caller's own visible month as CSV: what is seen of them, to take away. */
+export function visibleCsvUrl(organisationId: string, month: string): string {
+	const params = new URLSearchParams({ month, tz: browserTimeZone() });
+	return `${BASE}/${organisationId}/visible.csv?${params.toString()}`;
+}

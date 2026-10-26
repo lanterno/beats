@@ -239,11 +239,11 @@ function toMemberRecord(api: ApiMemberRecord): MemberRecord {
 }
 
 export function toRecord(api: ApiRecord): OrgRecord {
+	// The wire's `first`/`last` are the month's own bounds — derivable, and
+	// nothing reads them; they are validated and dropped.
 	return {
 		organisation: toCard(api.organisation),
 		month: api.month,
-		first: api.first,
-		last: api.last,
 		projects: api.projects.map((p) => ({
 			project: toProjectFields(p.project),
 			members: p.members.map(toMemberRecord),

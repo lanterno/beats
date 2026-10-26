@@ -19,13 +19,14 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Download, Eye, ScrollText } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
-import { monthOf, monthTitle, nextMonth, prevMonth } from "@/entities/billing";
+import { monthOf, monthTitle, nextMonth, prevMonth, useOpenMonth } from "@/entities/billing";
 import type { MemberBalance, MemberRecord, OrgRecord } from "@/entities/organisation";
 import {
 	complianceCsvUrl,
 	describeShareFrom,
 	recordCsvUrl,
 	useMembership,
+	visibleCsvUrl,
 } from "@/entities/organisation";
 import { ApiError, describeError } from "@/shared/api";
 import {
@@ -41,7 +42,6 @@ import { AbsenceList } from "./AbsenceList";
 import { EntriesTable } from "./EntriesTable";
 import { KIND_LABELS } from "./kinds";
 import { CRUMB, LEAD, MONTH_NAV, PAGE, PAGE_TITLE, PAGEBAR } from "./styles";
-import { useOpenMonth } from "./useOpenMonth";
 
 export interface RecordPageProps {
 	variant: "record" | "visible";
@@ -54,14 +54,14 @@ function dayText(value: string): string {
 }
 
 /** "+4.5 h ahead" or "−2 h behind" — of what the contract expected. */
-export function balanceText(balance: number): string {
+function balanceText(balance: number): string {
 	const rounded = Number(balance.toFixed(2));
 	if (rounded === 0) return "even";
 	return rounded > 0 ? `+${hoursText(rounded)} ahead` : `−${hoursText(-rounded)} behind`;
 }
 
 /** The four terms a balance is made of, each signed as it entered. */
-export function balanceTerms(balance: MemberBalance): string {
+function balanceTerms(balance: MemberBalance): string {
 	const signed = (v: number) =>
 		Number(v.toFixed(2)) < 0 ? `−${hoursText(-v)}` : `+${hoursText(v)}`;
 	return [
@@ -105,6 +105,13 @@ function MemberBlock({ member, project }: { member: MemberRecord; project: strin
 						organisation.
 					</p>
 				)
+			)}
+			{member.totals.entries > 0 && (
+				<p className={LEAD}>
+					All time: {hoursText(member.totals.hours)} across {member.totals.entries}{" "}
+					{member.totals.entries === 1 ? "entry" : "entries"}
+					{member.totals.first && <> since {dayText(member.totals.first)}</>}.
+				</p>
 			)}
 			{quiet ? (
 				<p className={LEAD}>Nothing this month.</p>
@@ -290,6 +297,18 @@ export function RecordPage({ variant, useRecord }: RecordPageProps) {
 						{hoursText(monthHours)}
 						<span className="font-body font-medium text-muted-foreground"> this month</span>
 					</span>
+				)}
+				{variant === "visible" && record && (
+					<Button
+						type="button"
+						variant="secondary"
+						size="sm"
+						className="ml-auto"
+						onClick={() => void download(visibleCsvUrl(id, month), `${name}-visible-${month}.csv`)}
+					>
+						<Download aria-hidden="true" />
+						This month as CSV
+					</Button>
 				)}
 				{variant === "record" && record && (
 					<span className="ml-auto flex items-center gap-2">
