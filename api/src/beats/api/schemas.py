@@ -128,13 +128,18 @@ class CreateBeatRequest(BaseModel):
 
 class UpdateBeatRequest(BaseModel):
     """Request body for editing a beat: these fields, and only these, change.
-    Tags are auto-derived, not sent. The note is not editable here: it comes
-    from an import, stays as stored, and a `note` in the body is ignored."""
+    Tags are auto-derived, not sent. The note (#348): a string sets it, an
+    empty string clears it, and omitted or null keeps it as stored — so every
+    client that never sends one (the daemon, the companion, the extension)
+    keeps meaning what it meant. On an organisation's project the note is
+    part of the organisation's record (rule 3), which is why the one input
+    that writes it carries the marker saying who reads it."""
 
     id: str
     project_id: str
     start: datetime
     end: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
 
 
 class GoalOverrideResponse(BaseModel):

@@ -338,11 +338,14 @@ class BeatService:
         """Get a beat by ID."""
         return await self.beat_repo.get_by_id(beat_id)
 
-    async def update_beat(self, beat: Beat) -> Beat:
+    async def update_beat(self, beat: Beat, *, note: str | None = None) -> Beat:
         """Write an edit's project, start and end onto the stored beat,
         re-deriving tags from daemon flow signals, and return the beat as
-        stored. Nothing else is written: the note and any other stored field
-        stay as they are, whatever `beat` carries for them.
+        stored. `note` is the one other field that writes, and only when
+        sent (#348): a string sets it, an empty or blank one clears it, None
+        leaves it as stored — so a client without a note input changes
+        nothing by not having one. Every other stored field stays as it is,
+        whatever `beat` carries for it.
 
         If the daemon has no windows for the (possibly edited) range we keep the
         beat's existing tags rather than wiping them — non-destructive for any
@@ -356,6 +359,9 @@ class BeatService:
             if end < start:
                 raise InvalidEndTime()
         written = {"project_id", "start", "end"}
+        if note is not None:
+            beat.note = note.strip() or None
+            written.add("note")
         if self.projects is not None:
             # The stored beat's own month must be open too: moving an entry
             # out of an approved month changes the frozen figure as surely as
