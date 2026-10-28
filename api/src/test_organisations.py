@@ -1011,6 +1011,141 @@ class TestConnectingAProject:
         assert self._connect(client, outsider, org["id"], theirs["id"], None).status_code == 404
 
 
+class TestMergingAProject:
+    """#346: a connect leaves a duplicate when the organisation already had
+    a project for the same work; the merge folds it in, rule 4 kept — every
+    row moves with its stamp untouched, so what was shared stays shared
+    from the chosen instant and what was private stays private."""
+
+    def _tracked(self, client, headers, name="Day job") -> dict:
+        project = client.post(
+            "/api/projects/",
+            json={
+                "name": name,
+                "kind": "day_job",
+                "contract": {"terms": FULL_TIME, "opening_balance_hours": 12},
+            },
+            headers=headers,
+        ).json()
+        _beat(client, headers, project["id"], "2026-03-02T09:00:00", 60)  # before the share
+        _beat(client, headers, project["id"], "2026-03-04T09:00:00", 120)  # from here
+        return project
+
+    def _connect(self, client, headers, org_id: str, project_id: str, share_from):
+        resp = client.post(
+            f"/api/organisations/{org_id}/connect",
+            params={"tz": "UTC"},
+            json={"project_id": project_id, "share_from": share_from},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def _merge(self, client, headers, org_id: str, source_id: str, target_id: str):
+        return client.post(
+            f"/api/organisations/{org_id}/projects/{source_id}/merge",
+            json={"into": target_id},
+            headers=headers,
+        )
+
+    def test_the_duplicate_folds_in_and_the_stamps_decide_what_crosses(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        mine = self._tracked(client, member)
+        self._connect(client, member, org["id"], mine["id"], "2026-03-04")
+
+        merged = self._merge(client, auth_headers, org["id"], mine["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+        assert merged.json()["id"] == platform["id"]
+        assert [m["user_id"] for m in merged.json()["members"]] == [member_id]
+
+        # One project remains, and the organisation reads under it exactly
+        # what the member shared: Wednesday's hours, never Monday's.
+        assert [
+            p["id"]
+            for p in client.get(
+                f"/api/organisations/{org['id']}/projects", headers=auth_headers
+            ).json()
+        ] == [platform["id"]]
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), platform["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04"]
+        assert row["has_contract"] is True  # the connect's contract moved with the assignment
+        assert row["shared_from"] == "2026-03-04T00:00:00Z"
+
+        # The member keeps one timeline: both entries, now under Platform.
+        [own] = _projects(client, member)
+        assert own["id"] == platform["id"]
+        assert own["organisation"]["name"] == "Acme"
+        total = client.get(
+            f"/api/projects/{platform['id']}/total/", params={"tz": "UTC"}, headers=member
+        ).json()
+        assert total["total_minutes"] == 180  # Monday's hour too, theirs as ever
+
+        events = [
+            e["event"]
+            for e in client.get(
+                f"/api/organisations/{org['id']}/audit", headers=auth_headers
+            ).json()
+        ]
+        assert "project.merged" in events
+
+    def test_an_existing_assignment_survives_and_gains_only_what_it_lacked(
+        self, client, auth_headers
+    ):
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        _assign(client, auth_headers, org["id"], platform["id"], member_id)
+        _beat(client, member, platform["id"], "2026-03-10T09:00:00", 60)
+        mine = self._tracked(client, member)
+        self._connect(client, member, org["id"], mine["id"], "2026-03-04")
+
+        merged = self._merge(client, auth_headers, org["id"], mine["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), platform["id"])
+        # Both stamped histories under one project, shared from the earlier
+        # instant; the target's assignment stood and took the contract it lacked.
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04", "2026-03-10"]
+        assert row["shared_from"] == "2026-03-04T00:00:00Z"
+        assert row["has_contract"] is True
+
+    def test_a_frozen_month_refuses_the_merge(self, client, auth_headers):
+        member = _new_user()
+        org, employed, _member_id = _employed(client, auth_headers, member)
+        _beat(client, member, employed["id"], "2026-03-03T09:00:00", 60)
+        sheet = _submit(client, member, org["id"], employed["id"], MONTH).json()
+        assert (
+            _decide_sheet(client, auth_headers, org["id"], sheet["id"], approve=True).status_code
+            == 200
+        )
+        other = _org_project(client, auth_headers, org["id"], name="Other")
+
+        for source, target in ((employed, other), (other, employed)):
+            refused = self._merge(client, auth_headers, org["id"], source["id"], target["id"])
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "PERIOD_APPROVED"
+
+    def test_only_an_admin_merges_and_only_into_another_project(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        other = _org_project(client, auth_headers, org["id"], name="Other")
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+
+        as_member = self._merge(client, member, org["id"], other["id"], platform["id"])
+        assert as_member.status_code == 403
+        itself = self._merge(client, auth_headers, org["id"], other["id"], other["id"])
+        assert itself.status_code == 409
+        assert itself.json()["code"] == "MERGE_INTO_ITSELF"
+        assert (
+            self._merge(client, auth_headers, org["id"], other["id"], "0" * 24).status_code == 404
+        )
+
+
 class TestLeavingAndRemoval:
     def _acme(self, client, admin, member) -> tuple[dict, dict, str]:
         org = _create_org(client, admin)
