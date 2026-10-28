@@ -53,9 +53,9 @@ showing the actual data held.
 | Stage | What | State |
 |---|---|---|
 | **1** | Clients for freelancers | **Done** — [docs/billing.md](billing.md) |
-| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — [docs/organisations.md](organisations.md), decisions 1–20 |
+| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — [docs/organisations.md](organisations.md), decisions 1–20, and 28 for the duplicate a connect can leave |
 | **3** | Employment: employer contracts, leave requests, timesheet approval | **Done** — decisions 21–24 and 26–27 |
-| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **The structural half done** — teams, manager and viewer roles, the audit read and the report CSVs (decision 25). The rest waits, each item with its reason, as an issue under [#353](https://github.com/lanterno/beats/issues/353) |
+| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **Done, but for what waits on a trigger outside the code** — teams, manager and viewer roles, the audit read and the report CSVs (decision 25), retention with its purge (decision 30), closing and deletion (decision 29). Organisation money, verified domains, SSO per organisation, SCIM and the payment machinery each wait, with their reason, as an issue under [#353](https://github.com/lanterno/beats/issues/353) |
 
 Stage 2 was the only one that changed the data model. Stages 3 and 4 are
 additive on top of it, which is what made the sequencing simple: get the
@@ -133,7 +133,9 @@ once there are approved periods in the database.
 Sections 1, 5 and 7 of the epic: everything that only matters once
 organisations have more than a handful of people in them. Built: teams with
 manager scope, the viewer role, the audit log read, the record and compliance
-CSVs (decision 25). What it builds on, for the rest:
+CSVs (decision 25), retention with a statutory floor and the operator-run
+purge behind it (decision 30), and closing with notice before deletion hands
+members their projects back (decision 29). What the rest builds on:
 
 - **OpenID Connect is built and tested** — discovery, code exchange with PKCE
   and a nonce, every ID-token check, identities keyed on issuer + subject,
@@ -225,6 +227,17 @@ that is itself being deleted. Open sub-questions: which rows survive (beats
 only, or absences and approved timesheets too); what identifies the person once
 the account is gone; who can delete them afterwards and when the retention
 clock stops; whether the person gets an export first.
+
+Each was settled in [organisations.md](organisations.md): erasure keeps the
+stamped rows — entries, absences, the contract and adjustments behind a balance
+the organisation read — under a tombstone with the name it knew the person by,
+and nothing else (decision 3); retention bounds that exception with a floor by
+jurisdiction and a purge the operator runs, which unstamps a living member's
+rows and deletes only tombstoned ones (decision 30); and an organisation's own
+end is notice first, then a deletion that hands each member a personal copy of
+the projects they hold rows on (decision 29). The record's keeper destroying
+the record is theirs to do; a person's rows outliving their account is bounded
+by law, not by us.
 
 ### Contract disagreement
 
