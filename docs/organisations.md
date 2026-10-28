@@ -413,16 +413,49 @@ Recorded here so they are decisions, not omissions:
   deliberately does not have (decision 11). Without verification, a domain
   rule would hand memberships to whoever registers an address — the exact
   hole decision 11 closed for invitations.
-- **SSO per organisation, and "required to enter"**: sessions deliberately
-  do not record which door was used (PRIVACY.md: "nothing downstream knows
-  which door"). Requiring SSO per organisation needs that recorded, which
-  is a privacy decision to make on its own, not a feature to slip in.
-- **SCIM** provisioning: its own protocol surface and credential story.
-- **Retention settings**: nothing in LifePete auto-deletes (DATA.md); a
-  stored setting nothing enforces would be a false promise. Decide the
-  deletion machinery first.
-- **Per-seat billing**: the first money flowing *to us* — a payment
-  provider, tax, invoices, dunning — its own project, as the roadmap says.
+- **SSO per organisation, and "required to enter"** — *shape decided
+  2026-10-28, built when a customer requires it.* Not by stamping the door
+  on the session: sessions stay door-blind, keeping the promise that nothing
+  downstream knows which door was used. Instead, a **per-organisation
+  attestation**, as GitHub gates an organisation behind SAML: an organisation
+  that requires SSO configures its own OpenID Connect provider (a scoping
+  layer over `auth/oidc.py`), and entering its slice needs a fresh
+  verification with *that* provider, stored on the membership — verified at
+  T, expires T+N — shown on the "What Acme can see" page and audited. The
+  passkey still opens the personal account and every other organisation
+  (rule 1). Enforced as a dependency on the organisation router, one place,
+  like the role checks — never a flag per route (the money permission's
+  lesson). PRIVACY.md then changes narrowly and first: an organisation that
+  requires SSO sees when you last verified with its provider — not "we
+  record how you log in". Open at build time: what a lapsed attestation
+  blocks — the organisation's routes alone, or also starting new timers on
+  its projects; existing data, never.
+- **SCIM** provisioning: its own protocol surface and credential story,
+  keyed on the same per-organisation provider, after SSO.
+- **Retention settings** — *shape decided 2026-10-28, built with organisation
+  deletion.* Nothing in LifePete auto-deletes (DATA.md), so the setting ships
+  only together with the machinery that honours it. The shape: a
+  per-organisation retention period with a **statutory floor by
+  jurisdiction** (the organisation already carries a country), default
+  **4 years from the record's date** — the floor is Spain's art. 34.9 ET,
+  the strictest common one, inside the CNIL's 5-year ceiling for time-clock
+  data; a setting below the jurisdiction's floor is refused, and Poland's
+  "employment + 10 years" is an explicit option, never the default. It
+  applies to the organisation's record — the stamped entries and absences,
+  the frozen months, the contract and adjustments behind a balance it read,
+  and tombstoned ex-member rows — with the audit log living as long as the
+  records it explains. Expiry removes the organisation's record, not the
+  person's data: a living member's rows lose the stamp; only tombstoned
+  rows are deleted; the deletion is itself an audit event (counts and
+  months, no data). The machinery starts as an idempotent operator-run
+  purge script with a dry run, in the shape of `scripts/erase_account.py`,
+  with DATA.md and PRIVACY.md changed in the same stage. During the beta
+  nothing auto-deletes.
+- **Per-seat billing** — *the numbers are decided* ([docs/pricing.md](pricing.md):
+  €8/seat/month annual, free to 5 seats, a seat is an active member with an
+  assignment, everything free during the beta). Collecting it — a payment
+  provider, tax, invoices, dunning — is the first money flowing *to us* and
+  stays its own project, as the roadmap says.
 
 ## Left out, still
 
