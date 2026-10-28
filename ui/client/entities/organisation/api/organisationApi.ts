@@ -93,6 +93,25 @@ export async function updateOrganisation(
 	return toOrganisation(parseApiResponse(ApiOrganisationSchema, data));
 }
 
+/** Start the closing notice (#347); null takes the API's default, 60 days. */
+export async function beginClosing(
+	organisationId: string,
+	closesOn: string | null,
+): Promise<Organisation> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/close`, { closes_on: closesOn });
+	return toOrganisation(parseApiResponse(ApiOrganisationSchema, data));
+}
+
+export async function cancelClosing(organisationId: string): Promise<Organisation> {
+	const data = await del<unknown>(`${BASE}/${organisationId}/close`);
+	return toOrganisation(parseApiResponse(ApiOrganisationSchema, data));
+}
+
+/** Delete the organisation, once its notice has run out. */
+export async function deleteOrganisation(organisationId: string): Promise<void> {
+	await del<void>(`${BASE}/${organisationId}`);
+}
+
 export async function fetchMembers(organisationId: string): Promise<Member[]> {
 	const data = await get<unknown>(`${BASE}/${organisationId}/members`);
 	return parseApiResponse(ApiMemberListSchema, data).map(toMember);

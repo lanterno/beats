@@ -839,6 +839,7 @@ export const ApiOrganisationSchema = z.object({
 	holiday_subdivision: z.string().nullable().optional(),
 	timezone: z.string().optional().default("UTC"),
 	created_at: z.string(),
+	closes_on: z.string().nullable().optional(),
 });
 export type ApiOrganisation = z.infer<typeof ApiOrganisationSchema>;
 

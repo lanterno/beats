@@ -25,6 +25,8 @@ export interface Organisation {
 	holidaySubdivision?: string;
 	timezone: string;
 	createdAt: string;
+	/** Set while the organisation is closing (#347): the day it is deleted. */
+	closesOn?: string;
 }
 
 /** What an organisation is set up with: the fields its admins write. */

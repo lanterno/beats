@@ -59,6 +59,7 @@ export function toOrganisation(api: ApiOrganisation): Organisation {
 		holidaySubdivision: api.holiday_subdivision ?? undefined,
 		timezone: api.timezone ?? "UTC",
 		createdAt: api.created_at,
+		closesOn: api.closes_on ?? undefined,
 	};
 }
 

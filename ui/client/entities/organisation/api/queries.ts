@@ -20,6 +20,8 @@ import { organisationsRootKey } from "@/shared/api";
 import type { InviteInput, OrganisationInput, OrgProjectInput, OrgRole, TeamInput } from "../model";
 import {
 	assignMember,
+	beginClosing,
+	cancelClosing,
 	connectProject,
 	createInvite,
 	createOrganisation,
@@ -28,6 +30,7 @@ import {
 	decideAbsenceRequest,
 	decideJoinRequest,
 	decideTimesheet,
+	deleteOrganisation,
 	deleteTeam,
 	enterTime,
 	fetchAbsenceRequests,
@@ -240,6 +243,34 @@ export function useUpdateOrganisation(organisationId: string) {
 		mutationFn: (input: OrganisationInput) => updateOrganisation(organisationId, input),
 		// The name and logo mark every member's project list.
 		onSuccess: invalidate,
+	});
+}
+
+export function useBeginClosing(organisationId: string) {
+	const invalidate = useInvalidateOrganisation(organisationId);
+	return useMutation({
+		mutationFn: (closesOn: string | null) => beginClosing(organisationId, closesOn),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useCancelClosing(organisationId: string) {
+	const invalidate = useInvalidateOrganisation(organisationId);
+	return useMutation({
+		mutationFn: () => cancelClosing(organisationId),
+		onSuccess: invalidate,
+		retry: false,
+	});
+}
+
+export function useDeleteOrganisation(organisationId: string) {
+	// Deletion hands members personal copies of its projects: every root.
+	const invalidate = useInvalidateTimeline(organisationId);
+	return useMutation({
+		mutationFn: () => deleteOrganisation(organisationId),
+		onSuccess: invalidate,
+		retry: false,
 	});
 }
 

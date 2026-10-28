@@ -39,6 +39,7 @@ import { cn } from "@/shared/lib";
 import { Button, Chip, Panel, TabPanel, Tabs, useConfirm } from "@/shared/ui";
 import { AbsenceRequestsSection } from "./AbsenceRequestsSection";
 import { AuditSection } from "./AuditSection";
+import { ClosingSection } from "./ClosingSection";
 import { InvitesSection } from "./InvitesSection";
 import { JoinRequestsSection } from "./JoinRequestsSection";
 import { MembersSection } from "./MembersSection";
@@ -292,6 +293,33 @@ export default function Organisation() {
 				</Link>
 			</Panel>
 
+			{org.closesOn && (
+				<Panel role="status" padding="px-6 py-[18px]">
+					<p className="font-heading text-[15px] font-extrabold text-foreground">
+						{org.name} closes on {org.closesOn}.
+					</p>
+					<p className={cn(LEAD, "mt-1")}>
+						Your hours stay yours: each of its projects comes back to you as your own when it
+						closes. Take{" "}
+						<Link to={`/organisations/${id}/archive`} className={LINKISH}>
+							your archive's CSV
+						</Link>{" "}
+						if you want a copy
+						{readsRecord(data.role) && (
+							<>
+								{" "}
+								— and the organisation's own copy is{" "}
+								<Link to={`/organisations/${id}/record`} className={LINKISH}>
+									the record's CSVs
+								</Link>
+								, which do not survive the closing
+							</>
+						)}
+						.
+					</p>
+				</Panel>
+			)}
+
 			{admin && (
 				<TabPanel value="people" current={tab}>
 					<div className="grid gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(320px,2fr)]">
@@ -368,6 +396,7 @@ export default function Organisation() {
 			{admin && (
 				<TabPanel value="settings" current={tab}>
 					<SettingsSection membership={data} />
+					{data.role === "owner" && <ClosingSection organisation={org} />}
 					{leaveSection}
 				</TabPanel>
 			)}
