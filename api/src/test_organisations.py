@@ -1401,6 +1401,110 @@ class TestBackupsAndOrganisations:
         assert [p["name"] for p in _projects(client, other)] == ["Garden"]
 
 
+class TestRetention:
+    """The retention setting over its statutory floor, and the purge pass
+    (docs/organisations.md, stage 4 — retention). Expiry removes the
+    organisation's record, never the person's data."""
+
+    def _settings(self, client, headers, org: dict, **changes):
+        body = {"name": org["name"], **changes}
+        return client.put(f"/api/organisations/{org['id']}", json=body, headers=headers)
+
+    def test_the_floor_is_the_jurisdictions_not_ours(self, client, auth_headers):
+        spain = _create_org(client, auth_headers, name="Madrid", holiday_country="ES")
+        refused = self._settings(
+            client, auth_headers, spain, holiday_country="ES", retention_years=3
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "RETENTION_BELOW_FLOOR"
+        assert "4 years" in refused.json()["detail"]
+        kept = self._settings(client, auth_headers, spain, holiday_country="ES", retention_years=4)
+        assert kept.status_code == 200, kept.text
+        assert kept.json()["retention_years"] == 4
+
+        berlin = _create_org(client, auth_headers, name="Berlin", holiday_country="DE")
+        two = self._settings(client, auth_headers, berlin, holiday_country="DE", retention_years=2)
+        assert two.status_code == 200, two.text
+
+        # No country: the strictest common floor holds, so a gap in the
+        # table can never allow deleting below a law not written down.
+        nowhere = _create_org(client, auth_headers, name="Nowhere")
+        assert self._settings(client, auth_headers, nowhere, retention_years=3).status_code == 409
+
+    def test_expiry_unstamps_the_living_and_deletes_the_tombstoned(self, client, auth_headers):
+        from beats.infrastructure.retention import purge_expired_records
+
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"])
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        old = _beat(client, member, project["id"], "2020-01-10T09:00:00", 60)
+        young = _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        db = _db()
+        # A tombstoned ex-member's old row, and records only the purge reads:
+        # an expired timesheet and an audit event older than the cutoff.
+        stone = dict(db.timeLogs.find_one({"_id": ObjectId(old["id"])}))
+        stone.pop("_id")
+        stone_id = db.timeLogs.insert_one({**stone, "user_id": "erased:m1"}).inserted_id
+        db.org_timesheets.insert_one(
+            {
+                "organisation_id": org["id"],
+                "project_id": project["id"],
+                "user_id": "erased:m1",
+                "month": "2020-01-01",
+                "status": "approved",
+                "history": [],
+            }
+        )
+        db.org_audit.insert_one(
+            {
+                "organisation_id": org["id"],
+                "at": "2020-01-10T09:00:00",
+                "event": "old",
+                "details": {},
+            }
+        )
+
+        async def run(apply: bool):
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await purge_expired_records(
+                    client_[os.environ.get("DB_NAME", "beats_test")], apply=apply
+                )
+            finally:
+                await client_.close()
+
+        dry = asyncio.run(run(False))
+        [mine] = [o for o in dry.organisations if o.organisation_id == org["id"]]
+        assert mine.counts["beats_unstamped"] == 1
+        assert mine.counts["beats_deleted"] == 1
+        assert mine.counts["timesheets_deleted"] == 1
+        assert mine.counts["audit_deleted"] == 1
+        # Dry means dry: the stamp is still on the old row.
+        assert db.timeLogs.find_one({"_id": ObjectId(old["id"])})["organisation_id"] == org["id"]
+
+        asyncio.run(run(True))
+        survivor = db.timeLogs.find_one({"_id": ObjectId(old["id"])})
+        assert survivor is not None, "a living member's row is theirs, not the record's"
+        assert "organisation_id" not in survivor
+        assert db.timeLogs.find_one({"_id": stone_id}) is None
+        assert db.timeLogs.find_one({"_id": ObjectId(young["id"])})["organisation_id"] == org["id"]
+        assert db.org_timesheets.count_documents({"organisation_id": org["id"]}) == 0
+        assert db.org_audit.count_documents({"organisation_id": org["id"], "event": "old"}) == 0
+        assert (
+            db.org_audit.count_documents(
+                {"organisation_id": org["id"], "event": "retention.purged"}
+            )
+            == 1
+        )
+        # The organisation's read agrees: only the young entry remains.
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-03"]
+
+
 class TestProjectsIndex:
     """The roadmap's fourth prerequisite: the project list reads through an
     index. Measured on the plan rather than assumed."""
