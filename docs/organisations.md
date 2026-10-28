@@ -466,9 +466,15 @@ Recorded here so they are decisions, not omissions:
   its projects; existing data, never.
 - **SCIM** provisioning: its own protocol surface and credential story,
   keyed on the same per-organisation provider, after SSO.
-- **Retention settings** — *shape decided 2026-10-28, built with organisation
-  deletion.* Nothing in LifePete auto-deletes (DATA.md), so the setting ships
-  only together with the machinery that honours it. The shape: a
+- **Retention settings** — *built 2026-10-28* (#344): the setting and the
+  machinery shipped together, as the decision required (`retention_years`
+  on the organisation, 409 `RETENTION_BELOW_FLOOR` under the floor;
+  `domain/retention.py`, `infrastructure/retention.py`,
+  `scripts/retention_purge.py` — operator-run, dry by default, audited as
+  `retention.purged`; DATA.md and PRIVACY.md updated in the same stage).
+  Organisation deletion (#347) now has the purge path it waited for; what
+  it still needs is its member-facing shape — notice without email, the
+  export window. The decided shape, kept as the reasoning: a
   per-organisation retention period with a **statutory floor by
   jurisdiction** (the organisation already carries a country), default
   **4 years from the record's date** — the floor is Spain's art. 34.9 ET,
