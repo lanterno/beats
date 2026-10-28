@@ -4630,6 +4630,21 @@
         "title": "MemoryResponse",
         "type": "object"
       },
+      "MergeProjectRequest": {
+        "description": "Which project the merged one folds into.",
+        "properties": {
+          "into": {
+            "minLength": 1,
+            "title": "Into",
+            "type": "string"
+          }
+        },
+        "required": [
+          "into"
+        ],
+        "title": "MergeProjectRequest",
+        "type": "object"
+      },
       "MonthlyTotalsResponse": {
         "description": "Response schema for monthly totals.",
         "properties": {
@@ -12843,7 +12858,7 @@
     },
     "/api/organisations/{organisation_id}/compliance.csv": {
       "get": {
-        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total \u2014 the shape a\nworking-time authority asks for. Whoever reads the record.",
+        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total, and the warnings a\nworking-time authority would raise (a day over 10 hours, rest under 11,\ntaken over every project the member is on). Whoever reads the record.",
         "operationId": "read_compliance_csv_api_organisations__organisation_id__compliance_csv_get",
         "parameters": [
           {
@@ -13925,6 +13940,71 @@
         "summary": "Enter Time",
         "tags": [
           "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/projects/{project_id}/merge": {
+      "post": {
+        "description": "Fold this project into another of the organisation's \u2014 the way out\nof the duplicate a connect leaves when the organisation already had a\nproject for the same work. Every row moves with its stamp untouched,\nassignments fold (the earlier shared-from; the target's contract\nstands), and the merged project is deleted. Refused while an approved\ntimesheet exists on either side (409 PERIOD_APPROVED). Admins.",
+        "operationId": "merge_project_api_organisations__organisation_id__projects__project_id__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Merge Project",
+        "tags": [
+          "Organisations"
         ]
       }
     },

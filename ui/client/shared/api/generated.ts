@@ -2203,8 +2203,9 @@ export interface paths {
         /**
          * Read Compliance Csv
          * @description The compliance record (docs/organisations.md, stage 3): per member,
-         *     per day — first start, last end, breaks, total — the shape a
-         *     working-time authority asks for. Whoever reads the record.
+         *     per day — first start, last end, breaks, total, and the warnings a
+         *     working-time authority would raise (a day over 10 hours, rest under 11,
+         *     taken over every project the member is on). Whoever reads the record.
          */
         get: operations["read_compliance_csv_api_organisations__organisation_id__compliance_csv_get"];
         put?: never;
@@ -2501,6 +2502,31 @@ export interface paths {
          *     the audit log. Refused inside an approved month.
          */
         post: operations["enter_time_api_organisations__organisation_id__projects__project_id__members__member_user_id__entries_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/projects/{project_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Project
+         * @description Fold this project into another of the organisation's — the way out
+         *     of the duplicate a connect leaves when the organisation already had a
+         *     project for the same work. Every row moves with its stamp untouched,
+         *     assignments fold (the earlier shared-from; the target's contract
+         *     stands), and the merged project is deleted. Refused while an approved
+         *     timesheet exists on either side (409 PERIOD_APPROVED). Admins.
+         */
+        post: operations["merge_project_api_organisations__organisation_id__projects__project_id__merge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5616,6 +5642,14 @@ export interface components {
             content?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * MergeProjectRequest
+         * @description Which project the merged one folds into.
+         */
+        MergeProjectRequest: {
+            /** Into */
+            into: string;
         };
         /**
          * MonthlyTotalsResponse
@@ -11316,6 +11350,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_project_api_organisations__organisation_id__projects__project_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgProjectResponse"];
                 };
             };
             /** @description Not found */
