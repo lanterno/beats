@@ -20,6 +20,7 @@ vi.mock("sonner", () => ({ toast: { success: hooks.toastSuccess, error: vi.fn() 
 
 function membership(id: string, name: string): Membership {
 	return {
+		userId: "u-me",
 		organisation: {
 			id,
 			name,

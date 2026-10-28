@@ -45,16 +45,20 @@ The roadmap left three open and gated the stage on them. They were settled
 first, then the model was built on them.
 
 1. **The note crosses; tags do not.** Rule 3 names the entry's note, and the
-   organisation reads it. Today no surface writes a note — the companion's
-   "How did it go?" sheet went with the last free-text inputs, the web app
-   takes none, and the API ignores a note on edit — so a note arrives only
-   through an import, and the marker the roadmap asked for goes where a note
-   is *shown* on an organisation's project: beside it, "Acme can read this
-   note" (`TodayFeed`, `WeekDays`). Any surface that brings a note input back
-   must ship the marker on the input with it. Tags are derived from the
-   daemon's flow windows — how someone worked, not what on — and stay on the
-   far side with the flow scores. An absence's note never crosses either; an
-   absence is its date, type and half day, as the timesheet already had it.
+   organisation reads it. The marker the roadmap asked for goes wherever a
+   note is *shown* on an organisation's project — beside it, "Acme can read
+   this note" (`TodayFeed`, `WeekDays`) — and, since #348, on the one input
+   that writes one: the web app's session editor, where the marker describes
+   the input itself and follows the project picked, so nobody writes
+   something personal without seeing who reads it. (The companion's "How did
+   it go?" sheet went with the last free-text inputs and has not returned;
+   the API's wire rule — a string sets, an empty string clears, omitted
+   keeps — means a client without the input cannot erase a note.) Any other
+   surface that brings a note input back ships the marker the same way.
+   Tags are derived from the daemon's flow windows — how someone worked, not
+   what on — and stay on the far side with the flow scores. An absence's
+   note never crosses either; an absence is its date, type and half day, as
+   the timesheet already had it.
 2. **No live presence, in this stage or any other.** The organisation's read
    takes finished entries only and carries no `running` flag, as 1c's report
    link does, so an employer cannot learn from its working-time record
@@ -124,8 +128,9 @@ Then the model's own:
    `PROJECT_HAS_BILLING`): billing is the person's, and an organisation's
    project is billed by nobody here (409 `ORGANISATION_PROJECT` on the
    billing route). Connecting creates a project the organisation did not
-   make, named as it was; stage 2 does not merge it into one the
-   organisation already has.
+   make, named as it was; folding it into one the organisation already
+   has is a second, deliberate act — the merge, decision 28 — never the
+   connect's own.
 9. **Leaving and removal end the assignments and move nothing.** The
    membership and every active assignment get an end instant; the project
    is then not found through the member's routes — which is how tracking
@@ -388,15 +393,63 @@ what only matters past a handful of people. Decisions 21–27:
     (`administers`, `decides`, `reads_record`), not the ladder.
 26. **The compliance record is a read, not a store.** `GET
     /{id}/compliance.csv?month=` derives, per member and day: first start,
-    last end, the breaks between entries, and the total — the shape a
-    working-time authority asks for. `record.csv` is the same month as flat
-    entry rows. Rest-period and maximum-daily-hours warnings are later
-    work, as the roadmap says.
+    last end, the breaks between entries, the total, and the warnings a
+    working-time authority would raise — a day over 10 hours (§3 ArbZG,
+    still current law; the June 2026 reform draft keeps the ceiling) and
+    rest under 11 hours between working days (Directive 2003/88/EC art. 3).
+    A warning is derived from the same rows on every read and never stored:
+    an edit that repairs the day repairs the record. The law binds the
+    employer per person, not per project — a day split over two projects is
+    one working day, the night between two projects is one rest, and the
+    whole-day figures ride in the warning's text so a per-project row still
+    explains itself. Exactly at a threshold is lawful; the first day read
+    raises no rest warning, since what came before the rows is not in them.
+    `record.csv` is the same month as flat entry rows.
 27. **Reminders are the surfaces, not emails.** The API sends no email
     (decision 11); what is missing or waiting shows where people already
     look — the member's timesheet list says which months are unsubmitted or
     sent back, the decider's sections say what waits. A digest or push is
     later work.
+
+28. **A merge moves rows, never stamps.** `POST /{id}/projects/{pid}/merge`
+    (admins) folds one of the organisation's projects into another — the
+    way out of the duplicate a connect leaves when the organisation
+    already had a project for the same work. Every row keyed by the
+    source (the members' own entries, absences and adjustments, and the
+    absence requests) now keys by the target with its stamp untouched, so
+    rule 4 holds without being re-decided: what the member chose to share
+    stays shared from that instant, and what was private stays private,
+    under the surviving project on their own timeline. Each active
+    assignment folds into the target's, which survives as it stands
+    (decision 17's spirit): the earlier `shared_from`, and the source's
+    contract only where the target's assignment has none. Refused while
+    an approved timesheet exists on either side (409 `PERIOD_APPROVED`
+    naming the earliest frozen month): a stored close must not gain or
+    lose rows silently — reopen first. A sheet submitted over the source
+    alone is dropped and resubmitted over the merged project; the source
+    document is deleted; the audit log holds the whole act, with counts.
+    The repoint is the one write besides erasure that crosses user scopes
+    (`MongoOrganisationStore.repoint_project_rows`), made only after both
+    projects are checked to be the same organisation's.
+
+29. **Closing is notice; deletion is the connect run backwards.** An owner
+    starts a clock (`POST /{id}/close`, at least 30 days out, 60 by
+    default, judged in the organisation's timezone) that every member sees
+    in-app through the organisation they already read — the notice
+    decision 11's no-email rule leaves us. Tracking carries on until the
+    day, and the closing can be called off (`DELETE /{id}/close`).
+    `DELETE /{id}` works only from the day on (409
+    `ORGANISATION_STILL_CLOSING` / `ORGANISATION_NOT_CLOSING`): each
+    member is handed a personal copy of every project they hold rows or a
+    contract on — the organisation's fields as they stood, their
+    assignment's half, the contract theirs again whoever held the pen —
+    their rows repointed to it and unstamped, archived where their
+    assignment had ended. Then everything that was the organisation's
+    goes, its working-time record included: the final `record.csv` and
+    `compliance.csv` are the notice period's job and the copy that
+    survives, said in the owner's UI in those words. Tombstoned rows go
+    too — the record's keeper is destroying the record. Hand-backs run
+    before the wipe, so a crash midway strands nothing of a member's.
 
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.
@@ -413,22 +466,71 @@ Recorded here so they are decisions, not omissions:
   deliberately does not have (decision 11). Without verification, a domain
   rule would hand memberships to whoever registers an address — the exact
   hole decision 11 closed for invitations.
-- **SSO per organisation, and "required to enter"**: sessions deliberately
-  do not record which door was used (PRIVACY.md: "nothing downstream knows
-  which door"). Requiring SSO per organisation needs that recorded, which
-  is a privacy decision to make on its own, not a feature to slip in.
-- **SCIM** provisioning: its own protocol surface and credential story.
-- **Retention settings**: nothing in LifePete auto-deletes (DATA.md); a
-  stored setting nothing enforces would be a false promise. Decide the
-  deletion machinery first.
-- **Per-seat billing**: the first money flowing *to us* — a payment
-  provider, tax, invoices, dunning — its own project, as the roadmap says.
+- **SSO per organisation, and "required to enter"** — *shape decided
+  2026-10-28, built when a customer requires it.* Not by stamping the door
+  on the session: sessions stay door-blind, keeping the promise that nothing
+  downstream knows which door was used. Instead, a **per-organisation
+  attestation**, as GitHub gates an organisation behind SAML: an organisation
+  that requires SSO configures its own OpenID Connect provider (a scoping
+  layer over `auth/oidc.py`), and entering its slice needs a fresh
+  verification with *that* provider, stored on the membership — verified at
+  T, expires T+N — shown on the "What Acme can see" page and audited. The
+  passkey still opens the personal account and every other organisation
+  (rule 1). Enforced as a dependency on the organisation router, one place,
+  like the role checks — never a flag per route (the money permission's
+  lesson). PRIVACY.md then changes narrowly and first: an organisation that
+  requires SSO sees when you last verified with its provider — not "we
+  record how you log in". Open at build time: what a lapsed attestation
+  blocks — the organisation's routes alone, or also starting new timers on
+  its projects; existing data, never.
+- **SCIM** provisioning: its own protocol surface and credential story,
+  keyed on the same per-organisation provider, after SSO.
+- **Retention settings** — *built 2026-10-28* (#344): the setting and the
+  machinery shipped together, as the decision required (`retention_years`
+  on the organisation, 409 `RETENTION_BELOW_FLOOR` under the floor;
+  `domain/retention.py`, `infrastructure/retention.py`,
+  `scripts/retention_purge.py` — operator-run, dry by default, audited as
+  `retention.purged`; DATA.md and PRIVACY.md updated in the same stage).
+  Organisation deletion (#347) now has the purge path it waited for; what
+  it still needs is its member-facing shape — notice without email, the
+  export window. The decided shape, kept as the reasoning: a
+  per-organisation retention period with a **statutory floor by
+  jurisdiction** (the organisation already carries a country), default
+  **4 years from the record's date** — the floor is Spain's art. 34.9 ET,
+  the strictest common one, inside the CNIL's 5-year ceiling for time-clock
+  data; a setting below the jurisdiction's floor is refused, and Poland's
+  "employment + 10 years" is an explicit option, never the default. It
+  applies to the organisation's record — the stamped entries and absences,
+  the frozen months, the contract and adjustments behind a balance it read,
+  and tombstoned ex-member rows — with the audit log living as long as the
+  records it explains. Expiry removes the organisation's record, not the
+  person's data: a living member's rows lose the stamp; only tombstoned
+  rows are deleted; the deletion is itself an audit event (counts and
+  months, no data). The machinery starts as an idempotent operator-run
+  purge script with a dry run, in the shape of `scripts/erase_account.py`,
+  with DATA.md and PRIVACY.md changed in the same stage. During the beta
+  nothing auto-deletes.
+- **Per-seat billing** — *the numbers are decided* ([docs/pricing.md](pricing.md):
+  €8/seat/month annual, free to 5 seats, a seat is an active member with an
+  assignment, everything free during the beta). Collecting it — a payment
+  provider, tax, invoices, dunning — is the first money flowing *to us* and
+  stays its own project, as the roadmap says.
 
 ## Left out, still
 
-- **Merging** a connected project into one the organisation already has.
-- **Deleting an organisation**; archiving its projects is the way out today.
-- **A note input** on any surface, and with it the marker on the input.
-- **Term editing in the employer's dialog**: the SPA's managed-contract
-  dialog toggles management; the employer edits terms through the API until
-  the contract form grows an employer mode.
+Nothing. The last entry, **deleting an organisation**, is decision 29.
+
+Done since: **a note input, with its marker** — the web app's session editor
+(decision 1, #348). And: **the merge** (decision 28, #346), and **the
+compliance warnings** (decision 26, #350).
+
+Done since: **term editing in the employer's dialog**. The managed-contract
+dialog lists an assignment's terms with the day each takes effect and which
+is in force, and edits, removes and adds them through the same term dialog
+the member's register uses — so one set of rules validates a term whoever
+writes it. Editing is offered only where the organisation manages the
+contract: the API would take the write either way, but on an unmanaged
+assignment the terms are the member's, and writing them from the employer's
+side is the silent recomputation decision 21 refuses. Each write sends the
+whole contract beside `managed`, so `keep_unsent_contract_fields` holds the
+holiday lists and the entitlement that only the member's own form edits.

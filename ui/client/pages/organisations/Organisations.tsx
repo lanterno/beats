@@ -33,7 +33,7 @@ import { Button, Chip, Dialog, Panel } from "@/shared/ui";
 import { tabsFor } from "./Organisation";
 import { OrganisationForm } from "./OrganisationForm";
 import { Section } from "./Section";
-import { LEAD, LINKISH, LIST, PAGE, PAGE_TITLE, PAGEBAR, ROW } from "./styles";
+import { LEAD, LIST, PAGE, PAGE_TITLE, PAGEBAR, ROW } from "./styles";
 
 const WHY: Record<MembershipEnd, string> = {
 	left: "you left",
@@ -68,9 +68,7 @@ function OrganisationCard({ membership }: { membership: Membership }) {
 						className="text-foreground"
 					/>
 				</Link>
-				<Chip tone={readsRecord(role) ? "ok" : "wait"} className="shrink-0">
-					{ROLE_LABELS[role]}
-				</Chip>
+				<Chip className="shrink-0">{ROLE_LABELS[role]}</Chip>
 				<span className="ml-auto text-[12.5px] font-mono text-muted-foreground whitespace-nowrap">
 					since {formatDate(membership.joinedAt)}
 				</span>
@@ -128,11 +126,20 @@ export default function Organisations() {
 				</Button>
 			</Panel>
 
+			{invitations.error != null && (
+				<Section label="Invitations" icon={Mail} bodyClassName="px-5 py-1">
+					<p className={`${LEAD} py-3`} role="alert">
+						{describeError(invitations.error, "Your invitations could not be read.")} The rest of
+						the page works as usual.
+					</p>
+				</Section>
+			)}
 			{pending.length > 0 && (
 				<Section label="Invitations" icon={Mail} bodyClassName="px-5 py-1">
 					<ul className={LIST}>
 						{pending.map((invitation) => (
-							<li key={invitation.organisation.id} className={ROW}>
+							// Keyed with the expiry: one organisation can invite twice.
+							<li key={`${invitation.organisation.id}-${invitation.expiresAt}`} className={ROW}>
 								<OrganisationMark
 									name={invitation.organisation.name}
 									logoUrl={invitation.organisation.logoUrl}
@@ -198,14 +205,8 @@ export default function Organisations() {
 								</Link>
 								<span className="text-muted-foreground">
 									{m.leftAt && formatDate(m.leftAt)}
-									{m.leftReason && ` · ${WHY[m.leftReason]}`}
+									{m.leftReason && ` · ${WHY[m.leftReason]}`} · your hours are kept
 								</span>
-								<Link
-									to={`/organisations/${m.organisation.id}/archive`}
-									className={`${LINKISH} ml-auto`}
-								>
-									Your hours
-								</Link>
 							</li>
 						))}
 					</ul>

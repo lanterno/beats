@@ -185,6 +185,18 @@ Coach prompts are sent to the [Anthropic Claude API](https://www.anthropic.com/)
 
 Beats does not auto-delete anything. Beats, notes, coach history, and biometrics persist until you delete them or delete your account.
 
+**One bounded exception, for an organisation's working-time record.** An
+organisation keeps the hours on its own projects for a retention period —
+its own setting, never below the statutory floor of its country (Spain
+four years, Germany two; the table and the default of four are
+`api/src/beats/domain/retention.py`). When the operator runs the retention
+purge (`api/scripts/retention_purge.py` — dry by default, audited per
+organisation, scheduled by nothing), rows older than the period stop being
+the organisation's record: **your own entries and absences lose the
+organisation's stamp and stay yours**; only a deleted account's tombstoned
+rows, expired timesheets and old audit entries are actually removed. Your
+timeline never shrinks because an employer's retention ended.
+
 ## Export
 
 `/api/export` returns the authenticated user's data. Nothing is held back behind a tier.

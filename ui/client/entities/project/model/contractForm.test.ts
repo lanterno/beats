@@ -4,6 +4,7 @@ import {
 	contractFieldErrors,
 	contractFrameDefaults,
 	contractFromForm,
+	placeTerm,
 	termFormDefaults,
 	termFromForm,
 	validateContractFrame,
@@ -245,5 +246,36 @@ describe("contractFieldErrors", () => {
 		);
 		expect(sorted.term).toEqual({ fullTimeHours: "must be positive" });
 		expect(sorted.general).toEqual(["ended_on is before the first term"]);
+	});
+});
+
+describe("placeTerm", () => {
+	const term = (effectiveFrom: string): ContractTerm => ({
+		effectiveFrom,
+		scheduleType: "full_time",
+		fullTimeHours: 40,
+		percentage: 1,
+	});
+
+	it("a new term lands where the dates put it, and says where", () => {
+		// Appended between two existing terms: savedIndex is the sorted
+		// position — the index a 422's field paths would name — not last.
+		const placed = placeTerm([term("2026-01-01"), term("2026-09-01")], null, term("2026-05-01"));
+		expect(placed.terms.map((t) => t.effectiveFrom)).toEqual([
+			"2026-01-01",
+			"2026-05-01",
+			"2026-09-01",
+		]);
+		expect(placed.savedIndex).toBe(1);
+	});
+
+	it("an edit that moves a term's date moves its index with it", () => {
+		const placed = placeTerm(
+			[term("2026-01-01"), term("2026-09-01")],
+			1,
+			term("2025-06-01"), // the September term re-dated before January's
+		);
+		expect(placed.terms.map((t) => t.effectiveFrom)).toEqual(["2025-06-01", "2026-01-01"]);
+		expect(placed.savedIndex).toBe(0);
 	});
 });

@@ -1435,3 +1435,50 @@ a.homepage-commit:hover .homepage-commit-msg {
 		opacity: 0;
 	}
 }
+
+/* ─── pricing ─── */
+.homepage-pricing {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 4rem 1.75rem 2rem;
+}
+.homepage-pricing-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.625rem;
+	max-width: 880px;
+	margin: 0 auto;
+}
+@media (max-width: 720px) {
+	.homepage-pricing-grid {
+		grid-template-columns: 1fr;
+	}
+}
+.homepage-price-card {
+	padding: 1.5rem 1.625rem;
+	border-radius: var(--hp-panel-radius);
+	background: var(--hp-panel);
+	box-shadow: var(--hp-shadow);
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+}
+.homepage-price-figure {
+	font-family: var(--font-heading);
+	font-size: 2rem;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	margin: 0;
+	color: var(--hp-ink);
+	display: flex;
+	align-items: baseline;
+	gap: 0.625rem;
+}
+.homepage-price-struck {
+	color: var(--hp-ink-2);
+	text-decoration-thickness: 2px;
+}
+.homepage-price-beta {
+	font-size: 1.125rem;
+	color: var(--hp-ink);
+}

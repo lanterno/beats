@@ -56,11 +56,14 @@ test.describe("Standing", () => {
 		);
 		await openSeededProject(page);
 
-		const standing = page.getByRole("region", { name: "Where you stand" });
+		// The error surfaces beside the weeks it affects — the Earlier weeks
+		// panel — while Standing claims nothing it cannot know.
 		// Two retries back off for about three seconds before the query gives up.
-		await expect(standing.getByRole("alert")).toHaveText("The ledger is down for this test", {
+		const weeks = page.getByRole("region", { name: /Earlier weeks/ });
+		await expect(weeks.getByRole("alert")).toHaveText("The ledger is down for this test", {
 			timeout: 10_000,
 		});
+		const standing = page.getByRole("region", { name: "Where you stand" });
 		await expect(standing).not.toContainText("No weeks closed yet");
 		await expect(standing).not.toContainText(/Goal met \d+ of/);
 	});

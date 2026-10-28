@@ -18,6 +18,18 @@ import { browserTimeZone } from "@/shared/lib";
 import { Button } from "@/shared/ui";
 import { ERROR, FIELD, LABEL, LEAD } from "./styles";
 
+/**
+ * The browser's own IANA zone names, as suggestions under the timezone
+ * field. Feature-tested — the compiler's lib predates `supportedValuesOf`
+ * — and the server still checks what is typed (400 INVALID_TIMEZONE).
+ */
+const TIMEZONES: readonly string[] =
+	"supportedValuesOf" in Intl
+		? (Intl as unknown as { supportedValuesOf(key: "timeZone"): string[] }).supportedValuesOf(
+				"timeZone",
+			)
+		: [];
+
 export interface OrganisationFormProps {
 	/** The organisation to edit; a new one without it. */
 	initial?: Organisation;
@@ -197,13 +209,21 @@ export function OrganisationForm({
 					</select>
 				))}
 				{field("timezone", "Timezone", (props) => (
-					<input
-						{...props}
-						type="text"
-						value={timezone}
-						onChange={(e) => setTimezone(e.target.value)}
-						placeholder="Europe/Berlin"
-					/>
+					<>
+						<input
+							{...props}
+							type="text"
+							value={timezone}
+							onChange={(e) => setTimezone(e.target.value)}
+							placeholder="Europe/Berlin"
+							list="organisation-timezones"
+						/>
+						<datalist id="organisation-timezones">
+							{TIMEZONES.map((tz) => (
+								<option key={tz} value={tz} />
+							))}
+						</datalist>
+					</>
 				))}
 			</div>
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

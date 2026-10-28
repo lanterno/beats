@@ -1540,6 +1540,12 @@ class OrganisationFields(BaseModel):
     holiday_country: str | None = None
     holiday_subdivision: str | None = None
     timezone: str = "UTC"
+    # Years the working-time record is kept, counted from each record's
+    # date; None reads as the default (domain/retention.py). Checked on
+    # write against the statutory floor of `holiday_country` — a setting
+    # below it is RETENTION_BELOW_FLOOR. Stored only: the enforcement is
+    # the operator-run purge, never a background job during the beta.
+    retention_years: int | None = Field(default=None, ge=1, le=99)
 
 
 class Organisation(OrganisationFields, TzNormalizedModel):
@@ -1549,6 +1555,10 @@ class Organisation(OrganisationFields, TzNormalizedModel):
     id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_by: str
+    # The closing state (#347): set by an owner with notice, shown to every
+    # member in-app, and the gate deletion waits behind. Not a settings
+    # field — the settings PUT replaces OrganisationFields and leaves this.
+    closes_on: date_type | None = None
 
 
 class MembershipEnd(StrEnum):

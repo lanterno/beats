@@ -88,6 +88,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, label, className
 						{tab.count ? (
 							<span className="ml-1.5 rounded-full bg-destructive px-1.5 text-[11px] font-bold text-destructive-foreground">
 								{tab.count}
+								<span className="sr-only"> waiting</span>
 							</span>
 						) : null}
 					</button>

@@ -161,6 +161,13 @@ class TestOrganisationLifecycle:
             "test@example.com",
             "owner",
         )
+        # The membership says whose it is, so a client finds its own row
+        # without matching on the address the person joined under.
+        assert mine["user_id"] == owner["user_id"]
+        assert (
+            client.get(f"/api/organisations/{org['id']}", headers=auth_headers).json()["user_id"]
+            == owner["user_id"]
+        )
 
     def test_settings_are_checked_like_a_contracts(self, client, auth_headers):
         bad_region = client.post(
@@ -258,17 +265,34 @@ class TestOrganisationLifecycle:
             f"/api/organisations/{org['id']}/requests", headers=auth_headers
         ).json()
         assert request["email"] == _me(client, applicant)["email"]
+        # The request says what approving it grants: the invite's role.
+        assert request["role"] == "member"
         decided = client.post(
             f"/api/organisations/{org['id']}/requests/{request['id']}",
             json={"decision": "approved"},
             headers=auth_headers,
         )
         assert decided.status_code == 200, decided.text
+        assert decided.json()["role"] == "member"
         [mine] = client.get("/api/organisations/", headers=applicant).json()
         assert mine["organisation"]["id"] == org["id"]
         assert (
             client.get(f"/api/organisations/{org['id']}/requests", headers=auth_headers).json()
             == []
+        )
+
+        # A link that grants more than membership says so on its requests.
+        admin_link = _invite(client, auth_headers, org["id"], requires_approval=True, role="admin")
+        hopeful = _new_user()
+        assert _join(client, hopeful, admin_link["token"]).json()["status"] == "pending"
+        [asking] = client.get(
+            f"/api/organisations/{org['id']}/requests", headers=auth_headers
+        ).json()
+        assert asking["role"] == "admin"
+        client.post(
+            f"/api/organisations/{org['id']}/requests/{asking['id']}",
+            json={"decision": "declined"},
+            headers=auth_headers,
         )
 
         # The link is reusable until revoked.
@@ -987,6 +1011,141 @@ class TestConnectingAProject:
         assert self._connect(client, outsider, org["id"], theirs["id"], None).status_code == 404
 
 
+class TestMergingAProject:
+    """#346: a connect leaves a duplicate when the organisation already had
+    a project for the same work; the merge folds it in, rule 4 kept — every
+    row moves with its stamp untouched, so what was shared stays shared
+    from the chosen instant and what was private stays private."""
+
+    def _tracked(self, client, headers, name="Day job") -> dict:
+        project = client.post(
+            "/api/projects/",
+            json={
+                "name": name,
+                "kind": "day_job",
+                "contract": {"terms": FULL_TIME, "opening_balance_hours": 12},
+            },
+            headers=headers,
+        ).json()
+        _beat(client, headers, project["id"], "2026-03-02T09:00:00", 60)  # before the share
+        _beat(client, headers, project["id"], "2026-03-04T09:00:00", 120)  # from here
+        return project
+
+    def _connect(self, client, headers, org_id: str, project_id: str, share_from):
+        resp = client.post(
+            f"/api/organisations/{org_id}/connect",
+            params={"tz": "UTC"},
+            json={"project_id": project_id, "share_from": share_from},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    def _merge(self, client, headers, org_id: str, source_id: str, target_id: str):
+        return client.post(
+            f"/api/organisations/{org_id}/projects/{source_id}/merge",
+            json={"into": target_id},
+            headers=headers,
+        )
+
+    def test_the_duplicate_folds_in_and_the_stamps_decide_what_crosses(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        mine = self._tracked(client, member)
+        self._connect(client, member, org["id"], mine["id"], "2026-03-04")
+
+        merged = self._merge(client, auth_headers, org["id"], mine["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+        assert merged.json()["id"] == platform["id"]
+        assert [m["user_id"] for m in merged.json()["members"]] == [member_id]
+
+        # One project remains, and the organisation reads under it exactly
+        # what the member shared: Wednesday's hours, never Monday's.
+        assert [
+            p["id"]
+            for p in client.get(
+                f"/api/organisations/{org['id']}/projects", headers=auth_headers
+            ).json()
+        ] == [platform["id"]]
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), platform["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04"]
+        assert row["has_contract"] is True  # the connect's contract moved with the assignment
+        assert row["shared_from"] == "2026-03-04T00:00:00Z"
+
+        # The member keeps one timeline: both entries, now under Platform.
+        [own] = _projects(client, member)
+        assert own["id"] == platform["id"]
+        assert own["organisation"]["name"] == "Acme"
+        total = client.get(
+            f"/api/projects/{platform['id']}/total/", params={"tz": "UTC"}, headers=member
+        ).json()
+        assert total["total_minutes"] == 180  # Monday's hour too, theirs as ever
+
+        events = [
+            e["event"]
+            for e in client.get(
+                f"/api/organisations/{org['id']}/audit", headers=auth_headers
+            ).json()
+        ]
+        assert "project.merged" in events
+
+    def test_an_existing_assignment_survives_and_gains_only_what_it_lacked(
+        self, client, auth_headers
+    ):
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        _assign(client, auth_headers, org["id"], platform["id"], member_id)
+        _beat(client, member, platform["id"], "2026-03-10T09:00:00", 60)
+        mine = self._tracked(client, member)
+        self._connect(client, member, org["id"], mine["id"], "2026-03-04")
+
+        merged = self._merge(client, auth_headers, org["id"], mine["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), platform["id"])
+        # Both stamped histories under one project, shared from the earlier
+        # instant; the target's assignment stood and took the contract it lacked.
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04", "2026-03-10"]
+        assert row["shared_from"] == "2026-03-04T00:00:00Z"
+        assert row["has_contract"] is True
+
+    def test_a_frozen_month_refuses_the_merge(self, client, auth_headers):
+        member = _new_user()
+        org, employed, _member_id = _employed(client, auth_headers, member)
+        _beat(client, member, employed["id"], "2026-03-03T09:00:00", 60)
+        sheet = _submit(client, member, org["id"], employed["id"], MONTH).json()
+        assert (
+            _decide_sheet(client, auth_headers, org["id"], sheet["id"], approve=True).status_code
+            == 200
+        )
+        other = _org_project(client, auth_headers, org["id"], name="Other")
+
+        for source, target in ((employed, other), (other, employed)):
+            refused = self._merge(client, auth_headers, org["id"], source["id"], target["id"])
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "PERIOD_APPROVED"
+
+    def test_only_an_admin_merges_and_only_into_another_project(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        other = _org_project(client, auth_headers, org["id"], name="Other")
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+
+        as_member = self._merge(client, member, org["id"], other["id"], platform["id"])
+        assert as_member.status_code == 403
+        itself = self._merge(client, auth_headers, org["id"], other["id"], other["id"])
+        assert itself.status_code == 409
+        assert itself.json()["code"] == "MERGE_INTO_ITSELF"
+        assert (
+            self._merge(client, auth_headers, org["id"], other["id"], "0" * 24).status_code == 404
+        )
+
+
 class TestLeavingAndRemoval:
     def _acme(self, client, admin, member) -> tuple[dict, dict, str]:
         org = _create_org(client, admin)
@@ -1240,6 +1399,224 @@ class TestBackupsAndOrganisations:
             ("beats", "ORGANISATION_PROJECT"),
         ]
         assert [p["name"] for p in _projects(client, other)] == ["Garden"]
+
+
+class TestDeletingAnOrganisation:
+    """#347: closing is notice, deletion is the hand-back. An owner starts
+    a clock every member sees in-app; when it runs out, each member gets a
+    personal copy of what connecting once took, and the organisation's
+    record goes with the organisation."""
+
+    def test_the_notice_has_a_floor_and_a_default(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        soon = (datetime.now(UTC).date() + timedelta(days=10)).isoformat()
+        refused = client.post(
+            f"/api/organisations/{org['id']}/close",
+            json={"closes_on": soon},
+            headers=auth_headers,
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "CLOSE_NOTICE_TOO_SHORT"
+
+        started = client.post(
+            f"/api/organisations/{org['id']}/close", json={}, headers=auth_headers
+        )
+        assert started.status_code == 200, started.text
+        default = date.fromisoformat(started.json()["closes_on"])
+        assert default >= datetime.now(UTC).date() + timedelta(days=59)
+
+        # Every member reads the state; only an owner sets or clears it.
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+        seen = client.get(f"/api/organisations/{org['id']}", headers=member)
+        assert seen.json()["organisation"]["closes_on"] == started.json()["closes_on"]
+        assert (
+            client.post(
+                f"/api/organisations/{org['id']}/close", json={}, headers=member
+            ).status_code
+            == 403
+        )
+
+        # Deletion waits for the day; cancel clears the clock.
+        waiting = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert waiting.status_code == 409
+        assert waiting.json()["code"] == "ORGANISATION_STILL_CLOSING"
+        cancelled = client.delete(f"/api/organisations/{org['id']}/close", headers=auth_headers)
+        assert cancelled.status_code == 200
+        assert cancelled.json()["closes_on"] is None
+        not_closing = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert not_closing.status_code == 409
+        assert not_closing.json()["code"] == "ORGANISATION_NOT_CLOSING"
+
+    def test_deletion_hands_every_member_back_their_own(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        client.put(
+            f"/api/projects/{project['id']}/contract", json={"terms": FULL_TIME}, headers=member
+        )
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        # A tombstoned ex-member's row: goes with the record's keeper.
+        db = _db()
+        stamped = db.timeLogs.find_one({"organisation_id": org["id"]})
+        db.timeLogs.insert_one(
+            {k: v for k, v in stamped.items() if k != "_id"} | {"user_id": "erased:gone"}
+        )
+
+        assert (
+            client.post(
+                f"/api/organisations/{org['id']}/close", json={}, headers=auth_headers
+            ).status_code
+            == 200
+        )
+        db.organisations.update_one(
+            {"_id": ObjectId(org["id"])},
+            {"$set": {"closes_on": (datetime.now(UTC).date() - timedelta(days=1)).isoformat()}},
+        )
+        gone = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert gone.status_code == 204, gone.text
+
+        # The member keeps one timeline: a personal copy of the project,
+        # same name and kind, the contract theirs again, the entry on it
+        # and no longer anyone's record.
+        [mine] = _projects(client, member)
+        assert mine["name"] == project["name"]
+        assert mine["kind"] == "day_job"
+        assert mine["organisation"] is None
+        assert mine["contract"] is not None
+        week = client.get(
+            f"/api/projects/{mine['id']}/contract/week", params={"tz": "UTC"}, headers=member
+        )
+        assert week.status_code == 200
+        own = db.timeLogs.find_one({"user_id": member_id})
+        assert own["project_id"] == mine["id"]
+        assert "organisation_id" not in own
+
+        # The organisation is gone whole: no membership, no rows, no stones.
+        assert client.get(f"/api/organisations/{org['id']}", headers=member).status_code == 404
+        assert db.org_members.count_documents({"organisation_id": org["id"]}) == 0
+        assert db.org_audit.count_documents({"organisation_id": org["id"]}) == 0
+        assert db.timeLogs.count_documents({"user_id": "erased:gone"}) == 0
+        assert db.projects.count_documents({"organisation_id": org["id"]}) == 0
+
+
+class TestRetention:
+    """The retention setting over its statutory floor, and the purge pass
+    (docs/organisations.md, stage 4 — retention). Expiry removes the
+    organisation's record, never the person's data."""
+
+    def _settings(self, client, headers, org: dict, **changes):
+        body = {"name": org["name"], **changes}
+        return client.put(f"/api/organisations/{org['id']}", json=body, headers=headers)
+
+    def test_the_floor_is_the_jurisdictions_not_ours(self, client, auth_headers):
+        spain = _create_org(client, auth_headers, name="Madrid", holiday_country="ES")
+        refused = self._settings(
+            client, auth_headers, spain, holiday_country="ES", retention_years=3
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "RETENTION_BELOW_FLOOR"
+        assert "4 years" in refused.json()["detail"]
+        kept = self._settings(client, auth_headers, spain, holiday_country="ES", retention_years=4)
+        assert kept.status_code == 200, kept.text
+        assert kept.json()["retention_years"] == 4
+
+        berlin = _create_org(client, auth_headers, name="Berlin", holiday_country="DE")
+        two = self._settings(client, auth_headers, berlin, holiday_country="DE", retention_years=2)
+        assert two.status_code == 200, two.text
+
+        # No country: the strictest common floor holds, so a gap in the
+        # table can never allow deleting below a law not written down.
+        nowhere = _create_org(client, auth_headers, name="Nowhere")
+        assert self._settings(client, auth_headers, nowhere, retention_years=3).status_code == 409
+
+    def test_expiry_unstamps_the_living_and_deletes_the_tombstoned(self, client, auth_headers):
+        from beats.infrastructure.retention import purge_expired_records
+
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"])
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        old = _beat(client, member, project["id"], "2020-01-10T09:00:00", 60)
+        young = _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        db = _db()
+        # A tombstoned ex-member's old row, and records only the purge reads:
+        # an expired timesheet and an audit event older than the cutoff.
+        stone = dict(db.timeLogs.find_one({"_id": ObjectId(old["id"])}))
+        stone.pop("_id")
+        stone_id = db.timeLogs.insert_one({**stone, "user_id": "erased:m1"}).inserted_id
+        # A tombstoned balance adjustment carries no stamp — the purge must
+        # find it through the organisation's projects, as erasure left it.
+        db.balance_adjustments.insert_one(
+            {
+                "user_id": "erased:m1",
+                "project_id": project["id"],
+                "date": "2020-01-12",
+                "kind": "delta",
+                "hours": 2.0,
+            }
+        )
+        db.org_timesheets.insert_one(
+            {
+                "organisation_id": org["id"],
+                "project_id": project["id"],
+                "user_id": "erased:m1",
+                "month": "2020-01-01",
+                "status": "approved",
+                "history": [],
+            }
+        )
+        db.org_audit.insert_one(
+            {
+                "organisation_id": org["id"],
+                "at": "2020-01-10T09:00:00",
+                "event": "old",
+                "details": {},
+            }
+        )
+
+        async def run(apply: bool):
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await purge_expired_records(
+                    client_[os.environ.get("DB_NAME", "beats_test")], apply=apply
+                )
+            finally:
+                await client_.close()
+
+        dry = asyncio.run(run(False))
+        [mine] = [o for o in dry.organisations if o.organisation_id == org["id"]]
+        assert mine.counts["beats_unstamped"] == 1
+        assert mine.counts["beats_deleted"] == 1
+        assert mine.counts["adjustments_deleted"] == 1
+        assert mine.counts["timesheets_deleted"] == 1
+        assert mine.counts["audit_deleted"] == 1
+        # Dry means dry: the stamp is still on the old row.
+        assert db.timeLogs.find_one({"_id": ObjectId(old["id"])})["organisation_id"] == org["id"]
+
+        asyncio.run(run(True))
+        survivor = db.timeLogs.find_one({"_id": ObjectId(old["id"])})
+        assert survivor is not None, "a living member's row is theirs, not the record's"
+        assert "organisation_id" not in survivor
+        assert db.timeLogs.find_one({"_id": stone_id}) is None
+        assert db.balance_adjustments.count_documents({"user_id": "erased:m1"}) == 0
+        assert db.timeLogs.find_one({"_id": ObjectId(young["id"])})["organisation_id"] == org["id"]
+        assert db.org_timesheets.count_documents({"organisation_id": org["id"]}) == 0
+        assert db.org_audit.count_documents({"organisation_id": org["id"], "event": "old"}) == 0
+        assert (
+            db.org_audit.count_documents(
+                {"organisation_id": org["id"], "event": "retention.purged"}
+            )
+            == 1
+        )
+        # The organisation's read agrees: only the young entry remains.
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-03"]
 
 
 class TestProjectsIndex:
@@ -1729,6 +2106,88 @@ class TestTeamsAndRoles:
             == 403
         )
 
+    def test_a_decider_reads_the_names_without_the_admins_project_list(self, client, auth_headers):
+        """A manager is shown the approvals but may not list the
+        organisation's projects. The rows name themselves, so the decision
+        does not have to be made against an id."""
+        org, project, (manager, _), (inside, inside_id), _ = self._org_with_team(
+            client, auth_headers
+        )
+        client.put(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{inside_id}/contract",
+            json={"contract": {"terms": FULL_TIME}, "managed": True},
+            headers=manager,
+        )
+        assert (
+            client.get(f"/api/organisations/{org['id']}/projects", headers=manager).status_code
+            == 403
+        )
+
+        asked = client.post(
+            f"/api/organisations/{org['id']}/absence-requests",
+            json={"project_id": project["id"], "date": "2026-03-06", "type": "vacation"},
+            headers=inside,
+        )
+        assert asked.status_code == 201, asked.text
+        [pending] = client.get(
+            f"/api/organisations/{org['id']}/absence-requests",
+            params={"pending": True},
+            headers=manager,
+        ).json()
+        name = _me(client, inside)["email"]
+        assert (pending["project_name"], pending["member_name"]) == (project["name"], name)
+
+        _submit(client, inside, org["id"], project["id"], "2026-03")
+        [sheet] = client.get(f"/api/organisations/{org['id']}/timesheets", headers=manager).json()
+        assert (sheet["project_name"], sheet["member_name"]) == (project["name"], name)
+
+    def test_a_decided_row_still_names_a_member_who_left(self, client, auth_headers):
+        """`/members` lists the active ones, so the name on a decision has to
+        outlive the membership: the record is read long after someone goes."""
+        member = _new_user()
+        org, project, member_id = _employed(client, auth_headers, member)
+        [listed] = [
+            m
+            for m in client.get(
+                f"/api/organisations/{org['id']}/members", headers=auth_headers
+            ).json()
+            if m["user_id"] == member_id
+        ]
+        asked = client.post(
+            f"/api/organisations/{org['id']}/absence-requests",
+            json={"project_id": project["id"], "date": "2026-03-06", "type": "vacation"},
+            headers=member,
+        )
+        request_id = asked.json()["id"]
+        client.post(
+            f"/api/organisations/{org['id']}/absence-requests/{request_id}/decision",
+            json={"approve": True},
+            headers=auth_headers,
+        )
+        _submit(client, member, org["id"], project["id"], "2026-03")
+        assert (
+            client.delete(
+                f"/api/organisations/{org['id']}/members/{member_id}", headers=auth_headers
+            ).status_code
+            == 204
+        )
+
+        assert not [
+            m
+            for m in client.get(
+                f"/api/organisations/{org['id']}/members", headers=auth_headers
+            ).json()
+            if m["user_id"] == member_id
+        ]
+        [gone] = client.get(
+            f"/api/organisations/{org['id']}/absence-requests", headers=auth_headers
+        ).json()
+        assert gone["member_name"] == listed["name"]
+        [sheet] = client.get(
+            f"/api/organisations/{org['id']}/timesheets", headers=auth_headers
+        ).json()
+        assert sheet["member_name"] == listed["name"]
+
     def test_a_viewer_reads_everything_and_changes_nothing(self, client, auth_headers):
         org, project, _, (inside, inside_id), (outside, outside_id) = self._org_with_team(
             client, auth_headers
@@ -1756,7 +2215,9 @@ class TestTeamsAndRoles:
         )
         assert compliance.status_code == 200
         header, *rows_csv = compliance.text.splitlines()
-        assert header == "member,project,day,first_start,last_end,break_minutes,worked_hours"
+        assert header == (
+            "member,project,day,first_start,last_end,break_minutes,worked_hours,warnings"
+        )
         assert len(rows_csv) == 2
 
         # Changes nothing: no deciding, no administering, no audit.
@@ -1769,6 +2230,35 @@ class TestTeamsAndRoles:
             client.get(f"/api/organisations/{org['id']}/audit", headers=viewer).status_code == 403
         )
 
+    def test_a_member_takes_their_visible_month_away_as_csv(self, client, auth_headers):
+        """The person can always take away exactly what is seen of them —
+        their own rows, nobody else's, and no reader's role needed."""
+        org, project, _, (inside, _inside_id), (outside, _outside_id) = self._org_with_team(
+            client, auth_headers
+        )
+        _beat(client, inside, project["id"], "2026-03-03T09:00:00", 60)
+        _beat(client, outside, project["id"], "2026-03-03T11:00:00", 60)
+
+        mine = client.get(
+            f"/api/organisations/{org['id']}/visible.csv",
+            params={"month": "2026-03", "tz": "UTC"},
+            headers=inside,
+        )
+        assert mine.status_code == 200, mine.text
+        header, *rows = mine.text.splitlines()
+        assert header == "project,member,day,start,end,hours,note"
+        # One row: their own entry. The other member's is in no byte of it.
+        assert len(rows) == 1
+        outside_email = _me(client, outside)["email"]
+        assert outside_email not in mine.text
+        # The record's own CSV stays a reader's: a plain member is refused.
+        refused = client.get(
+            f"/api/organisations/{org['id']}/record.csv",
+            params={"month": "2026-03", "tz": "UTC"},
+            headers=inside,
+        )
+        assert refused.status_code == 403
+
     def test_compliance_counts_breaks_between_entries(self, client, auth_headers):
         member = _new_user()
         org, project, _member_id = _employed(client, auth_headers, member, managed=False)
@@ -1780,7 +2270,24 @@ class TestTeamsAndRoles:
             headers=auth_headers,
         ).text
         [row] = csv_text.splitlines()[1:]
-        assert row.endswith(",30,2.00")
+        # Two lawful hours: the breaks and total, and no warning raised.
+        assert row.endswith(",30,2.00,")
+
+    def test_compliance_warns_on_long_days_and_short_rests(self, client, auth_headers):
+        """#350: the warnings are derived from the same rows on every read —
+        an 11-hour day, then a start 8 hours after it ends."""
+        member = _new_user()
+        org, project, _member_id = _employed(client, auth_headers, member, managed=False)
+        _beat(client, member, project["id"], "2026-03-03T08:00:00", 660)  # 08:00–19:00
+        _beat(client, member, project["id"], "2026-03-04T03:00:00", 120)  # 8 h after
+        csv_text = client.get(
+            f"/api/organisations/{org['id']}/compliance.csv",
+            params={"month": "2026-03", "tz": "UTC"},
+            headers=auth_headers,
+        ).text
+        day_one, day_two = csv_text.splitlines()[1:]
+        assert day_one.endswith(",day over 10 h (11.00 h)")
+        assert day_two.endswith(",rest under 11 h (8.00 h after 2026-03-03)")
 
     def test_the_audit_log_reads_newest_first_for_admins(self, client, auth_headers):
         member = _new_user()

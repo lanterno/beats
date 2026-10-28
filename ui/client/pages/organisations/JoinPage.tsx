@@ -11,6 +11,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import {
 	OrganisationMark,
+	ROLE_HINTS,
 	ROLE_LABELS,
 	useInvitePreview,
 	useJoinOrganisation,
@@ -25,6 +26,11 @@ function failure(err: unknown): string {
 		return "This invite isn't for this account, or doesn't exist.";
 	}
 	return describeError(err, "The invite could not be read.");
+}
+
+/** "a member", "an admin" — the right article for the role's word. */
+function asA(role: string): string {
+	return /^[aeiou]/i.test(role) ? `an ${role}` : `a ${role}`;
 }
 
 export default function JoinPage() {
@@ -45,7 +51,13 @@ export default function JoinPage() {
 					setPending(true);
 				}
 			},
-			onError: (err) => toast.error(describeError(err, "You could not join.")),
+			onError: (err) => {
+				// Asking again on a link already asked on is the answer "it is
+				// still waiting", not a failure — a reload loses the local
+				// pending flag, and this is how it comes back.
+				if (err instanceof ApiError && err.code === "JOIN_REQUEST_PENDING") setPending(true);
+				else toast.error(describeError(err, "You could not join."));
+			},
 		});
 	};
 
@@ -84,21 +96,30 @@ export default function JoinPage() {
 							</Link>
 						</>
 					) : pending ? (
-						<p className="text-[13px] font-medium text-foreground">
-							Your request is waiting for an admin.
-						</p>
+						<>
+							<p className="text-[13px] font-medium text-foreground">
+								Your request is waiting for an admin. Once someone decides,{" "}
+								{invite.organisation.name} appears under your organisations.
+							</p>
+							<Link to="/organisations" className={LINKISH}>
+								Your organisations
+							</Link>
+						</>
 					) : (
 						<>
 							<p className="text-[13px] font-medium text-foreground">
 								{invite.addressed
-									? `You've been invited to join as a ${role}.`
+									? `You've been invited to join as ${asA(role)}.`
 									: invite.requiresApproval
-										? `Anyone with this link may join as a ${role}, after approval.`
-										: `Anyone with this link may join as a ${role}.`}
+										? `Anyone with this link may join as ${asA(role)}, after approval.`
+										: `Anyone with this link may join as ${asA(role)}.`}{" "}
+								<span className="text-muted-foreground">{ROLE_HINTS[invite.role]}</span>
 							</p>
 							<p className={LEAD}>
-								Joining adds its projects to your own list once you are assigned. It sees finished
-								entries on those projects and nothing else; your own projects stay yours.
+								Joining adds its projects to your own list once you are assigned. On those projects
+								it sees your finished entries — start, end, duration and the note — your absences as
+								a date and a type, and a managed contract's balance. Nothing else crosses: not your
+								own projects, nothing about now, and you can always read exactly what it holds.
 							</p>
 							<Button type="button" size="sm" onClick={accept} disabled={join.isPending}>
 								{join.isPending

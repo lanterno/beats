@@ -48,17 +48,18 @@ async def get_beat(beat_id: str, service: BeatServiceDep):
 
 @router.put("/")
 async def update_beat(request: UpdateBeatRequest, service: BeatServiceDep):
-    """Edit a beat's project, start and end. The note and every other stored
-    field stay as stored; the tags are re-derived from the new times when the
-    daemon has flow windows for them, and kept when it has none. A beat the
-    caller does not hold is a 404."""
+    """Edit a beat's project, start, end and — when one is sent — its note:
+    a string sets it, an empty string clears it, omitted keeps it as stored
+    (#348). Every other stored field stays; the tags are re-derived from the
+    new times when the daemon has flow windows for them, and kept when it
+    has none. A beat the caller does not hold is a 404."""
     beat = Beat(
         id=request.id,
         project_id=request.project_id,
         start=request.start,
         end=request.end,
     )
-    updated = await service.update_beat(beat)
+    updated = await service.update_beat(beat, note=request.note)
     return updated.model_dump()
 
 

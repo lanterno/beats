@@ -176,7 +176,7 @@ notes under them are kept as the reasoning. The sixth is an issue.
 | What does **account deletion** do to records an employer must legally keep? | **Settled:** the stamped working-time rows, the balance's inputs and the name on the membership stay under a tombstone; everything else is erased (`erasure.py`) | 2 |
 | What does **"day job"** mean once an employer can be an entity? | **Settled:** personal day jobs stay exactly as they are; on an organisation project the contract lives on the assignment, the member's until the employer takes it under management (decision 21) | 3 |
 | Who wins when the **employer's contract terms differ** from the employee's? | **Settled:** management starts from the terms the member recorded; the employer's changes are audited acts, never silent recomputation (decision 21) | 3 |
-| **Pricing**: seat price, free tier, whether contractors count as seats | **Open:** [#345](https://github.com/lanterno/beats/issues/345) | 4 |
+| **Pricing**: seat price, free tier, whether contractors count as seats | **Settled** (2026-10-28): €8/seat/mo annual (€10 monthly), free to 5 seats, SSO included; a seat is an active member with an assignment — viewers free, contractors count when assigned; one subscription per organisation; everything free during the beta as a shown 100% discount, and non-payment afterwards degrades to read-only, never deletion. Priced against the vendors' own pages in [docs/pricing.md](pricing.md); the payment machinery stays its own project, [#345](https://github.com/lanterno/beats/issues/345) | 4 |
 
 ### Notes and tags
 

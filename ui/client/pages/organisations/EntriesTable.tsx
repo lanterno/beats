@@ -6,7 +6,15 @@
  */
 
 import type { RecordEntry } from "@/entities/organisation";
-import { formatDateOnly, formatTime, hoursText } from "@/shared/lib";
+import { formatDateOnly, formatTime, hoursText, parseUtcIso } from "@/shared/lib";
+
+/** Whether the entry ends on a later local day than it starts — a night shift. */
+function crossesMidnight(entry: RecordEntry): boolean {
+	return (
+		parseUtcIso(entry.start).toLocaleDateString("en-CA") !==
+		parseUtcIso(entry.end).toLocaleDateString("en-CA")
+	);
+}
 
 const TH =
 	"py-1.5 pr-3 text-left font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground";
@@ -46,6 +54,9 @@ export function EntriesTable({ entries, label }: EntriesTableProps) {
 							</td>
 							<td className={`${TD} whitespace-nowrap font-mono text-foreground`}>
 								{formatTime(entry.start)} → {formatTime(entry.end)}
+								{crossesMidnight(entry) && (
+									<span className="font-body text-muted-foreground"> next day</span>
+								)}
 							</td>
 							<td className={`${TD} whitespace-nowrap font-mono text-right text-foreground`}>
 								{hoursText(entry.hours)}

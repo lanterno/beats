@@ -27,20 +27,17 @@ import type {
 	GoalOverride,
 	ProjectFormAutoFocusField,
 	ProjectWithDuration,
-	TermFieldErrors,
-	TermFormValues,
 } from "@/entities/project";
 import {
-	ContractTermFields,
-	contractFieldErrors,
+	ContractTermDialog,
 	describeEntitlement,
 	describeTerm,
 	formatSignedHours,
 	permanentOverrideOn,
+	placeTerm,
 	sortTerms,
 	standingGoalOn,
 	termFormDefaults,
-	termFromForm,
 	termHoursPerWeek,
 	termOn,
 	toApiContract,
@@ -49,12 +46,11 @@ import {
 	useProjectHolidays,
 	useUpdateContract,
 	useUpdateGoalOverrides,
-	validateTerm,
 	weekNumber,
 } from "@/entities/project";
-import { apiFieldErrors, describeError } from "@/shared/api";
+import { describeError } from "@/shared/api";
 import { cn, mondayOfIso } from "@/shared/lib";
-import { Button, Dialog, Panel } from "@/shared/ui";
+import { Button, Panel } from "@/shared/ui";
 import { longDate, plainDate } from "./dates";
 import { type ChartStep, stepChartGeometry } from "./stepChart";
 import { LABEL, LINKISH } from "./styles";
@@ -607,7 +603,7 @@ function ContractVariant({
 			</div>
 
 			{editor && (
-				<TermDialog
+				<ContractTermDialog
 					key={editor.mode === "edit" ? `edit-${editor.index}` : "add"}
 					title={editor.mode === "edit" ? "Edit term" : "Change contract from…"}
 					initial={
@@ -624,12 +620,8 @@ function ContractVariant({
 					returnFocus={() => changeButton.current}
 					onClose={() => setEditor(null)}
 					onSave={(term, onError) => {
-						const nextTerms =
-							editor.mode === "edit"
-								? terms.map((t, i) => (i === editor.index ? term : t))
-								: [...terms, term];
-						const savedIndex = sortTerms(nextTerms).indexOf(term);
-						const nextContract: Contract = { ...contract, terms: sortTerms(nextTerms) };
+						const placed = placeTerm(terms, editor.mode === "edit" ? editor.index : null, term);
+						const nextContract: Contract = { ...contract, terms: placed.terms };
 						updateContract.mutate(
 							{ projectId: project.id, contract: toApiContract(nextContract) },
 							{
@@ -637,7 +629,7 @@ function ContractVariant({
 									toast.success(editor.mode === "edit" ? "Term updated" : "Contract changed");
 									setEditor(null);
 								},
-								onError: (err) => onError(err, savedIndex),
+								onError: (err) => onError(err, placed.savedIndex),
 							},
 						);
 					}}
@@ -805,95 +797,5 @@ export function ContractRegister({
 			firstTrackedIso={firstTrackedIso}
 			onOpenSettings={onOpenSettings}
 		/>
-	);
-}
-
-interface TermDialogProps {
-	title: string;
-	initial: TermFormValues;
-	/** effective_from dates of the other terms — no two may start on one day. */
-	takenDates: string[];
-	submitting: boolean;
-	onClose: () => void;
-	/** Hands the term over; `onError` brings a failed save's 422 back to the inputs. */
-	onSave: (term: ContractTerm, onError: (err: unknown, savedIndex: number) => void) => void;
-	/** Where focus goes on close when the control that opened the dialog has gone. */
-	returnFocus?: () => HTMLElement | null | undefined;
-}
-
-function TermDialog({
-	title,
-	initial,
-	takenDates,
-	submitting,
-	onClose,
-	onSave,
-	returnFocus,
-}: TermDialogProps) {
-	const [values, setValues] = useState<TermFormValues>(initial);
-	const [errors, setErrors] = useState<TermFieldErrors>({});
-	const [general, setGeneral] = useState<string[]>([]);
-
-	const handleSubmit = () => {
-		const next = validateTerm(values);
-		if (!next.effectiveFrom && takenDates.includes(values.effectiveFrom)) {
-			next.effectiveFrom = "Another term already starts on this day";
-		}
-		setErrors(next);
-		setGeneral([]);
-		if (Object.keys(next).length > 0) return;
-		onSave(termFromForm(values), (err, savedIndex) => {
-			// PUT /contract's body is the contract itself, so paths start at "terms".
-			const sorted = contractFieldErrors(apiFieldErrors(err), "", savedIndex);
-			setErrors(sorted.term);
-			const messages = [...sorted.general];
-			if (messages.length === 0 && Object.keys(sorted.term).length === 0) {
-				messages.push(describeError(err, "Failed to save contract"));
-			}
-			setGeneral(messages);
-		});
-	};
-
-	return (
-		<Dialog
-			open
-			onClose={onClose}
-			returnFocus={returnFocus}
-			title={title}
-			description="Any weekday works: a change on a Wednesday charges Monday and Tuesday at the old rate."
-		>
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					handleSubmit();
-				}}
-				className="space-y-4"
-				noValidate
-			>
-				<ContractTermFields
-					values={values}
-					onChange={setValues}
-					errors={errors}
-					dateLabel="From"
-					withNote
-					autoFocusField="effectiveFrom"
-				/>
-				{general.length > 0 && (
-					<div className="text-sm text-destructive-ink space-y-0.5" role="alert">
-						{general.map((message) => (
-							<p key={message}>{message}</p>
-						))}
-					</div>
-				)}
-				<div className="flex gap-2 pt-1">
-					<Button type="submit" disabled={submitting} className="flex-1">
-						{submitting ? "Saving…" : "Save term"}
-					</Button>
-					<Button type="button" variant="outline" onClick={onClose}>
-						Cancel
-					</Button>
-				</div>
-			</form>
-		</Dialog>
 	);
 }

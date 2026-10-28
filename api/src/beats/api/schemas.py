@@ -128,13 +128,18 @@ class CreateBeatRequest(BaseModel):
 
 class UpdateBeatRequest(BaseModel):
     """Request body for editing a beat: these fields, and only these, change.
-    Tags are auto-derived, not sent. The note is not editable here: it comes
-    from an import, stays as stored, and a `note` in the body is ignored."""
+    Tags are auto-derived, not sent. The note (#348): a string sets it, an
+    empty string clears it, and omitted or null keeps it as stored — so every
+    client that never sends one (the daemon, the companion, the extension)
+    keeps meaning what it meant. On an organisation's project the note is
+    part of the organisation's record (rule 3), which is why the one input
+    that writes it carries the marker saying who reads it."""
 
     id: str
     project_id: str
     start: datetime
     end: datetime | None = None
+    note: str | None = Field(default=None, max_length=2000)
 
 
 class GoalOverrideResponse(BaseModel):
@@ -751,13 +756,21 @@ class InboxResponse(BaseModel):
 class OrganisationResponse(OrganisationFields):
     id: str
     created_at: datetime
+    # The closing state (#347): every member's banner reads it.
+    closes_on: date_type | None = None
 
 
 class MembershipResponse(BaseModel):
     """One of the caller's organisations, with their standing in it. A
     membership that ended (`left_at`) is listed too: the archive of the
-    person's own hours there is reached through it."""
+    person's own hours there is reached through it.
 
+    `user_id` is the caller's own, so a client can tell which row of
+    `/members` or which timesheet is theirs without matching on the address
+    they joined under — which an account that changed its email, or signed
+    in through a provider, no longer has."""
+
+    user_id: str
     organisation: OrganisationResponse
     role: OrgRole
     joined_at: datetime
@@ -839,10 +852,14 @@ class JoinResponse(BaseModel):
 
 
 class JoinRequestResponse(BaseModel):
+    """A join request with the role approving it grants — the invite's, so
+    the admin decides knowing what they are handing over."""
+
     id: str
     user_id: str
     name: str
     email: str
+    role: OrgRole
     requested_at: datetime
 
 
@@ -861,6 +878,18 @@ class OrgProjectRequest(BaseModel):
     github_repo: str | None = None
     category: str | None = None
     archived: bool = False
+
+
+class MergeProjectRequest(BaseModel):
+    """Which project the merged one folds into."""
+
+    into: str = Field(min_length=1)
+
+
+class CloseOrganisationRequest(BaseModel):
+    """When the organisation closes; left out, the default notice runs."""
+
+    closes_on: date_type | None = None
 
 
 class AssignmentResponse(BaseModel):

@@ -9,11 +9,11 @@ import type { OrgRole, WeekStart } from "./types";
 
 const RANK: Record<OrgRole, number> = { member: 0, viewer: 1, manager: 2, admin: 3, owner: 4 };
 
-export function roleAtLeast(role: OrgRole, needed: OrgRole): boolean {
+function roleAtLeast(role: OrgRole, needed: OrgRole): boolean {
 	return RANK[role] >= RANK[needed];
 }
 
-/** Whether a role sees the organisation's members, projects, invites and record. */
+/** Whether a role runs the organisation: members, projects, invites, settings. */
 export function canAdminister(role: OrgRole): boolean {
 	return roleAtLeast(role, "admin");
 }

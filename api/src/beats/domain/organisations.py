@@ -24,19 +24,25 @@ from beats.domain.billing import utc_midnight, utc_range
 from beats.domain.contracts import balance_terms
 from beats.domain.exceptions import (
     AlreadyAMember,
+    CloseNoticeTooShort,
     InviteExpired,
     InviteNotFound,
     JoinRequestNotFound,
     JoinRequestPending,
     LastOwner,
     MemberNotFound,
+    MergeIntoItself,
     NotAssigned,
+    OrganisationNotClosing,
     OrganisationNotFound,
     OrganisationProject,
     OrganisationRoleRequired,
+    OrganisationStillClosing,
     OwnerRoleReserved,
+    PeriodApproved,
     ProjectHasBilling,
     ProjectNotFound,
+    RetentionBelowFloor,
     ShareFromInFuture,
     UnknownHolidayRegion,
     UnknownTimezone,
@@ -57,6 +63,7 @@ from beats.domain.models import (
     OrgMembership,
     OrgProject,
     OrgRole,
+    TimesheetStatus,
 )
 from beats.domain.ports import (
     BillingPresence,
@@ -67,6 +74,7 @@ from beats.domain.ports import (
     OrganisationStore,
     UserDirectory,
 )
+from beats.domain.retention import retention_floor
 from beats.domain.services import worked_by_local_day
 from beats.domain.timesheet import month_end
 from beats.domain.utils import local_date, normalize_tz
@@ -82,6 +90,15 @@ class Member(NamedTuple):
 class ProjectMembers(NamedTuple):
     project: OrgProject
     assignments: list[tuple[OrgAssignment, OrgMembership | None]]
+
+
+class OrgLabels(NamedTuple):
+    """The names a row is read by: projects by id, members by user id. The
+    members include those who have left, because a decided request, an
+    approved sheet and an audit line all outlive the membership they name."""
+
+    projects: dict[str, str]
+    members: dict[str, str]
 
 
 class RecordEntry(NamedTuple):
@@ -167,6 +184,10 @@ def _entry(beat: Beat, tz: ZoneInfo) -> RecordEntry:
     )
 
 
+MIN_CLOSE_NOTICE_DAYS = 30  # members export on their own clock, not the owner's
+DEFAULT_CLOSE_NOTICE_DAYS = 60  # one round number with the pricing decision's grace
+
+
 class OrganisationService:
     def __init__(
         self,
@@ -231,6 +252,10 @@ class OrganisationService:
             ZoneInfo(fields.timezone)
         except ZoneInfoNotFoundError, ValueError:
             raise UnknownTimezone(fields.timezone) from None
+        if fields.retention_years is not None:
+            floor = retention_floor(fields.holiday_country)
+            if fields.retention_years < floor:
+                raise RetentionBelowFloor(fields.holiday_country, floor)
 
     # --- organisations -------------------------------------------------------------
 
@@ -280,6 +305,101 @@ class OrganisationService:
             organisation_id, user_id, "organisation.updated", fields=fields.model_dump()
         )
         return organisation
+
+    # --- closing and deletion (#347) ---------------------------------------------------
+
+    async def begin_closing(
+        self, organisation_id: str, actor: str, closes_on: date | None
+    ) -> Organisation:
+        """An owner starts the clock: the organisation closes on a day at
+        least MIN_CLOSE_NOTICE_DAYS out (default DEFAULT_CLOSE_NOTICE_DAYS),
+        shown to every member in-app — the notice decision 11's no-email
+        rule leaves us, and enough of it that people export on their own
+        clock, not the owner's. Tracking carries on until the day: closing
+        is notice, not a lock."""
+        me = await self._member(organisation_id, actor, OrgRole.OWNER)
+        today = self._today(me.organisation)
+        if closes_on is None:
+            closes_on = today + timedelta(days=DEFAULT_CLOSE_NOTICE_DAYS)
+        if closes_on < today + timedelta(days=MIN_CLOSE_NOTICE_DAYS):
+            raise CloseNoticeTooShort(MIN_CLOSE_NOTICE_DAYS)
+        organisation = me.organisation.model_copy(update={"closes_on": closes_on})
+        await self.store.update_organisation(organisation)
+        await self._audit(
+            organisation_id, actor, "organisation.closing", closes_on=closes_on.isoformat()
+        )
+        return organisation
+
+    async def cancel_closing(self, organisation_id: str, actor: str) -> Organisation:
+        me = await self._member(organisation_id, actor, OrgRole.OWNER)
+        if me.organisation.closes_on is None:
+            raise OrganisationNotClosing()
+        organisation = me.organisation.model_copy(update={"closes_on": None})
+        await self.store.update_organisation(organisation)
+        await self._audit(organisation_id, actor, "organisation.closing_cancelled")
+        return organisation
+
+    async def delete_organisation(self, organisation_id: str, actor: str) -> dict[str, int]:
+        """The end of the organisation, once its notice has run out: every
+        member is handed back what connecting once took — a personal copy
+        of each project they hold rows or a contract on, carrying the
+        organisation's fields and their own assignment's half, their rows
+        repointed to it and unstamped (archived where their assignment had
+        already ended). Then everything that was the organisation's goes:
+        its tombstoned rows — the record's keeper is destroying the record,
+        and its final export was the notice period's job — its project
+        documents, memberships, timesheets, audit log and the document
+        itself. The hand-backs run first, so a crash midway strands nothing
+        of a member's. Owners only, and only from `closes_on` on (409
+        ORGANISATION_STILL_CLOSING before, ORGANISATION_NOT_CLOSING with no
+        notice at all)."""
+        me = await self._member(organisation_id, actor, OrgRole.OWNER)
+        closes_on = me.organisation.closes_on
+        if closes_on is None:
+            raise OrganisationNotClosing()
+        if self._today(me.organisation) < closes_on:
+            raise OrganisationStillClosing(closes_on)
+        projects = await self.store.list_projects(organisation_id)
+        assignments = await self.store.list_assignments(organisation_id, active_only=False)
+        by_pair = {(a.project_id, a.user_id): a for a in assignments}
+        counts: dict[str, int] = {"projects_handed_back": 0}
+        for project in projects:
+            assert project.id is not None
+            holders = await self.store.row_owner_ids(project.id)
+            holders |= {
+                a.user_id
+                for a in assignments
+                if a.project_id == project.id
+                and a.contract is not None
+                and not a.user_id.startswith("erased:")
+            }
+            for user_id in sorted(holders):
+                assignment = by_pair.get((project.id, user_id))
+                archived = assignment is None or assignment.ended_at is not None
+                new_id = await self.store.hand_back_project(project, user_id, assignment, archived)
+                moved = await self.store.repoint_member_rows(project.id, user_id, new_id)
+                counts["projects_handed_back"] += 1
+                for key, value in moved.items():
+                    counts[key] = counts.get(key, 0) + value
+        deleted = await self.store.delete_organisation_rows(
+            organisation_id, [p.id for p in projects if p.id is not None]
+        )
+        for key, value in deleted.items():
+            counts[f"deleted_{key}"] = value
+        return counts
+
+    @staticmethod
+    def _zone(organisation: Organisation) -> ZoneInfo:
+        """The organisation's timezone, UTC when the tz database dropped it."""
+        try:
+            return ZoneInfo(organisation.timezone)
+        except ZoneInfoNotFoundError, ValueError:
+            return ZoneInfo("UTC")
+
+    def _today(self, organisation: Organisation) -> date:
+        """Today where the organisation is: its own timezone decides when a
+        notice has run out, as it decides when a month has ended."""
+        return self._now().astimezone(self._zone(organisation)).date()
 
     # --- members ---------------------------------------------------------------------
 
@@ -513,22 +633,31 @@ class OrganisationService:
 
     # --- join requests ---------------------------------------------------------------
 
-    async def requests(self, organisation_id: str, actor: str) -> list[OrgJoinRequest]:
+    async def requests(
+        self, organisation_id: str, actor: str
+    ) -> list[tuple[OrgJoinRequest, OrgRole]]:
+        """Each waiting request with the role approving it would grant — the
+        invite's, the same rule `decide_request` applies — so the decision is
+        made knowing it, not discovered after."""
         await self._member(organisation_id, actor, OrgRole.ADMIN)
-        return await self.store.list_requests(organisation_id)
+        requests = await self.store.list_requests(organisation_id)
+        return [(r, await self._requested_role(organisation_id, r)) for r in requests]
+
+    async def _requested_role(self, organisation_id: str, request: OrgJoinRequest) -> OrgRole:
+        invite = await self.store.get_invite(organisation_id, request.invite_id)
+        return invite.role if invite is not None else OrgRole.MEMBER
 
     async def decide_request(
         self, organisation_id: str, actor: str, request_id: str, decision: JoinDecision
-    ) -> OrgJoinRequest:
+    ) -> tuple[OrgJoinRequest, OrgRole]:
         await self._member(organisation_id, actor, OrgRole.ADMIN)
         decided = await self.store.decide_request(
             organisation_id, request_id, decision, actor, self._now()
         )
         if decided is None:
             raise JoinRequestNotFound()
+        role = await self._requested_role(organisation_id, decided)
         if decision is JoinDecision.APPROVED:
-            invite = await self.store.get_invite(organisation_id, decided.invite_id)
-            role = invite.role if invite is not None else OrgRole.MEMBER
             await self.store.open_membership(
                 OrgMembership(
                     organisation_id=organisation_id,
@@ -542,7 +671,7 @@ class OrganisationService:
         await self._audit(
             organisation_id, actor, f"request.{decision.value}", subject_user_id=decided.user_id
         )
-        return decided
+        return decided, role
 
     # --- projects ----------------------------------------------------------------------
 
@@ -638,6 +767,19 @@ class OrganisationService:
         membership = await self.store.membership(organisation_id, user_id)
         return membership.name if membership else None
 
+    async def labels(self, organisation_id: str) -> OrgLabels:
+        """The names of the organisation's projects and members, for a
+        response that names a row the reader is already being shown. Like
+        `member_name` it checks nothing itself — the route resolved the
+        caller before it had a row to name — and it is how a decider reads a
+        project's name without the admin-only project list."""
+        projects = await self.store.list_projects(organisation_id)
+        members = await self.store.list_members(organisation_id, active_only=False)
+        return OrgLabels(
+            projects={p.id: p.name for p in projects if p.id is not None},
+            members={m.user_id: m.name for m in members},
+        )
+
     async def unassign(
         self, organisation_id: str, actor: str, project_id: str, user_id: str
     ) -> None:
@@ -722,6 +864,71 @@ class OrganisationService:
             organisation=member.organisation.name,
         )
         return assignment
+
+    async def merge_project(
+        self, organisation_id: str, actor: str, source_id: str, target_id: str
+    ) -> ProjectMembers:
+        """Fold one of the organisation's projects into another (decision
+        28) — the way out of the duplicate a connect leaves when the
+        organisation already had a project for the same work. Admins.
+
+        Every row keyed by the source moves to the target with its stamp
+        untouched, so rule 4 holds without being re-decided: what the
+        member chose to share stays shared from that instant, and what was
+        private stays private, now under the surviving project on their
+        own timeline. Each active assignment folds into the target's,
+        which survives as it stands (decision 17's spirit) — the earlier
+        `shared_from`, and the source's contract only where the target's
+        assignment has none. Refused while an approved timesheet exists on
+        either side (409 PERIOD_APPROVED): a frozen figure must not gain
+        or lose rows silently; reopen first. A sheet submitted over the
+        source alone is dropped — its month no longer stands apart — and
+        is resubmitted over the merged project. The source document is
+        then deleted, and the audit log holds the whole act."""
+        await self._member(organisation_id, actor, OrgRole.ADMIN)
+        if source_id == target_id:
+            raise MergeIntoItself()
+        source = await self.store.get_project(organisation_id, source_id)
+        if source is None:
+            raise ProjectNotFound(source_id)
+        target = await self.store.get_project(organisation_id, target_id)
+        if target is None:
+            raise ProjectNotFound(target_id)
+        approved = [
+            sheet.month
+            for project_id in (source_id, target_id)
+            for sheet in await self.store.list_timesheets(organisation_id, project_id=project_id)
+            if sheet.status is TimesheetStatus.APPROVED
+        ]
+        if approved:
+            raise PeriodApproved(min(approved))
+        for a in await self.store.list_assignments(organisation_id, project_id=source_id):
+            existing = await self.store.assignment(organisation_id, target_id, a.user_id)
+            if existing is None:
+                folded = a.model_copy(update={"project_id": target_id})
+            else:
+                update: dict[str, Any] = {"shared_from": min(existing.shared_from, a.shared_from)}
+                if existing.contract is None and a.contract is not None:
+                    update["contract"] = a.contract
+                    update["contract_managed"] = a.contract_managed
+                folded = existing.model_copy(update=update)
+            await self.store.open_assignment(folded, keep_personal=False)
+        await self.store.delete_assignments(organisation_id, source_id)
+        moved = await self.store.repoint_project_rows(source_id, target_id)
+        dropped = await self.store.delete_unapproved_timesheets(organisation_id, source_id)
+        await self.store.delete_project(organisation_id, source_id)
+        await self._audit(
+            organisation_id,
+            actor,
+            "project.merged",
+            project_id=target_id,
+            source=source.name,
+            target=target.name,
+            moved=moved,
+            dropped_timesheets=dropped,
+        )
+        [with_members] = await self._with_members(organisation_id, [target])
+        return with_members
 
     # --- the record --------------------------------------------------------------------
 

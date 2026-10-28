@@ -1,10 +1,12 @@
-export { archiveCsvUrl, complianceCsvUrl, recordCsvUrl } from "./organisationApi";
+export { archiveCsvUrl, complianceCsvUrl, recordCsvUrl, visibleCsvUrl } from "./organisationApi";
 export {
 	organisationKeys,
 	useAbsenceRequests,
 	useArchive,
-	useAssignMember,
+	useAssignMembers,
 	useAuditLog,
+	useBeginClosing,
+	useCancelClosing,
 	useConnectProject,
 	useCreateInvite,
 	useCreateOrganisation,
@@ -12,6 +14,7 @@ export {
 	useDecideAbsenceRequest,
 	useDecideJoinRequest,
 	useDecideTimesheet,
+	useDeleteOrganisation,
 	useDeleteTeam,
 	useEnterTime,
 	useInvitations,
@@ -24,6 +27,7 @@ export {
 	useMembers,
 	useMembership,
 	useMemberships,
+	useMergeOrgProject,
 	useOrgProjects,
 	useOrgRecord,
 	useRemoveMember,

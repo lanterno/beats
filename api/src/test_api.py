@@ -4176,9 +4176,12 @@ class TestBeatsDirectAPI:
 
 class TestBeatEdit:
     """PUT /api/beats/ changes what the request carries — the project, the
-    start and the end — and the tags those times derive, and nothing else.
-    A note reaches a session only through an import, and no client sends one
-    back, so an edit that rebuilt the session from the request erased it."""
+    start, the end and, since #348, a note that is actually sent — and the
+    tags those times derive, and nothing else. The note's wire rule: a
+    string sets it, an empty string clears it, omitted keeps it as stored —
+    so the daemon, the companion and the extension, which send none, keep
+    meaning what they meant, and an edit that rebuilt the session from the
+    request still cannot erase one."""
 
     START = "2026-04-01T09:00:00Z"
     END = "2026-04-01T09:30:00Z"
@@ -4241,6 +4244,27 @@ class TestBeatEdit:
         stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
         assert stored["end"].startswith("2026-04-01T10:15:00")
         assert stored["note"] == "Call with the auditors"
+
+    def test_a_sent_note_sets_and_an_empty_one_clears(self, client, auth_headers):
+        """#348: the one free-text input writes through here."""
+        beat = self._session(client, auth_headers, note="From the import")
+
+        written = self._edit(client, auth_headers, beat, note="  Standup and review  ")
+        assert written.status_code == 200, written.text
+        assert written.json()["note"] == "Standup and review"
+
+        cleared = self._edit(client, auth_headers, beat, note="")
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["note"] is None
+
+    def test_a_null_note_keeps_the_stored_one(self, client, auth_headers):
+        """Explicit null is a client without the input, not a clearing."""
+        beat = self._session(client, auth_headers, note="Kept")
+
+        resp = self._edit(client, auth_headers, beat, note=None)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["note"] == "Kept"
 
     def test_moving_a_session_to_another_project_keeps_the_note(self, client, auth_headers):
         beat = self._session(client, auth_headers, note="Billable")

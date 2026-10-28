@@ -93,6 +93,25 @@ export async function updateOrganisation(
 	return toOrganisation(parseApiResponse(ApiOrganisationSchema, data));
 }
 
+/** Start the closing notice (#347); null takes the API's default, 60 days. */
+export async function beginClosing(
+	organisationId: string,
+	closesOn: string | null,
+): Promise<Organisation> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/close`, { closes_on: closesOn });
+	return toOrganisation(parseApiResponse(ApiOrganisationSchema, data));
+}
+
+export async function cancelClosing(organisationId: string): Promise<Organisation> {
+	const data = await del<unknown>(`${BASE}/${organisationId}/close`);
+	return toOrganisation(parseApiResponse(ApiOrganisationSchema, data));
+}
+
+/** Delete the organisation, once its notice has run out. */
+export async function deleteOrganisation(organisationId: string): Promise<void> {
+	await del<void>(`${BASE}/${organisationId}`);
+}
+
 export async function fetchMembers(organisationId: string): Promise<Member[]> {
 	const data = await get<unknown>(`${BASE}/${organisationId}/members`);
 	return parseApiResponse(ApiMemberListSchema, data).map(toMember);
@@ -194,6 +213,18 @@ export async function updateOrgProject(
 	return toOrgProject(parseApiResponse(ApiOrgProjectSchema, data));
 }
 
+/** Fold one of the organisation's projects into another (decision 28). */
+export async function mergeOrgProject(
+	organisationId: string,
+	projectId: string,
+	into: string,
+): Promise<OrgProject> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/projects/${projectId}/merge`, {
+		into,
+	});
+	return toOrgProject(parseApiResponse(ApiOrgProjectSchema, data));
+}
+
 export async function assignMember(
 	organisationId: string,
 	projectId: string,
@@ -265,6 +296,7 @@ export function archiveCsvUrl(organisationId: string): string {
 
 // --- Employment (docs/organisations.md, stages 3 and 4) -----------------------
 
+import type { ApiContract } from "@/shared/api";
 import {
 	ApiAbsenceRequestListSchema,
 	ApiAbsenceRequestSchema,
@@ -334,7 +366,7 @@ export async function setManagedContract(
 	organisationId: string,
 	projectId: string,
 	userId: string,
-	contract: unknown | null,
+	contract: ApiContract | null,
 	managed: boolean,
 ): Promise<ManagedContract> {
 	const data = await put<unknown>(
@@ -470,4 +502,10 @@ export function recordCsvUrl(organisationId: string, month: string): string {
 export function complianceCsvUrl(organisationId: string, month: string): string {
 	const params = new URLSearchParams({ month, tz: browserTimeZone() });
 	return `${BASE}/${organisationId}/compliance.csv?${params.toString()}`;
+}
+
+/** The caller's own visible month as CSV: what is seen of them, to take away. */
+export function visibleCsvUrl(organisationId: string, month: string): string {
+	const params = new URLSearchParams({ month, tz: browserTimeZone() });
+	return `${BASE}/${organisationId}/visible.csv?${params.toString()}`;
 }

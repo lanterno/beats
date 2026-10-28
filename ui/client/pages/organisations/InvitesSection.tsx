@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import type { Invite, InviteInput, OrgRole } from "@/entities/organisation";
 import {
 	inviteUrl,
+	ROLE_HINTS,
 	ROLE_LABELS,
 	useCreateInvite,
 	useInvites,
@@ -19,12 +20,13 @@ import {
 } from "@/entities/organisation";
 import { apiFieldErrors, describeError } from "@/shared/api";
 import { formatDate } from "@/shared/lib";
-import { Button, Dialog } from "@/shared/ui";
-import { Section } from "./Section";
-import { ERROR, FIELD, LABEL, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
+import { Button, Dialog, useConfirm } from "@/shared/ui";
+import { QueryBody, Section } from "./Section";
+import { ERROR, FIELD, LABEL, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
-/** The roles an invite gives: the owner role is given by an owner to a member, never by invite. */
-const INVITE_ROLES: OrgRole[] = ["member", "admin"];
+/** The roles an invite gives — every one but owner, which is given by an
+ * owner to a member, never by invite (403 OWNER_ROLE_RESERVED). */
+const INVITE_ROLES: OrgRole[] = ["member", "viewer", "manager", "admin"];
 
 async function copyLink(token: string) {
 	try {
@@ -68,12 +70,20 @@ function NewInviteDialog({
 			const invite = await create.mutateAsync(input);
 			setCreated(invite);
 		} catch (err) {
+			// Only email and expires_in_days render under their fields; an
+			// error on anything else folds into the general line rather than
+			// being set under a key nothing shows.
 			const fields = apiFieldErrors(err);
-			setErrors(
-				Object.keys(fields).length > 0
-					? fields
-					: { general: describeError(err, "The invite could not be made.") },
-			);
+			const shown: Record<string, string> = {};
+			const stray: string[] = [];
+			for (const [key, message] of Object.entries(fields)) {
+				if (key === "email" || key === "expires_in_days") shown[key] = message;
+				else stray.push(message);
+			}
+			if (stray.length > 0 || Object.keys(shown).length === 0) {
+				shown.general = stray.join(" ") || describeError(err, "The invite could not be made.");
+			}
+			setErrors(shown);
 		}
 	};
 
@@ -165,6 +175,7 @@ function NewInviteDialog({
 							id={`${id}-role`}
 							value={role}
 							onChange={(e) => setRole(e.target.value as OrgRole)}
+							aria-describedby={`${id}-role-hint`}
 							className={FIELD}
 						>
 							{INVITE_ROLES.map((r) => (
@@ -173,6 +184,9 @@ function NewInviteDialog({
 								</option>
 							))}
 						</select>
+						<p id={`${id}-role-hint`} className="mt-1 text-xs text-muted-foreground">
+							{ROLE_HINTS[role]}
+						</p>
 					</div>
 					<div>
 						<label htmlFor={`${id}-days`} className={LABEL}>
@@ -196,19 +210,24 @@ function NewInviteDialog({
 						)}
 					</div>
 				</div>
-				{!email.trim() && (
-					<label className="flex items-center gap-2 text-[13px] font-medium text-foreground">
-						<input
-							type="checkbox"
-							checked={requiresApproval}
-							onChange={(e) => setRequiresApproval(e.target.checked)}
-							className="accent-accent"
-						/>
-						Needs approval — whoever opens the link asks to join, and an admin decides
-					</label>
-				)}
+				<label
+					className={`flex items-center gap-2 text-[13px] font-medium ${
+						email.trim() ? "text-muted-foreground" : "text-foreground"
+					}`}
+				>
+					<input
+						type="checkbox"
+						checked={!email.trim() && requiresApproval}
+						onChange={(e) => setRequiresApproval(e.target.checked)}
+						disabled={Boolean(email.trim())}
+						className="accent-accent"
+					/>
+					{email.trim()
+						? "An addressed invite needs no approval: only that account can take it."
+						: "Needs approval — whoever opens the link asks to join, and an admin decides"}
+				</label>
 				{errors.general && (
-					<p role="alert" className="text-sm text-destructive-ink">
+					<p role="alert" className={ERROR}>
 						{errors.general}
 					</p>
 				)}
@@ -235,12 +254,21 @@ export function InvitesSection({ organisationId }: { organisationId: string }) {
 	const invites = useInvites(organisationId);
 	const revoke = useRevokeInvite(organisationId);
 	const [creating, setCreating] = useState(false);
+	const { confirm, confirmDialog } = useConfirm();
 
-	const revokeInvite = (invite: Invite) =>
+	const revokeInvite = async (invite: Invite) => {
+		const ok = await confirm({
+			title: `Revoke this invite${invite.email ? ` to ${invite.email}` : " link"}?`,
+			detail: "It stops working at once; anyone holding it can no longer join.",
+			confirmLabel: "Revoke",
+			tone: "danger",
+		});
+		if (!ok) return;
 		revoke.mutate(invite.id, {
 			onSuccess: () => toast.success("Invite revoked"),
 			onError: (err) => toast.error(describeError(err, "The invite could not be revoked.")),
 		});
+	};
 
 	return (
 		<Section
@@ -253,45 +281,48 @@ export function InvitesSection({ organisationId }: { organisationId: string }) {
 				</button>
 			}
 		>
-			{invites.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(invites.error, "The invites could not be read.")}
-				</p>
-			) : !invites.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : invites.data.length === 0 ? (
-				<p className={`${LEAD} py-3`}>No open invites.</p>
-			) : (
-				<ul className={LIST}>
-					{invites.data.map((invite) => (
-						<li key={invite.id} className={ROW}>
-							<div className="min-w-0 flex-1">
-								<p className="font-bold text-foreground truncate">{invite.email ?? "Link"}</p>
-								<p className="text-muted-foreground truncate">
-									{ROLE_LABELS[invite.role]}
-									{invite.requiresApproval && " · needs approval"} · expires{" "}
-									{formatDate(invite.expiresAt)}
-								</p>
-							</div>
-							<button type="button" onClick={() => void copyLink(invite.token)} className={LINKISH}>
-								Copy link
-							</button>
-							<button
-								type="button"
-								onClick={() => revokeInvite(invite)}
-								disabled={revoke.isPending}
-								aria-label={`Revoke the invite ${invite.email ? `to ${invite.email}` : "link"}`}
-								className={REMOVE}
-							>
-								<X className="w-3.5 h-3.5" aria-hidden="true" />
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
+			<QueryBody
+				query={invites}
+				errorText="The invites could not be read."
+				empty="No open invites."
+			>
+				{(rows) => (
+					<ul className={LIST}>
+						{rows.map((invite) => (
+							<li key={invite.id} className={ROW}>
+								<div className="min-w-0 flex-1">
+									<p className="font-bold text-foreground truncate">{invite.email ?? "Link"}</p>
+									<p className="text-muted-foreground truncate">
+										{ROLE_LABELS[invite.role]}
+										{invite.requiresApproval && " · needs approval"} · expires{" "}
+										{formatDate(invite.expiresAt)}
+									</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => void copyLink(invite.token)}
+									className={LINKISH}
+								>
+									Copy link
+								</button>
+								<button
+									type="button"
+									onClick={() => revokeInvite(invite)}
+									disabled={revoke.isPending}
+									aria-label={`Revoke the invite ${invite.email ? `to ${invite.email}` : "link"}`}
+									className={REMOVE}
+								>
+									<X className="w-3.5 h-3.5" aria-hidden="true" />
+								</button>
+							</li>
+						))}
+					</ul>
+				)}
+			</QueryBody>
 			{creating && (
 				<NewInviteDialog organisationId={organisationId} onClose={() => setCreating(false)} />
 			)}
+			{confirmDialog}
 		</Section>
 	);
 }

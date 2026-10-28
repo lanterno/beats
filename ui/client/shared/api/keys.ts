@@ -14,7 +14,9 @@ export const billingRootKey = ["billing"] as const;
 export const clientsRootKey = ["clients"] as const;
 
 /**
- * Every organisation read. A project write invalidates it too, since
- * connecting a project changes who owns one (docs/organisations.md).
+ * Every organisation read. A write to the timeline invalidates it too: an
+ * entry edited, deleted or logged, and a timer stopped, all move what the
+ * organisation reads of its own projects — the record, "What Acme can see"
+ * and the archive are assembled from the same beats (docs/organisations.md).
  */
 export const organisationsRootKey = ["organisations"] as const;

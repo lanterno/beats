@@ -1,10 +1,12 @@
 /**
  * OrganisationMark — how an organisation's project is marked wherever
  * projects are listed (docs/organisations.md, stage 2): the logo if there
- * is one, else a lettered tile in the muted wash, and the name. Small by
- * default, for a row; `size="md"` for a header.
+ * is one — falling back to the lettered tile when its URL no longer
+ * answers, rather than a broken image on every project list — and the
+ * name. Small by default, for a row; `size="md"` for a header.
  */
 
+import { useState } from "react";
 import { cn } from "@/shared/lib";
 
 export interface OrganisationMarkProps {
@@ -25,6 +27,7 @@ export function OrganisationMark({
 }: OrganisationMarkProps) {
 	const tile = size === "md" ? "w-6 h-6 text-[11px] rounded-lg" : "w-4 h-4 text-[9px] rounded-md";
 	const initial = name.trim().charAt(0).toUpperCase() || "?";
+	const [logoBroken, setLogoBroken] = useState(false);
 	return (
 		<span
 			className={cn(
@@ -33,12 +36,13 @@ export function OrganisationMark({
 				"text-muted-foreground",
 				className,
 			)}
-			title={tileOnly ? name : undefined}
+			title={name}
 		>
-			{logoUrl ? (
+			{logoUrl && !logoBroken ? (
 				<img
 					src={logoUrl}
 					alt=""
+					onError={() => setLogoBroken(true)}
 					className={cn(tile, "shrink-0 object-cover bg-secondary")}
 					loading="lazy"
 				/>

@@ -32,11 +32,13 @@ import { Link } from "react-router";
 import { toast } from "sonner";
 import {
 	monthOf,
+	monthTitle,
 	nextMonth,
 	prevMonth,
 	useBillableOverrides,
 	useBillingBudgets,
 	useBillingMonth,
+	useOpenMonth,
 	useProjectBillings,
 	withPastConsent,
 } from "@/entities/billing";
@@ -56,7 +58,6 @@ import { ClientPanel } from "./ClientPanel";
 import { ClientsOverview } from "./ClientsOverview";
 import { MonthTotals } from "./MonthTotals";
 import { describeMonth, monthName } from "./summary";
-import { useOpenMonth } from "./useOpenMonth";
 
 type Editor = { mode: "new" } | { mode: "edit"; client: Client };
 
@@ -65,12 +66,6 @@ const LINKISH =
 /** The ‹ ›, now inside the page bar's card, where a wash reads. */
 const MONTH_NAV =
 	"grid place-items-center w-8 h-8 rounded-full text-foreground hover:bg-secondary transition-colors disabled:opacity-40 disabled:pointer-events-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
-
-/** "October 2026". */
-function monthTitle(month: string): string {
-	const date = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1, 12);
-	return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
 
 export default function Clients() {
 	const today = readToday();

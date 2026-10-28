@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
 import type { FlowWindow, FlowWindowSummary, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
-import { billingRootKey } from "@/shared/api";
+import { billingRootKey, organisationsRootKey } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -71,11 +71,14 @@ export function useUpdateSession() {
 			startTime,
 			endTime,
 			projectId,
+			note,
 		}: {
 			session: Session;
 			startTime: string;
 			endTime: string;
 			projectId: string;
+			/** The note as edited; left out, the stored one stays (#348). */
+			note?: string;
 		}) => {
 			const duration = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000 / 60;
 			const updatedSession: Session = {
@@ -84,8 +87,14 @@ export function useUpdateSession() {
 				endTime,
 				projectId,
 				duration,
+				note: note !== undefined ? note.trim() || undefined : session.note,
 			};
-			await updateBeat(toApiBeat(updatedSession));
+			// The wire rule: a string sets, "" clears, null keeps — so an edit
+			// that never offered the input sends the stored note back as is.
+			await updateBeat({
+				...toApiBeat(updatedSession),
+				note: note !== undefined ? note.trim() : (session.note ?? null),
+			});
 			return updatedSession;
 		},
 		onSuccess: (_, variables) => {
@@ -99,6 +108,8 @@ export function useUpdateSession() {
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 			// An entry's times and project are what the month's billing is made of.
 			queryClient.invalidateQueries({ queryKey: billingRootKey });
+			// And, on an organisation's project, what the organisation reads.
+			queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 		},
 	});
 }
@@ -117,6 +128,7 @@ export function useDeleteSession() {
 			queryClient.invalidateQueries({ queryKey: sessionKeys.all });
 			queryClient.invalidateQueries({ queryKey: projectKeys.all });
 			queryClient.invalidateQueries({ queryKey: billingRootKey });
+			queryClient.invalidateQueries({ queryKey: organisationsRootKey });
 		},
 	});
 }

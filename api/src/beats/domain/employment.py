@@ -21,7 +21,8 @@ membership resolution, same audit, same record reads — and adds:
 - **Admin-entered time**, stamped and marked with who entered it, on the
   member's own timeline.
 - **The compliance record**: per person, per day — first start, last end,
-  breaks, total — as CSV.
+  breaks, total, and the warnings a working-time authority would raise
+  (a day over 10 hours, rest under 11) — as CSV, derived on every read.
 - **Teams and scope** (stage 4): a manager decides and reads for the
   members of the teams they are in; a viewer reads everything and changes
   nothing; both through the same reads the record already has.
@@ -127,12 +128,6 @@ class EmploymentService(OrganisationService):
         if assignment is None or not assignment.active:
             raise NotAssigned()
         return assignment
-
-    def _org_zone(self, member: Member) -> ZoneInfo:
-        try:
-            return ZoneInfo(member.organisation.timezone)
-        except Exception:  # noqa: BLE001 - a stored zone the tz database dropped
-            return ZoneInfo("UTC")
 
     # --- teams (stage 4) ------------------------------------------------------
 
@@ -268,7 +263,7 @@ class EmploymentService(OrganisationService):
         assignment = await self._active_assignment(organisation_id, project_id, user_id)
         if not assignment.contract_managed or assignment.contract is None:
             raise NotManaged()
-        today = local_date(self._now(), self._org_zone(member))  # the organisation's today
+        today = local_date(self._now(), self._zone(member.organisation))  # the organisation's today
         if not assignment.contract.starts_on <= adjustment.date <= today:
             from beats.domain.exceptions import AdjustmentOutsideBalance
 
@@ -460,7 +455,7 @@ class EmploymentService(OrganisationService):
         member = await self._member(organisation_id, user_id)
         await self._active_assignment(organisation_id, project_id, user_id)
         month = month_of(month)
-        today = local_date(self._now(), self._org_zone(member))
+        today = local_date(self._now(), self._zone(member.organisation))
         if next_month(month) > today:
             raise MonthNotEnded()
         existing = await self.store.find_timesheet(project_id, user_id, month)
@@ -592,7 +587,7 @@ class EmploymentService(OrganisationService):
         expectation over the month and the balance at its close. The balance
         follows decision 16: withheld (None) while any entry or absence on
         the project is not the organisation's."""
-        tz = self._org_zone(member)
+        tz = self._zone(member.organisation)
         organisation_id = member.organisation.id or ""
         first, last = sheet.month, month_end(sheet.month)
         start, end = utc_range(first, last, tz)
@@ -651,7 +646,7 @@ class EmploymentService(OrganisationService):
     async def _refuse_locked_instant(
         self, project_id: str, user_id: str, instant: datetime, member: Member
     ) -> None:
-        day = local_date(instant, self._org_zone(member))
+        day = local_date(instant, self._zone(member.organisation))
         await self._refuse_locked_day(project_id, user_id, day, member)
 
     # --- the audit log, read (stage 4) ----------------------------------------------
@@ -727,19 +722,86 @@ def record_csv(record) -> str:
     return out.getvalue()
 
 
+# The compliance warnings' thresholds (docs/organisations.md, decision 26).
+# The 11 hours' rest between working days is Directive 2003/88/EC art. 3,
+# EU-wide; the 10-hour daily ceiling is Germany's §3 ArbZG, the strictest
+# concrete one among the markets this sells to — and still current law: the
+# June 2026 reform draft keeps the daily ceiling and moves to a weekly
+# maximum only where a collective agreement says so. A warning is a line of
+# text derived on every read, never a stored flag: an edit that repairs the
+# day repairs the record.
+MAX_DAILY_HOURS = 10.0
+MIN_REST_HOURS = 11.0
+
+_EPSILON = 1e-9  # exactly 10 h worked, or exactly 11 h rest, is within the law
+
+
+def compliance_warnings(record) -> dict[tuple[str, date], list[str]]:
+    """Per member and day, what a working-time authority would flag.
+
+    The law binds the employer per person, not per project: a day split
+    over two projects is one working day, and the night between two
+    projects' entries is one rest period. So totals and rests are taken
+    over every entry the organisation holds for the member, and the same
+    warnings attach to each of that day's rows. Rest is judged against the
+    nearest earlier day with entries in the month read — the first such day
+    gets no rest warning, since what came before the rows is not in them.
+    """
+    from collections import defaultdict
+
+    by_member: dict[str, dict[date, list]] = defaultdict(lambda: defaultdict(list))
+    for project in record.projects:
+        for member in project.members:
+            for e in member.entries:
+                by_member[member.user_id][e.day].append(e)
+
+    warnings: dict[tuple[str, date], list[str]] = {}
+    for user_id, days in by_member.items():
+        previous_end: datetime | None = None
+        previous_day: date | None = None
+        for day in sorted(days):
+            entries = sorted(days[day], key=lambda e: e.start)
+            found: list[str] = []
+            total = sum(e.hours for e in entries)
+            if total > MAX_DAILY_HOURS + _EPSILON:
+                found.append(f"day over {MAX_DAILY_HOURS:g} h ({total:.2f} h)")
+            if previous_end is not None:
+                rest = (entries[0].start - previous_end).total_seconds() / 3600
+                if rest < MIN_REST_HOURS - _EPSILON:
+                    found.append(
+                        f"rest under {MIN_REST_HOURS:g} h ({rest:.2f} h after {previous_day})"
+                    )
+            if found:
+                warnings[(user_id, day)] = found
+            last_end = max(e.end for e in entries)
+            previous_end = last_end if previous_end is None else max(previous_end, last_end)
+            previous_day = day
+    return warnings
+
+
 def compliance_csv(record) -> str:
     """The compliance record as RFC 4180 CSV (docs/organisations.md, stage
     3): per member, per project, per day — first start, last end, the breaks
-    between entries, and the total — the shape a working-time authority
-    asks for. Rest-period and maximum-hours warnings are later work."""
+    between entries, the total, and the warnings a working-time authority
+    would raise (`compliance_warnings`), derived from the same rows."""
     import csv
     import io
     from collections import defaultdict
 
+    warnings = compliance_warnings(record)
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(
-        ["member", "project", "day", "first_start", "last_end", "break_minutes", "worked_hours"]
+        [
+            "member",
+            "project",
+            "day",
+            "first_start",
+            "last_end",
+            "break_minutes",
+            "worked_hours",
+            "warnings",
+        ]
     )
     for project in record.projects:
         for member in project.members:
@@ -764,6 +826,7 @@ def compliance_csv(record) -> str:
                         entries[-1].end.isoformat(),
                         f"{breaks:.0f}",
                         f"{sum(e.hours for e in entries):.2f}",
+                        "; ".join(warnings.get((member.user_id, day), [])),
                     ]
                 )
     return out.getvalue()

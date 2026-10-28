@@ -106,7 +106,12 @@ function toApiContractTerm(term: ContractTerm): ApiContractTerm {
 	};
 }
 
-function toContract(api: ApiContract): Contract {
+/**
+ * Wire → domain. Exported for the one caller outside a project read: the
+ * employer's managed-contract dialog, which holds an assignment's contract
+ * from the organisation's route rather than from a project.
+ */
+export function toContract(api: ApiContract): Contract {
 	return {
 		terms: api.terms.map(toContractTerm),
 		holidayCountry: api.holiday_country ?? undefined,

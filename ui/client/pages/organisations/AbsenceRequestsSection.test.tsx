@@ -1,6 +1,8 @@
 /**
  * A pending day off shows who, where, when, and the note — addressed to
- * the decider, never to the record — and the two ways to answer it.
+ * the decider, never to the record — and the two ways to answer it. The
+ * names are the row's own, which is what lets a manager read it: the
+ * organisation's project list is an admin's.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -21,7 +23,9 @@ vi.mock("@/entities/organisation", async () => {
 				{
 					id: "r1",
 					projectId: "p1",
+					projectName: "Backend",
 					userId: "u1",
+					memberName: "Nadia",
 					date: "2026-11-03",
 					type: "vacation",
 					halfDay: true,
@@ -32,22 +36,13 @@ vi.mock("@/entities/organisation", async () => {
 			],
 			error: null,
 		}),
-		useMembers: () => ({
-			data: [
-				{
-					userId: "u1",
-					name: "Nadia",
-					email: "n@example.com",
-					role: "member",
-					joinedAt: "2026-01-01T00:00:00Z",
-				},
-			],
-			error: null,
-		}),
-		useOrgProjects: () => ({
-			data: [{ id: "p1", name: "Backend", archived: false, kind: "day_job", members: [] }],
-			error: null,
-		}),
+		// Neither list is read any more: a decider may not have them.
+		useMembers: () => {
+			throw new Error("the members are not read here");
+		},
+		useOrgProjects: () => {
+			throw new Error("the projects are not read here");
+		},
 		useDecideAbsenceRequest: idle,
 	};
 });
@@ -66,7 +61,8 @@ describe("AbsenceRequestsSection", () => {
 		expect(screen.getByText(/Backend/)).toBeInTheDocument();
 		expect(screen.getByText(/half day/)).toBeInTheDocument();
 		expect(screen.getByText(/Dentist in the morning/)).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+		// The accessible name carries the whole request, so rows tell apart.
+		expect(screen.getByRole("button", { name: /^Approve Nadia · Backend/ })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Decline Nadia · Backend/ })).toBeInTheDocument();
 	});
 });

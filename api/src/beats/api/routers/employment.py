@@ -42,6 +42,7 @@ from beats.domain.models import (
     TimesheetEvent,
     TimesheetStatus,
 )
+from beats.domain.organisations import OrgLabels
 
 router = APIRouter(
     prefix="/api/organisations",
@@ -95,9 +96,16 @@ class AbsenceRequestBody(BaseModel):
 
 
 class AbsenceRequestResponse(BaseModel):
+    """A request as its decider and its asker read it. The names come with
+    it: a decider reads a project's name here, having no right to the
+    organisation's project list, and a member who has since left is still
+    named rather than left as an id."""
+
     id: str
     project_id: str
+    project_name: str | None
     user_id: str
+    member_name: str | None
     date: date
     type: AbsenceType
     half_day: bool
@@ -106,6 +114,7 @@ class AbsenceRequestResponse(BaseModel):
     requested_at: datetime
     decided_at: datetime | None
     decided_by: str | None
+    decided_by_name: str | None
     comment: str | None
 
 
@@ -121,16 +130,20 @@ class SubmitTimesheetBody(BaseModel):
 
 class TimesheetResponse(BaseModel):
     """A timesheet as both sides read it. `frozen` is set only while
-    approved: the figures as approval saw them, which the lock then keeps."""
+    approved: the figures as approval saw them, which the lock then keeps.
+    The names come with it, for the reasons `AbsenceRequestResponse` gives."""
 
     id: str
     project_id: str
+    project_name: str | None
     user_id: str
+    member_name: str | None
     month: date
     status: TimesheetStatus
     submitted_at: datetime
     decided_at: datetime | None
     decided_by: str | None
+    decided_by_name: str | None
     comment: str | None
     frozen: FrozenMonth | None
     history: list[TimesheetEvent]
@@ -153,12 +166,22 @@ def _team(team: OrgTeam) -> TeamResponse:
     return TeamResponse(id=team.id or "", name=team.name, member_ids=team.member_ids)
 
 
-def _request(request: OrgAbsenceRequest) -> AbsenceRequestResponse:
-    return AbsenceRequestResponse(**request.model_dump(exclude={"organisation_id"}))
+def _request(request: OrgAbsenceRequest, labels: OrgLabels) -> AbsenceRequestResponse:
+    return AbsenceRequestResponse(
+        **request.model_dump(exclude={"organisation_id"}),
+        project_name=labels.projects.get(request.project_id),
+        member_name=labels.members.get(request.user_id),
+        decided_by_name=labels.members.get(request.decided_by) if request.decided_by else None,
+    )
 
 
-def _sheet(sheet: OrgTimesheet) -> TimesheetResponse:
-    return TimesheetResponse(**sheet.model_dump(exclude={"organisation_id"}))
+def _sheet(sheet: OrgTimesheet, labels: OrgLabels) -> TimesheetResponse:
+    return TimesheetResponse(
+        **sheet.model_dump(exclude={"organisation_id"}),
+        project_name=labels.projects.get(sheet.project_id),
+        member_name=labels.members.get(sheet.user_id),
+        decided_by_name=labels.members.get(sheet.decided_by) if sheet.decided_by else None,
+    )
 
 
 # --- teams (stage 4) ----------------------------------------------------------
@@ -351,7 +374,7 @@ async def request_absence(
         body.half_day,
         body.note,
     )
-    return _request(request)
+    return _request(request, await service.labels(organisation_id))
 
 
 @router.get("/{organisation_id}/absence-requests", response_model=list[AbsenceRequestResponse])
@@ -364,7 +387,8 @@ async def list_absence_requests(
     """A member's own requests; a decider's whole scope — an owner's or
     admin's everyone, a manager's their teams."""
     requests = await service.absence_requests(organisation_id, user_id, pending_only=pending)
-    return [_request(r) for r in requests]
+    labels = await service.labels(organisation_id)
+    return [_request(r, labels) for r in requests]
 
 
 @router.post(
@@ -388,7 +412,7 @@ async def decide_absence_request(
         approve=body.approve,
         comment=body.comment,
     )
-    return _request(decided)
+    return _request(decided, await service.labels(organisation_id))
 
 
 @router.delete(
@@ -421,7 +445,7 @@ async def submit_timesheet(
     sheet sent back or reopened resubmits the same way; an approved one is
     refused until reopened (409 TIMESHEET_APPROVED)."""
     sheet = await service.submit_timesheet(organisation_id, user_id, body.project_id, body.month)
-    return _sheet(sheet)
+    return _sheet(sheet, await service.labels(organisation_id))
 
 
 @router.get("/{organisation_id}/timesheets", response_model=list[TimesheetResponse])
@@ -433,7 +457,8 @@ async def list_timesheets(
 ):
     """A member's own sheets; a decider's or viewer's whole scope."""
     sheets = await service.timesheets(organisation_id, user_id, month=month)
-    return [_sheet(s) for s in sheets]
+    labels = await service.labels(organisation_id)
+    return [_sheet(s, labels) for s in sheets]
 
 
 @router.post("/{organisation_id}/timesheets/{sheet_id}/decision", response_model=TimesheetResponse)
@@ -448,11 +473,10 @@ async def decide_timesheet(
     write dated inside it — or send the sheet back with a comment. Approval
     waits while a stamped timer still runs in the month (409
     PERIOD_APPROVED names it). Deciders."""
-    return _sheet(
-        await service.decide_timesheet(
-            organisation_id, user_id, sheet_id, approve=body.approve, comment=body.comment
-        )
+    decided = await service.decide_timesheet(
+        organisation_id, user_id, sheet_id, approve=body.approve, comment=body.comment
     )
+    return _sheet(decided, await service.labels(organisation_id))
 
 
 @router.post("/{organisation_id}/timesheets/{sheet_id}/reopen", response_model=TimesheetResponse)
@@ -466,7 +490,8 @@ async def reopen_timesheet(
     """Lift an approved month's lock, with a reason, recorded in the sheet's
     history and the audit log. The frozen figures go with it; re-approval
     freezes afresh. Deciders."""
-    return _sheet(await service.reopen_timesheet(organisation_id, user_id, sheet_id, body.reason))
+    reopened = await service.reopen_timesheet(organisation_id, user_id, sheet_id, body.reason)
+    return _sheet(reopened, await service.labels(organisation_id))
 
 
 # --- the audit log and the report CSVs (stage 4) -------------------------------------
@@ -521,6 +546,34 @@ async def read_record_csv(
 
 
 @router.get(
+    "/{organisation_id}/visible.csv",
+    response_class=Response,
+    responses={
+        200: {
+            "description": "What the organisation sees of the caller, as CSV.",
+            "content": {"text/csv": {}},
+        }
+    },
+)
+async def read_visible_csv(
+    organisation_id: str,
+    month: MonthQuery,
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+    tz: TimezoneDep,
+) -> Response:
+    """The month the organisation holds about the caller, as the same CSV its
+    record exports — the person can always take away exactly what is seen of
+    them, not just read it. Members and former members, like `/visible`."""
+    record = await service.visible(organisation_id, user_id, month, tz)
+    return Response(
+        content=record_csv(record),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment"},
+    )
+
+
+@router.get(
     "/{organisation_id}/compliance.csv",
     response_class=Response,
     responses={
@@ -535,8 +588,9 @@ async def read_compliance_csv(
     tz: TimezoneDep,
 ) -> Response:
     """The compliance record (docs/organisations.md, stage 3): per member,
-    per day — first start, last end, breaks, total — the shape a
-    working-time authority asks for. Whoever reads the record."""
+    per day — first start, last end, breaks, total, and the warnings a
+    working-time authority would raise (a day over 10 hours, rest under 11,
+    taken over every project the member is on). Whoever reads the record."""
     record = await service.scoped_record(organisation_id, user_id, month, tz)
     return Response(
         content=compliance_csv(record),

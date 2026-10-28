@@ -8,9 +8,10 @@
 
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { describeError } from "@/shared/api";
 import { cn } from "@/shared/lib";
 import { Panel } from "@/shared/ui";
-import { HEADING_ICON, LEAD, PANEL_HEADING } from "./styles";
+import { HEADING_ICON, LEAD, LINKISH, PANEL_HEADING } from "./styles";
 
 export interface SectionProps {
 	/** The region's accessible name, and by default the heading's words. */
@@ -53,4 +54,50 @@ export function Section({
 			</Panel>
 		</section>
 	);
+}
+
+/**
+ * QueryBody — the one way a section's list reads its query: the failure in
+ * the API's words with the read offered again, the loading line, the empty
+ * line, else the rows. It existed as a copied ternary in seven sections,
+ * none of which offered a retry.
+ */
+export function QueryBody<T>({
+	query,
+	errorText,
+	empty,
+	isEmpty = (data) => Array.isArray(data) && data.length === 0,
+	children,
+}: {
+	query: {
+		data: T | undefined;
+		error: unknown;
+		refetch: () => unknown;
+		isFetching: boolean;
+	};
+	/** What a failure is called here, before the API's own words. */
+	errorText: string;
+	/** The line shown when `isEmpty` reads the data as nothing. */
+	empty: ReactNode;
+	isEmpty?: (data: T) => boolean;
+	children: (data: T) => ReactNode;
+}) {
+	if (query.error) {
+		return (
+			<p className={`${LEAD} py-3`} role="alert">
+				{describeError(query.error, errorText)}{" "}
+				<button
+					type="button"
+					onClick={() => void query.refetch()}
+					disabled={query.isFetching}
+					className={LINKISH}
+				>
+					{query.isFetching ? "Trying…" : "Try again"}
+				</button>
+			</p>
+		);
+	}
+	if (query.data === undefined) return <p className={`${LEAD} py-3`}>Loading…</p>;
+	if (isEmpty(query.data)) return <p className={`${LEAD} py-3`}>{empty}</p>;
+	return <>{children(query.data)}</>;
 }

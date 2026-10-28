@@ -1,7 +1,7 @@
 // A billing budget in words, and its state against the clock
 
 // The Clients page's month navigator
-export { isFutureMonth, monthOf, nextMonth, prevMonth } from "./billingMonth";
+export { isFutureMonth, monthOf, monthTitle, nextMonth, prevMonth } from "./billingMonth";
 export { type BillingBudgetWords, billingBudgetState, describeBillingBudget } from "./budget";
 // Mappers
 export {
@@ -43,5 +43,6 @@ export type {
 	ReportLinkInput,
 	UnattachedHours,
 } from "./types";
+export { useOpenMonth } from "./useOpenMonth";
 // Ask before a write that changes a month already over
 export { withPastConsent } from "./withPastConsent";

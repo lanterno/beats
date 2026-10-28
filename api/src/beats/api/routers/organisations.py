@@ -37,6 +37,7 @@ from beats.api.schemas import (
     ArchiveProjectResponse,
     ArchiveResponse,
     AssignmentResponse,
+    CloseOrganisationRequest,
     ConnectProjectRequest,
     DecideRequest,
     InvitationResponse,
@@ -49,6 +50,7 @@ from beats.api.schemas import (
     MemberRecordResponse,
     MemberResponse,
     MembershipResponse,
+    MergeProjectRequest,
     OrganisationCardResponse,
     OrganisationResponse,
     OrgProjectRequest,
@@ -91,6 +93,7 @@ def _card(organisation: Organisation) -> OrganisationCardResponse:
 def _membership(member: Member) -> MembershipResponse:
     m = member.membership
     return MembershipResponse(
+        user_id=m.user_id,
         organisation=_organisation(member.organisation),
         role=m.role,
         joined_at=m.joined_at,
@@ -270,6 +273,41 @@ async def update_organisation(
     return _organisation(await service.update(organisation_id, user_id, fields))
 
 
+@router.post("/{organisation_id}/close", response_model=OrganisationResponse)
+async def begin_closing(
+    organisation_id: str,
+    request: CloseOrganisationRequest,
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+):
+    """Start the organisation's notice (#347): it closes on the day given —
+    at least 30 days out, 60 by default — shown to every member in-app so
+    they export on their own clock. Tracking carries on until the day.
+    Owners."""
+    return _organisation(await service.begin_closing(organisation_id, user_id, request.closes_on))
+
+
+@router.delete("/{organisation_id}/close", response_model=OrganisationResponse)
+async def cancel_closing(
+    organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
+):
+    """Call the closing off. Owners."""
+    return _organisation(await service.cancel_closing(organisation_id, user_id))
+
+
+@router.delete("/{organisation_id}", status_code=http.HTTPStatus.NO_CONTENT)
+async def delete_organisation(
+    organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
+):
+    """Delete the organisation, once its notice has run out (#347). Every
+    member is handed back a personal copy of each project they hold rows or
+    a contract on — their rows repointed and unstamped, theirs as ever —
+    and everything that was the organisation's goes, its working-time
+    record with it: the final record.csv and compliance.csv were the notice
+    period's job. Owners; 409 before `closes_on`."""
+    await service.delete_organisation(organisation_id, user_id)
+
+
 @router.get("/{organisation_id}/members", response_model=list[MemberResponse])
 async def list_members(
     organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
@@ -367,12 +405,14 @@ async def revoke_invite(
 async def list_requests(
     organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
 ):
-    """The join requests waiting on an invite link with an approval step. Admins."""
+    """The join requests waiting on an invite link with an approval step,
+    each with the role approving it would grant. Admins."""
     return [
         JoinRequestResponse(
-            **r.model_dump(include={"id", "user_id", "name", "email", "requested_at"})
+            **r.model_dump(include={"id", "user_id", "name", "email", "requested_at"}),
+            role=role,
         )
-        for r in await service.requests(organisation_id, user_id)
+        for r, role in await service.requests(organisation_id, user_id)
     ]
 
 
@@ -385,9 +425,12 @@ async def decide_request(
     service: OrganisationServiceDep,
 ):
     """Approve or decline a join request; approving makes the member. Admins."""
-    decided = await service.decide_request(organisation_id, user_id, request_id, request.decision)
+    decided, role = await service.decide_request(
+        organisation_id, user_id, request_id, request.decision
+    )
     return JoinRequestResponse(
-        **decided.model_dump(include={"id", "user_id", "name", "email", "requested_at"})
+        **decided.model_dump(include={"id", "user_id", "name", "email", "requested_at"}),
+        role=role,
     )
 
 
@@ -434,6 +477,26 @@ async def update_project(
     out keeps its value. Admins."""
     sent: dict[str, Any] = {k: getattr(request, k) for k in request.model_fields_set}
     return _project(await service.update_project(organisation_id, user_id, project_id, sent))
+
+
+@router.post(
+    "/{organisation_id}/projects/{project_id}/merge",
+    response_model=OrgProjectResponse,
+)
+async def merge_project(
+    organisation_id: str,
+    project_id: str,
+    request: MergeProjectRequest,
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+):
+    """Fold this project into another of the organisation's — the way out
+    of the duplicate a connect leaves when the organisation already had a
+    project for the same work. Every row moves with its stamp untouched,
+    assignments fold (the earlier shared-from; the target's contract
+    stands), and the merged project is deleted. Refused while an approved
+    timesheet exists on either side (409 PERIOD_APPROVED). Admins."""
+    return _project(await service.merge_project(organisation_id, user_id, project_id, request.into))
 
 
 @router.put(

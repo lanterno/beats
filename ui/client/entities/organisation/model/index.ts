@@ -29,9 +29,16 @@ export {
 	ROLE_HINTS,
 	ROLE_LABELS,
 	readsRecord,
-	roleAtLeast,
 	WEEK_START_LABELS,
 } from "./roles";
+export {
+	endedMonths,
+	frozenText,
+	organisationToday,
+	sheetMonthTitle,
+	TIMESHEET_STATUS_LABELS,
+	TIMESHEET_STATUS_TONE,
+} from "./timesheets";
 export type {
 	AbsenceRequest,
 	Archive,

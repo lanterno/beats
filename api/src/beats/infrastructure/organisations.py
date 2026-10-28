@@ -67,6 +67,17 @@ def _dump(model: BaseModel) -> dict[str, Any]:
     return serialize_to_document(model.model_dump(mode="json", exclude_none=True))
 
 
+def member_row_collections(db: AsyncDatabase) -> tuple[tuple[str, AsyncCollection], ...]:
+    """The three collections of a member's own rows that can carry an
+    organisation's stamp. One list, so the merge, the hand-back, the wipe
+    and the retention purge agree on what "the rows" means."""
+    return (
+        ("beats", db.timeLogs),
+        ("absences", db.absences),
+        ("adjustments", db.balance_adjustments),
+    )
+
+
 def _org_project(doc: dict[str, Any]) -> OrgProject:
     return OrgProject(**{**serialize_from_document(doc), "id": str(doc["_id"])})
 
@@ -78,6 +89,7 @@ class MongoOrganisationStore:
     memberships) are named as such."""
 
     def __init__(self, db: AsyncDatabase):
+        self._db = db  # the merge repoints member rows across users, as erasure does
         self.organisations: AsyncCollection = db.organisations
         self.members: AsyncCollection = db.org_members
         self.invites: AsyncCollection = db.org_invites
@@ -116,10 +128,16 @@ class MongoOrganisationStore:
         data = _dump(organisation)
         data.pop("_id", None)
         # `exclude_none` leaves out a field cleared to None; unset those so a
-        # removed logo or region does not linger.
+        # removed logo or region — or a cancelled closing — does not linger.
         unset = {
             field: ""
-            for field in ("logo_url", "holiday_country", "holiday_subdivision")
+            for field in (
+                "logo_url",
+                "holiday_country",
+                "holiday_subdivision",
+                "retention_years",
+                "closes_on",
+            )
             if getattr(organisation, field) is None
         }
         changes: dict[str, Any] = {"$set": data}
@@ -458,6 +476,133 @@ class MongoOrganisationStore:
         result = await self.assignments.update_many(query, {"$set": {"ended_at": at.isoformat()}})
         return result.modified_count
 
+    # --- merging a connected project (docs/organisations.md, decision 28) --------
+
+    async def repoint_project_rows(self, source_id: str, target_id: str) -> dict[str, int]:
+        """Every row keyed by the source project now keys by the target: the
+        members' own beats, absences and balance adjustments — stamps
+        untouched, so what was the organisation's record stays exactly that
+        and what was private stays private — and the organisation's absence
+        requests. The one write besides erasure that crosses user scopes,
+        made only by the merge, after the service has checked both projects
+        are the same organisation's."""
+        moved: dict[str, int] = {}
+        rows = (*member_row_collections(self._db), ("absence_requests", self.absence_requests))
+        for name, collection in rows:
+            result = await collection.update_many(
+                {"project_id": source_id}, {"$set": {"project_id": target_id}}
+            )
+            moved[name] = result.modified_count
+        return moved
+
+    async def delete_assignments(self, organisation_id: str, project_id: str) -> int:
+        result = await self.assignments.delete_many(
+            {"organisation_id": organisation_id, "project_id": project_id}
+        )
+        return result.deleted_count
+
+    async def delete_unapproved_timesheets(self, organisation_id: str, project_id: str) -> int:
+        result = await self.timesheets.delete_many(
+            {
+                "organisation_id": organisation_id,
+                "project_id": project_id,
+                "status": {"$ne": TimesheetStatus.APPROVED.value},
+            }
+        )
+        return result.deleted_count
+
+    async def delete_project(self, organisation_id: str, project_id: str) -> bool:
+        oid = oid_or_none(project_id)
+        if oid is None:
+            return False
+        result = await self.projects.delete_one({"_id": oid, "organisation_id": organisation_id})
+        return result.deleted_count == 1
+
+    # --- deleting the organisation (#347) ----------------------------------------
+
+    async def row_owner_ids(self, project_id: str) -> set[str]:
+        """Who holds rows on this project — tombstones left out, since a
+        deleted account has nobody to hand anything back to."""
+        owners: set[str] = set()
+        for _, collection in member_row_collections(self._db):
+            owners.update(await collection.distinct("user_id", {"project_id": project_id}))
+        return {o for o in owners if not o.startswith("erased:")}
+
+    async def hand_back_project(
+        self, project: OrgProject, user_id: str, assignment: OrgAssignment | None, archived: bool
+    ) -> str:
+        """The connect, run backwards for one member: a personal project
+        carrying the organisation's fields as they stood and the member's
+        own half off their assignment — the contract among them, whoever
+        held the pen; with the organisation gone, it is the member's again."""
+        doc: dict[str, Any] = {
+            "user_id": user_id,
+            "name": project.name,
+            "kind": project.kind.value,
+            "archived": archived,
+        }
+        for field in ("description", "color", "github_repo", "category"):
+            value = getattr(project, field)
+            if value is not None:
+                doc[field] = value
+        if assignment is not None:
+            personal = serialize_to_document(
+                assignment.model_dump(mode="json", include=set(PERSONAL_FIELDS), exclude_none=True)
+            )
+            doc.update(personal)
+        result = await self.projects.insert_one(doc)
+        return str(result.inserted_id)
+
+    async def repoint_member_rows(
+        self, project_id: str, user_id: str, new_project_id: str
+    ) -> dict[str, int]:
+        """One member's rows move to their handed-back project and stop
+        being anyone's record: the stamp goes with the organisation."""
+        moved: dict[str, int] = {}
+        for name, collection in member_row_collections(self._db):
+            result = await collection.update_many(
+                {"project_id": project_id, "user_id": user_id},
+                {"$set": {"project_id": new_project_id}, "$unset": {"organisation_id": ""}},
+            )
+            moved[name] = result.modified_count
+        return moved
+
+    async def delete_organisation_rows(
+        self, organisation_id: str, project_ids: list[str]
+    ) -> dict[str, int]:
+        """Everything that was the organisation's goes: its tombstoned rows
+        (the record they served is being destroyed by its keeper), its
+        project documents, and every collection of its own. Run last, after
+        the hand-backs, so a crash midway strands nothing of a member's."""
+        deleted: dict[str, int] = {}
+        for name, collection in member_row_collections(self._db):
+            result = await collection.delete_many(
+                {"project_id": {"$in": project_ids}, "user_id": {"$regex": "^erased:"}}
+            )
+            deleted[f"tombstoned_{name}"] = result.deleted_count
+        oids = [oid for pid in project_ids if (oid := oid_or_none(pid)) is not None]
+        deleted["projects"] = (
+            await self.projects.delete_many(
+                {"_id": {"$in": oids}, "organisation_id": organisation_id}
+            )
+        ).deleted_count
+        for name, collection in (
+            ("members", self.members),
+            ("invites", self.invites),
+            ("requests", self.requests),
+            ("assignments", self.assignments),
+            ("teams", self.teams),
+            ("absence_requests", self.absence_requests),
+            ("timesheets", self.timesheets),
+            ("audit", self.audit),
+        ):
+            result = await collection.delete_many({"organisation_id": organisation_id})
+            deleted[name] = result.deleted_count
+        org_oid = oid_or_none(organisation_id)
+        if org_oid is not None:
+            await self.organisations.delete_one({"_id": org_oid})
+        return deleted
+
     # --- teams (stage 4) --------------------------------------------------------
 
     async def create_team(self, team: OrgTeam) -> OrgTeam:
@@ -644,12 +789,15 @@ class MongoOrganisationStore:
         *,
         user_id: str | None = None,
         month: date | None = None,
+        project_id: str | None = None,
     ) -> list[OrgTimesheet]:
         query: dict[str, Any] = {"organisation_id": organisation_id}
         if user_id is not None:
             query["user_id"] = user_id
         if month is not None:
             query["month"] = month.isoformat()
+        if project_id is not None:
+            query["project_id"] = project_id
         docs = await self.timesheets.find(query).sort("month", -1).to_list(length=None)
         return [_load(OrgTimesheet, doc) for doc in docs]
 

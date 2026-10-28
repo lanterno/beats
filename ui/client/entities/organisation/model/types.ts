@@ -10,6 +10,7 @@
  */
 
 import type { ProjectKind } from "@/entities/project";
+import type { ApiContract } from "@/shared/api";
 
 export type OrgRole = "owner" | "admin" | "manager" | "viewer" | "member";
 
@@ -24,6 +25,8 @@ export interface Organisation {
 	holidaySubdivision?: string;
 	timezone: string;
 	createdAt: string;
+	/** Set while the organisation is closing (#347): the day it is deleted. */
+	closesOn?: string;
 }
 
 /** What an organisation is set up with: the fields its admins write. */
@@ -40,6 +43,8 @@ export type MembershipEnd = "left" | "removed" | "erased";
 
 /** One of the caller's organisations, with their standing in it. */
 export interface Membership {
+	/** The caller's own id: which member row, or which timesheet, is theirs. */
+	userId: string;
 	organisation: Organisation;
 	role: OrgRole;
 	joinedAt: string;
@@ -112,6 +117,8 @@ export interface JoinRequest {
 	userId: string;
 	name: string;
 	email: string;
+	/** What approving grants: the invite's role. */
+	role: OrgRole;
 	requestedAt: string;
 }
 
@@ -210,8 +217,6 @@ export interface ProjectRecord {
 export interface OrgRecord {
 	organisation: OrganisationCard;
 	month: string; // YYYY-MM
-	first: string;
-	last: string;
 	projects: ProjectRecord[];
 }
 
@@ -254,7 +259,10 @@ export type RequestStatus = "pending" | "approved" | "declined";
 export interface AbsenceRequest {
 	id: string;
 	projectId: string;
+	/** The names come with the row: a decider may not list the projects. */
+	projectName?: string;
 	userId: string;
+	memberName?: string;
 	date: string;
 	type: "vacation" | "sick" | "other";
 	halfDay: boolean;
@@ -263,6 +271,7 @@ export interface AbsenceRequest {
 	requestedAt: string;
 	decidedAt?: string;
 	decidedBy?: string;
+	decidedByName?: string;
 	comment?: string;
 }
 
@@ -288,12 +297,16 @@ export interface TimesheetEvent {
 export interface Timesheet {
 	id: string;
 	projectId: string;
+	/** As on `AbsenceRequest`: the row names itself. */
+	projectName?: string;
 	userId: string;
+	memberName?: string;
 	month: string; // YYYY-MM-01
 	status: TimesheetStatus;
 	submittedAt: string;
 	decidedAt?: string;
 	decidedBy?: string;
+	decidedByName?: string;
 	comment?: string;
 	frozen?: FrozenMonth;
 	history: TimesheetEvent[];
@@ -304,8 +317,13 @@ export interface ManagedContract {
 	projectId: string;
 	userId: string;
 	managed: boolean;
-	/** The wire contract, passed to the project entity's mappers where edited. */
-	contract: unknown | null;
+	/**
+	 * The wire contract as `ApiManagedContractSchema` validated it — the same
+	 * shape a project read carries, handed to the project entity's mappers
+	 * where it is shown or edited. An entity may not import another, so the
+	 * mapping happens on the page.
+	 */
+	contract: ApiContract | null;
 }
 
 /** One line of the audit log. */

@@ -229,7 +229,11 @@ note is addressed to the decider), timesheets with the frozen figures and
 approve / ask-for-changes / reopen, *Your timesheets* with a submit for ended months, the
 audit-log disclosure, Contract… and Enter time… per assignment, and the record page's
 Record/Compliance CSV downloads; managers (scoped to their teams) and viewers read the
-record. On a managed assignment the member's project page asks instead of booking
+record. Contract… (`ManagedContractDialog`) toggles management and, where the
+organisation manages the contract, lists its terms with edit, remove and "Change
+contract from…" — through `ContractTermDialog`, the same dialog the member's register
+opens, so a term is validated and corrected the same way on both sides; it is offered
+only while managed, since the terms are otherwise the member's own. On a managed assignment the member's project page asks instead of booking
 (`RequestAbsenceDialog`, the request list in `TimeOff`), the contract register names the
 organisation as the terms' owner, and the rail's Organisation panel carries the project's
 timesheets and submit; a decider-entered session wears "entered for you".

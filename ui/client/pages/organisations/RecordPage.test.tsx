@@ -15,8 +15,6 @@ import { RecordPage } from "./RecordPage";
 const RECORD: OrgRecord = {
 	organisation: { id: "o1", name: "Acme" },
 	month: "2026-10",
-	first: "2026-10-01",
-	last: "2026-10-24",
 	projects: [
 		{
 			project: { id: "p1", name: "Payroll", archived: false, kind: "day_job", color: "#4E93E3" },
@@ -93,7 +91,9 @@ describe("RecordPage", () => {
 		// A header row and one per entry.
 		expect(within(table).getAllByRole("row")).toHaveLength(3);
 		expect(table).toHaveTextContent("Month end");
-		expect(ada).toHaveTextContent("Balance +4.5 h over");
+		// Today's balance, said as today's, with the four terms it is made of.
+		expect(ada).toHaveTextContent("Balance today: +4.5 h ahead");
+		expect(ada).toHaveTextContent("worked 100 h");
 		expect(ada).toHaveTextContent("half day");
 	});
 

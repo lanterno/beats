@@ -20,6 +20,12 @@ export interface ConfirmRequest {
 	detail: string;
 	confirmLabel: string;
 	cancelLabel?: string;
+	/**
+	 * "danger" draws the confirm button in the destructive tone. The accent
+	 * marks a page's primary action; removing someone or deleting something
+	 * is not that, and the sunlit button made it read as the expected step.
+	 */
+	tone?: "danger";
 }
 
 export function useConfirm(): {
@@ -55,7 +61,12 @@ export function useConfirm(): {
 				<Button type="button" variant="secondary" size="sm" onClick={() => answer(false)}>
 					{request.cancelLabel ?? "Cancel"}
 				</Button>
-				<Button type="button" size="sm" onClick={() => answer(true)}>
+				<Button
+					type="button"
+					size="sm"
+					variant={request.tone === "danger" ? "destructive" : "default"}
+					onClick={() => answer(true)}
+				>
 					{request.confirmLabel}
 				</Button>
 			</div>

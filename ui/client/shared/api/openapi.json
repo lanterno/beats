@@ -77,6 +77,7 @@
         "type": "object"
       },
       "AbsenceRequestResponse": {
+        "description": "A request as its decider and its asker read it. The names come with\nit: a decider reads a project's name here, having no right to the\norganisation's project list, and a member who has since left is still\nnamed rather than left as an id.",
         "properties": {
           "comment": {
             "anyOf": [
@@ -117,6 +118,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "half_day": {
             "title": "Half Day",
             "type": "boolean"
@@ -124,6 +136,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "member_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Name"
           },
           "note": {
             "anyOf": [
@@ -139,6 +162,17 @@
           "project_id": {
             "title": "Project Id",
             "type": "string"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
           },
           "requested_at": {
             "format": "date-time",
@@ -159,7 +193,9 @@
         "required": [
           "id",
           "project_id",
+          "project_name",
           "user_id",
+          "member_name",
           "date",
           "type",
           "half_day",
@@ -168,6 +204,7 @@
           "requested_at",
           "decided_at",
           "decided_by",
+          "decided_by_name",
           "comment"
         ],
         "title": "AbsenceRequestResponse",
@@ -1907,6 +1944,25 @@
           "rates"
         ],
         "title": "ClientWriteRequest",
+        "type": "object"
+      },
+      "CloseOrganisationRequest": {
+        "description": "When the organisation closes; left out, the default notice runs.",
+        "properties": {
+          "closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes On"
+          }
+        },
+        "title": "CloseOrganisationRequest",
         "type": "object"
       },
       "CoachStatusResponse": {
@@ -3806,6 +3862,7 @@
         "type": "string"
       },
       "JoinRequestResponse": {
+        "description": "A join request with the role approving it grants \u2014 the invite's, so\nthe admin decides knowing what they are handing over.",
         "properties": {
           "email": {
             "title": "Email",
@@ -3824,6 +3881,9 @@
             "title": "Requested At",
             "type": "string"
           },
+          "role": {
+            "$ref": "#/components/schemas/OrgRole"
+          },
           "user_id": {
             "title": "User Id",
             "type": "string"
@@ -3834,6 +3894,7 @@
           "user_id",
           "name",
           "email",
+          "role",
           "requested_at"
         ],
         "title": "JoinRequestResponse",
@@ -4508,7 +4569,7 @@
         "type": "string"
       },
       "MembershipResponse": {
-        "description": "One of the caller's organisations, with their standing in it. A\nmembership that ended (`left_at`) is listed too: the archive of the\nperson's own hours there is reached through it.",
+        "description": "One of the caller's organisations, with their standing in it. A\nmembership that ended (`left_at`) is listed too: the archive of the\nperson's own hours there is reached through it.\n\n`user_id` is the caller's own, so a client can tell which row of\n`/members` or which timesheet is theirs without matching on the address\nthey joined under \u2014 which an account that changed its email, or signed\nin through a provider, no longer has.",
         "properties": {
           "joined_at": {
             "format": "date-time",
@@ -4542,9 +4603,14 @@
           },
           "role": {
             "$ref": "#/components/schemas/OrgRole"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
           }
         },
         "required": [
+          "user_id",
           "organisation",
           "role",
           "joined_at",
@@ -4581,6 +4647,21 @@
           }
         },
         "title": "MemoryResponse",
+        "type": "object"
+      },
+      "MergeProjectRequest": {
+        "description": "Which project the merged one folds into.",
+        "properties": {
+          "into": {
+            "minLength": 1,
+            "title": "Into",
+            "type": "string"
+          }
+        },
+        "required": [
+          "into"
+        ],
+        "title": "MergeProjectRequest",
         "type": "object"
       },
       "MonthlyTotalsResponse": {
@@ -4919,6 +5000,19 @@
             "title": "Name",
             "type": "string"
           },
+          "retention_years": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
+          },
           "timezone": {
             "default": "UTC",
             "title": "Timezone",
@@ -4937,6 +5031,18 @@
       },
       "OrganisationResponse": {
         "properties": {
+          "closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes On"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -4985,6 +5091,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "retention_years": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
           },
           "timezone": {
             "default": "UTC",
@@ -6937,7 +7056,7 @@
         "type": "object"
       },
       "TimesheetResponse": {
-        "description": "A timesheet as both sides read it. `frozen` is set only while\napproved: the figures as approval saw them, which the lock then keeps.",
+        "description": "A timesheet as both sides read it. `frozen` is set only while\napproved: the figures as approval saw them, which the lock then keeps.\nThe names come with it, for the reasons `AbsenceRequestResponse` gives.",
         "properties": {
           "comment": {
             "anyOf": [
@@ -6973,6 +7092,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "frozen": {
             "anyOf": [
               {
@@ -6994,6 +7124,17 @@
             "title": "Id",
             "type": "string"
           },
+          "member_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Name"
+          },
           "month": {
             "format": "date",
             "title": "Month",
@@ -7002,6 +7143,17 @@
           "project_id": {
             "title": "Project Id",
             "type": "string"
+          },
+          "project_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Name"
           },
           "status": {
             "$ref": "#/components/schemas/TimesheetStatus"
@@ -7019,12 +7171,15 @@
         "required": [
           "id",
           "project_id",
+          "project_name",
           "user_id",
+          "member_name",
           "month",
           "status",
           "submitted_at",
           "decided_at",
           "decided_by",
+          "decided_by_name",
           "comment",
           "frozen",
           "history"
@@ -7091,7 +7246,7 @@
         "type": "object"
       },
       "UpdateBeatRequest": {
-        "description": "Request body for editing a beat: these fields, and only these, change.\nTags are auto-derived, not sent. The note is not editable here: it comes\nfrom an import, stays as stored, and a `note` in the body is ignored.",
+        "description": "Request body for editing a beat: these fields, and only these, change.\nTags are auto-derived, not sent. The note (#348): a string sets it, an\nempty string clears it, and omitted or null keeps it as stored \u2014 so every\nclient that never sends one (the daemon, the companion, the extension)\nkeeps meaning what it meant. On an organisation's project the note is\npart of the organisation's record (rule 3), which is why the one input\nthat writes it carries the marker saying who reads it.",
         "properties": {
           "end": {
             "anyOf": [
@@ -7108,6 +7263,18 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "project_id": {
             "title": "Project Id",
@@ -8551,7 +8718,7 @@
         ]
       },
       "put": {
-        "description": "Edit a beat's project, start and end. The note and every other stored\nfield stay as stored; the tags are re-derived from the new times when the\ndaemon has flow windows for them, and kept when it has none. A beat the\ncaller does not hold is a 404.",
+        "description": "Edit a beat's project, start, end and \u2014 when one is sent \u2014 its note:\na string sets it, an empty string clears it, omitted keeps it as stored\n(#348). Every other stored field stays; the tags are re-derived from the\nnew times when the daemon has flow windows for them, and kept when it\nhas none. A beat the caller does not hold is a 404.",
         "operationId": "update_beat_api_beats__put",
         "requestBody": {
           "content": {
@@ -12225,6 +12392,43 @@
       }
     },
     "/api/organisations/{organisation_id}": {
+      "delete": {
+        "description": "Delete the organisation, once its notice has run out (#347). Every\nmember is handed back a personal copy of each project they hold rows or\na contract on \u2014 their rows repointed and unstamped, theirs as ever \u2014\nand everything that was the organisation's goes, its working-time\nrecord with it: the final record.csv and compliance.csv were the notice\nperiod's job. Owners; 409 before `closes_on`.",
+        "operationId": "delete_organisation_api_organisations__organisation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Organisation",
+        "tags": [
+          "Organisations"
+        ]
+      },
       "get": {
         "description": "The organisation and the caller's standing in it. Members only.",
         "operationId": "get_organisation_api_organisations__organisation_id__get",
@@ -12758,9 +12962,109 @@
         ]
       }
     },
+    "/api/organisations/{organisation_id}/close": {
+      "delete": {
+        "description": "Call the closing off. Owners.",
+        "operationId": "cancel_closing_api_organisations__organisation_id__close_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Closing",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "post": {
+        "description": "Start the organisation's notice (#347): it closes on the day given \u2014\nat least 30 days out, 60 by default \u2014 shown to every member in-app so\nthey export on their own clock. Tracking carries on until the day.\nOwners.",
+        "operationId": "begin_closing_api_organisations__organisation_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseOrganisationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Begin Closing",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
     "/api/organisations/{organisation_id}/compliance.csv": {
       "get": {
-        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total \u2014 the shape a\nworking-time authority asks for. Whoever reads the record.",
+        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total, and the warnings a\nworking-time authority would raise (a day over 10 hours, rest under 11,\ntaken over every project the member is on). Whoever reads the record.",
         "operationId": "read_compliance_csv_api_organisations__organisation_id__compliance_csv_get",
         "parameters": [
           {
@@ -13845,6 +14149,71 @@
         ]
       }
     },
+    "/api/organisations/{organisation_id}/projects/{project_id}/merge": {
+      "post": {
+        "description": "Fold this project into another of the organisation's \u2014 the way out\nof the duplicate a connect leaves when the organisation already had a\nproject for the same work. Every row moves with its stamp untouched,\nassignments fold (the earlier shared-from; the target's contract\nstands), and the merged project is deleted. Refused while an approved\ntimesheet exists on either side (409 PERIOD_APPROVED). Admins.",
+        "operationId": "merge_project_api_organisations__organisation_id__projects__project_id__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgProjectResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Merge Project",
+        "tags": [
+          "Organisations"
+        ]
+      }
+    },
     "/api/organisations/{organisation_id}/record": {
       "get": {
         "description": "What the organisation sees: per project, per member, the finished\nentries started in `month` in `tz` (start, end, hours, note), the\nabsences (date, type, half day), the all-time totals, and where the\nmember has a contract its balance as of today. Nothing else, and nothing\nabout now. Owners, admins and viewers whole; a manager their teams'.",
@@ -13999,7 +14368,7 @@
     },
     "/api/organisations/{organisation_id}/requests": {
       "get": {
-        "description": "The join requests waiting on an invite link with an approval step. Admins.",
+        "description": "The join requests waiting on an invite link with an approval step,\neach with the role approving it would grant. Admins.",
         "operationId": "list_requests_api_organisations__organisation_id__requests_get",
         "parameters": [
           {
@@ -14656,6 +15025,80 @@
         "summary": "Read Visible",
         "tags": [
           "Organisations"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/visible.csv": {
+      "get": {
+        "description": "The month the organisation holds about the caller, as the same CSV its\nrecord exports \u2014 the person can always take away exactly what is seen of\nthem, not just read it. Members and former members, like `/visible`.",
+        "operationId": "read_visible_csv_api_organisations__organisation_id__visible_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The month wanted, as YYYY-MM.",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "examples": [
+                "2026-09"
+              ],
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "What the organisation sees of the caller, as CSV."
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Visible Csv",
+        "tags": [
+          "Employment"
         ]
       }
     },

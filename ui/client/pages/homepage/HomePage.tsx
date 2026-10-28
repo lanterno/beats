@@ -844,6 +844,48 @@ function ObjectionRow() {
 	);
 }
 
+// ─────────────────── pricing ───────────────────
+
+/**
+ * The decided prices (docs/pricing.md), shown struck through while the
+ * beta's 100% discount applies — the price is known before it is charged.
+ * Figures here are the decision's words, not a billing system's: nothing
+ * is collected during the beta.
+ */
+function PricingSection() {
+	return (
+		<section id="pricing" className="homepage-pricing" aria-label="Pricing">
+			<div className="homepage-section-head">
+				<p className="homepage-section-eyebrow">Pricing</p>
+				<h2 className="homepage-section-title">Free while in beta — and here's the price tag.</h2>
+			</div>
+			<div className="homepage-pricing-grid">
+				<div className="homepage-price-card">
+					<h3 className="homepage-contrast-title">Personal</h3>
+					<p className="homepage-price-figure">Free</p>
+					<p className="homepage-contrast-proof">
+						Your projects, your timeline, every surface. Joining or leaving an organisation never
+						changes your own plan.
+					</p>
+				</div>
+				<div className="homepage-price-card">
+					<h3 className="homepage-contrast-title">Organisations</h3>
+					<p className="homepage-price-figure">
+						<s className="homepage-price-struck">€8</s>{" "}
+						<span className="homepage-price-beta">Free during beta</span>
+					</p>
+					<p className="homepage-contrast-proof">
+						€8 per seat a month billed annually (€10 monthly) once the beta ends, with notice first
+						— and free up to 5 seats, always. A seat is an active member on a project; viewers, like
+						a works council seat or an accountant, are free. Single sign-on is included, not an
+						enterprise upsell.
+					</p>
+				</div>
+			</div>
+		</section>
+	);
+}
+
 // ─────────────────── final CTA ───────────────────
 
 function FinalCta({ onPrimary }: { onPrimary: () => void }) {
@@ -982,6 +1024,7 @@ export default function HomePage() {
 			<WhyBeats />
 			<TrustBand />
 			<ObjectionRow />
+			<PricingSection />
 			<FinalCta onPrimary={onPrimary} />
 			<FooterNew />
 			<AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialMode={authMode} />

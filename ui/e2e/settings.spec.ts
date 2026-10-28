@@ -43,24 +43,24 @@ test.describe("Settings", () => {
 	});
 
 	test("data export section is present", async ({ page }) => {
-		await page.goto("/settings");
+		await page.goto("/settings?tab=data");
 		await expect(page.getByRole("heading", { name: "Data Export" })).toBeVisible();
 		await expect(page.locator("text=Sessions CSV")).toBeVisible();
 		await expect(page.locator("text=Full JSON Backup")).toBeVisible();
 	});
 
 	test("data import section is present", async ({ page }) => {
-		await page.goto("/settings");
+		await page.goto("/settings?tab=data");
 		await expect(page.locator("text=Data Import")).toBeVisible();
 	});
 
 	test("webhooks section is present", async ({ page }) => {
-		await page.goto("/settings");
+		await page.goto("/settings?tab=integrations");
 		await expect(page.locator("text=Webhooks")).toBeVisible();
 	});
 
 	test("developer section shows API info", async ({ page }) => {
-		await page.goto("/settings");
+		await page.goto("/settings?tab=data");
 		await expect(page.getByRole("heading", { name: "Developer" })).toBeVisible();
 		await expect(page.getByText("API Base URL")).toBeVisible();
 	});

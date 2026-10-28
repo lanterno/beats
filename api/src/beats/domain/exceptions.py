@@ -570,6 +570,55 @@ class ShareFromInFuture(DomainException):
     code = "SHARE_FROM_IN_FUTURE"
 
 
+class MergeIntoItself(DomainException):
+    """A merge names one project twice. Nothing to fold."""
+
+    status_code = 409
+    message = "A project cannot be merged into itself"
+    code = "MERGE_INTO_ITSELF"
+
+
+class CloseNoticeTooShort(DomainException):
+    """Closing an organisation needs real notice: members export on their
+    own clock, not the owner's."""
+
+    status_code = 409
+    code = "CLOSE_NOTICE_TOO_SHORT"
+
+    def __init__(self, minimum_days: int):
+        super().__init__(f"Closing needs at least {minimum_days} days' notice")
+
+
+class OrganisationNotClosing(DomainException):
+    """Deletion and cancel both need a closing under way."""
+
+    status_code = 409
+    message = "The organisation is not closing"
+    code = "ORGANISATION_NOT_CLOSING"
+
+
+class OrganisationStillClosing(DomainException):
+    """Deletion waits for the notice to run out."""
+
+    status_code = 409
+    code = "ORGANISATION_STILL_CLOSING"
+
+    def __init__(self, closes_on):
+        super().__init__(f"The organisation closes on {closes_on}; deletion waits for that day")
+
+
+class RetentionBelowFloor(DomainException):
+    """A retention setting under the jurisdiction's statutory minimum. The
+    floor is the law's, not ours; the message names it."""
+
+    status_code = 409
+    code = "RETENTION_BELOW_FLOOR"
+
+    def __init__(self, country: str | None, floor: int):
+        where = country or "an organisation without a country"
+        super().__init__(f"The working-time record must be kept at least {floor} years for {where}")
+
+
 class CoachNotConfigured(DomainException):
     """The coach needs an Anthropic API key and this deployment has none.
     Every route that would call the model answers this instead of trying,

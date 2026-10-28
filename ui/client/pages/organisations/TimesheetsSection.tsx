@@ -1,197 +1,181 @@
 /**
- * TimesheetsSection — every submitted month, newest first, for the people
- * who decide them (and for a viewer, read-only). Approval freezes the
- * month's figures and locks its days; reopening lifts the lock, takes the
- * frozen figures with it, and re-approval freezes afresh. A decision the
- * month refuses (409, a running timer in it) answers in the API's words.
+ * TimesheetsSection — every submitted month for the people who decide them
+ * (and for a viewer, read-only), grouped by whose move it is: a submitted
+ * sheet waits on the decider; one sent back or reopened is with the member;
+ * an approved one is settled. Approval freezes the month's figures and
+ * locks its days; "Ask for changes" requires the words the member will act
+ * on; reopening says whose month it is and takes the frozen figures with
+ * it. Each row links the month in the record — the evidence — and a
+ * decider's own month says so, since the API lets them approve it.
+ *
+ * Contract… and Enter time… sit on the row for deciders: a manager may do
+ * both within their scope but cannot reach the admin-only Projects tab, so
+ * the row is their one entry point.
  */
 
 import { ClipboardCheck } from "lucide-react";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import type { OrgRole, Timesheet } from "@/entities/organisation";
 import {
 	decides,
+	frozenText,
+	sheetMonthTitle,
+	TIMESHEET_STATUS_LABELS,
+	TIMESHEET_STATUS_TONE,
 	useDecideTimesheet,
-	useMembers,
-	useOrgProjects,
 	useReopenTimesheet,
 	useTimesheets,
 } from "@/entities/organisation";
-import { describeError } from "@/shared/api";
-import { cn, hoursText } from "@/shared/lib";
-import { Button, Dialog } from "@/shared/ui";
-import { Section } from "./Section";
-import { FIELD, LABEL, LEAD, LINKISH, LIST } from "./styles";
-
-export const STATUS_LABELS: Record<Timesheet["status"], string> = {
-	submitted: "Submitted",
-	approved: "Approved",
-	changes_requested: "Changes requested",
-	reopened: "Reopened",
-};
-
-const STATUS_TONE: Record<Timesheet["status"], string> = {
-	submitted: "text-accent-ink",
-	approved: "text-success-ink",
-	changes_requested: "text-muted-foreground",
-	reopened: "text-muted-foreground",
-};
-
-/** "September 2026" from the sheet's YYYY-MM-01. */
-export function sheetMonthTitle(month: string): string {
-	const date = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1, 12);
-	return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
-
-/** "42.5 h worked · 160 h expected · balance −12.3 h at the close". */
-export function frozenText(frozen: NonNullable<Timesheet["frozen"]>): string {
-	const parts = [`${hoursText(frozen.worked)} worked`];
-	if (frozen.expected !== null) parts.push(`${hoursText(frozen.expected)} expected`);
-	if (frozen.balanceEnd !== null) {
-		const b = frozen.balanceEnd;
-		const signed = b < 0 ? `−${hoursText(-b)}` : `+${hoursText(b)}`;
-		parts.push(`balance ${signed} at the close`);
-	}
-	return parts.join(" · ");
-}
+import { formatDate } from "@/shared/lib";
+import { Button, Chip } from "@/shared/ui";
+import { CommentDialog } from "./CommentDialog";
+import { EnterTimeDialog } from "./EnterTimeDialog";
+import { memberLabel, projectLabel } from "./labels";
+import { ManagedContractDialog } from "./ManagedContractDialog";
+import { RecordMonthLink } from "./RecordMonthLink";
+import { QueryBody, Section } from "./Section";
+import { LEAD, LINKISH, LIST } from "./styles";
 
 type Action = { sheet: Timesheet; kind: "approve" | "changes" | "reopen" };
+type MemberAct = { sheet: Timesheet; kind: "contract" | "time" };
 
-function ActionDialog({
-	action,
-	title,
-	onClose,
-	onSend,
-	busy,
-}: {
-	action: Action;
-	title: string;
-	onClose: () => void;
-	onSend: (comment: string) => void;
-	busy: boolean;
-}) {
-	const id = useId();
-	const [comment, setComment] = useState("");
-	const reopen = action.kind === "reopen";
-	const [error, setError] = useState("");
-	return (
-		<Dialog
-			open
-			onClose={() => !busy && onClose()}
-			title={
-				action.kind === "approve"
-					? "Approve this month?"
-					: action.kind === "changes"
-						? "Ask for changes?"
-						: "Reopen this month?"
-			}
-			description={
-				reopen
-					? "Reopening lifts the month's lock; the frozen figures go with it and re-approval freezes afresh."
-					: title
-			}
-			contentClassName="sm:w-full sm:max-w-[380px]"
-		>
-			<form
-				onSubmit={(e) => {
-					e.preventDefault();
-					const trimmed = comment.trim();
-					if (reopen && !trimmed) {
-						setError("Reopening needs a reason.");
-						return;
-					}
-					onSend(trimmed);
-				}}
-				noValidate
-				className="space-y-3"
-			>
-				<div>
-					<label htmlFor={`${id}-comment`} className={LABEL}>
-						{reopen
-							? "Reason"
-							: action.kind === "approve"
-								? "Comment (optional)"
-								: "What should change"}
-					</label>
-					<input
-						id={`${id}-comment`}
-						type="text"
-						value={comment}
-						onChange={(e) => setComment(e.target.value)}
-						maxLength={500}
-						autoFocus
-						aria-invalid={error ? true : undefined}
-						className={FIELD}
-					/>
-					{error && <p className="mt-1 text-xs text-destructive-ink">{error}</p>}
-				</div>
-				<div className="flex justify-end gap-2.5 pt-1">
-					<Button type="button" variant="secondary" size="sm" onClick={onClose} disabled={busy}>
-						Cancel
-					</Button>
-					<Button type="submit" size="sm" disabled={busy}>
-						{busy
-							? "Sending…"
-							: action.kind === "approve"
-								? "Approve"
-								: action.kind === "changes"
-									? "Ask for changes"
-									: "Reopen"}
-					</Button>
-				</div>
-			</form>
-		</Dialog>
-	);
+/** Whose move a sheet waits on, in the order the list shows. */
+const GROUPS = [
+	{ key: "deciding", title: "Waiting on you", of: (s: Timesheet) => s.status === "submitted" },
+	{
+		key: "member",
+		title: "With the member",
+		of: (s: Timesheet) => s.status === "changes_requested" || s.status === "reopened",
+	},
+	{ key: "approved", title: "Approved", of: (s: Timesheet) => s.status === "approved" },
+] as const;
+
+/** "submitted Oct 1", or "submitted again Oct 12" when it came back. */
+function submittedWords(sheet: Timesheet): string {
+	const times = sheet.history.filter((h) => h.action === "submitted").length;
+	return `${times > 1 ? "submitted again" : "submitted"} ${formatDate(sheet.submittedAt)}`;
 }
 
 export function TimesheetsSection({
 	organisationId,
 	role,
+	userId,
 }: {
 	organisationId: string;
 	role: OrgRole;
+	/** The caller's own, so their own month says so beside Approve. */
+	userId: string;
 }) {
 	const sheets = useTimesheets(organisationId);
-	const members = useMembers(organisationId);
-	const projects = useOrgProjects(organisationId);
 	const decide = useDecideTimesheet(organisationId);
 	const reopen = useReopenTimesheet(organisationId);
 	const [action, setAction] = useState<Action | null>(null);
+	const [act, setAct] = useState<MemberAct | null>(null);
 	const mayDecide = decides(role);
 	const busy = decide.isPending || reopen.isPending;
 
-	const memberName = (userId: string) =>
-		(members.data ?? []).find((m) => m.userId === userId)?.name ?? userId;
-	const projectName = (projectId: string) =>
-		(projects.data ?? []).find((p) => p.id === projectId)?.name ?? "a project";
-
-	const send = (act: Action, comment: string) => {
-		const done = {
-			onSuccess: () => {
-				setAction(null);
-				toast.success(
-					act.kind === "approve"
-						? "Month approved"
-						: act.kind === "changes"
-							? "Changes asked for"
-							: "Month reopened",
-				);
-			},
-			// A 409 (PERIOD_APPROVED, a timer still running in the month) answers
-			// in the API's words.
-			onError: (err: unknown) =>
-				toast.error(describeError(err, "The timesheet could not be decided.")),
-		};
-		if (act.kind === "reopen") reopen.mutate({ sheetId: act.sheet.id, reason: comment }, done);
-		else
-			decide.mutate(
-				{ sheetId: act.sheet.id, approve: act.kind === "approve", comment: comment || undefined },
-				done,
-			);
+	const send = async (a: Action, comment: string) => {
+		if (a.kind === "reopen") {
+			await reopen.mutateAsync({ sheetId: a.sheet.id, reason: comment });
+		} else {
+			await decide.mutateAsync({
+				sheetId: a.sheet.id,
+				approve: a.kind === "approve",
+				comment: comment || undefined,
+			});
+		}
+		setAction(null);
+		toast.success(
+			a.kind === "approve"
+				? "Month approved"
+				: a.kind === "changes"
+					? "Changes asked for"
+					: "Month reopened",
+		);
 	};
 
 	const rows = [...(sheets.data ?? [])].sort((a, b) => b.month.localeCompare(a.month));
+	const who = (sheet: Timesheet) =>
+		`${memberLabel(sheet.memberName)} · ${projectLabel(sheet.projectName)} · ${sheetMonthTitle(sheet.month)}`;
+
+	const sheetRow = (sheet: Timesheet) => (
+		<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
+			<div className="flex items-center gap-2 flex-wrap">
+				<span className="font-bold text-foreground">{memberLabel(sheet.memberName)}</span>
+				{sheet.userId === userId && <span className="text-muted-foreground">(your month)</span>}
+				<span className="text-muted-foreground">
+					{projectLabel(sheet.projectName)} ·{" "}
+					<RecordMonthLink organisationId={organisationId} month={sheet.month}>
+						{sheetMonthTitle(sheet.month)}
+					</RecordMonthLink>{" "}
+					· {submittedWords(sheet)}
+				</span>
+				<Chip tone={TIMESHEET_STATUS_TONE[sheet.status]}>
+					{TIMESHEET_STATUS_LABELS[sheet.status]}
+				</Chip>
+				{mayDecide && (
+					<span className="ml-auto flex items-center gap-2">
+						{sheet.status === "approved" ? (
+							<button
+								type="button"
+								onClick={() => setAction({ sheet, kind: "reopen" })}
+								disabled={busy}
+								aria-label={`Reopen ${who(sheet)}`}
+								className={LINKISH}
+							>
+								Reopen…
+							</button>
+						) : (
+							<>
+								<Button
+									type="button"
+									size="sm"
+									className="h-7 px-2.5 text-xs"
+									onClick={() => setAction({ sheet, kind: "approve" })}
+									disabled={busy}
+									aria-label={`Approve ${who(sheet)}`}
+								>
+									Approve
+								</Button>
+								<Button
+									type="button"
+									variant="secondary"
+									size="sm"
+									className="h-7 px-2.5 text-xs"
+									onClick={() => setAction({ sheet, kind: "changes" })}
+									disabled={busy}
+									aria-label={`Ask for changes on ${who(sheet)}`}
+								>
+									Ask for changes
+								</Button>
+							</>
+						)}
+						<button
+							type="button"
+							onClick={() => setAct({ sheet, kind: "contract" })}
+							aria-label={`Contract of ${memberLabel(sheet.memberName)} on ${projectLabel(sheet.projectName)}`}
+							className={LINKISH}
+						>
+							Contract…
+						</button>
+						<button
+							type="button"
+							onClick={() => setAct({ sheet, kind: "time" })}
+							aria-label={`Enter time for ${memberLabel(sheet.memberName)} on ${projectLabel(sheet.projectName)}`}
+							className={LINKISH}
+						>
+							Enter time…
+						</button>
+					</span>
+				)}
+			</div>
+			{sheet.status === "approved" && sheet.frozen && (
+				<p className="text-foreground font-medium font-mono">{frozenText(sheet.frozen)}</p>
+			)}
+			{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
+		</li>
+	);
 
 	return (
 		<Section
@@ -199,79 +183,93 @@ export function TimesheetsSection({
 			icon={ClipboardCheck}
 			lead="Approval freezes a month's figures and locks its days until it is reopened."
 		>
-			{sheets.error ? (
-				<p className={`${LEAD} py-3`} role="alert">
-					{describeError(sheets.error, "The timesheets could not be read.")}
-				</p>
-			) : !sheets.data ? (
-				<p className={`${LEAD} py-3`}>Loading…</p>
-			) : rows.length === 0 ? (
-				<p className={`${LEAD} py-3`}>No months submitted yet.</p>
-			) : (
-				<ul className={LIST}>
-					{rows.map((sheet) => (
-						<li key={sheet.id} className="py-2.5 text-[12.5px] space-y-1">
-							<div className="flex items-center gap-2 flex-wrap">
-								<span className="font-bold text-foreground">{memberName(sheet.userId)}</span>
-								<span className="text-muted-foreground">
-									{projectName(sheet.projectId)} · {sheetMonthTitle(sheet.month)}
-								</span>
-								<span className={cn("font-bold", STATUS_TONE[sheet.status])}>
-									{STATUS_LABELS[sheet.status]}
-								</span>
-								{mayDecide && (
-									<span className="ml-auto flex items-center gap-2">
-										{sheet.status === "approved" ? (
-											<button
-												type="button"
-												onClick={() => setAction({ sheet, kind: "reopen" })}
-												disabled={busy}
-												className={LINKISH}
-											>
-												Reopen…
-											</button>
-										) : (
-											<>
-												<Button
-													type="button"
-													size="sm"
-													className="h-7 px-2.5 text-xs"
-													onClick={() => setAction({ sheet, kind: "approve" })}
-													disabled={busy}
-												>
-													Approve
-												</Button>
-												<Button
-													type="button"
-													variant="secondary"
-													size="sm"
-													className="h-7 px-2.5 text-xs"
-													onClick={() => setAction({ sheet, kind: "changes" })}
-													disabled={busy}
-												>
-													Ask for changes
-												</Button>
-											</>
-										)}
-									</span>
-								)}
+			<QueryBody
+				query={sheets}
+				errorText="The timesheets could not be read."
+				empty="No months submitted yet."
+			>
+				{() =>
+					GROUPS.map(({ key, title, of }) => {
+						const inGroup = rows.filter(of);
+						if (inGroup.length === 0) return null;
+						return (
+							<div key={key} className="py-1.5">
+								<h3 className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground pt-2">
+									{title}
+								</h3>
+								<ul className={LIST}>{inGroup.map(sheetRow)}</ul>
 							</div>
-							{sheet.status === "approved" && sheet.frozen && (
-								<p className="text-foreground font-medium font-mono">{frozenText(sheet.frozen)}</p>
-							)}
-							{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
-						</li>
-					))}
-				</ul>
-			)}
-			{action && (
-				<ActionDialog
-					key={`${action.sheet.id}-${action.kind}`}
-					action={action}
-					title={`${memberName(action.sheet.userId)} · ${projectName(action.sheet.projectId)} · ${sheetMonthTitle(action.sheet.month)}.`}
+						);
+					})
+				}
+			</QueryBody>
+			{action?.kind === "approve" && (
+				<CommentDialog
+					key={action.sheet.id}
+					title="Approve this month?"
+					context={`${who(action.sheet)} — its figures freeze as they stand and every day in it locks.`}
+					hint={
+						<p className={LEAD}>
+							{submittedWords(action.sheet)} ·{" "}
+							<RecordMonthLink organisationId={organisationId} month={action.sheet.month}>
+								See the month in the record
+							</RecordMonthLink>
+						</p>
+					}
+					commentLabel="Comment (optional)"
+					confirmLabel="Approve"
+					busyLabel="Approving…"
 					onClose={() => setAction(null)}
 					onSend={(comment) => send(action, comment)}
-					busy={busy}
+				/>
+			)}
+			{action?.kind === "changes" && (
+				<CommentDialog
+					key={action.sheet.id}
+					title="Ask for changes?"
+					context={`${who(action.sheet)} goes back to ${memberLabel(action.sheet.memberName)} with your words.`}
+					commentLabel="What should change"
+					commentRequired
+					confirmLabel="Ask for changes"
+					busyLabel="Sending…"
+					onClose={() => setAction(null)}
+					onSend={(comment) => send(action, comment)}
+				/>
+			)}
+			{action?.kind === "reopen" && (
+				<CommentDialog
+					key={action.sheet.id}
+					title="Reopen this month?"
+					context={`${who(action.sheet)} — the lock lifts, the frozen figures go with it, and the reason is recorded.`}
+					commentLabel="Why it reopens"
+					commentRequired
+					confirmLabel="Reopen"
+					busyLabel="Reopening…"
+					danger
+					onClose={() => setAction(null)}
+					onSend={(comment) => send(action, comment)}
+				/>
+			)}
+			{act?.kind === "contract" && (
+				<ManagedContractDialog
+					key={`${act.sheet.projectId}-${act.sheet.userId}`}
+					organisationId={organisationId}
+					projectId={act.sheet.projectId}
+					projectName={projectLabel(act.sheet.projectName)}
+					userId={act.sheet.userId}
+					memberName={memberLabel(act.sheet.memberName)}
+					onClose={() => setAct(null)}
+				/>
+			)}
+			{act?.kind === "time" && (
+				<EnterTimeDialog
+					key={`${act.sheet.projectId}-${act.sheet.userId}`}
+					organisationId={organisationId}
+					projectId={act.sheet.projectId}
+					projectName={projectLabel(act.sheet.projectName)}
+					userId={act.sheet.userId}
+					memberName={memberLabel(act.sheet.memberName)}
+					onClose={() => setAct(null)}
 				/>
 			)}
 		</Section>

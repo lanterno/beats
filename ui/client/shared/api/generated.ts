@@ -386,10 +386,11 @@ export interface paths {
         get: operations["list_beats_api_beats__get"];
         /**
          * Update Beat
-         * @description Edit a beat's project, start and end. The note and every other stored
-         *     field stay as stored; the tags are re-derived from the new times when the
-         *     daemon has flow windows for them, and kept when it has none. A beat the
-         *     caller does not hold is a 404.
+         * @description Edit a beat's project, start, end and — when one is sent — its note:
+         *     a string sets it, an empty string clears it, omitted keeps it as stored
+         *     (#348). Every other stored field stays; the tags are re-derived from the
+         *     new times when the daemon has flow windows for them, and kept when it
+         *     has none. A beat the caller does not hold is a 404.
          */
         put: operations["update_beat_api_beats__put"];
         /**
@@ -2055,7 +2056,16 @@ export interface paths {
          */
         put: operations["update_organisation_api_organisations__organisation_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Organisation
+         * @description Delete the organisation, once its notice has run out (#347). Every
+         *     member is handed back a personal copy of each project they hold rows or
+         *     a contract on — their rows repointed and unstamped, theirs as ever —
+         *     and everything that was the organisation's goes, its working-time
+         *     record with it: the final record.csv and compliance.csv were the notice
+         *     period's job. Owners; 409 before `closes_on`.
+         */
+        delete: operations["delete_organisation_api_organisations__organisation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2193,6 +2203,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organisations/{organisation_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin Closing
+         * @description Start the organisation's notice (#347): it closes on the day given —
+         *     at least 30 days out, 60 by default — shown to every member in-app so
+         *     they export on their own clock. Tracking carries on until the day.
+         *     Owners.
+         */
+        post: operations["begin_closing_api_organisations__organisation_id__close_post"];
+        /**
+         * Cancel Closing
+         * @description Call the closing off. Owners.
+         */
+        delete: operations["cancel_closing_api_organisations__organisation_id__close_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organisations/{organisation_id}/compliance.csv": {
         parameters: {
             query?: never;
@@ -2203,8 +2240,9 @@ export interface paths {
         /**
          * Read Compliance Csv
          * @description The compliance record (docs/organisations.md, stage 3): per member,
-         *     per day — first start, last end, breaks, total — the shape a
-         *     working-time authority asks for. Whoever reads the record.
+         *     per day — first start, last end, breaks, total, and the warnings a
+         *     working-time authority would raise (a day over 10 hours, rest under 11,
+         *     taken over every project the member is on). Whoever reads the record.
          */
         get: operations["read_compliance_csv_api_organisations__organisation_id__compliance_csv_get"];
         put?: never;
@@ -2507,6 +2545,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organisations/{organisation_id}/projects/{project_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Project
+         * @description Fold this project into another of the organisation's — the way out
+         *     of the duplicate a connect leaves when the organisation already had a
+         *     project for the same work. Every row moves with its stamp untouched,
+         *     assignments fold (the earlier shared-from; the target's contract
+         *     stands), and the merged project is deleted. Refused while an approved
+         *     timesheet exists on either side (409 PERIOD_APPROVED). Admins.
+         */
+        post: operations["merge_project_api_organisations__organisation_id__projects__project_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organisations/{organisation_id}/record": {
         parameters: {
             query?: never;
@@ -2561,7 +2624,8 @@ export interface paths {
         };
         /**
          * List Requests
-         * @description The join requests waiting on an invite link with an approval step. Admins.
+         * @description The join requests waiting on an invite link with an approval step,
+         *     each with the role approving it would grant. Admins.
          */
         get: operations["list_requests_api_organisations__organisation_id__requests_get"];
         put?: never;
@@ -2729,6 +2793,28 @@ export interface paths {
          *     members.
          */
         get: operations["read_visible_api_organisations__organisation_id__visible_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/visible.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Visible Csv
+         * @description The month the organisation holds about the caller, as the same CSV its
+         *     record exports — the person can always take away exactly what is seen of
+         *     them, not just read it. Members and former members, like `/visible`.
+         */
+        get: operations["read_visible_csv_api_organisations__organisation_id__visible_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3748,7 +3834,13 @@ export interface components {
             project_id: string;
             type: components["schemas"]["AbsenceType"];
         };
-        /** AbsenceRequestResponse */
+        /**
+         * AbsenceRequestResponse
+         * @description A request as its decider and its asker read it. The names come with
+         *     it: a decider reads a project's name here, having no right to the
+         *     organisation's project list, and a member who has since left is still
+         *     named rather than left as an id.
+         */
         AbsenceRequestResponse: {
             /** Comment */
             comment: string | null;
@@ -3761,14 +3853,20 @@ export interface components {
             decided_at: string | null;
             /** Decided By */
             decided_by: string | null;
+            /** Decided By Name */
+            decided_by_name: string | null;
             /** Half Day */
             half_day: boolean;
             /** Id */
             id: string;
+            /** Member Name */
+            member_name: string | null;
             /** Note */
             note: string | null;
             /** Project Id */
             project_id: string;
+            /** Project Name */
+            project_name: string | null;
             /**
              * Requested At
              * Format: date-time
@@ -4424,6 +4522,14 @@ export interface components {
             name: string;
             /** Rates */
             rates: components["schemas"]["RateTerm"][];
+        };
+        /**
+         * CloseOrganisationRequest
+         * @description When the organisation closes; left out, the default notice runs.
+         */
+        CloseOrganisationRequest: {
+            /** Closes On */
+            closes_on?: string | null;
         };
         /**
          * CoachStatusResponse
@@ -5257,7 +5363,11 @@ export interface components {
          * @enum {string}
          */
         JoinDecision: "approved" | "declined";
-        /** JoinRequestResponse */
+        /**
+         * JoinRequestResponse
+         * @description A join request with the role approving it grants — the invite's, so
+         *     the admin decides knowing what they are handing over.
+         */
         JoinRequestResponse: {
             /** Email */
             email: string;
@@ -5270,6 +5380,7 @@ export interface components {
              * Format: date-time
              */
             requested_at: string;
+            role: components["schemas"]["OrgRole"];
             /** User Id */
             user_id: string;
         };
@@ -5550,6 +5661,11 @@ export interface components {
          * @description One of the caller's organisations, with their standing in it. A
          *     membership that ended (`left_at`) is listed too: the archive of the
          *     person's own hours there is reached through it.
+         *
+         *     `user_id` is the caller's own, so a client can tell which row of
+         *     `/members` or which timesheet is theirs without matching on the address
+         *     they joined under — which an account that changed its email, or signed
+         *     in through a provider, no longer has.
          */
         MembershipResponse: {
             /**
@@ -5562,6 +5678,8 @@ export interface components {
             left_reason: components["schemas"]["MembershipEnd"] | null;
             organisation: components["schemas"]["OrganisationResponse"];
             role: components["schemas"]["OrgRole"];
+            /** User Id */
+            user_id: string;
         };
         /** MemoryResponse */
         MemoryResponse: {
@@ -5569,6 +5687,14 @@ export interface components {
             content?: string | null;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * MergeProjectRequest
+         * @description Which project the merged one folds into.
+         */
+        MergeProjectRequest: {
+            /** Into */
+            into: string;
         };
         /**
          * MonthlyTotalsResponse
@@ -5697,6 +5823,8 @@ export interface components {
             logo_url?: string | null;
             /** Name */
             name: string;
+            /** Retention Years */
+            retention_years?: number | null;
             /**
              * Timezone
              * @default UTC
@@ -5707,6 +5835,8 @@ export interface components {
         };
         /** OrganisationResponse */
         OrganisationResponse: {
+            /** Closes On */
+            closes_on?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -5722,6 +5852,8 @@ export interface components {
             logo_url?: string | null;
             /** Name */
             name: string;
+            /** Retention Years */
+            retention_years?: number | null;
             /**
              * Timezone
              * @default UTC
@@ -6599,6 +6731,7 @@ export interface components {
          * TimesheetResponse
          * @description A timesheet as both sides read it. `frozen` is set only while
          *     approved: the figures as approval saw them, which the lock then keeps.
+         *     The names come with it, for the reasons `AbsenceRequestResponse` gives.
          */
         TimesheetResponse: {
             /** Comment */
@@ -6607,11 +6740,15 @@ export interface components {
             decided_at: string | null;
             /** Decided By */
             decided_by: string | null;
+            /** Decided By Name */
+            decided_by_name: string | null;
             frozen: components["schemas"]["FrozenMonth"] | null;
             /** History */
             history: components["schemas"]["TimesheetEvent"][];
             /** Id */
             id: string;
+            /** Member Name */
+            member_name: string | null;
             /**
              * Month
              * Format: date
@@ -6619,6 +6756,8 @@ export interface components {
             month: string;
             /** Project Id */
             project_id: string;
+            /** Project Name */
+            project_name: string | null;
             status: components["schemas"]["TimesheetStatus"];
             /**
              * Submitted At
@@ -6661,14 +6800,20 @@ export interface components {
         /**
          * UpdateBeatRequest
          * @description Request body for editing a beat: these fields, and only these, change.
-         *     Tags are auto-derived, not sent. The note is not editable here: it comes
-         *     from an import, stays as stored, and a `note` in the body is ignored.
+         *     Tags are auto-derived, not sent. The note (#348): a string sets it, an
+         *     empty string clears it, and omitted or null keeps it as stored — so every
+         *     client that never sends one (the daemon, the companion, the extension)
+         *     keeps meaning what it meant. On an organisation's project the note is
+         *     part of the organisation's record (rule 3), which is why the one input
+         *     that writes it carries the marker saying who reads it.
          */
         UpdateBeatRequest: {
             /** End */
             end?: string | null;
             /** Id */
             id: string;
+            /** Note */
+            note?: string | null;
             /** Project Id */
             project_id: string;
             /**
@@ -10259,6 +10404,42 @@ export interface operations {
             };
         };
     };
+    delete_organisation_api_organisations__organisation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_absence_requests_api_organisations__organisation_id__absence_requests_get: {
         parameters: {
             query?: {
@@ -10526,6 +10707,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditEventResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    begin_closing_api_organisations__organisation_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseOrganisationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_closing_api_organisations__organisation_id__close_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationResponse"];
                 };
             };
             /** @description Not found */
@@ -11282,6 +11543,49 @@ export interface operations {
             };
         };
     };
+    merge_project_api_organisations__organisation_id__projects__project_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgProjectResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_record_api_organisations__organisation_id__record_get: {
         parameters: {
             query: {
@@ -11800,6 +12104,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_visible_csv_api_organisations__organisation_id__visible_csv_get: {
+        parameters: {
+            query: {
+                /** @description The month wanted, as YYYY-MM. */
+                month: string;
+                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
+                tz?: string | null;
+            };
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the organisation sees of the caller, as CSV. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Not found */

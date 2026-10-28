@@ -3,6 +3,7 @@ export type {
 	AdvancedFieldsValues,
 } from "./AdvancedFields";
 export { BalanceChip } from "./BalanceChip";
+export { ContractTermDialog, type ContractTermDialogProps } from "./ContractTermDialog";
 export { ContractTermFields, type ContractTermFieldsProps } from "./ContractTermFields";
 export { LoadingSpinner } from "./LoadingSpinner";
 export { isInlineFormError, NewProjectDialog } from "./NewProjectDialog";
