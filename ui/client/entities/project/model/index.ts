@@ -52,7 +52,14 @@ export {
 	weekDelta,
 } from "./ledger";
 // Mappers
-export { toApiContract, toContractWeek, toLedger, toProject, toVacationYear } from "./mappers";
+export {
+	toApiContract,
+	toContract,
+	toContractWeek,
+	toLedger,
+	toProject,
+	toVacationYear,
+} from "./mappers";
 // Picker recents (user-scoped localStorage)
 export { readPickerRecents, recordPickerRecent } from "./pickerRecents";
 // Project pins (user-scoped localStorage + custom-event sync)

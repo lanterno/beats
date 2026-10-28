@@ -10,6 +10,7 @@
  */
 
 import type { ProjectKind } from "@/entities/project";
+import type { ApiContract } from "@/shared/api";
 
 export type OrgRole = "owner" | "admin" | "manager" | "viewer" | "member";
 
@@ -314,8 +315,13 @@ export interface ManagedContract {
 	projectId: string;
 	userId: string;
 	managed: boolean;
-	/** The wire contract, passed to the project entity's mappers where edited. */
-	contract: unknown | null;
+	/**
+	 * The wire contract as `ApiManagedContractSchema` validated it — the same
+	 * shape a project read carries, handed to the project entity's mappers
+	 * where it is shown or edited. An entity may not import another, so the
+	 * mapping happens on the page.
+	 */
+	contract: ApiContract | null;
 }
 
 /** One line of the audit log. */

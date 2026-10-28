@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-query";
 import { projectKeys } from "@/entities/project";
 import { sessionKeys } from "@/entities/session";
+import type { ApiContract } from "@/shared/api";
 import { organisationsRootKey } from "@/shared/api";
 import type { InviteInput, OrganisationInput, OrgProjectInput, OrgRole, TeamInput } from "../model";
 import {
@@ -424,7 +425,7 @@ export function useSetManagedContract(organisationId: string) {
 		}: {
 			projectId: string;
 			userId: string;
-			contract: unknown | null;
+			contract: ApiContract | null;
 			managed: boolean;
 		}) => setManagedContract(organisationId, projectId, userId, contract, managed),
 		onSuccess: invalidate,

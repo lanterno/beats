@@ -265,6 +265,7 @@ export function archiveCsvUrl(organisationId: string): string {
 
 // --- Employment (docs/organisations.md, stages 3 and 4) -----------------------
 
+import type { ApiContract } from "@/shared/api";
 import {
 	ApiAbsenceRequestListSchema,
 	ApiAbsenceRequestSchema,
@@ -334,7 +335,7 @@ export async function setManagedContract(
 	organisationId: string,
 	projectId: string,
 	userId: string,
-	contract: unknown | null,
+	contract: ApiContract | null,
 	managed: boolean,
 ): Promise<ManagedContract> {
 	const data = await put<unknown>(
