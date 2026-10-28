@@ -1946,6 +1946,25 @@
         "title": "ClientWriteRequest",
         "type": "object"
       },
+      "CloseOrganisationRequest": {
+        "description": "When the organisation closes; left out, the default notice runs.",
+        "properties": {
+          "closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes On"
+          }
+        },
+        "title": "CloseOrganisationRequest",
+        "type": "object"
+      },
       "CoachStatusResponse": {
         "description": "Whether this deployment can run the coach at all. False when no\nANTHROPIC_API_KEY is configured: every route that would call the model\nthen answers 503 COACH_NOT_CONFIGURED, and a client reading this first\nleaves the coach out rather than offer it and fail.",
         "properties": {
@@ -5012,6 +5031,18 @@
       },
       "OrganisationResponse": {
         "properties": {
+          "closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes On"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -12361,6 +12392,43 @@
       }
     },
     "/api/organisations/{organisation_id}": {
+      "delete": {
+        "description": "Delete the organisation, once its notice has run out (#347). Every\nmember is handed back a personal copy of each project they hold rows or\na contract on \u2014 their rows repointed and unstamped, theirs as ever \u2014\nand everything that was the organisation's goes, its working-time\nrecord with it: the final record.csv and compliance.csv were the notice\nperiod's job. Owners; 409 before `closes_on`.",
+        "operationId": "delete_organisation_api_organisations__organisation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Organisation",
+        "tags": [
+          "Organisations"
+        ]
+      },
       "get": {
         "description": "The organisation and the caller's standing in it. Members only.",
         "operationId": "get_organisation_api_organisations__organisation_id__get",
@@ -12891,6 +12959,106 @@
         "summary": "Read Audit",
         "tags": [
           "Employment"
+        ]
+      }
+    },
+    "/api/organisations/{organisation_id}/close": {
+      "delete": {
+        "description": "Call the closing off. Owners.",
+        "operationId": "cancel_closing_api_organisations__organisation_id__close_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Closing",
+        "tags": [
+          "Organisations"
+        ]
+      },
+      "post": {
+        "description": "Start the organisation's notice (#347): it closes on the day given \u2014\nat least 30 days out, 60 by default \u2014 shown to every member in-app so\nthey export on their own clock. Tracking carries on until the day.\nOwners.",
+        "operationId": "begin_closing_api_organisations__organisation_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseOrganisationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Begin Closing",
+        "tags": [
+          "Organisations"
         ]
       }
     },

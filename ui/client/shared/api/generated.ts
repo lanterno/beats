@@ -2056,7 +2056,16 @@ export interface paths {
          */
         put: operations["update_organisation_api_organisations__organisation_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * Delete Organisation
+         * @description Delete the organisation, once its notice has run out (#347). Every
+         *     member is handed back a personal copy of each project they hold rows or
+         *     a contract on — their rows repointed and unstamped, theirs as ever —
+         *     and everything that was the organisation's goes, its working-time
+         *     record with it: the final record.csv and compliance.csv were the notice
+         *     period's job. Owners; 409 before `closes_on`.
+         */
+        delete: operations["delete_organisation_api_organisations__organisation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2189,6 +2198,33 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organisations/{organisation_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin Closing
+         * @description Start the organisation's notice (#347): it closes on the day given —
+         *     at least 30 days out, 60 by default — shown to every member in-app so
+         *     they export on their own clock. Tracking carries on until the day.
+         *     Owners.
+         */
+        post: operations["begin_closing_api_organisations__organisation_id__close_post"];
+        /**
+         * Cancel Closing
+         * @description Call the closing off. Owners.
+         */
+        delete: operations["cancel_closing_api_organisations__organisation_id__close_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4488,6 +4524,14 @@ export interface components {
             rates: components["schemas"]["RateTerm"][];
         };
         /**
+         * CloseOrganisationRequest
+         * @description When the organisation closes; left out, the default notice runs.
+         */
+        CloseOrganisationRequest: {
+            /** Closes On */
+            closes_on?: string | null;
+        };
+        /**
          * CoachStatusResponse
          * @description Whether this deployment can run the coach at all. False when no
          *     ANTHROPIC_API_KEY is configured: every route that would call the model
@@ -5791,6 +5835,8 @@ export interface components {
         };
         /** OrganisationResponse */
         OrganisationResponse: {
+            /** Closes On */
+            closes_on?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -10358,6 +10404,42 @@ export interface operations {
             };
         };
     };
+    delete_organisation_api_organisations__organisation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_absence_requests_api_organisations__organisation_id__absence_requests_get: {
         parameters: {
             query?: {
@@ -10625,6 +10707,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditEventResponse"][];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    begin_closing_api_organisations__organisation_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseOrganisationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationResponse"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_closing_api_organisations__organisation_id__close_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organisation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationResponse"];
                 };
             };
             /** @description Not found */
