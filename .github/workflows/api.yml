@@ -36,9 +36,9 @@ jobs:
         # 9.0 images refuse to start on Linux 6.19+ (SERVER-121912,
         # SERVER-136272), the kernel some GitHub runners now have, and fail the
         # job in "Initialize containers". 8.2 predates that check. Move on once
-        # MongoDB ships the TCMalloc fix (AHM-107); a Renovate PR to 9 will fail
-        # the same way until then.
-        image: mongo:8.3
+        # MongoDB ships the TCMalloc fix (#356); renovate.json pins this one
+        # image until then, since Renovate auto-merged the bump to 8.3 (#286).
+        image: mongo:8.2
         ports: [27017:27017]
         options: >-
           --health-cmd "mongosh --eval 'db.runCommand({ping:1})' --quiet"

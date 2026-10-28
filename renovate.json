@@ -25,6 +25,13 @@
       "matchPackageNames": ["react", "react-dom", "@types/react", "@types/react-dom"],
       "groupName": "React",
       "description": "Keep React packages in sync"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["mongo"],
+      "matchFileNames": [".github/workflows/api.yml"],
+      "enabled": false,
+      "description": "CI's Mongo service stays at 8.2: 8.3 and 9 refuse to start on the Linux 6.19+ runners (#356)"
     }
   ]
 }
