@@ -8,7 +8,7 @@
  * why it asks first.
  */
 
-import { Layers, Pencil, Plus, X } from "lucide-react";
+import { GitMerge, Layers, Pencil, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import { AssignMembersDialog } from "./AssignMembersDialog";
 import { EnterTimeDialog } from "./EnterTimeDialog";
 import { KIND_LABELS } from "./kinds";
 import { ManagedContractDialog } from "./ManagedContractDialog";
+import { MergeProjectDialog } from "./MergeProjectDialog";
 import { OrgProjectDialog } from "./OrgProjectDialog";
 import { Section } from "./Section";
 import { CHIP, LEAD, LINKISH, LIST } from "./styles";
@@ -46,6 +47,7 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 	const unassign = useUnassignMember(organisationId);
 	const { confirm, confirmDialog } = useConfirm();
 	const [editor, setEditor] = useState<Editor | null>(null);
+	const [merging, setMerging] = useState<string | null>(null);
 	const [act, setAct] = useState<MemberAct | null>(null);
 	const [assigning, setAssigning] = useState<string | null>(null);
 	// `/members` answers active members; this tab is an admin's, who decides.
@@ -53,6 +55,7 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 	// The open dialog reads the project off the query, so an assignment that
 	// lands while it is open narrows its list rather than going stale.
 	const assigningProject = (projects.data ?? []).find((p) => p.id === assigning);
+	const mergingProject = (projects.data ?? []).find((p) => p.id === merging);
 
 	const takeOff = async (project: OrgProject, userId: string, name: string) => {
 		const ok = await confirm({
@@ -118,6 +121,19 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 										<Pencil className="w-3 h-3" aria-hidden="true" />
 										Edit
 									</Button>
+									{(projects.data?.length ?? 0) > 1 && (
+										<Button
+											type="button"
+											variant="secondary"
+											size="sm"
+											className="h-7 px-2.5 text-xs"
+											onClick={() => setMerging(project.id)}
+											aria-label={`Merge ${project.name} into another project`}
+										>
+											<GitMerge className="w-3 h-3" aria-hidden="true" />
+											Merge…
+										</Button>
+									)}
 								</div>
 								<div className="flex flex-wrap items-center gap-1.5">
 									{onIt.map((a) => (
@@ -205,6 +221,15 @@ export function ProjectsSection({ organisationId }: { organisationId: string }) 
 					organisationId={organisationId}
 					project={assigningProject}
 					onClose={() => setAssigning(null)}
+				/>
+			)}
+			{merging && mergingProject && (
+				<MergeProjectDialog
+					key={merging}
+					organisationId={organisationId}
+					project={mergingProject}
+					targets={(projects.data ?? []).filter((p) => p.id !== merging)}
+					onClose={() => setMerging(null)}
 				/>
 			)}
 			{editor && (

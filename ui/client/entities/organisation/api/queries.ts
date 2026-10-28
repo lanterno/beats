@@ -48,6 +48,7 @@ import {
 	fetchVisible,
 	joinOrganisation,
 	leaveOrganisation,
+	mergeOrgProject,
 	removeMember,
 	reopenTimesheet,
 	requestAbsence,
@@ -323,6 +324,18 @@ export function useUpdateOrgProject(organisationId: string) {
 		mutationFn: ({ projectId, input }: { projectId: string; input: OrgProjectInput }) =>
 			updateOrgProject(organisationId, projectId, input),
 		onSuccess: invalidate,
+	});
+}
+
+export function useMergeOrgProject(organisationId: string) {
+	// The merged-away project leaves every member's own list, so the
+	// project and session roots refresh with the organisation's.
+	const invalidate = useInvalidateTimeline(organisationId);
+	return useMutation({
+		mutationFn: ({ projectId, into }: { projectId: string; into: string }) =>
+			mergeOrgProject(organisationId, projectId, into),
+		onSuccess: invalidate,
+		retry: false,
 	});
 }
 

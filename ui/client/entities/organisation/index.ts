@@ -34,6 +34,7 @@ export {
 	useMembers,
 	useMembership,
 	useMemberships,
+	useMergeOrgProject,
 	useOrgProjects,
 	useOrgRecord,
 	useRemoveMember,

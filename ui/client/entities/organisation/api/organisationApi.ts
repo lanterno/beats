@@ -194,6 +194,18 @@ export async function updateOrgProject(
 	return toOrgProject(parseApiResponse(ApiOrgProjectSchema, data));
 }
 
+/** Fold one of the organisation's projects into another (decision 28). */
+export async function mergeOrgProject(
+	organisationId: string,
+	projectId: string,
+	into: string,
+): Promise<OrgProject> {
+	const data = await post<unknown>(`${BASE}/${organisationId}/projects/${projectId}/merge`, {
+		into,
+	});
+	return toOrgProject(parseApiResponse(ApiOrgProjectSchema, data));
+}
+
 export async function assignMember(
 	organisationId: string,
 	projectId: string,
