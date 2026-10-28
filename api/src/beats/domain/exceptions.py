@@ -578,6 +578,18 @@ class MergeIntoItself(DomainException):
     code = "MERGE_INTO_ITSELF"
 
 
+class RetentionBelowFloor(DomainException):
+    """A retention setting under the jurisdiction's statutory minimum. The
+    floor is the law's, not ours; the message names it."""
+
+    status_code = 409
+    code = "RETENTION_BELOW_FLOOR"
+
+    def __init__(self, country: str | None, floor: int):
+        where = country or "an organisation without a country"
+        super().__init__(f"The working-time record must be kept at least {floor} years for {where}")
+
+
 class CoachNotConfigured(DomainException):
     """The coach needs an Anthropic API key and this deployment has none.
     Every route that would call the model answers this instead of trying,

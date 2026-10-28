@@ -39,6 +39,7 @@ from beats.domain.exceptions import (
     PeriodApproved,
     ProjectHasBilling,
     ProjectNotFound,
+    RetentionBelowFloor,
     ShareFromInFuture,
     UnknownHolidayRegion,
     UnknownTimezone,
@@ -70,6 +71,7 @@ from beats.domain.ports import (
     OrganisationStore,
     UserDirectory,
 )
+from beats.domain.retention import retention_floor
 from beats.domain.services import worked_by_local_day
 from beats.domain.timesheet import month_end
 from beats.domain.utils import local_date, normalize_tz
@@ -243,6 +245,10 @@ class OrganisationService:
             ZoneInfo(fields.timezone)
         except ZoneInfoNotFoundError, ValueError:
             raise UnknownTimezone(fields.timezone) from None
+        if fields.retention_years is not None:
+            floor = retention_floor(fields.holiday_country)
+            if fields.retention_years < floor:
+                raise RetentionBelowFloor(fields.holiday_country, floor)
 
     # --- organisations -------------------------------------------------------------
 
