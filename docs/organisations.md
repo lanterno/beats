@@ -45,16 +45,20 @@ The roadmap left three open and gated the stage on them. They were settled
 first, then the model was built on them.
 
 1. **The note crosses; tags do not.** Rule 3 names the entry's note, and the
-   organisation reads it. Today no surface writes a note — the companion's
-   "How did it go?" sheet went with the last free-text inputs, the web app
-   takes none, and the API ignores a note on edit — so a note arrives only
-   through an import, and the marker the roadmap asked for goes where a note
-   is *shown* on an organisation's project: beside it, "Acme can read this
-   note" (`TodayFeed`, `WeekDays`). Any surface that brings a note input back
-   must ship the marker on the input with it. Tags are derived from the
-   daemon's flow windows — how someone worked, not what on — and stay on the
-   far side with the flow scores. An absence's note never crosses either; an
-   absence is its date, type and half day, as the timesheet already had it.
+   organisation reads it. The marker the roadmap asked for goes wherever a
+   note is *shown* on an organisation's project — beside it, "Acme can read
+   this note" (`TodayFeed`, `WeekDays`) — and, since #348, on the one input
+   that writes one: the web app's session editor, where the marker describes
+   the input itself and follows the project picked, so nobody writes
+   something personal without seeing who reads it. (The companion's "How did
+   it go?" sheet went with the last free-text inputs and has not returned;
+   the API's wire rule — a string sets, an empty string clears, omitted
+   keeps — means a client without the input cannot erase a note.) Any other
+   surface that brings a note input back ships the marker the same way.
+   Tags are derived from the daemon's flow windows — how someone worked, not
+   what on — and stay on the far side with the flow scores. An absence's
+   note never crosses either; an absence is its date, type and half day, as
+   the timesheet already had it.
 2. **No live presence, in this stage or any other.** The organisation's read
    takes finished entries only and carries no `running` flag, as 1c's report
    link does, so an employer cannot learn from its working-time record
@@ -489,8 +493,12 @@ Recorded here so they are decisions, not omissions:
 
 ## Left out, still
 
-- **Deleting an organisation**; archiving its projects is the way out today.
-- **A note input** on any surface, and with it the marker on the input.
+- **Deleting an organisation**; archiving its projects is the way out today
+  (it waits on the retention machinery — see the stage 4 items above).
+
+Done since: **a note input, with its marker** — the web app's session editor
+(decision 1, #348). And: **the merge** (decision 28, #346), and **the
+compliance warnings** (decision 26, #350).
 
 Done since: **term editing in the employer's dialog**. The managed-contract
 dialog lists an assignment's terms with the day each takes effect and which
