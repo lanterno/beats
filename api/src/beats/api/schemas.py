@@ -873,6 +873,12 @@ class OrgProjectRequest(BaseModel):
     archived: bool = False
 
 
+class MergeProjectRequest(BaseModel):
+    """Which project the merged one folds into."""
+
+    into: str = Field(min_length=1)
+
+
 class AssignmentResponse(BaseModel):
     user_id: str
     name: str | None

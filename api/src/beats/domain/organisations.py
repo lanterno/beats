@@ -30,11 +30,13 @@ from beats.domain.exceptions import (
     JoinRequestPending,
     LastOwner,
     MemberNotFound,
+    MergeIntoItself,
     NotAssigned,
     OrganisationNotFound,
     OrganisationProject,
     OrganisationRoleRequired,
     OwnerRoleReserved,
+    PeriodApproved,
     ProjectHasBilling,
     ProjectNotFound,
     ShareFromInFuture,
@@ -57,6 +59,7 @@ from beats.domain.models import (
     OrgMembership,
     OrgProject,
     OrgRole,
+    TimesheetStatus,
 )
 from beats.domain.ports import (
     BillingPresence,
@@ -753,6 +756,71 @@ class OrganisationService:
             organisation=member.organisation.name,
         )
         return assignment
+
+    async def merge_project(
+        self, organisation_id: str, actor: str, source_id: str, target_id: str
+    ) -> ProjectMembers:
+        """Fold one of the organisation's projects into another (decision
+        28) — the way out of the duplicate a connect leaves when the
+        organisation already had a project for the same work. Admins.
+
+        Every row keyed by the source moves to the target with its stamp
+        untouched, so rule 4 holds without being re-decided: what the
+        member chose to share stays shared from that instant, and what was
+        private stays private, now under the surviving project on their
+        own timeline. Each active assignment folds into the target's,
+        which survives as it stands (decision 17's spirit) — the earlier
+        `shared_from`, and the source's contract only where the target's
+        assignment has none. Refused while an approved timesheet exists on
+        either side (409 PERIOD_APPROVED): a frozen figure must not gain
+        or lose rows silently; reopen first. A sheet submitted over the
+        source alone is dropped — its month no longer stands apart — and
+        is resubmitted over the merged project. The source document is
+        then deleted, and the audit log holds the whole act."""
+        await self._member(organisation_id, actor, OrgRole.ADMIN)
+        if source_id == target_id:
+            raise MergeIntoItself()
+        source = await self.store.get_project(organisation_id, source_id)
+        if source is None:
+            raise ProjectNotFound(source_id)
+        target = await self.store.get_project(organisation_id, target_id)
+        if target is None:
+            raise ProjectNotFound(target_id)
+        approved = [
+            sheet.month
+            for project_id in (source_id, target_id)
+            for sheet in await self.store.list_timesheets(organisation_id, project_id=project_id)
+            if sheet.status is TimesheetStatus.APPROVED
+        ]
+        if approved:
+            raise PeriodApproved(min(approved))
+        for a in await self.store.list_assignments(organisation_id, project_id=source_id):
+            existing = await self.store.assignment(organisation_id, target_id, a.user_id)
+            if existing is None:
+                folded = a.model_copy(update={"project_id": target_id})
+            else:
+                update: dict[str, Any] = {"shared_from": min(existing.shared_from, a.shared_from)}
+                if existing.contract is None and a.contract is not None:
+                    update["contract"] = a.contract
+                    update["contract_managed"] = a.contract_managed
+                folded = existing.model_copy(update=update)
+            await self.store.open_assignment(folded, keep_personal=False)
+        await self.store.delete_assignments(organisation_id, source_id)
+        moved = await self.store.repoint_project_rows(source_id, target_id)
+        dropped = await self.store.delete_unapproved_timesheets(organisation_id, source_id)
+        await self.store.delete_project(organisation_id, source_id)
+        await self._audit(
+            organisation_id,
+            actor,
+            "project.merged",
+            project_id=target_id,
+            source=source.name,
+            target=target.name,
+            moved=moved,
+            dropped_timesheets=dropped,
+        )
+        [with_members] = await self._with_members(organisation_id, [target])
+        return with_members
 
     # --- the record --------------------------------------------------------------------
 

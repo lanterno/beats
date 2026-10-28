@@ -78,6 +78,7 @@ class MongoOrganisationStore:
     memberships) are named as such."""
 
     def __init__(self, db: AsyncDatabase):
+        self._db = db  # the merge repoints member rows across users, as erasure does
         self.organisations: AsyncCollection = db.organisations
         self.members: AsyncCollection = db.org_members
         self.invites: AsyncCollection = db.org_invites
@@ -458,6 +459,52 @@ class MongoOrganisationStore:
         result = await self.assignments.update_many(query, {"$set": {"ended_at": at.isoformat()}})
         return result.modified_count
 
+    # --- merging a connected project (docs/organisations.md, decision 28) --------
+
+    async def repoint_project_rows(self, source_id: str, target_id: str) -> dict[str, int]:
+        """Every row keyed by the source project now keys by the target: the
+        members' own beats, absences and balance adjustments — stamps
+        untouched, so what was the organisation's record stays exactly that
+        and what was private stays private — and the organisation's absence
+        requests. The one write besides erasure that crosses user scopes,
+        made only by the merge, after the service has checked both projects
+        are the same organisation's."""
+        moved: dict[str, int] = {}
+        for name, collection in (
+            ("beats", self._db.timeLogs),
+            ("absences", self._db.absences),
+            ("adjustments", self._db.balance_adjustments),
+            ("absence_requests", self.absence_requests),
+        ):
+            result = await collection.update_many(
+                {"project_id": source_id}, {"$set": {"project_id": target_id}}
+            )
+            moved[name] = result.modified_count
+        return moved
+
+    async def delete_assignments(self, organisation_id: str, project_id: str) -> int:
+        result = await self.assignments.delete_many(
+            {"organisation_id": organisation_id, "project_id": project_id}
+        )
+        return result.deleted_count
+
+    async def delete_unapproved_timesheets(self, organisation_id: str, project_id: str) -> int:
+        result = await self.timesheets.delete_many(
+            {
+                "organisation_id": organisation_id,
+                "project_id": project_id,
+                "status": {"$ne": TimesheetStatus.APPROVED.value},
+            }
+        )
+        return result.deleted_count
+
+    async def delete_project(self, organisation_id: str, project_id: str) -> bool:
+        oid = oid_or_none(project_id)
+        if oid is None:
+            return False
+        result = await self.projects.delete_one({"_id": oid, "organisation_id": organisation_id})
+        return result.deleted_count == 1
+
     # --- teams (stage 4) --------------------------------------------------------
 
     async def create_team(self, team: OrgTeam) -> OrgTeam:
@@ -644,12 +691,15 @@ class MongoOrganisationStore:
         *,
         user_id: str | None = None,
         month: date | None = None,
+        project_id: str | None = None,
     ) -> list[OrgTimesheet]:
         query: dict[str, Any] = {"organisation_id": organisation_id}
         if user_id is not None:
             query["user_id"] = user_id
         if month is not None:
             query["month"] = month.isoformat()
+        if project_id is not None:
+            query["project_id"] = project_id
         docs = await self.timesheets.find(query).sort("month", -1).to_list(length=None)
         return [_load(OrgTimesheet, doc) for doc in docs]
 

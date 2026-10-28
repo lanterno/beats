@@ -570,6 +570,14 @@ class ShareFromInFuture(DomainException):
     code = "SHARE_FROM_IN_FUTURE"
 
 
+class MergeIntoItself(DomainException):
+    """A merge names one project twice. Nothing to fold."""
+
+    status_code = 409
+    message = "A project cannot be merged into itself"
+    code = "MERGE_INTO_ITSELF"
+
+
 class CoachNotConfigured(DomainException):
     """The coach needs an Anthropic API key and this deployment has none.
     Every route that would call the model answers this instead of trying,

@@ -49,6 +49,7 @@ from beats.api.schemas import (
     MemberRecordResponse,
     MemberResponse,
     MembershipResponse,
+    MergeProjectRequest,
     OrganisationCardResponse,
     OrganisationResponse,
     OrgProjectRequest,
@@ -440,6 +441,26 @@ async def update_project(
     out keeps its value. Admins."""
     sent: dict[str, Any] = {k: getattr(request, k) for k in request.model_fields_set}
     return _project(await service.update_project(organisation_id, user_id, project_id, sent))
+
+
+@router.post(
+    "/{organisation_id}/projects/{project_id}/merge",
+    response_model=OrgProjectResponse,
+)
+async def merge_project(
+    organisation_id: str,
+    project_id: str,
+    request: MergeProjectRequest,
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+):
+    """Fold this project into another of the organisation's — the way out
+    of the duplicate a connect leaves when the organisation already had a
+    project for the same work. Every row moves with its stamp untouched,
+    assignments fold (the earlier shared-from; the target's contract
+    stands), and the merged project is deleted. Refused while an approved
+    timesheet exists on either side (409 PERIOD_APPROVED). Admins."""
+    return _project(await service.merge_project(organisation_id, user_id, project_id, request.into))
 
 
 @router.put(
