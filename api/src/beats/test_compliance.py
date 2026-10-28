@@ -10,7 +10,7 @@ no rest to judge. The CSV's shape and the HTTP contract stay in
 from datetime import UTC, date, datetime, timedelta
 from typing import NamedTuple
 
-from beats.domain.employment import MAX_DAILY_HOURS, MIN_REST_HOURS, compliance_warnings
+from beats.domain.employment import MAX_DAILY_HOURS, compliance_warnings
 from beats.domain.models import MemberTotals, OrgProject
 from beats.domain.organisations import MemberRecord, ProjectRecord, RecordEntry
 
@@ -87,12 +87,11 @@ class TestDailyMaximum:
 
 class TestRestPeriod:
     def test_exactly_eleven_hours_rest_is_lawful(self):
-        # Ends 18:00, resumes 05:00 next day: exactly MIN_REST_HOURS.
+        # Ends 18:00, resumes 05:00 next day: exactly the 11 hours owed.
         record = _record(
             ("P", [_member("u1", [_entry(3, 10, 8), _entry(4, 5, 4)])]),
         )
         assert compliance_warnings(record) == {}
-        assert MIN_REST_HOURS == 11.0
 
     def test_short_rest_warns_on_the_later_day(self):
         # Ends 22:00 on the 3rd, starts 06:00 on the 4th: 8 hours' rest.

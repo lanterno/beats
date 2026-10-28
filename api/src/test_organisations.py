@@ -1548,6 +1548,17 @@ class TestRetention:
         stone = dict(db.timeLogs.find_one({"_id": ObjectId(old["id"])}))
         stone.pop("_id")
         stone_id = db.timeLogs.insert_one({**stone, "user_id": "erased:m1"}).inserted_id
+        # A tombstoned balance adjustment carries no stamp — the purge must
+        # find it through the organisation's projects, as erasure left it.
+        db.balance_adjustments.insert_one(
+            {
+                "user_id": "erased:m1",
+                "project_id": project["id"],
+                "date": "2020-01-12",
+                "kind": "delta",
+                "hours": 2.0,
+            }
+        )
         db.org_timesheets.insert_one(
             {
                 "organisation_id": org["id"],
@@ -1582,6 +1593,7 @@ class TestRetention:
         [mine] = [o for o in dry.organisations if o.organisation_id == org["id"]]
         assert mine.counts["beats_unstamped"] == 1
         assert mine.counts["beats_deleted"] == 1
+        assert mine.counts["adjustments_deleted"] == 1
         assert mine.counts["timesheets_deleted"] == 1
         assert mine.counts["audit_deleted"] == 1
         # Dry means dry: the stamp is still on the old row.
@@ -1592,6 +1604,7 @@ class TestRetention:
         assert survivor is not None, "a living member's row is theirs, not the record's"
         assert "organisation_id" not in survivor
         assert db.timeLogs.find_one({"_id": stone_id}) is None
+        assert db.balance_adjustments.count_documents({"user_id": "erased:m1"}) == 0
         assert db.timeLogs.find_one({"_id": ObjectId(young["id"])})["organisation_id"] == org["id"]
         assert db.org_timesheets.count_documents({"organisation_id": org["id"]}) == 0
         assert db.org_audit.count_documents({"organisation_id": org["id"], "event": "old"}) == 0
