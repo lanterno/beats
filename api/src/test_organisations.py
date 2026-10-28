@@ -1862,7 +1862,9 @@ class TestTeamsAndRoles:
         )
         assert compliance.status_code == 200
         header, *rows_csv = compliance.text.splitlines()
-        assert header == "member,project,day,first_start,last_end,break_minutes,worked_hours"
+        assert header == (
+            "member,project,day,first_start,last_end,break_minutes,worked_hours,warnings"
+        )
         assert len(rows_csv) == 2
 
         # Changes nothing: no deciding, no administering, no audit.
@@ -1915,7 +1917,24 @@ class TestTeamsAndRoles:
             headers=auth_headers,
         ).text
         [row] = csv_text.splitlines()[1:]
-        assert row.endswith(",30,2.00")
+        # Two lawful hours: the breaks and total, and no warning raised.
+        assert row.endswith(",30,2.00,")
+
+    def test_compliance_warns_on_long_days_and_short_rests(self, client, auth_headers):
+        """#350: the warnings are derived from the same rows on every read —
+        an 11-hour day, then a start 8 hours after it ends."""
+        member = _new_user()
+        org, project, _member_id = _employed(client, auth_headers, member, managed=False)
+        _beat(client, member, project["id"], "2026-03-03T08:00:00", 660)  # 08:00–19:00
+        _beat(client, member, project["id"], "2026-03-04T03:00:00", 120)  # 8 h after
+        csv_text = client.get(
+            f"/api/organisations/{org['id']}/compliance.csv",
+            params={"month": "2026-03", "tz": "UTC"},
+            headers=auth_headers,
+        ).text
+        day_one, day_two = csv_text.splitlines()[1:]
+        assert day_one.endswith(",day over 10 h (11.00 h)")
+        assert day_two.endswith(",rest under 11 h (8.00 h after 2026-03-03)")
 
     def test_the_audit_log_reads_newest_first_for_admins(self, client, auth_headers):
         member = _new_user()
