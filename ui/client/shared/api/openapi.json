@@ -7189,7 +7189,7 @@
         "type": "object"
       },
       "UpdateBeatRequest": {
-        "description": "Request body for editing a beat: these fields, and only these, change.\nTags are auto-derived, not sent. The note is not editable here: it comes\nfrom an import, stays as stored, and a `note` in the body is ignored.",
+        "description": "Request body for editing a beat: these fields, and only these, change.\nTags are auto-derived, not sent. The note (#348): a string sets it, an\nempty string clears it, and omitted or null keeps it as stored \u2014 so every\nclient that never sends one (the daemon, the companion, the extension)\nkeeps meaning what it meant. On an organisation's project the note is\npart of the organisation's record (rule 3), which is why the one input\nthat writes it carries the marker saying who reads it.",
         "properties": {
           "end": {
             "anyOf": [
@@ -7206,6 +7206,18 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           },
           "project_id": {
             "title": "Project Id",
@@ -8649,7 +8661,7 @@
         ]
       },
       "put": {
-        "description": "Edit a beat's project, start and end. The note and every other stored\nfield stay as stored; the tags are re-derived from the new times when the\ndaemon has flow windows for them, and kept when it has none. A beat the\ncaller does not hold is a 404.",
+        "description": "Edit a beat's project, start, end and \u2014 when one is sent \u2014 its note:\na string sets it, an empty string clears it, omitted keeps it as stored\n(#348). Every other stored field stays; the tags are re-derived from the\nnew times when the daemon has flow windows for them, and kept when it\nhas none. A beat the caller does not hold is a 404.",
         "operationId": "update_beat_api_beats__put",
         "requestBody": {
           "content": {

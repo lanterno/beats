@@ -386,10 +386,11 @@ export interface paths {
         get: operations["list_beats_api_beats__get"];
         /**
          * Update Beat
-         * @description Edit a beat's project, start and end. The note and every other stored
-         *     field stay as stored; the tags are re-derived from the new times when the
-         *     daemon has flow windows for them, and kept when it has none. A beat the
-         *     caller does not hold is a 404.
+         * @description Edit a beat's project, start, end and — when one is sent — its note:
+         *     a string sets it, an empty string clears it, omitted keeps it as stored
+         *     (#348). Every other stored field stays; the tags are re-derived from the
+         *     new times when the daemon has flow windows for them, and kept when it
+         *     has none. A beat the caller does not hold is a 404.
          */
         put: operations["update_beat_api_beats__put"];
         /**
@@ -6749,14 +6750,20 @@ export interface components {
         /**
          * UpdateBeatRequest
          * @description Request body for editing a beat: these fields, and only these, change.
-         *     Tags are auto-derived, not sent. The note is not editable here: it comes
-         *     from an import, stays as stored, and a `note` in the body is ignored.
+         *     Tags are auto-derived, not sent. The note (#348): a string sets it, an
+         *     empty string clears it, and omitted or null keeps it as stored — so every
+         *     client that never sends one (the daemon, the companion, the extension)
+         *     keeps meaning what it meant. On an organisation's project the note is
+         *     part of the organisation's record (rule 3), which is why the one input
+         *     that writes it carries the marker saying who reads it.
          */
         UpdateBeatRequest: {
             /** End */
             end?: string | null;
             /** Id */
             id: string;
+            /** Note */
+            note?: string | null;
             /** Project Id */
             project_id: string;
             /**
