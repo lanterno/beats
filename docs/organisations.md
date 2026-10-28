@@ -432,6 +432,25 @@ what only matters past a handful of people. Decisions 21–27:
     (`MongoOrganisationStore.repoint_project_rows`), made only after both
     projects are checked to be the same organisation's.
 
+29. **Closing is notice; deletion is the connect run backwards.** An owner
+    starts a clock (`POST /{id}/close`, at least 30 days out, 60 by
+    default, judged in the organisation's timezone) that every member sees
+    in-app through the organisation they already read — the notice
+    decision 11's no-email rule leaves us. Tracking carries on until the
+    day, and the closing can be called off (`DELETE /{id}/close`).
+    `DELETE /{id}` works only from the day on (409
+    `ORGANISATION_STILL_CLOSING` / `ORGANISATION_NOT_CLOSING`): each
+    member is handed a personal copy of every project they hold rows or a
+    contract on — the organisation's fields as they stood, their
+    assignment's half, the contract theirs again whoever held the pen —
+    their rows repointed to it and unstamped, archived where their
+    assignment had ended. Then everything that was the organisation's
+    goes, its working-time record included: the final `record.csv` and
+    `compliance.csv` are the notice period's job and the copy that
+    survives, said in the owner's UI in those words. Tombstoned rows go
+    too — the record's keeper is destroying the record. Hand-backs run
+    before the wipe, so a crash midway strands nothing of a member's.
+
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.
 
@@ -499,8 +518,7 @@ Recorded here so they are decisions, not omissions:
 
 ## Left out, still
 
-- **Deleting an organisation**; archiving its projects is the way out today
-  (it waits on the retention machinery — see the stage 4 items above).
+Nothing. The last entry, **deleting an organisation**, is decision 29.
 
 Done since: **a note input, with its marker** — the web app's session editor
 (decision 1, #348). And: **the merge** (decision 28, #346), and **the
