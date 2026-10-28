@@ -68,7 +68,7 @@ goal. Git history has the plans.
     history of how a goal changed over time.
 11. **Timesheets and export are a follow-up.** The product goal of this
     iteration is the *week*: expected, worked, remaining, balance.
-    The monthly timesheet followed (AHM-30): see "The timesheet" below.
+    The monthly timesheet followed: see "The timesheet" below.
 12. **Employer holidays are dated full days on the contract.** Where an
     employer's days off differ from its region's, the contract says so in
     two lists: `company_holidays` adds days (Christmas Eve, a bridge day),
