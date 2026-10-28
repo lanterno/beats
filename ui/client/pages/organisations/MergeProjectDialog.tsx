@@ -14,7 +14,7 @@ import type { OrgProject } from "@/entities/organisation";
 import { useMergeOrgProject } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
 import { Button, Dialog } from "@/shared/ui";
-import { LEAD } from "./styles";
+import { FIELD, LABEL, LEAD } from "./styles";
 
 export function MergeProjectDialog({
 	organisationId,
@@ -59,17 +59,14 @@ export function MergeProjectDialog({
 		>
 			<div className="space-y-3">
 				<div>
-					<label
-						htmlFor={`${id}-into`}
-						className="block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1.5"
-					>
+					<label htmlFor={`${id}-into`} className={LABEL}>
 						The project that stays
 					</label>
 					<select
 						id={`${id}-into`}
 						value={into}
 						onChange={(e) => setInto(e.target.value)}
-						className="w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent"
+						className={FIELD}
 					>
 						{targets.map((t) => (
 							<option key={t.id} value={t.id}>

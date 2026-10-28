@@ -92,6 +92,7 @@ export {
 	nominalLine,
 	partitionByArchived,
 	permanentOverrideOn,
+	placeTerm,
 	projection,
 	type SearchField,
 	sortProjectsForList,

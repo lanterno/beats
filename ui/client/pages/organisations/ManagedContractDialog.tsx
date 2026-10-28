@@ -25,6 +25,7 @@ import type { Contract, ContractTerm } from "@/entities/project";
 import {
 	ContractTermDialog,
 	describeTerm,
+	placeTerm,
 	sortTerms,
 	termFormDefaults,
 	termOn,
@@ -35,7 +36,7 @@ import type { ApiContract } from "@/shared/api";
 import { describeError } from "@/shared/api";
 import { formatDateOnly, todayIso } from "@/shared/lib";
 import { Button, Dialog } from "@/shared/ui";
-import { LEAD } from "./styles";
+import { LABEL, LEAD } from "./styles";
 
 type Editor = { mode: "add" } | { mode: "edit"; index: number };
 
@@ -92,10 +93,12 @@ export function ManagedContractDialog({
 		);
 	};
 
-	/** Write the whole contract with `terms` replaced, keeping management on. */
+	/** Write the whole contract with `terms` replaced — already in the API's
+	 * order (`placeTerm`, or a filter over the sorted list) — keeping
+	 * management on. */
 	const saveTerms = (next: ContractTerm[], done: () => void, onError?: (err: unknown) => void) => {
 		if (!contract) return;
-		const nextContract: ApiContract = toApiContract({ ...contract, terms: sortTerms(next) });
+		const nextContract: ApiContract = toApiContract({ ...contract, terms: next });
 		save.mutate(
 			{ projectId, userId, contract: nextContract, managed: true },
 			{
@@ -148,9 +151,7 @@ export function ManagedContractDialog({
 
 					{editable && (
 						<div className="space-y-1.5 rounded-2xl bg-secondary p-3">
-							<h3 className="font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-								Terms
-							</h3>
+							<h3 className={LABEL}>Terms</h3>
 							<ul className="space-y-1">
 								{terms.map((term, index) => (
 									<li
@@ -249,18 +250,14 @@ export function ManagedContractDialog({
 					returnFocus={() => changeButton.current}
 					onClose={() => setEditor(null)}
 					onSave={(term, onError) => {
-						const nextTerms =
-							editor.mode === "edit"
-								? terms.map((t, i) => (i === editor.index ? term : t))
-								: [...terms, term];
-						const savedIndex = sortTerms(nextTerms).indexOf(term);
+						const placed = placeTerm(terms, editor.mode === "edit" ? editor.index : null, term);
 						saveTerms(
-							nextTerms,
+							placed.terms,
 							() => {
 								toast.success(editor.mode === "edit" ? "Term updated" : "Contract changed");
 								setEditor(null);
 							},
-							(err) => onError(err, savedIndex),
+							(err) => onError(err, placed.savedIndex),
 						);
 					}}
 				/>

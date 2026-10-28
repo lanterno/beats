@@ -34,6 +34,7 @@ import {
 	describeTerm,
 	formatSignedHours,
 	permanentOverrideOn,
+	placeTerm,
 	sortTerms,
 	standingGoalOn,
 	termFormDefaults,
@@ -619,12 +620,8 @@ function ContractVariant({
 					returnFocus={() => changeButton.current}
 					onClose={() => setEditor(null)}
 					onSave={(term, onError) => {
-						const nextTerms =
-							editor.mode === "edit"
-								? terms.map((t, i) => (i === editor.index ? term : t))
-								: [...terms, term];
-						const savedIndex = sortTerms(nextTerms).indexOf(term);
-						const nextContract: Contract = { ...contract, terms: sortTerms(nextTerms) };
+						const placed = placeTerm(terms, editor.mode === "edit" ? editor.index : null, term);
+						const nextContract: Contract = { ...contract, terms: placed.terms };
 						updateContract.mutate(
 							{ projectId: project.id, contract: toApiContract(nextContract) },
 							{
@@ -632,7 +629,7 @@ function ContractVariant({
 									toast.success(editor.mode === "edit" ? "Term updated" : "Contract changed");
 									setEditor(null);
 								},
-								onError: (err) => onError(err, savedIndex),
+								onError: (err) => onError(err, placed.savedIndex),
 							},
 						);
 					}}

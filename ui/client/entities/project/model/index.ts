@@ -30,6 +30,7 @@ export {
 	contractFieldErrors,
 	contractFrameDefaults,
 	contractFromForm,
+	placeTerm,
 	type TermFieldErrors,
 	type TermFormValues,
 	termFormDefaults,

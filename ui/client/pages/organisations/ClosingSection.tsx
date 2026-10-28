@@ -18,9 +18,7 @@ import { useBeginClosing, useCancelClosing, useDeleteOrganisation } from "@/enti
 import { describeError } from "@/shared/api";
 import { Button, Dialog, useConfirm } from "@/shared/ui";
 import { Section } from "./Section";
-import { LEAD, LINKISH } from "./styles";
-
-const DANGER_HOVER = "hover:text-destructive-ink";
+import { DANGER_HOVER, FIELD, LABEL, LEAD, LINKISH } from "./styles";
 
 /** The API's default notice, mirrored for the date input's initial value. */
 const DEFAULT_NOTICE_DAYS = 60;
@@ -134,10 +132,7 @@ export function ClosingSection({ organisation }: { organisation: Organisation })
 				>
 					<div className="space-y-3">
 						<div>
-							<label
-								htmlFor={`${id}-closes-on`}
-								className="block font-body text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground mb-1.5"
-							>
+							<label htmlFor={`${id}-closes-on`} className={LABEL}>
 								Closes on
 							</label>
 							<input
@@ -146,7 +141,7 @@ export function ClosingSection({ organisation }: { organisation: Organisation })
 								value={closesOn}
 								min={plusDays(30)}
 								onChange={(e) => setClosesOn(e.target.value)}
-								className="w-full rounded-xl bg-secondary py-2 px-3 text-base text-foreground focus:outline-hidden focus:ring-[3px] focus:ring-accent"
+								className={FIELD}
 							/>
 						</div>
 						<p className={LEAD}>

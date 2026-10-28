@@ -235,6 +235,23 @@ function vacationFromForm(frame: ContractFrameValues): VacationEntitlement | und
 }
 
 /**
+ * A term written into its place: the edited index replaced — or the term
+ * appended, when `index` is null — and the list sorted as the API wants it.
+ * `savedIndex` is where the term landed in that order, which is the index a
+ * 422's field paths name (`contractFieldErrors`); both writers of a term
+ * need it, and getting it wrong sends an error to the wrong input.
+ */
+export function placeTerm(
+	terms: ContractTerm[],
+	index: number | null,
+	term: ContractTerm,
+): { terms: ContractTerm[]; savedIndex: number } {
+	const next = index === null ? [...terms, term] : terms.map((t, i) => (i === index ? term : t));
+	const sorted = sortTerms(next);
+	return { terms: sorted, savedIndex: sorted.indexOf(term) };
+}
+
+/**
  * Form → domain for the whole contract. `terms` are whatever the caller
  * holds — the existing history when editing the frame, the one new term
  * when creating — sorted the way the API wants them. `kept` are the

@@ -47,11 +47,9 @@ import { MyTimesheetsSection } from "./MyTimesheetsSection";
 import { OrganisationForm } from "./OrganisationForm";
 import { ProjectsSection } from "./ProjectsSection";
 import { Section } from "./Section";
-import { CRUMB, LEAD, LINKISH, PAGE, PAGE_TITLE, PAGEBAR } from "./styles";
+import { CRUMB, DANGER_HOVER, LEAD, LINKISH, PAGE, PAGE_TITLE, PAGEBAR } from "./styles";
 import { TeamsSection } from "./TeamsSection";
 import { TimesheetsSection } from "./TimesheetsSection";
-
-const DANGER_HOVER = "hover:text-destructive-ink";
 
 export type TabValue = "people" | "projects" | "approvals" | "timesheets" | "audit" | "settings";
 

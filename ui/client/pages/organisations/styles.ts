@@ -41,6 +41,9 @@ export const ROW = "flex items-center gap-2 py-2 text-[12.5px]";
 export const REMOVE =
 	"grid place-items-center w-7 h-7 rounded-full text-muted-foreground hover:bg-sidebar-accent hover:text-destructive-ink transition-colors shrink-0 disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
 
+/** A secondary button that destroys something: the warning on hover. */
+export const DANGER_HOVER = "hover:text-destructive-ink";
+
 /** `.linkish` — a small bold link in the accent's ink. */
 export const LINKISH =
 	"text-accent-ink text-[12.5px] font-bold hover:underline underline-offset-[3px] rounded-full disabled:opacity-40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring";
