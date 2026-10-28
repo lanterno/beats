@@ -462,6 +462,14 @@ Recorded here so they are decisions, not omissions:
 - **Merging** a connected project into one the organisation already has.
 - **Deleting an organisation**; archiving its projects is the way out today.
 - **A note input** on any surface, and with it the marker on the input.
-- **Term editing in the employer's dialog**: the SPA's managed-contract
-  dialog toggles management; the employer edits terms through the API until
-  the contract form grows an employer mode.
+
+Done since: **term editing in the employer's dialog**. The managed-contract
+dialog lists an assignment's terms with the day each takes effect and which
+is in force, and edits, removes and adds them through the same term dialog
+the member's register uses — so one set of rules validates a term whoever
+writes it. Editing is offered only where the organisation manages the
+contract: the API would take the write either way, but on an unmanaged
+assignment the terms are the member's, and writing them from the employer's
+side is the silent recomputation decision 21 refuses. Each write sends the
+whole contract beside `managed`, so `keep_unsent_contract_fields` holds the
+holiday lists and the entitlement that only the member's own form edits.
