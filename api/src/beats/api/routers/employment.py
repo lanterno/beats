@@ -588,8 +588,9 @@ async def read_compliance_csv(
     tz: TimezoneDep,
 ) -> Response:
     """The compliance record (docs/organisations.md, stage 3): per member,
-    per day — first start, last end, breaks, total — the shape a
-    working-time authority asks for. Whoever reads the record."""
+    per day — first start, last end, breaks, total, and the warnings a
+    working-time authority would raise (a day over 10 hours, rest under 11,
+    taken over every project the member is on). Whoever reads the record."""
     record = await service.scoped_record(organisation_id, user_id, month, tz)
     return Response(
         content=compliance_csv(record),
