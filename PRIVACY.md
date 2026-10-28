@@ -25,6 +25,8 @@ If you bill freelance work, Beats also stores your clients — each one's name, 
 
 Beats uses [WebAuthn passkeys](https://www.w3.org/TR/webauthn-2/). The server never sees a password — it only stores a public key and a counter. Sessions are signed JWTs.
 
+A deployment can also offer **single sign-on** through an OpenID Connect provider (Google, Microsoft, Keycloak, …) as a second door beside the passkey. Beats stores the identity the provider asserts — its issuer and subject, at most one per provider per account — and still never a password. Either door issues an ordinary Beats session: **nothing downstream records which door was used**, and nothing in your account behaves differently for it. You can link and unlink a provider identity in Settings; an unlink that would leave the account with no way to sign in is refused.
+
 ## Third-party integrations (all optional)
 
 If you connect any of these, the relevant OAuth token is stored in the database and used only to fetch the data that integration is for:
