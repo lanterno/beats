@@ -68,7 +68,6 @@ function CoachChat() {
 	// messages.length and currentTool are *trigger* deps: they drive when the
 	// scroll-to-bottom fires but aren't read inside the effect body. Removing
 	// them breaks auto-scroll on a new message or tool.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: trigger deps, as above
 	useEffect(() => {
 		bottomRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [messages.length, currentTool]);
