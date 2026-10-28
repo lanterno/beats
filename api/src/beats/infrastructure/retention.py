@@ -27,6 +27,7 @@ from typing import Any, NamedTuple
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.retention import retention_cutoff, retention_years
+from beats.infrastructure.organisations import member_row_collections
 
 _TOMBSTONE = {"$regex": "^erased:"}
 
@@ -60,55 +61,46 @@ async def purge_expired_records(
         years = retention_years(org.get("retention_years"))
         cutoff = retention_cutoff(today, years)
         # Beats store `start` as BSON datetimes (the beat repository's
-        # dump_mode is "python"); absences, timesheet months and audit
-        # instants are ISO strings. Each side gets the type it compares.
+        # dump_mode is "python"); absences, adjustments, timesheet months
+        # and audit instants are ISO strings. Each gets the type it compares.
         day = cutoff.isoformat()
         instant = datetime(cutoff.year, cutoff.month, cutoff.day, tzinfo=UTC)
         counts: dict[str, int] = {}
-
-        expired: list[tuple[str, Any, dict[str, Any], str]] = [
-            # (action, collection, filter, mode) — tombstones delete, the living unstamp.
-            (
-                "beats_deleted",
-                db.timeLogs,
-                {"user_id": _TOMBSTONE, "start": {"$lt": instant}},
-                "delete",
-            ),
-            (
-                "absences_deleted",
-                db.absences,
-                {"user_id": _TOMBSTONE, "date": {"$lt": day}},
-                "delete",
-            ),
-            (
-                "adjustments_deleted",
-                db.balance_adjustments,
-                {"user_id": _TOMBSTONE, "date": {"$lt": day}},
-                "delete",
-            ),
-            (
-                "beats_unstamped",
-                db.timeLogs,
-                {"user_id": {"$not": _TOMBSTONE}, "start": {"$lt": instant}},
-                "unstamp",
-            ),
-            (
-                "absences_unstamped",
-                db.absences,
-                {"user_id": {"$not": _TOMBSTONE}, "date": {"$lt": day}},
-                "unstamp",
-            ),
+        project_ids = [
+            str(doc["_id"])
+            async for doc in db.projects.find({"organisation_id": org_id}, {"_id": 1})
         ]
-        for action, collection, query, mode in expired:
-            query = {"organisation_id": org_id, **query}
-            if not apply:
-                counts[action] = await collection.count_documents(query)
-            elif mode == "delete":
-                counts[action] = (await collection.delete_many(query)).deleted_count
-            else:
-                counts[action] = (
+
+        # Adjustments carry no stamp — they are read by project and member —
+        # so the organisation's are found through its projects, as erasure
+        # finds them.
+        expired: dict[str, dict[str, Any]] = {
+            "beats": {"organisation_id": org_id, "start": {"$lt": instant}},
+            "absences": {"organisation_id": org_id, "date": {"$lt": day}},
+            "adjustments": {"project_id": {"$in": project_ids}, "date": {"$lt": day}},
+        }
+
+        # Tombstoned rows go first, living members' stamps after, so a crash
+        # midway never leaves an ex-member's rows outliving a current
+        # member's stamp.
+        for name, collection in member_row_collections(db):
+            query = {**expired[name], "user_id": _TOMBSTONE}
+            counts[f"{name}_deleted"] = (
+                (await collection.delete_many(query)).deleted_count
+                if apply
+                else await collection.count_documents(query)
+            )
+        for name, collection in member_row_collections(db):
+            if name == "adjustments":
+                continue  # stampless: nothing of a living member's to take back
+            query = {**expired[name], "user_id": {"$not": _TOMBSTONE}}
+            counts[f"{name}_unstamped"] = (
+                (
                     await collection.update_many(query, {"$unset": {"organisation_id": ""}})
                 ).modified_count
+                if apply
+                else await collection.count_documents(query)
+            )
 
         # A sheet goes only when its whole month is out: the month holding
         # the cutoff still has retained days, so the comparison is against
