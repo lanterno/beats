@@ -353,6 +353,17 @@ what only matters past a handful of people. Decisions 21–27:
     they were — nothing forces anyone into an organisation
     (`docs/work-contracts.md` decision 1 stands, read through the
     assignment).
+    In the SPA, the managed-contract dialog lists the assignment's terms
+    with the day each takes effect and which is in force, and edits,
+    removes and adds them through the same term dialog the member's
+    register uses, so one set of rules validates a term whoever writes it
+    (#349). Editing is offered only where the organisation manages the
+    contract: the API would take the write either way, but on an unmanaged
+    assignment the terms are the member's, and writing them from the
+    employer's side is the silent recomputation this decision refuses. Each
+    write sends the whole contract beside `managed`, so
+    `keep_unsent_contract_fields` holds the holiday lists and the
+    entitlement that only the member's own form edits.
 22. **An absence on a managed assignment is a request.** The member asks
     (`org_absence_requests` — date, type, half day, and a note *addressed to
     the decider*, which the record never shows); an owner, admin or scoped
@@ -451,22 +462,45 @@ what only matters past a handful of people. Decisions 21–27:
     too — the record's keeper is destroying the record. Hand-backs run
     before the wipe, so a crash midway strands nothing of a member's.
 
+30. **Retention has a statutory floor; expiry removes the record, not the
+    person.** An organisation keeps its working-time record for
+    `retention_years`, refused below the floor of its country (409
+    `RETENTION_BELOW_FLOOR`: Spain's art. 34.9 ET gives 4, Germany 2,
+    France, Austria and the Netherlands 1, Poland 10; a country the table
+    does not know gets 4, so a gap can never permit deleting below a law we
+    had not written down). The default is 4 years from the record's date —
+    the strictest common floor, inside the CNIL's 5-year ceiling for
+    time-clock data. The period applies to the organisation's record — the
+    stamped entries and absences, the frozen months, the contract and
+    adjustments behind a balance it read, and tombstoned ex-member rows —
+    with the audit log living as long as the records it explains. Expiry
+    removes the organisation's record, not the person's data: a living
+    member's rows lose the stamp and are purely their own again; only
+    tombstoned rows are deleted. The purge is an idempotent operator-run
+    script in the shape of `scripts/erase_account.py`
+    (`api/scripts/retention_purge.py`, dry by default), audited as
+    `retention.purged` with counts and months and no data; nothing
+    schedules it, so the beta auto-deletes nothing. DATA.md and PRIVACY.md
+    changed in the same stage, since the setting is a promise they make.
+
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.
 
-### Stage 4 items deliberately not built
+### Stage 4 items that wait, and what each waits for
 
-Recorded here so they are decisions, not omissions:
+Recorded here so they are decisions, not omissions; each is an issue under
+[#353](https://github.com/lanterno/beats/issues/353).
 
-- **Money as a permission**: there is still no organisation-side money —
-  billing stayed personal (decision on `ORGANISATION_PROJECT` in billing) —
-  so there is nothing for the permission to guard yet. When organisation
-  money arrives, lean on the collection boundary as the roadmap says.
-- **Verified email domains**: needs the email infrastructure the API
+- **Money as a permission** (#340): there is still no organisation-side
+  money — billing stayed personal (decision on `ORGANISATION_PROJECT` in
+  billing) — so there is nothing for the permission to guard yet. When
+  organisation money arrives, lean on the collection boundary as the roadmap
+  says.
+- **Verified email domains** (#341): needs the email infrastructure the API
   deliberately does not have (decision 11). Without verification, a domain
   rule would hand memberships to whoever registers an address — the exact
   hole decision 11 closed for invitations.
-- **SSO per organisation, and "required to enter"** — *shape decided
+- **SSO per organisation, and "required to enter"** (#342) — *shape decided
   2026-10-28, built when a customer requires it.* Not by stamping the door
   on the session: sessions stay door-blind, keeping the promise that nothing
   downstream knows which door was used. Instead, a **per-organisation
@@ -483,54 +517,16 @@ Recorded here so they are decisions, not omissions:
   record how you log in". Open at build time: what a lapsed attestation
   blocks — the organisation's routes alone, or also starting new timers on
   its projects; existing data, never.
-- **SCIM** provisioning: its own protocol surface and credential story,
-  keyed on the same per-organisation provider, after SSO.
-- **Retention settings** — *built 2026-10-28* (#344): the setting and the
-  machinery shipped together, as the decision required (`retention_years`
-  on the organisation, 409 `RETENTION_BELOW_FLOOR` under the floor;
-  `domain/retention.py`, `infrastructure/retention.py`,
-  `scripts/retention_purge.py` — operator-run, dry by default, audited as
-  `retention.purged`; DATA.md and PRIVACY.md updated in the same stage).
-  Organisation deletion (#347) now has the purge path it waited for; what
-  it still needs is its member-facing shape — notice without email, the
-  export window. The decided shape, kept as the reasoning: a
-  per-organisation retention period with a **statutory floor by
-  jurisdiction** (the organisation already carries a country), default
-  **4 years from the record's date** — the floor is Spain's art. 34.9 ET,
-  the strictest common one, inside the CNIL's 5-year ceiling for time-clock
-  data; a setting below the jurisdiction's floor is refused, and Poland's
-  "employment + 10 years" is an explicit option, never the default. It
-  applies to the organisation's record — the stamped entries and absences,
-  the frozen months, the contract and adjustments behind a balance it read,
-  and tombstoned ex-member rows — with the audit log living as long as the
-  records it explains. Expiry removes the organisation's record, not the
-  person's data: a living member's rows lose the stamp; only tombstoned
-  rows are deleted; the deletion is itself an audit event (counts and
-  months, no data). The machinery starts as an idempotent operator-run
-  purge script with a dry run, in the shape of `scripts/erase_account.py`,
-  with DATA.md and PRIVACY.md changed in the same stage. During the beta
-  nothing auto-deletes.
-- **Per-seat billing** — *the numbers are decided* ([docs/pricing.md](pricing.md):
-  €8/seat/month annual, free to 5 seats, a seat is an active member with an
-  assignment, everything free during the beta). Collecting it — a payment
-  provider, tax, invoices, dunning — is the first money flowing *to us* and
-  stays its own project, as the roadmap says.
+- **SCIM** provisioning (#343): its own protocol surface and credential
+  story, keyed on the same per-organisation provider, after SSO.
+- **Per-seat billing** (#345) — *the numbers are decided*
+  ([docs/pricing.md](pricing.md): €8/seat/month annual, free to 5 seats, a
+  seat is an active member with an assignment, everything free during the
+  beta). Collecting it — a payment provider, tax, invoices, dunning — is the
+  first money flowing *to us* and stays its own project, as the roadmap
+  says.
 
-## Left out, still
-
-Nothing. The last entry, **deleting an organisation**, is decision 29.
-
-Done since: **a note input, with its marker** — the web app's session editor
-(decision 1, #348). And: **the merge** (decision 28, #346), and **the
-compliance warnings** (decision 26, #350).
-
-Done since: **term editing in the employer's dialog**. The managed-contract
-dialog lists an assignment's terms with the day each takes effect and which
-is in force, and edits, removes and adds them through the same term dialog
-the member's register uses — so one set of rules validates a term whoever
-writes it. Editing is offered only where the organisation manages the
-contract: the API would take the write either way, but on an unmanaged
-assignment the terms are the member's, and writing them from the employer's
-side is the silent recomputation decision 21 refuses. Each write sends the
-whole contract beside `managed`, so `keep_unsent_contract_fields` holds the
-holiday lists and the entitlement that only the member's own form edits.
+The sales and legal material the epic's section 7 asked for — a
+data-processing agreement, a one-page sheet for works councils and a DPIA
+template — are drafts in [docs/legal/](legal/), unreviewed by counsel (#352);
+nothing there reaches a customer first.
