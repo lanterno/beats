@@ -49,7 +49,13 @@ describe("SessionEditForm start/end validation", () => {
 		expect(saveBtn).not.toBeDisabled();
 
 		await userEvent.click(saveBtn);
-		expect(onSave).toHaveBeenCalledWith("s1", "2026-04-07T10:00:00Z", "2026-04-07T11:00:00Z", "p1");
+		expect(onSave).toHaveBeenCalledWith(
+			"s1",
+			"2026-04-07T10:00:00Z",
+			"2026-04-07T11:00:00Z",
+			"p1",
+			"",
+		);
 	});
 
 	it("blocks saving when end equals start", () => {
@@ -79,5 +85,46 @@ describe("SessionEditForm start/end validation", () => {
 		expect(saveBtn).not.toBeDisabled();
 		await userEvent.click(saveBtn);
 		expect(onSave).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("SessionEditForm note (#348)", () => {
+	const withOrg: ProjectOption[] = [
+		{ id: "p1", name: "Personal" },
+		{ id: "acme", name: "Platform", organisation: "Acme" },
+	];
+
+	function renderWith(session: Session) {
+		const onSave = vi.fn();
+		render(
+			<SessionEditForm session={session} projects={withOrg} onSave={onSave} onCancel={vi.fn()} />,
+		);
+		return onSave;
+	}
+
+	it("forwards the typed note", async () => {
+		const onSave = renderWith(makeSession());
+		await userEvent.type(screen.getByLabelText("Note (optional)"), "standup and review");
+		await userEvent.click(screen.getByRole("button", { name: /Save/i }));
+		expect(onSave).toHaveBeenCalledWith(
+			"s1",
+			"2026-04-07T10:00:00Z",
+			"2026-04-07T11:00:00Z",
+			"p1",
+			"standup and review",
+		);
+	});
+
+	it("marks the input only while the picked project is an organisation's", async () => {
+		renderWith(makeSession({ projectId: "acme" }));
+		const input = screen.getByLabelText("Note (optional)");
+		expect(screen.getByText("Acme can read this note")).toBeTruthy();
+		// The marker describes the input itself, for a screen reader too.
+		expect(input.getAttribute("aria-describedby")).toBeTruthy();
+
+		// Moved to a personal project, the note is private again.
+		fireEvent.change(screen.getByLabelText("Project"), { target: { value: "p1" } });
+		expect(screen.queryByText("Acme can read this note")).toBeNull();
+		expect(input.getAttribute("aria-describedby")).toBeNull();
 	});
 });
