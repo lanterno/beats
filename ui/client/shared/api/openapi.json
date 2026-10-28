@@ -4981,6 +4981,19 @@
             "title": "Name",
             "type": "string"
           },
+          "retention_years": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
+          },
           "timezone": {
             "default": "UTC",
             "title": "Timezone",
@@ -5047,6 +5060,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "retention_years": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
           },
           "timezone": {
             "default": "UTC",

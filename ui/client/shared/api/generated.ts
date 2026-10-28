@@ -5779,6 +5779,8 @@ export interface components {
             logo_url?: string | null;
             /** Name */
             name: string;
+            /** Retention Years */
+            retention_years?: number | null;
             /**
              * Timezone
              * @default UTC
@@ -5804,6 +5806,8 @@ export interface components {
             logo_url?: string | null;
             /** Name */
             name: string;
+            /** Retention Years */
+            retention_years?: number | null;
             /**
              * Timezone
              * @default UTC
