@@ -67,6 +67,17 @@ def _dump(model: BaseModel) -> dict[str, Any]:
     return serialize_to_document(model.model_dump(mode="json", exclude_none=True))
 
 
+def member_row_collections(db: AsyncDatabase) -> tuple[tuple[str, AsyncCollection], ...]:
+    """The three collections of a member's own rows that can carry an
+    organisation's stamp. One list, so the merge, the hand-back, the wipe
+    and the retention purge agree on what "the rows" means."""
+    return (
+        ("beats", db.timeLogs),
+        ("absences", db.absences),
+        ("adjustments", db.balance_adjustments),
+    )
+
+
 def _org_project(doc: dict[str, Any]) -> OrgProject:
     return OrgProject(**{**serialize_from_document(doc), "id": str(doc["_id"])})
 
@@ -476,12 +487,8 @@ class MongoOrganisationStore:
         made only by the merge, after the service has checked both projects
         are the same organisation's."""
         moved: dict[str, int] = {}
-        for name, collection in (
-            ("beats", self._db.timeLogs),
-            ("absences", self._db.absences),
-            ("adjustments", self._db.balance_adjustments),
-            ("absence_requests", self.absence_requests),
-        ):
+        rows = (*member_row_collections(self._db), ("absence_requests", self.absence_requests))
+        for name, collection in rows:
             result = await collection.update_many(
                 {"project_id": source_id}, {"$set": {"project_id": target_id}}
             )
@@ -517,7 +524,7 @@ class MongoOrganisationStore:
         """Who holds rows on this project — tombstones left out, since a
         deleted account has nobody to hand anything back to."""
         owners: set[str] = set()
-        for collection in (self._db.timeLogs, self._db.absences, self._db.balance_adjustments):
+        for _, collection in member_row_collections(self._db):
             owners.update(await collection.distinct("user_id", {"project_id": project_id}))
         return {o for o in owners if not o.startswith("erased:")}
 
@@ -552,11 +559,7 @@ class MongoOrganisationStore:
         """One member's rows move to their handed-back project and stop
         being anyone's record: the stamp goes with the organisation."""
         moved: dict[str, int] = {}
-        for name, collection in (
-            ("beats", self._db.timeLogs),
-            ("absences", self._db.absences),
-            ("adjustments", self._db.balance_adjustments),
-        ):
+        for name, collection in member_row_collections(self._db):
             result = await collection.update_many(
                 {"project_id": project_id, "user_id": user_id},
                 {"$set": {"project_id": new_project_id}, "$unset": {"organisation_id": ""}},
@@ -572,11 +575,7 @@ class MongoOrganisationStore:
         project documents, and every collection of its own. Run last, after
         the hand-backs, so a crash midway strands nothing of a member's."""
         deleted: dict[str, int] = {}
-        for name, collection in (
-            ("beats", self._db.timeLogs),
-            ("absences", self._db.absences),
-            ("adjustments", self._db.balance_adjustments),
-        ):
+        for name, collection in member_row_collections(self._db):
             result = await collection.delete_many(
                 {"project_id": {"$in": project_ids}, "user_id": {"$regex": "^erased:"}}
             )

@@ -388,14 +388,18 @@ class OrganisationService:
             counts[f"deleted_{key}"] = value
         return counts
 
+    @staticmethod
+    def _zone(organisation: Organisation) -> ZoneInfo:
+        """The organisation's timezone, UTC when the tz database dropped it."""
+        try:
+            return ZoneInfo(organisation.timezone)
+        except ZoneInfoNotFoundError, ValueError:
+            return ZoneInfo("UTC")
+
     def _today(self, organisation: Organisation) -> date:
         """Today where the organisation is: its own timezone decides when a
         notice has run out, as it decides when a month has ended."""
-        try:
-            zone = ZoneInfo(organisation.timezone)
-        except ZoneInfoNotFoundError, ValueError:
-            zone = ZoneInfo("UTC")
-        return self._now().astimezone(zone).date()
+        return self._now().astimezone(self._zone(organisation)).date()
 
     # --- members ---------------------------------------------------------------------
 

@@ -129,12 +129,6 @@ class EmploymentService(OrganisationService):
             raise NotAssigned()
         return assignment
 
-    def _org_zone(self, member: Member) -> ZoneInfo:
-        try:
-            return ZoneInfo(member.organisation.timezone)
-        except Exception:  # noqa: BLE001 - a stored zone the tz database dropped
-            return ZoneInfo("UTC")
-
     # --- teams (stage 4) ------------------------------------------------------
 
     async def teams(self, organisation_id: str, actor: str) -> list[OrgTeam]:
@@ -269,7 +263,7 @@ class EmploymentService(OrganisationService):
         assignment = await self._active_assignment(organisation_id, project_id, user_id)
         if not assignment.contract_managed or assignment.contract is None:
             raise NotManaged()
-        today = local_date(self._now(), self._org_zone(member))  # the organisation's today
+        today = local_date(self._now(), self._zone(member.organisation))  # the organisation's today
         if not assignment.contract.starts_on <= adjustment.date <= today:
             from beats.domain.exceptions import AdjustmentOutsideBalance
 
@@ -461,7 +455,7 @@ class EmploymentService(OrganisationService):
         member = await self._member(organisation_id, user_id)
         await self._active_assignment(organisation_id, project_id, user_id)
         month = month_of(month)
-        today = local_date(self._now(), self._org_zone(member))
+        today = local_date(self._now(), self._zone(member.organisation))
         if next_month(month) > today:
             raise MonthNotEnded()
         existing = await self.store.find_timesheet(project_id, user_id, month)
@@ -593,7 +587,7 @@ class EmploymentService(OrganisationService):
         expectation over the month and the balance at its close. The balance
         follows decision 16: withheld (None) while any entry or absence on
         the project is not the organisation's."""
-        tz = self._org_zone(member)
+        tz = self._zone(member.organisation)
         organisation_id = member.organisation.id or ""
         first, last = sheet.month, month_end(sheet.month)
         start, end = utc_range(first, last, tz)
@@ -652,7 +646,7 @@ class EmploymentService(OrganisationService):
     async def _refuse_locked_instant(
         self, project_id: str, user_id: str, instant: datetime, member: Member
     ) -> None:
-        day = local_date(instant, self._org_zone(member))
+        day = local_date(instant, self._zone(member.organisation))
         await self._refuse_locked_day(project_id, user_id, day, member)
 
     # --- the audit log, read (stage 4) ----------------------------------------------
