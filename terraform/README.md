@@ -147,7 +147,7 @@ deploying, `terraform apply -var="container_image_tag=<good sha>"` from
 
 That holds for commits that carry the guard. A build runs the
 `api/cloudbuild.yaml` of its own commit, so re-running the build of a commit
-from before it (AHM-92) runs the old pipeline, which applies that commit's
+from before it runs the old pipeline, which applies that commit's
 image whatever is live: a rollback, without a lock.
 
 While Terraform manages the Cloud Build trigger configuration, it doesn't directly rerun builds. Here are your options:

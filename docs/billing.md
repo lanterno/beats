@@ -14,9 +14,9 @@ one entry billable or not, whatever its project's term says. From those
 and the finished sessions, Beats works out a month's figures per client.
 
 The decisions below were made in the design of phase 1a of Organisations
-(AHM-88) and are recorded so that later work does not re-litigate them.
-The rest says what was built on them and why. Phase 1b, billing budgets
-(AHM-95), has a section of its own, *Billing budgets (phase 1b)*: it builds
+and are recorded so that later work does not re-litigate them.
+The rest says what was built on them and why. Phase 1b, billing budgets,
+has a section of its own, *Billing budgets (phase 1b)*: it builds
 on these decisions and changes none of them. How the project page shows a
 project's billing is in [project-page.md](project-page.md).
 
@@ -597,7 +597,7 @@ always says *billing budget* (`BillingBudget`, `billing_budgets`,
 already use the word. The UI says "budget": on the Clients page and in the
 Billing panel nothing else could be meant.
 
-The decisions below were made in the design of AHM-95. They build on 1a's
+The decisions below were made in the design of phase 1b. They build on 1a's
 decisions 1–15 above and change none of them; "decision N" in this section
 means one of its own.
 

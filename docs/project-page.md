@@ -559,7 +559,7 @@ What the shape settles:
   the close before off the same pass, so the oldest row shown has it
   though the ledger does not hold the week before; reconstructed from the
   rows, that row could only fall back to worked − expected, which counts
-  the hours after `ended_on` the balance does not (AHM-81). On the first
+  the hours after `ended_on` the balance does not. On the first
   close it moves from the opening balance, and when the week before has
   no close, from the day before the first day in it the balance counts —
   a time-based term starting on that weekend, the contract's first or one
