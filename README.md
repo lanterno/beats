@@ -193,6 +193,12 @@ Open work — bugs, follow-ups, open questions — is tracked in
 |----------|----------------|
 | [Work Contracts](docs/work-contracts.md) | Day-job contracts: percentage of full time, regional holidays, absences, the overtime balance |
 | [Project Page](docs/project-page.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
+| [Billing](docs/billing.md) | Clients a freelancer bills: rates and billable marks, the month's figures, billing budgets and the report links a client reads |
+| [Organisations](docs/organisations.md) | One account, one timeline, many employers: the four rules, the decisions, the data model, employment and scale |
+| [Organisations roadmap](docs/organisations-roadmap.md) | Why the organisations epic went the way it did, stage by stage |
+| [Pricing](docs/pricing.md) | What an organisation pays, decided against the vendors' own pages |
+| [Data handling](DATA.md) | Every field stored, where, and how to get it back out |
+| [Privacy](PRIVACY.md) | What LifePete does with your data, in plain English |
 | [Architecture](ARCHITECTURE.md) | How the API, the web app and the wall clock are put together |
 | [Companion](companion/README.md) | The Flutter companion: what it does on a Mac and a phone, its architecture, pairing and the API |
 | [Daemon](daemon/README.md) | `beatsd`: the flow score, the auto-timer, and its CLI |
