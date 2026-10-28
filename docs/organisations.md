@@ -388,10 +388,18 @@ what only matters past a handful of people. Decisions 21–27:
     (`administers`, `decides`, `reads_record`), not the ladder.
 26. **The compliance record is a read, not a store.** `GET
     /{id}/compliance.csv?month=` derives, per member and day: first start,
-    last end, the breaks between entries, and the total — the shape a
-    working-time authority asks for. `record.csv` is the same month as flat
-    entry rows. Rest-period and maximum-daily-hours warnings are later
-    work, as the roadmap says.
+    last end, the breaks between entries, the total, and the warnings a
+    working-time authority would raise — a day over 10 hours (§3 ArbZG,
+    still current law; the June 2026 reform draft keeps the ceiling) and
+    rest under 11 hours between working days (Directive 2003/88/EC art. 3).
+    A warning is derived from the same rows on every read and never stored:
+    an edit that repairs the day repairs the record. The law binds the
+    employer per person, not per project — a day split over two projects is
+    one working day, the night between two projects is one rest, and the
+    whole-day figures ride in the warning's text so a per-project row still
+    explains itself. Exactly at a threshold is lawful; the first day read
+    raises no rest warning, since what came before the rows is not in them.
+    `record.csv` is the same month as flat entry rows.
 27. **Reminders are the surfaces, not emails.** The API sends no email
     (decision 11); what is missing or waiting shows where people already
     look — the member's timesheet list says which months are unsubmitted or
