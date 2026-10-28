@@ -34,7 +34,7 @@ test.describe("Insights", () => {
 	});
 
 	test("digests link is present", async ({ page }) => {
-		await page.goto("/insights");
+		await page.goto("/insights?tab=reviews");
 		const digestsLink = page.locator('a[href="/insights/digests"]');
 		await expect(digestsLink).toBeVisible({ timeout: 10_000 });
 	});
@@ -57,7 +57,7 @@ test.describe("Insights", () => {
 		// `items-end` a column was once only as tall as its label, and every
 		// bar drew at no height with the unit tests green. The seeded week's
 		// scores average above one half on every day, hour and weekday.
-		await page.goto("/insights");
+		await page.goto("/insights?tab=flow");
 		for (const name of [
 			"Daily flow score",
 			"Average flow score per hour of day",
