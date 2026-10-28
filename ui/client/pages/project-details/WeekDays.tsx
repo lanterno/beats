@@ -281,6 +281,7 @@ export function WeekDays({
 		startTime: string,
 		endTime: string,
 		projectIdForSession: string,
+		note: string,
 	) => {
 		const session = sessions?.find((s) => s.id === sessionId);
 		if (!session) return;
@@ -290,6 +291,7 @@ export function WeekDays({
 				startTime,
 				endTime,
 				projectId: projectIdForSession,
+				note,
 			});
 			toast.success("Session updated");
 			refetch();
@@ -484,7 +486,11 @@ export function WeekDays({
 											<div key={session.id} className="py-1">
 												<SessionEditForm
 													session={session}
-													projects={(allProjects ?? []).map((p) => ({ id: p.id, name: p.name }))}
+													projects={(allProjects ?? []).map((p) => ({
+														id: p.id,
+														name: p.name,
+														organisation: p.organisation?.name,
+													}))}
 													onSave={handleSave}
 													onCancel={() => setEditing(null)}
 												/>

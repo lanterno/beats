@@ -1,6 +1,11 @@
 /**
  * Session Edit Form Component
- * Form for editing a work session.
+ * Form for editing a work session: project, times, and the note (#348) —
+ * the one free-text input in the app. On an organisation's project the
+ * note is part of the organisation's record (rule 3), so the input itself
+ * carries the marker saying who reads it, and the marker follows the
+ * project picked: moving the session to a personal project makes the note
+ * private again, and the line goes.
  */
 
 import { Save, X } from "lucide-react";
@@ -28,7 +33,13 @@ const FIELD =
 interface SessionEditFormProps {
 	session: Session;
 	projects: ProjectOption[];
-	onSave: (sessionId: string, startTime: string, endTime: string, projectId: string) => void;
+	onSave: (
+		sessionId: string,
+		startTime: string,
+		endTime: string,
+		projectId: string,
+		note: string,
+	) => void;
 	onCancel: () => void;
 }
 
@@ -36,12 +47,14 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 	const [editStartTime, setEditStartTime] = useState(session.startTime);
 	const [editEndTime, setEditEndTime] = useState(session.endTime);
 	const [editProjectId, setEditProjectId] = useState(session.projectId);
+	const [editNote, setEditNote] = useState(session.note ?? "");
 
 	const validRange = isValidTimeRange(editStartTime, editEndTime);
+	const noteReader = projects.find((p) => p.id === editProjectId)?.organisation;
 
 	const handleSave = () => {
 		if (!validRange) return;
-		onSave(session.id, editStartTime, editEndTime, editProjectId);
+		onSave(session.id, editStartTime, editEndTime, editProjectId, editNote);
 	};
 
 	const fieldId = useId();
@@ -88,6 +101,28 @@ export function SessionEditForm({ session, projects, onSave, onCancel }: Session
 					onChange={(e) => setEditEndTime(new Date(e.target.value).toISOString())}
 					className={`${FIELD} font-mono font-bold`}
 				/>
+			</div>
+			<div>
+				<label htmlFor={`${fieldId}-note`} className={LABEL}>
+					Note (optional)
+				</label>
+				<input
+					id={`${fieldId}-note`}
+					value={editNote}
+					onChange={(e) => setEditNote(e.target.value)}
+					maxLength={2000}
+					placeholder="What this session was"
+					aria-describedby={noteReader ? `${fieldId}-note-reader` : undefined}
+					className={FIELD}
+				/>
+				{noteReader && (
+					<p
+						id={`${fieldId}-note-reader`}
+						className="mt-1 text-[10.5px] font-medium text-muted-foreground"
+					>
+						{noteReader} can read this note
+					</p>
+				)}
 			</div>
 			<div className="rounded-xl bg-card px-3 py-2.5">
 				<p className="text-muted-foreground text-[13px] font-medium">

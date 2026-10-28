@@ -71,11 +71,14 @@ export function useUpdateSession() {
 			startTime,
 			endTime,
 			projectId,
+			note,
 		}: {
 			session: Session;
 			startTime: string;
 			endTime: string;
 			projectId: string;
+			/** The note as edited; left out, the stored one stays (#348). */
+			note?: string;
 		}) => {
 			const duration = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 1000 / 60;
 			const updatedSession: Session = {
@@ -84,8 +87,14 @@ export function useUpdateSession() {
 				endTime,
 				projectId,
 				duration,
+				note: note !== undefined ? note.trim() || undefined : session.note,
 			};
-			await updateBeat(toApiBeat(updatedSession));
+			// The wire rule: a string sets, "" clears, null keeps — so an edit
+			// that never offered the input sends the stored note back as is.
+			await updateBeat({
+				...toApiBeat(updatedSession),
+				note: note !== undefined ? note.trim() : (session.note ?? null),
+			});
 			return updatedSession;
 		},
 		onSuccess: (_, variables) => {

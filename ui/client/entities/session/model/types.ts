@@ -49,4 +49,6 @@ export interface DayProjectBreakdown {
 export interface ProjectOption {
 	id: string;
 	name: string;
+	/** The organisation that owns it, when one does — it reads a note there. */
+	organisation?: string;
 }
