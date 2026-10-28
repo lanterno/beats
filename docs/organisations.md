@@ -124,8 +124,9 @@ Then the model's own:
    `PROJECT_HAS_BILLING`): billing is the person's, and an organisation's
    project is billed by nobody here (409 `ORGANISATION_PROJECT` on the
    billing route). Connecting creates a project the organisation did not
-   make, named as it was; stage 2 does not merge it into one the
-   organisation already has.
+   make, named as it was; folding it into one the organisation already
+   has is a second, deliberate act — the merge, decision 28 — never the
+   connect's own.
 9. **Leaving and removal end the assignments and move nothing.** The
    membership and every active assignment get an end instant; the project
    is then not found through the member's routes — which is how tracking
@@ -406,6 +407,27 @@ what only matters past a handful of people. Decisions 21–27:
     sent back, the decider's sections say what waits. A digest or push is
     later work.
 
+28. **A merge moves rows, never stamps.** `POST /{id}/projects/{pid}/merge`
+    (admins) folds one of the organisation's projects into another — the
+    way out of the duplicate a connect leaves when the organisation
+    already had a project for the same work. Every row keyed by the
+    source (the members' own entries, absences and adjustments, and the
+    absence requests) now keys by the target with its stamp untouched, so
+    rule 4 holds without being re-decided: what the member chose to share
+    stays shared from that instant, and what was private stays private,
+    under the surviving project on their own timeline. Each active
+    assignment folds into the target's, which survives as it stands
+    (decision 17's spirit): the earlier `shared_from`, and the source's
+    contract only where the target's assignment has none. Refused while
+    an approved timesheet exists on either side (409 `PERIOD_APPROVED`
+    naming the earliest frozen month): a stored close must not gain or
+    lose rows silently — reopen first. A sheet submitted over the source
+    alone is dropped and resubmitted over the merged project; the source
+    document is deleted; the audit log holds the whole act, with counts.
+    The repoint is the one write besides erasure that crosses user scopes
+    (`MongoOrganisationStore.repoint_project_rows`), made only after both
+    projects are checked to be the same organisation's.
+
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.
 
@@ -467,7 +489,6 @@ Recorded here so they are decisions, not omissions:
 
 ## Left out, still
 
-- **Merging** a connected project into one the organisation already has.
 - **Deleting an organisation**; archiving its projects is the way out today.
 - **A note input** on any surface, and with it the marker on the input.
 
