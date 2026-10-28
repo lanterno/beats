@@ -1401,6 +1401,107 @@ class TestBackupsAndOrganisations:
         assert [p["name"] for p in _projects(client, other)] == ["Garden"]
 
 
+class TestDeletingAnOrganisation:
+    """#347: closing is notice, deletion is the hand-back. An owner starts
+    a clock every member sees in-app; when it runs out, each member gets a
+    personal copy of what connecting once took, and the organisation's
+    record goes with the organisation."""
+
+    def test_the_notice_has_a_floor_and_a_default(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        soon = (datetime.now(UTC).date() + timedelta(days=10)).isoformat()
+        refused = client.post(
+            f"/api/organisations/{org['id']}/close",
+            json={"closes_on": soon},
+            headers=auth_headers,
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "CLOSE_NOTICE_TOO_SHORT"
+
+        started = client.post(
+            f"/api/organisations/{org['id']}/close", json={}, headers=auth_headers
+        )
+        assert started.status_code == 200, started.text
+        default = date.fromisoformat(started.json()["closes_on"])
+        assert default >= datetime.now(UTC).date() + timedelta(days=59)
+
+        # Every member reads the state; only an owner sets or clears it.
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+        seen = client.get(f"/api/organisations/{org['id']}", headers=member)
+        assert seen.json()["organisation"]["closes_on"] == started.json()["closes_on"]
+        assert (
+            client.post(
+                f"/api/organisations/{org['id']}/close", json={}, headers=member
+            ).status_code
+            == 403
+        )
+
+        # Deletion waits for the day; cancel clears the clock.
+        waiting = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert waiting.status_code == 409
+        assert waiting.json()["code"] == "ORGANISATION_STILL_CLOSING"
+        cancelled = client.delete(f"/api/organisations/{org['id']}/close", headers=auth_headers)
+        assert cancelled.status_code == 200
+        assert cancelled.json()["closes_on"] is None
+        not_closing = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert not_closing.status_code == 409
+        assert not_closing.json()["code"] == "ORGANISATION_NOT_CLOSING"
+
+    def test_deletion_hands_every_member_back_their_own(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        client.put(
+            f"/api/projects/{project['id']}/contract", json={"terms": FULL_TIME}, headers=member
+        )
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        # A tombstoned ex-member's row: goes with the record's keeper.
+        db = _db()
+        stamped = db.timeLogs.find_one({"organisation_id": org["id"]})
+        db.timeLogs.insert_one(
+            {k: v for k, v in stamped.items() if k != "_id"} | {"user_id": "erased:gone"}
+        )
+
+        assert (
+            client.post(
+                f"/api/organisations/{org['id']}/close", json={}, headers=auth_headers
+            ).status_code
+            == 200
+        )
+        db.organisations.update_one(
+            {"_id": ObjectId(org["id"])},
+            {"$set": {"closes_on": (datetime.now(UTC).date() - timedelta(days=1)).isoformat()}},
+        )
+        gone = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert gone.status_code == 204, gone.text
+
+        # The member keeps one timeline: a personal copy of the project,
+        # same name and kind, the contract theirs again, the entry on it
+        # and no longer anyone's record.
+        [mine] = _projects(client, member)
+        assert mine["name"] == project["name"]
+        assert mine["kind"] == "day_job"
+        assert mine["organisation"] is None
+        assert mine["contract"] is not None
+        week = client.get(
+            f"/api/projects/{mine['id']}/contract/week", params={"tz": "UTC"}, headers=member
+        )
+        assert week.status_code == 200
+        own = db.timeLogs.find_one({"user_id": member_id})
+        assert own["project_id"] == mine["id"]
+        assert "organisation_id" not in own
+
+        # The organisation is gone whole: no membership, no rows, no stones.
+        assert client.get(f"/api/organisations/{org['id']}", headers=member).status_code == 404
+        assert db.org_members.count_documents({"organisation_id": org["id"]}) == 0
+        assert db.org_audit.count_documents({"organisation_id": org["id"]}) == 0
+        assert db.timeLogs.count_documents({"user_id": "erased:gone"}) == 0
+        assert db.projects.count_documents({"organisation_id": org["id"]}) == 0
+
+
 class TestRetention:
     """The retention setting over its statutory floor, and the purge pass
     (docs/organisations.md, stage 4 — retention). Expiry removes the
