@@ -152,6 +152,6 @@ brew developer off   # tap-new turns developer mode on; skip if you had it on
   formula's. A copy downloaded by hand from the release page in a browser
   is quarantined: clear it with `xattr -d com.apple.quarantine beatsd`, or
   allow it in System Settings → Privacy & Security. Signing and
-  notarization need an Apple Developer account (AHM-14).
+  notarization need an Apple Developer account (#291).
 - No cask: `beatsd` is a CLI, not a `.app`. The Mac app's cask is a
-  separate item (AHM-48).
+  separate item (#303).

@@ -5,9 +5,9 @@ Cross-platform Flutter app — desktop tray icon + mobile companion for the Beat
 The companion is for acting — start, stop, see what's running, get nudged — and the web
 is for reflecting: heatmaps, reviews, goals, integrations. It is also the only way health
 data from the phone can reach the API, since a browser can't read HealthKit or Health
-Connect; that ingestion is still to be built (AHM-37 in
-[Linear](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de), with the companion's
-other open work under *Companion: native & device*).
+Connect; that ingestion is still to be built
+([#293](https://github.com/lanterno/beats/issues/293), with the companion's other open
+work under the *Companion: native & device* milestone).
 
 ## What it does
 
@@ -44,8 +44,8 @@ floating tab bar instead of the sidebar:
 - **Start sheet** (the gold button) — the projects as tiles with their week, and the
   quick-start field above them, with a card saying what a typed time will do
 - **Focus mode** — a Stop to press, and a tap anywhere leaves
-- **Pairing** — type the code from the web's Settings → Daemon; the phone can scan a QR
-  too, once the web draws one (AHM-43)
+- **Pairing** — type the code from the web's Settings → Daemon; the phone can scan the QR
+  the web draws beside the code
 - **Sample data** — "Look around with sample data" on the pairing screen opens every place on
   a made-up account held in memory (`services/sample_api.dart`), for Play's reviewers and the
   curious; nothing is stored and a banner says so
@@ -132,8 +132,9 @@ device-token auth as the Go daemon. Pairing flow:
 1. The web's Settings → Daemon generates a 6-char code (`POST /api/device/pair/code`)
 2. The app sends it to `POST /api/device/pair/exchange` (public) and receives a long-lived
    device token. Phones can scan a QR instead of typing; `parseQrPairingPayload` takes a bare
-   code, a `beats://pair/CODE` link or `{"code", "api"}` JSON — though the web doesn't draw
-   that QR yet (AHM-43)
+   code, a `beats://pair/CODE` link or `{"code", "api"}` JSON, and the web's Settings → Daemon draws
+   that QR beside the code. A QR naming another host re-points the app without
+   asking (#325)
 3. The token sits in OS secure storage via `flutter_secure_storage` (Keychain, Android's
    EncryptedSharedPreferences, libsecret, DPAPI), behind a `SecureStore` interface tests can
    replace. API URLs stay in `shared_preferences`: not secrets, and they should survive a

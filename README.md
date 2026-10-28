@@ -187,7 +187,7 @@ before removing anything that looks like dead config.
 ## Design notes
 
 Open work — bugs, follow-ups, open questions — is tracked in
-[Linear](https://linear.app/elghareeb/project/lifepete-a8ecce3a86de). These documents hold the decisions and designs.
+[GitHub issues](https://github.com/lanterno/beats/issues). These documents hold the decisions and designs.
 
 | Document | What it covers |
 |----------|----------------|

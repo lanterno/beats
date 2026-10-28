@@ -38,7 +38,7 @@ jobs:
         # job in "Initialize containers". 8.2 predates that check. Move on once
         # MongoDB ships the TCMalloc fix (AHM-107); a Renovate PR to 9 will fail
         # the same way until then.
-        image: mongo:8.2
+        image: mongo:8.3
         ports: [27017:27017]
         options: >-
           --health-cmd "mongosh --eval 'db.runCommand({ping:1})' --quiet"
