@@ -37,6 +37,7 @@ from beats.api.schemas import (
     ArchiveProjectResponse,
     ArchiveResponse,
     AssignmentResponse,
+    CloseOrganisationRequest,
     ConnectProjectRequest,
     DecideRequest,
     InvitationResponse,
@@ -270,6 +271,41 @@ async def update_organisation(
 ):
     """Replace the organisation's settings. Admins."""
     return _organisation(await service.update(organisation_id, user_id, fields))
+
+
+@router.post("/{organisation_id}/close", response_model=OrganisationResponse)
+async def begin_closing(
+    organisation_id: str,
+    request: CloseOrganisationRequest,
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+):
+    """Start the organisation's notice (#347): it closes on the day given —
+    at least 30 days out, 60 by default — shown to every member in-app so
+    they export on their own clock. Tracking carries on until the day.
+    Owners."""
+    return _organisation(await service.begin_closing(organisation_id, user_id, request.closes_on))
+
+
+@router.delete("/{organisation_id}/close", response_model=OrganisationResponse)
+async def cancel_closing(
+    organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
+):
+    """Call the closing off. Owners."""
+    return _organisation(await service.cancel_closing(organisation_id, user_id))
+
+
+@router.delete("/{organisation_id}", status_code=http.HTTPStatus.NO_CONTENT)
+async def delete_organisation(
+    organisation_id: str, user_id: CurrentUserId, service: OrganisationServiceDep
+):
+    """Delete the organisation, once its notice has run out (#347). Every
+    member is handed back a personal copy of each project they hold rows or
+    a contract on — their rows repointed and unstamped, theirs as ever —
+    and everything that was the organisation's goes, its working-time
+    record with it: the final record.csv and compliance.csv were the notice
+    period's job. Owners; 409 before `closes_on`."""
+    await service.delete_organisation(organisation_id, user_id)
 
 
 @router.get("/{organisation_id}/members", response_model=list[MemberResponse])

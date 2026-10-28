@@ -756,6 +756,8 @@ class InboxResponse(BaseModel):
 class OrganisationResponse(OrganisationFields):
     id: str
     created_at: datetime
+    # The closing state (#347): every member's banner reads it.
+    closes_on: date_type | None = None
 
 
 class MembershipResponse(BaseModel):
@@ -882,6 +884,12 @@ class MergeProjectRequest(BaseModel):
     """Which project the merged one folds into."""
 
     into: str = Field(min_length=1)
+
+
+class CloseOrganisationRequest(BaseModel):
+    """When the organisation closes; left out, the default notice runs."""
+
+    closes_on: date_type | None = None
 
 
 class AssignmentResponse(BaseModel):

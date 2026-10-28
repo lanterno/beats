@@ -1555,6 +1555,10 @@ class Organisation(OrganisationFields, TzNormalizedModel):
     id: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_by: str
+    # The closing state (#347): set by an owner with notice, shown to every
+    # member in-app, and the gate deletion waits behind. Not a settings
+    # field — the settings PUT replaces OrganisationFields and leaves this.
+    closes_on: date_type | None = None
 
 
 class MembershipEnd(StrEnum):

@@ -24,6 +24,7 @@ from beats.domain.billing import utc_midnight, utc_range
 from beats.domain.contracts import balance_terms
 from beats.domain.exceptions import (
     AlreadyAMember,
+    CloseNoticeTooShort,
     InviteExpired,
     InviteNotFound,
     JoinRequestNotFound,
@@ -32,9 +33,11 @@ from beats.domain.exceptions import (
     MemberNotFound,
     MergeIntoItself,
     NotAssigned,
+    OrganisationNotClosing,
     OrganisationNotFound,
     OrganisationProject,
     OrganisationRoleRequired,
+    OrganisationStillClosing,
     OwnerRoleReserved,
     PeriodApproved,
     ProjectHasBilling,
@@ -181,6 +184,10 @@ def _entry(beat: Beat, tz: ZoneInfo) -> RecordEntry:
     )
 
 
+MIN_CLOSE_NOTICE_DAYS = 30  # members export on their own clock, not the owner's
+DEFAULT_CLOSE_NOTICE_DAYS = 60  # one round number with the pricing decision's grace
+
+
 class OrganisationService:
     def __init__(
         self,
@@ -298,6 +305,97 @@ class OrganisationService:
             organisation_id, user_id, "organisation.updated", fields=fields.model_dump()
         )
         return organisation
+
+    # --- closing and deletion (#347) ---------------------------------------------------
+
+    async def begin_closing(
+        self, organisation_id: str, actor: str, closes_on: date | None
+    ) -> Organisation:
+        """An owner starts the clock: the organisation closes on a day at
+        least MIN_CLOSE_NOTICE_DAYS out (default DEFAULT_CLOSE_NOTICE_DAYS),
+        shown to every member in-app — the notice decision 11's no-email
+        rule leaves us, and enough of it that people export on their own
+        clock, not the owner's. Tracking carries on until the day: closing
+        is notice, not a lock."""
+        me = await self._member(organisation_id, actor, OrgRole.OWNER)
+        today = self._today(me.organisation)
+        if closes_on is None:
+            closes_on = today + timedelta(days=DEFAULT_CLOSE_NOTICE_DAYS)
+        if closes_on < today + timedelta(days=MIN_CLOSE_NOTICE_DAYS):
+            raise CloseNoticeTooShort(MIN_CLOSE_NOTICE_DAYS)
+        organisation = me.organisation.model_copy(update={"closes_on": closes_on})
+        await self.store.update_organisation(organisation)
+        await self._audit(
+            organisation_id, actor, "organisation.closing", closes_on=closes_on.isoformat()
+        )
+        return organisation
+
+    async def cancel_closing(self, organisation_id: str, actor: str) -> Organisation:
+        me = await self._member(organisation_id, actor, OrgRole.OWNER)
+        if me.organisation.closes_on is None:
+            raise OrganisationNotClosing()
+        organisation = me.organisation.model_copy(update={"closes_on": None})
+        await self.store.update_organisation(organisation)
+        await self._audit(organisation_id, actor, "organisation.closing_cancelled")
+        return organisation
+
+    async def delete_organisation(self, organisation_id: str, actor: str) -> dict[str, int]:
+        """The end of the organisation, once its notice has run out: every
+        member is handed back what connecting once took — a personal copy
+        of each project they hold rows or a contract on, carrying the
+        organisation's fields and their own assignment's half, their rows
+        repointed to it and unstamped (archived where their assignment had
+        already ended). Then everything that was the organisation's goes:
+        its tombstoned rows — the record's keeper is destroying the record,
+        and its final export was the notice period's job — its project
+        documents, memberships, timesheets, audit log and the document
+        itself. The hand-backs run first, so a crash midway strands nothing
+        of a member's. Owners only, and only from `closes_on` on (409
+        ORGANISATION_STILL_CLOSING before, ORGANISATION_NOT_CLOSING with no
+        notice at all)."""
+        me = await self._member(organisation_id, actor, OrgRole.OWNER)
+        closes_on = me.organisation.closes_on
+        if closes_on is None:
+            raise OrganisationNotClosing()
+        if self._today(me.organisation) < closes_on:
+            raise OrganisationStillClosing(closes_on)
+        projects = await self.store.list_projects(organisation_id)
+        assignments = await self.store.list_assignments(organisation_id, active_only=False)
+        by_pair = {(a.project_id, a.user_id): a for a in assignments}
+        counts: dict[str, int] = {"projects_handed_back": 0}
+        for project in projects:
+            assert project.id is not None
+            holders = await self.store.row_owner_ids(project.id)
+            holders |= {
+                a.user_id
+                for a in assignments
+                if a.project_id == project.id
+                and a.contract is not None
+                and not a.user_id.startswith("erased:")
+            }
+            for user_id in sorted(holders):
+                assignment = by_pair.get((project.id, user_id))
+                archived = assignment is None or assignment.ended_at is not None
+                new_id = await self.store.hand_back_project(project, user_id, assignment, archived)
+                moved = await self.store.repoint_member_rows(project.id, user_id, new_id)
+                counts["projects_handed_back"] += 1
+                for key, value in moved.items():
+                    counts[key] = counts.get(key, 0) + value
+        deleted = await self.store.delete_organisation_rows(
+            organisation_id, [p.id for p in projects if p.id is not None]
+        )
+        for key, value in deleted.items():
+            counts[f"deleted_{key}"] = value
+        return counts
+
+    def _today(self, organisation: Organisation) -> date:
+        """Today where the organisation is: its own timezone decides when a
+        notice has run out, as it decides when a month has ended."""
+        try:
+            zone = ZoneInfo(organisation.timezone)
+        except ZoneInfoNotFoundError, ValueError:
+            zone = ZoneInfo("UTC")
+        return self._now().astimezone(zone).date()
 
     # --- members ---------------------------------------------------------------------
 

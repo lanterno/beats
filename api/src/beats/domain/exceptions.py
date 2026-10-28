@@ -578,6 +578,35 @@ class MergeIntoItself(DomainException):
     code = "MERGE_INTO_ITSELF"
 
 
+class CloseNoticeTooShort(DomainException):
+    """Closing an organisation needs real notice: members export on their
+    own clock, not the owner's."""
+
+    status_code = 409
+    code = "CLOSE_NOTICE_TOO_SHORT"
+
+    def __init__(self, minimum_days: int):
+        super().__init__(f"Closing needs at least {minimum_days} days' notice")
+
+
+class OrganisationNotClosing(DomainException):
+    """Deletion and cancel both need a closing under way."""
+
+    status_code = 409
+    message = "The organisation is not closing"
+    code = "ORGANISATION_NOT_CLOSING"
+
+
+class OrganisationStillClosing(DomainException):
+    """Deletion waits for the notice to run out."""
+
+    status_code = 409
+    code = "ORGANISATION_STILL_CLOSING"
+
+    def __init__(self, closes_on):
+        super().__init__(f"The organisation closes on {closes_on}; deletion waits for that day")
+
+
 class RetentionBelowFloor(DomainException):
     """A retention setting under the jurisdiction's statutory minimum. The
     floor is the law's, not ours; the message names it."""
