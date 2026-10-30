@@ -25,6 +25,7 @@ from beats.domain.exceptions import (
     BeatChanged,
     BeatNotFound,
     ContractManaged,
+    DomainException,
     InvalidEndTime,
     MonthOutsideContract,
     NoActiveTimer,
@@ -337,8 +338,39 @@ class BeatService:
         await refuse_locked(self.locks, project, beat.start)
         return beat
 
+    async def _refuse_second_timer(self, beat: Beat) -> None:
+        """One session open at a time, on the CRUD routes as on the timer.
+
+        `start_timer` has always checked (TimerAlreadyRunning), but a beat
+        written with no `end` is a running session too, whichever door it came
+        through: a create that omits `end`, or an edit that reopens a finished
+        session by clearing it. Without this check two timers run at once, and
+        `get_active` then answers with whichever of them storage returns
+        first.
+
+        The open session the edit is itself editing is not a second one.
+        """
+        if beat.end is not None:
+            return
+        active = await self.beat_repo.get_active()
+        if active is None or active.id == beat.id:
+            return
+        name: str | None = None
+        if self.projects is not None:
+            try:
+                name = (await self.projects.get_by_id(active.project_id)).name
+            except DomainException:
+                # The open session is on a project this caller can no longer
+                # read (an assignment that ended). It still blocks the write;
+                # it just cannot be named.
+                name = None
+        raise TimerAlreadyRunning(project_name=name, beat=active.model_dump(mode="json"))
+
     async def create_beat(self, beat: Beat) -> Beat:
-        """Create a new beat, auto-tagging it from daemon flow signals."""
+        """Create a new beat, auto-tagging it from daemon flow signals. A
+        create that leaves `end` unset opens a session, and is refused while
+        another is open."""
+        await self._refuse_second_timer(beat)
         beat = await self._stamped(beat)
         if self.flow_repo is not None and beat.end is not None:
             beat.tags = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
@@ -366,7 +398,9 @@ class BeatService:
         If the daemon has no windows for the (possibly edited) range we keep the
         beat's existing tags rather than wiping them — non-destructive for any
         tags captured before this range was last touched. A beat reopened
-        (`end` None) keeps its tags too; the stop that closes it derives them.
+        (`end` None) keeps its tags too; the stop that closes it derives them,
+        and the reopen is refused (TimerAlreadyRunning) while another session
+        is open — reopening is a start by another name.
         """
         # Validate the beat can be stopped if end is being set
         if beat.end:
@@ -374,6 +408,10 @@ class BeatService:
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        else:
+            # Clearing `end` reopens the session, which is a start by another
+            # name; it is refused while another session is open.
+            await self._refuse_second_timer(beat)
         stored: Beat | None = None
         if expected is not None and beat.id is not None:
             stored = await self.beat_repo.get_by_id(beat.id)
