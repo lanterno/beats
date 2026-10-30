@@ -5745,8 +5745,8 @@ class TestIdempotentReplay:
         in the middleware: a regression that cached failures
         would lock the user out of retrying the same operation.
 
-        Idempotency middleware ONLY covers /api/projects/{id}/start
-        and /stop (per IDEMPOTENT_PATH_SUFFIXES) — so we trigger
+        Idempotency middleware covers /api/projects/{id}/start and
+        /stop and the session writes on /api/beats/ — so we trigger
         the failure on /start with a malformed body."""
         project_id = self._create_project(client, auth_headers)
         headers = {**auth_headers, "X-Client-Id": "test-failed-mutation-start"}
@@ -5780,6 +5780,59 @@ class TestIdempotentReplay:
             json={"time": "2026-04-16T12:00:30Z"},
             headers=auth_headers,
         )
+
+    def test_a_replayed_session_create_logs_it_once(self, client, auth_headers):
+        """The companion queues "log time you forgot" while offline; a create
+        whose response was lost is sent again with the same X-Client-Id."""
+        project_id = self._create_project(client, auth_headers)
+        session = {
+            "project_id": project_id,
+            "start": "2026-04-17T09:00:00Z",
+            "end": "2026-04-17T10:00:00Z",
+        }
+        headers = {**auth_headers, "X-Client-Id": "offline-create-1"}
+        first = client.post("/api/beats/", json=session, headers=headers)
+        assert first.status_code == 201, first.text
+
+        second = client.post("/api/beats/", json=session, headers=headers)
+
+        assert second.status_code == 201
+        assert second.headers.get("X-Idempotent-Replay") == "true"
+        assert second.json()["id"] == first.json()["id"]
+        beats = client.get(f"/api/beats/?project_id={project_id}", headers=auth_headers).json()
+        assert len(beats) == 1
+
+    def test_a_replayed_edit_does_not_undo_a_later_one(self, client, auth_headers):
+        """An edit landed, its response was lost, and the session was edited
+        again elsewhere. The replay is answered from the record and leaves
+        the later edit standing."""
+        project_id = self._create_project(client, auth_headers)
+        beat = client.post(
+            "/api/beats/",
+            json={
+                "project_id": project_id,
+                "start": "2026-04-17T11:00:00Z",
+                "end": "2026-04-17T12:00:00Z",
+            },
+            headers=auth_headers,
+        ).json()
+        edit = {
+            "id": beat["id"],
+            "project_id": project_id,
+            "start": "2026-04-17T10:30:00Z",
+            "end": "2026-04-17T12:00:00Z",
+        }
+        headers = {**auth_headers, "X-Client-Id": "offline-edit-1"}
+        assert client.put("/api/beats/", json=edit, headers=headers).status_code == 200
+        later = {**edit, "start": "2026-04-17T10:45:00Z"}
+        assert client.put("/api/beats/", json=later, headers=auth_headers).status_code == 200
+
+        replay = client.put("/api/beats/", json=edit, headers=headers)
+
+        assert replay.status_code == 200
+        assert replay.headers.get("X-Idempotent-Replay") == "true"
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["start"].startswith("2026-04-17T10:45:00")
 
 
 class TestCsvAndJsonExport:
