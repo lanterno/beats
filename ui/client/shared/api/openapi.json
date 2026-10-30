@@ -276,6 +276,58 @@
         "title": "AbsenceType",
         "type": "string"
       },
+      "AddCredentialStartResponse": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "title": "AddCredentialStartResponse",
+        "type": "object"
+      },
+      "AddCredentialVerifyRequest": {
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "AddCredentialVerifyRequest",
+        "type": "object"
+      },
+      "AddCredentialVerifyResponse": {
+        "properties": {
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified"
+        ],
+        "title": "AddCredentialVerifyResponse",
+        "type": "object"
+      },
       "AdjustmentKind": {
         "description": "How a balance adjustment moves the balance at the start of its day.",
         "enum": [
@@ -7955,6 +8007,70 @@
         ]
       }
     },
+    "/api/account/credentials/start": {
+      "post": {
+        "description": "Start adding a passkey to the signed-in account.",
+        "operationId": "add_credential_start_api_account_credentials_start_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCredentialStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Add Credential Start",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/credentials/verify": {
+      "post": {
+        "description": "Store the passkey the signed-in account just created.\n\nThe account is the session's, never the ceremony's: a verified credential\nis saved against `user_id` from the token and nowhere else.",
+        "operationId": "add_credential_verify_api_account_credentials_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCredentialVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCredentialVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Credential Verify",
+        "tags": [
+          "account"
+        ]
+      }
+    },
     "/api/account/credentials/{credential_id}": {
       "delete": {
         "description": "Delete a registered credential for the current user.",
@@ -12365,17 +12481,17 @@
         ]
       }
     },
-    "/api/organisations/join/{token}": {
+    "/api/organisations/join": {
       "get": {
         "description": "What an invite token opens: the organisation's name and the role it\ngives. 404 for a token that is unknown or addressed to another address\n(INVITE_NOT_FOUND), 410 for one that was real and is closed\n(INVITE_EXPIRED).",
-        "operationId": "preview_invite_api_organisations_join__token__get",
+        "operationId": "preview_invite_api_organisations_join_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "token",
+            "in": "header",
+            "name": "X-Invite-Token",
             "required": true,
             "schema": {
-              "title": "Token",
+              "title": "X-Invite-Token",
               "type": "string"
             }
           }
@@ -12412,14 +12528,14 @@
       },
       "post": {
         "description": "Take an invite. Joining makes one membership document and nothing\nelse: no second account, no moved data (rule 1). A link with an approval\nstep answers `pending` and leaves a request for an admin. 409 when\nalready a member (ALREADY_A_MEMBER) or already waiting\n(JOIN_REQUEST_PENDING).",
-        "operationId": "join_api_organisations_join__token__post",
+        "operationId": "join_api_organisations_join_post",
         "parameters": [
           {
-            "in": "path",
-            "name": "token",
+            "in": "header",
+            "name": "X-Invite-Token",
             "required": true,
             "schema": {
-              "title": "Token",
+              "title": "X-Invite-Token",
               "type": "string"
             }
           }
@@ -16824,17 +16940,17 @@
         ]
       }
     },
-    "/api/reports/{token}": {
+    "/api/reports": {
       "get": {
         "description": "One client's billable work over a report link's frozen range.\n\nPublic: no bearer token, and a device token is still refused before this\nruns (`device_may_reach` in `server.py`). Rate-limited less against\nguessing \u2014 32 bytes are not guessed \u2014 than against a leaked link being\nhammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.",
-        "operationId": "read_report_api_reports__token__get",
+        "operationId": "read_report_api_reports_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "token",
+            "in": "header",
+            "name": "X-Report-Token",
             "required": true,
             "schema": {
-              "title": "Token",
+              "title": "X-Report-Token",
               "type": "string"
             }
           }
