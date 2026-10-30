@@ -335,7 +335,12 @@ class OfflineApi extends ApiClient {
 
   void _reached() {
     status._set(online: true);
-    if (drains && _replay == null) unawaited(_drainIfQueued());
+    if (!drains) {
+      // The other engine replays; this one only follows how far it got.
+      unawaited(_publish());
+    } else if (_replay == null) {
+      unawaited(_drainIfQueued());
+    }
   }
 
   Future<void> _drainIfQueued() async {
