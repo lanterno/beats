@@ -277,6 +277,8 @@ class _AppShellState extends State<AppShell> {
       _paired = true;
       _connect(api);
     });
+    // The popover's engine built its client from the old token (or none).
+    unawaited(StatusMenu.pairingChanged());
     await _initNotifications();
   }
 
@@ -300,6 +302,9 @@ class _AppShellState extends State<AppShell> {
       _paired = false;
       _disconnect();
     });
+    // Without this the popover's engine keeps the old token's client alive,
+    // polling the API with dropped credentials until the app restarts.
+    unawaited(StatusMenu.pairingChanged());
   }
 
   @override

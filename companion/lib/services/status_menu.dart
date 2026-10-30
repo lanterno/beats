@@ -39,6 +39,16 @@ class StatusMenu {
     } catch (_) {}
   }
 
+  /// Tells the popover's engine the pairing changed — the token was dropped
+  /// (unpairing) or replaced (pairing anew) — so it rebuilds its client from
+  /// storage instead of keeping the old credentials until it is restarted.
+  static Future<void> pairingChanged() async {
+    if (!Platform.isMacOS) return;
+    try {
+      await _channel.invokeMethod('pairing.changed');
+    } catch (_) {}
+  }
+
   /// [show] gets the place (`today`, `flow`, `coach`, `body`) or route
   /// (`settings`, `focus`) the popover asked for, either may be null;
   /// [refresh] runs when the popover changed the timer.

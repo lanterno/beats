@@ -98,6 +98,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       popoverChannel?.invokeMethod("timer.refresh", arguments: nil)
       result(nil)
 
+    case "pairing.changed":
+      // The window paired or unpaired: the popover's engine must drop the
+      // client it built from the old token and read storage again.
+      popoverChannel?.invokeMethod("pairing.changed", arguments: nil)
+      result(nil)
+
     default:
       result(FlutterMethodNotImplemented)
     }

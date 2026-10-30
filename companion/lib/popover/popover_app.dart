@@ -96,14 +96,27 @@ class _PopoverAppState extends State<PopoverApp> {
         if (mounted) setState(() => _mode = 'panel');
       case 'timer.refresh':
         unawaited(_timer?.refresh());
+      case 'pairing.changed':
+        // The window paired or unpaired: the stored token is no longer the
+        // one this client was built from. Drop the client and read storage
+        // again — no token leaves the pair-first note.
+        _disconnect();
+        await _connect();
     }
+  }
+
+  void _disconnect() {
+    _timer?.removeListener(_onTimer);
+    _week?.dispose();
+    _timer?.dispose();
+    _timer = null;
+    _week = null;
+    _timerKey = '';
   }
 
   @override
   void dispose() {
-    _timer?.removeListener(_onTimer);
-    _week?.dispose();
-    _timer?.dispose();
+    _disconnect();
     super.dispose();
   }
 
