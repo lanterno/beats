@@ -278,9 +278,9 @@ class TrayService {
 
     final current = timer.current;
     if (current != null) {
-      add(_item('\u25cf ${current.name} \u2014 ${formatTrayElapsed(timer.elapsed)}'));
+      add(_item('● ${current.name} — ${formatTrayElapsed(timer.elapsed)}'));
       menu.addSeparator();
-      add(_item('\u25a0  Stop Timer', onClick: () => timer.stop()));
+      add(_item('■  Stop Timer', onClick: () => timer.stop()));
       menu.addSeparator();
     } else {
       add(_item('No timer running'));
@@ -288,7 +288,7 @@ class TrayService {
       final projects = timer.recentFirst.take(12).toList();
       if (projects.isNotEmpty) {
         final start = tray.MenuItem.createWithLabelAndType(
-          '\u25b6  Start Timer',
+          '▶  Start Timer',
           tray.MenuItemType.submenu,
         );
         final submenu = tray.Menu.create();
