@@ -1109,7 +1109,7 @@ and change none of them; "decision N" in this section means one of its own.
 
 1. **A link is a capability in its URL**, 32 bytes from
    `secrets.token_urlsafe`, and it is stored as it is read, not hashed. A
-   pairing code is hashed because it is eight guessable characters that live
+   pairing code is hashed because it is six guessable characters that live
    for minutes; this is neither. Hashing would protect nothing here — whoever
    can read the `report_links` collection can read the hours it serves, out of
    the same database — and it would cost the one thing the owner needs, which
