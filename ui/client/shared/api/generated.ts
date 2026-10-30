@@ -24,6 +24,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/account/credentials/add/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Credential Start
+         * @description WebAuthn options for one more passkey on the signed-in account.
+         *
+         *     This is how an account puts a passkey on a second device — and how one
+         *     provisioned through single sign-on gets its first. Sign-up stays
+         *     /api/auth/register, which rightly refuses an email that already has a
+         *     passkey; before this route existed that refusal meant no account could
+         *     ever add one, and losing the only passkey locked the account out.
+         */
+        post: operations["add_credential_start_api_account_credentials_add_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/account/credentials/add/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Credential Verify
+         * @description Verify the ceremony and store the new credential.
+         *
+         *     The session names the account; the pending-registration slot sign-up
+         *     uses is never consulted, so a sign-up started elsewhere cannot hand
+         *     this session its user. The manager still enforces the per-account
+         *     passkey cap. No token in the answer: the caller is already signed in,
+         *     and the session it holds stays the session.
+         */
+        post: operations["add_credential_verify_api_account_credentials_add_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/account/credentials/{credential_id}": {
         parameters: {
             query?: never;
@@ -3913,6 +3965,27 @@ export interface components {
          * @enum {string}
          */
         AbsenceType: "vacation" | "sick" | "other";
+        /** AddCredentialStartResponse */
+        AddCredentialStartResponse: {
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /** AddCredentialVerifyRequest */
+        AddCredentialVerifyRequest: {
+            /** Credential */
+            credential: {
+                [key: string]: unknown;
+            };
+            /** Device Name */
+            device_name?: string | null;
+        };
+        /** AddCredentialVerifyResponse */
+        AddCredentialVerifyResponse: {
+            /** Verified */
+            verified: boolean;
+        };
         /**
          * AdjustmentKind
          * @description How a balance adjustment moves the balance at the start of its day.
@@ -7138,6 +7211,59 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    add_credential_start_api_account_credentials_add_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddCredentialStartResponse"];
+                };
+            };
+        };
+    };
+    add_credential_verify_api_account_credentials_add_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddCredentialVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddCredentialVerifyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

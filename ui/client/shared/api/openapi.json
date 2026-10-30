@@ -276,6 +276,58 @@
         "title": "AbsenceType",
         "type": "string"
       },
+      "AddCredentialStartResponse": {
+        "properties": {
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "title": "AddCredentialStartResponse",
+        "type": "object"
+      },
+      "AddCredentialVerifyRequest": {
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "title": "Credential",
+            "type": "object"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "AddCredentialVerifyRequest",
+        "type": "object"
+      },
+      "AddCredentialVerifyResponse": {
+        "properties": {
+          "verified": {
+            "title": "Verified",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verified"
+        ],
+        "title": "AddCredentialVerifyResponse",
+        "type": "object"
+      },
       "AdjustmentKind": {
         "description": "How a balance adjustment moves the balance at the start of its day.",
         "enum": [
@@ -7950,6 +8002,70 @@
           }
         },
         "summary": "List Credentials",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/credentials/add/start": {
+      "post": {
+        "description": "WebAuthn options for one more passkey on the signed-in account.\n\nThis is how an account puts a passkey on a second device \u2014 and how one\nprovisioned through single sign-on gets its first. Sign-up stays\n/api/auth/register, which rightly refuses an email that already has a\npasskey; before this route existed that refusal meant no account could\never add one, and losing the only passkey locked the account out.",
+        "operationId": "add_credential_start_api_account_credentials_add_start_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCredentialStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Add Credential Start",
+        "tags": [
+          "account"
+        ]
+      }
+    },
+    "/api/account/credentials/add/verify": {
+      "post": {
+        "description": "Verify the ceremony and store the new credential.\n\nThe session names the account; the pending-registration slot sign-up\nuses is never consulted, so a sign-up started elsewhere cannot hand\nthis session its user. The manager still enforces the per-account\npasskey cap. No token in the answer: the caller is already signed in,\nand the session it holds stays the session.",
+        "operationId": "add_credential_verify_api_account_credentials_add_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddCredentialVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddCredentialVerifyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Credential Verify",
         "tags": [
           "account"
         ]
