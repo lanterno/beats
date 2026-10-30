@@ -28,6 +28,7 @@ vi.mock("@simplewebauthn/browser", () => ({
 vi.mock("../api/authApi", () => ({
 	registerStart: vi.fn(),
 	verifyRegistration: vi.fn(),
+	deviceName: vi.fn(() => "Mac"),
 	getLoginOptions: vi.fn(),
 	verifyLogin: vi.fn(),
 	getCurrentUser: vi.fn(() => Promise.resolve({ email: "test@example.com", display_name: "Test" })),
