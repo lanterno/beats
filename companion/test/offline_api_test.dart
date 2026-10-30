@@ -423,6 +423,12 @@ void main() {
 
     await api.drain();
     expect(server.applied, ['start p1 09:00']);
+
+    // The popover's count follows on its next answer.
+    expect(popover.status.pending, 1);
+    await popover.getTimerStatus();
+    await settle();
+    expect(popover.status.pending, 0);
   });
 
   group('the timer over it', () {
