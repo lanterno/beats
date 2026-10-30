@@ -70,7 +70,7 @@ def _invite(client, headers, org_id: str, **fields) -> dict:
 
 
 def _join(client, headers, token: str):
-    return client.post(f"/api/organisations/join/{token}", headers=headers)
+    return client.post("/api/organisations/join", headers={**headers, "X-Invite-Token": token})
 
 
 def _member_of(client, admin, org_id: str, headers, role: str = "member") -> str:
@@ -229,12 +229,18 @@ class TestOrganisationLifecycle:
 
         # Someone else holding the token learns nothing from it.
         passerby = _new_user()
-        preview = client.get(f"/api/organisations/join/{invite['token']}", headers=passerby)
+        preview = client.get(
+            "/api/organisations/join",
+            headers={**passerby, "X-Invite-Token": invite["token"]},
+        )
         assert preview.status_code == 404
         assert preview.json()["code"] == "INVITE_NOT_FOUND"
         assert _join(client, passerby, invite["token"]).status_code == 404
 
-        preview = client.get(f"/api/organisations/join/{invite['token']}", headers=invitee)
+        preview = client.get(
+            "/api/organisations/join",
+            headers={**invitee, "X-Invite-Token": invite["token"]},
+        )
         assert preview.status_code == 200
         assert preview.json()["addressed"] is True
         assert preview.json()["already_member"] is False
@@ -248,6 +254,26 @@ class TestOrganisationLifecycle:
         assert again.status_code == 410
         assert again.json()["code"] == "INVITE_EXPIRED"
         assert client.get("/api/organisations/invitations", headers=invitee).json() == []
+
+    def test_no_join_route_carries_the_token_in_its_path(self, client, auth_headers):
+        """Cloud Run's request log keeps every request's full URL for 30
+        days, so a token in the path is an unused invitation anyone who can
+        read the project's logs can take (#376). Both join routes read it
+        from X-Invite-Token and nowhere else."""
+        org = _create_org(client, auth_headers)
+        invite = _invite(client, auth_headers, org["id"])
+        joiner = _new_user()
+
+        in_path = client.get(f"/api/organisations/join/{invite['token']}", headers=joiner)
+        assert in_path.status_code == 404
+        posted_in_path = client.post(f"/api/organisations/join/{invite['token']}", headers=joiner)
+        assert posted_in_path.status_code in (404, 405)
+        # Missing header: malformed, not a token that failed to resolve.
+        assert client.get("/api/organisations/join", headers=joiner).status_code == 422
+        assert client.post("/api/organisations/join", headers=joiner).status_code == 422
+
+        # And the header still works.
+        assert _join(client, joiner, invite["token"]).status_code == 200
 
     def test_a_link_with_an_approval_step_leaves_a_request(self, client, auth_headers):
         org = _create_org(client, auth_headers)

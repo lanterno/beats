@@ -3690,8 +3690,9 @@ def _mint_link(client, headers, client_id: str, **fields) -> dict:
 
 def _read_report(client, token: str):
     """The public read, deliberately with no Authorization header: that it
-    works without one is half of what these tests are for."""
-    return client.get(f"/api/reports/{token}")
+    works without one is half of what these tests are for. The token goes in
+    a header, never the path — Cloud Run logs every request's URL (#376)."""
+    return client.get("/api/reports", headers={"X-Report-Token": token})
 
 
 def _billed_march(client, headers, *, name: str = "Studio Kite", project: str = "Website") -> dict:
@@ -3710,8 +3711,8 @@ def _billed_march(client, headers, *, name: str = "Studio Kite", project: str = 
 
 class TestReportLinksAPI:
     """Report links (docs/billing.md, phase 1c) — the owner's writes under
-    /api/clients/{id}/links, and the public read under /api/reports/{token}
-    that a client opens with no account at all.
+    /api/clients/{id}/links, and the public read under /api/reports that a
+    client opens with no account at all, its token in X-Report-Token.
 
     The range is March 2026, in the past and so fully closed, which is what
     lets these assert exact figures.
@@ -3863,6 +3864,27 @@ class TestReportLinksAPI:
         resp = _read_report(client, "nosuchtoken")
         assert resp.status_code == 404, resp.text
         assert resp.json()["code"] == "REPORT_NOT_FOUND"
+
+    def test_no_route_carries_the_token_in_its_path(self, client, auth_headers):
+        """Cloud Run's request log keeps every request's full URL for 30
+        days, so a token in the path is a live report link anyone who can
+        read the project's logs can open (#376). The token is read from
+        X-Report-Token and from nowhere else — not the path it used to be
+        in, and not a query parameter either."""
+        billed = _billed_march(client, auth_headers)
+        link = _mint_link(client, auth_headers, billed["client"]["id"])
+        assert _read_report(client, link["token"]).status_code == 200
+
+        assert client.get(f"/api/reports/{link['token']}").status_code == 404
+        in_query = client.get(f"/api/reports?token={link['token']}")
+        assert in_query.status_code == 422, in_query.text
+
+    def test_the_header_is_required(self, client):
+        """No token at all is a 422 — the request is malformed, which is a
+        different answer from a token that did not resolve, and tells a
+        reader nothing the absent token did not already."""
+        resp = client.get("/api/reports")
+        assert resp.status_code == 422, resp.text
 
     def test_a_revoked_link_is_dead(self, client, auth_headers):
         billed = _billed_march(client, auth_headers)
@@ -8812,7 +8834,10 @@ class TestDevicePairingAPI:
             # device could reach by the prefix rules alone. It cannot: the
             # middleware resolves the bearer token and checks the device
             # allowlist before a path's publicness is ever considered.
-            client.get("/api/reports/sometoken", headers=device_headers),
+            client.get(
+                "/api/reports",
+                headers={**device_headers, "X-Report-Token": "sometoken"},
+            ),
         ):
             assert resp.status_code == 403, resp.text
             assert resp.json()["code"] == "DEVICE_PATH_FORBIDDEN"
