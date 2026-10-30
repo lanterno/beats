@@ -321,16 +321,18 @@ npx firebase-tools deploy --only hosting
 
 ### DNS Configuration
 
-- **UI Domain**: `lifepete.com` → Automatically configured via Cloudflare DNS
-- **API Domain**: `api.lifepete.com` → Automatically configured via Cloudflare DNS
+- **API Domain**: `api.lifepete.com` → the CNAME Terraform manages in Cloudflare.
+- **UI Domain**: `lifepete.com` → Firebase Hosting's, not Terraform's. Set up
+  with the site, in the Firebase console.
 
-DNS records are automatically managed by Terraform using Cloudflare. See the Cloudflare DNS Management section below for setup instructions.
+See the Cloudflare DNS Management section below for the one record this
+configuration owns.
 
 See `../ui/README.md` for more detailed deployment instructions.
 
 ## Cloudflare DNS Management
 
-Terraform automatically manages Cloudflare DNS records for your custom domains. This eliminates the need to manually create CNAME and A records.
+Terraform manages the API subdomain's record in Cloudflare, so it is not created by hand. The apex belongs to Firebase Hosting.
 
 ### Setup
 
@@ -356,9 +358,13 @@ Terraform automatically manages Cloudflare DNS records for your custom domains. 
    terraform apply
    ```
 
-Terraform will automatically:
-- Create a CNAME record for `api.lifepete.com` → `ghs.googlehosted.com` (Cloud Run)
-- Create an A record for `lifepete.com` → Load Balancer IP address
+Terraform creates one record, and only one:
+- a CNAME for `api.lifepete.com` → `ghs.googlehosted.com` (Cloud Run's domain
+  mapping), `cloudflare.tf:14`.
+
+**The apex is not Terraform's.** `lifepete.com` serves the SPA from Firebase
+Hosting, which owns that DNS; no `.tf` file declares an A record, and there is
+no load balancer in this configuration. A README bullet said otherwise (#387).
 
 ### Moving to provider 5
 
