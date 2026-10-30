@@ -4331,6 +4331,78 @@ class TestBeatEdit:
         assert stored["end"].startswith("2026-04-01T09:30:00")
         assert (stored["note"], stored["tags"]) == ("Mine", [])
 
+    # An edit can carry `expected`, the session as it was made against it:
+    # the companion replays edits it queued offline, after another device
+    # may have changed the same session.
+
+    @staticmethod
+    def _expected(beat: dict) -> dict:
+        return {k: beat[k] for k in ("project_id", "start", "end")}
+
+    def test_an_edit_made_against_the_stored_session_applies(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+
+        resp = self._edit(
+            client, auth_headers, beat, start="2026-04-01T08:45:00Z", expected=self._expected(beat)
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["start"].startswith("2026-04-01T08:45:00")
+
+    def test_an_edit_made_before_another_device_changed_it_is_refused(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+        assert self._edit(client, auth_headers, beat, end="2026-04-01T10:00:00Z").status_code == 200
+
+        resp = self._edit(
+            client, auth_headers, beat, start="2026-04-01T08:45:00Z", expected=self._expected(beat)
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "BEAT_CHANGED"
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["start"].startswith("2026-04-01T09:00:00")
+        assert stored["end"].startswith("2026-04-01T10:00:00")
+
+    def test_moving_a_running_start_does_not_reopen_a_session_stopped_elsewhere(
+        self, client, auth_headers
+    ):
+        """The companion moved the running timer's start while offline; by
+        the replay another device had stopped it. The edit carries end None,
+        and applied it would set the session running again."""
+        # An earlier test in the class reopened a session; nothing may run.
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+        project_id = self._project(client, auth_headers)
+        running = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-02T09:00:00Z"},
+            headers=auth_headers,
+        ).json()
+        stopped = client.post(
+            "/api/projects/stop", json={"time": "2026-04-02T10:00:00Z"}, headers=auth_headers
+        )
+        assert stopped.status_code == 200, stopped.text
+
+        resp = self._edit(
+            client,
+            auth_headers,
+            running,
+            start="2026-04-02T08:30:00Z",
+            expected=self._expected(running),
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert client.get("/api/timer/status", headers=auth_headers).json()["isBeating"] is False
+
+    def test_an_edit_to_a_session_deleted_elsewhere_is_404(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+        assert client.delete(f"/api/beats/{beat['id']}", headers=auth_headers).status_code == 200
+
+        resp = self._edit(
+            client, auth_headers, beat, start="2026-04-01T08:45:00Z", expected=self._expected(beat)
+        )
+
+        assert resp.status_code == 404, resp.text
+
 
 class TestTimerAPI:
     """Test suite for Timer status endpoints"""
