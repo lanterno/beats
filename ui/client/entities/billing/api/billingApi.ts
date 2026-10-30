@@ -189,8 +189,14 @@ export async function deleteReportLink(clientId: string, linkId: string): Promis
  * Read a report link. The one call in the SPA that sends no session
  * (`getPublic`): the token is the whole of the authorisation, and the page
  * must read the same for the client it was sent to as for its owner.
+ *
+ * The token goes in `X-Report-Token`, not the path: Cloud Run records every
+ * request's full URL and the logs are kept 30 days, so a token in the path
+ * is a live report link anyone who can read them can open (#376). The link
+ * people share is unchanged — it is `/r/<token>` on this app, and this is
+ * what the page does with the token it reads out of its own URL.
  */
 export async function fetchReport(token: string): Promise<Report> {
-	const data = await getPublic<unknown>(`/api/reports/${encodeURIComponent(token)}`);
+	const data = await getPublic<unknown>("/api/reports", { "X-Report-Token": token });
 	return toReport(parseApiResponse(ReportSchema, data));
 }

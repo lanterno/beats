@@ -206,14 +206,25 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	return response.json();
 }
 
-export function get<T>(endpoint: string): Promise<T> {
-	return apiClient<T>(endpoint, { method: "GET" });
+/**
+ * `headers` is for a route whose secret goes in one rather than in the URL,
+ * which Cloud Run's request log keeps for 30 days (#376) — the invite token
+ * the join routes take. It merges after the session's, so it can add to
+ * them but a caller passing `Authorization` replaces it on purpose.
+ */
+export function get<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
+	return apiClient<T>(endpoint, { method: "GET", headers });
 }
 
-export function post<T>(endpoint: string, body?: unknown): Promise<T> {
+export function post<T>(
+	endpoint: string,
+	body?: unknown,
+	headers?: Record<string, string>,
+): Promise<T> {
 	return apiClient<T>(endpoint, {
 		method: "POST",
 		body: body ? JSON.stringify(body) : undefined,
+		headers,
 	});
 }
 
@@ -238,21 +249,27 @@ export function del<T>(endpoint: string): Promise<T> {
 /**
  * A GET that never carries the session.
  *
- * The one public route the SPA reads is a report link
- * (`/api/reports/{token}`, docs/billing.md phase 1c). The token in the URL
- * is the whole of its authorisation, and the page has to work for a client
- * who has no account at all. Attaching the owner's bearer token when they
- * happen to be signed in would make the page behave differently for them
- * than for the person they sent it to, which is the one thing a "see what
- * your client sees" page must not do.
+ * The one public route the SPA reads is a report link (`/api/reports`,
+ * docs/billing.md phase 1c). Its token is the whole of the authorisation,
+ * and the page has to work for a client who has no account at all.
+ * Attaching the owner's bearer token when they happen to be signed in would
+ * make the page behave differently for them than for the person they sent
+ * it to, which is the one thing a "see what your client sees" page must not
+ * do.
  *
  * Not `get` with headers overridden: `apiClient` spreads its own headers
  * first, so an override can replace `Authorization` but never remove it.
+ *
+ * `headers` is for a route whose secret goes in one rather than in the URL,
+ * which Cloud Run's request log keeps for 30 days (#376).
  */
-export async function getPublic<T>(endpoint: string): Promise<T> {
+export async function getPublic<T>(
+	endpoint: string,
+	headers: Record<string, string> = {},
+): Promise<T> {
 	const response = await fetch(`${config.apiBaseUrl}${endpoint}`, {
 		method: "GET",
-		headers: { Accept: "application/json" },
+		headers: { Accept: "application/json", ...headers },
 	});
 
 	if (!response.ok) {
