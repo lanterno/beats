@@ -168,7 +168,10 @@ jobs:
           channel: stable
       - run: |
           sudo apt-get update -y
-          sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev libjsoncpp-dev libayatana-appindicator3-dev
+          # libx11-dev and libxi-dev are tray_manager's (the tray icon is a
+          # StatusNotifierItem over D-Bus); libayatana-appindicator3-dev was
+          # system_tray's and left with it (#395).
+          sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev libjsoncpp-dev libx11-dev libxi-dev
       - run: flutter pub get
       - run: flutter build linux --release
       - uses: actions/upload-artifact@v7
