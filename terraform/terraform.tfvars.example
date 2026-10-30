@@ -25,3 +25,6 @@ api_domain = "api.example.com"
 
 # Cloudflare
 cloudflare_api_token = "your-cloudflare-api-token"
+
+# Where production alerts are emailed (alerts.tf)
+alert_email = "you@example.com"
