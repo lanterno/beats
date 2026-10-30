@@ -27,3 +27,11 @@ resource "google_project_service" "secretmanager" {
 
   disable_on_destroy = false
 }
+
+# Uptime checks and the dashboard (monitoring.tf).
+resource "google_project_service" "monitoring" {
+  service = "monitoring.googleapis.com"
+  project = var.project_id
+
+  disable_on_destroy = false
+}
