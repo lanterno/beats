@@ -189,3 +189,15 @@ variable "dns_ttl" {
   default     = 1
 }
 
+# Alerts (alerts.tf)
+variable "alert_email" {
+  description = "Email address the production alerts are sent to (alerts.tf). No default: a deployment names its own."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be one email address."
+  }
+}
+
