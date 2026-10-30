@@ -8,6 +8,10 @@ idempotent by construction: the first acts on documents without a `kind` field
 and stamps one, the second on day jobs that still carry a `weekly_goal` and
 unsets it, so a second boot finds nothing to do for either.
 
+A third pass, `date_pairing_codes`, has nothing to do with projects: it gives
+the pairing codes stored with string dates BSON dates, so their TTL index can
+remove them. Its reasoning is on the function, at the end of the module.
+
 The first pass, `migrate_project_kinds`:
 
 That test only holds if nothing else writes `kind` first. Since the domain
@@ -437,3 +441,70 @@ def _as_date(value: Any) -> date:
         return _as_date(datetime.fromisoformat(value))
     msg = f"not a date: {value!r}"
     raise TypeError(msg)
+
+
+@dataclass
+class PairingCodeReport:
+    """What the pairing-code pass did: codes given BSON dates, and codes deleted."""
+
+    converted: int = 0
+    deleted: int = 0
+
+
+async def date_pairing_codes(db: AsyncDatabase, now: datetime | None = None) -> PairingCodeReport:
+    """Give every pairing code stored with string dates BSON dates, or delete it.
+
+    Pairing codes were written through `model_dump(mode="json")`, which turns
+    `expires_at` and `created_at` into ISO strings. The TTL index on
+    `expires_at` acts only on dates, so no code was ever removed: every one
+    issued stayed in the collection with its hash and its owner. The
+    repository now writes dates; this pass mends what it wrote before.
+
+    A code already expired is deleted, which is all the TTL index would have
+    done with it; it could never be redeemed again. One still live — issued by
+    the revision being replaced in the five minutes before this boot — is
+    converted instead, so a daemon being paired across a deploy can finish,
+    and the TTL index removes it when it lapses. A code whose dates cannot be
+    read is deleted: no redemption could match it.
+
+    Idempotent: it acts on documents whose `expires_at` is a string and leaves
+    none behind. During a rollout the revision being replaced can still write a
+    string-dated code after this pass has run. The new revision refuses it
+    (`$gt` on a date skips strings), and the next boot deletes it or converts
+    it.
+    """
+    report = PairingCodeReport()
+    now = now if now is not None else datetime.now(UTC)
+    docs = await db.pairing_codes.find(
+        {"expires_at": {"$type": "string"}},
+        projection={"expires_at": 1, "created_at": 1},
+    ).to_list(length=None)
+
+    for doc in docs:
+        stored = doc["expires_at"]
+        created = doc.get("created_at")
+        update: dict[str, Any] = {}
+        try:
+            update["expires_at"] = normalize_tz(datetime.fromisoformat(stored))
+            if isinstance(created, str):
+                update["created_at"] = normalize_tz(datetime.fromisoformat(created))
+        except ValueError:
+            update = {}
+        if not update or update["expires_at"] <= now:
+            result = await db.pairing_codes.delete_one({"_id": doc["_id"]})
+            report.deleted += result.deleted_count
+            continue
+        # Filtered on the string it read: a code redeemed in the meantime is
+        # gone, and stays gone.
+        result = await db.pairing_codes.update_one(
+            {"_id": doc["_id"], "expires_at": stored}, {"$set": update}
+        )
+        report.converted += result.modified_count
+
+    if report.converted or report.deleted:
+        logger.info(
+            "pairing codes: %d given BSON dates, %d deleted (expired or unreadable)",
+            report.converted,
+            report.deleted,
+        )
+    return report
