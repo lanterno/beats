@@ -57,13 +57,39 @@ describe("replayPoisonAware", () => {
 	});
 
 	it("drops on every 4xx code, not just 422", async () => {
-		// 400 / 401 / 403 / 404 / 409 — all permanent from a sync
-		// engine's perspective. The server's saying "this won't
-		// succeed, stop retrying", so we drop and continue.
+		// 400 / 401 / 403 / 404 / 409 — permanent from a sync engine's
+		// perspective (the one exception, 409 IDEMPOTENT_IN_PROGRESS,
+		// is pinned below). The server's saying "this won't succeed,
+		// stop retrying", so we drop and continue.
 		for (const status of [400, 401, 403, 404, 409]) {
 			mockFetch(status, { detail: "no" });
 			await expect(replayPoisonAware(mutation)).resolves.toBeUndefined();
 		}
+	});
+
+	it("keeps a 409 IDEMPOTENT_IN_PROGRESS queued — the first copy is still being handled", async () => {
+		// The API's idempotency middleware answers this while another
+		// attempt of the same write is still running: "ask again", not
+		// "never". Rethrowing keeps the mutation in the queue, and the
+		// next drain (reconnect, or the engine's active poll) retries it
+		// — the drain's pacing is the backoff, so no hot loop here.
+		mockFetch(409, {
+			detail: "An identical request is already being processed.",
+			code: "IDEMPOTENT_IN_PROGRESS",
+		});
+		await expect(replayPoisonAware(mutation)).rejects.toMatchObject({
+			statusCode: 409,
+			code: "IDEMPOTENT_IN_PROGRESS",
+		});
+		expect(consoleWarnSpy).not.toHaveBeenCalled();
+	});
+
+	it("still drops any other 409 — a real conflict is final", async () => {
+		// TIMER_CHANGED, NOT_FREELANCE, … mean the write will never be
+		// accepted as queued; retrying it would block the queue forever.
+		mockFetch(409, { detail: "Timer changed", code: "TIMER_CHANGED" });
+		await expect(replayPoisonAware(mutation)).resolves.toBeUndefined();
+		expect(consoleWarnSpy).toHaveBeenCalled();
 	});
 
 	it("throws on 5xx so the queue keeps the mutation for retry", async () => {

@@ -14,7 +14,7 @@
  */
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearAll, listPending } from "../lib/mutationQueue";
+import { clearAll, enqueueMutation, listPending } from "../lib/mutationQueue";
 import { ApiError, type ApiErrorField, apiClient, apiMutate, describeError } from "./client";
 
 const originalFetch = globalThis.fetch;
@@ -286,6 +286,50 @@ describe("apiMutate — queue vs throw", () => {
 			"Failed to fetch",
 		);
 		expect(await listPending()).toHaveLength(0);
+	});
+
+	it("joins the back of the queue instead of sending while earlier writes wait", async () => {
+		// The overtaking bug (#394): a stop queued offline must not be
+		// overtaken by a new start made once the network is back. While
+		// anything waits in the queue, a new write is queued behind it,
+		// never sent — the sync engine replays them in order.
+		await enqueueMutation({
+			method: "POST",
+			path: "/api/projects/stop",
+			body: { time: "2026-04-16T10:00:00Z" },
+			clientId: "queued-stop",
+		});
+		const fetchSpy = vi.fn();
+		globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+		const result = await apiMutate("POST", "/api/projects/p1/start", {
+			time: "2026-04-16T10:05:00Z",
+		});
+
+		expect(result.status).toBe("queued");
+		expect(result.queueError).toBeUndefined();
+		expect(fetchSpy).not.toHaveBeenCalled();
+
+		const pending = await listPending();
+		expect(pending.map((p) => p.path)).toEqual(["/api/projects/stop", "/api/projects/p1/start"]);
+		expect(pending[1].clientId).toBe(result.clientId);
+	});
+
+	it("still sends directly when queueOnFailure:false, queue or no queue", async () => {
+		// The opt-out means "handle failure inline, never queue me" — such
+		// a caller accepts that its write may land ahead of queued ones.
+		await enqueueMutation({
+			method: "POST",
+			path: "/api/projects/stop",
+			body: {},
+			clientId: "queued-stop",
+		});
+		mockFetchOnce(200, {});
+
+		const result = await apiMutate("POST", "/api/anything", {}, { queueOnFailure: false });
+
+		expect(result.status).toBe("sent");
+		expect(await listPending()).toHaveLength(1);
 	});
 
 	it("uses caller-supplied clientId verbatim (so retries dedupe)", async () => {

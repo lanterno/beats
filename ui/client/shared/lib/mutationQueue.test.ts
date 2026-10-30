@@ -9,6 +9,7 @@ import {
 	clearAll,
 	drainPending,
 	enqueueMutation,
+	hasQueuedWork,
 	listPending,
 	newClientId,
 	type PendingMutation,
@@ -93,6 +94,44 @@ describe("mutation queue", () => {
 		const failed = remaining.find((p) => p.clientId === b);
 		expect(failed?.attempts).toBe(1);
 		expect(failed?.lastError).toBe("boom");
+	});
+
+	describe("hasQueuedWork", () => {
+		it("is false when the queue is empty and nothing drains", async () => {
+			expect(await hasQueuedWork()).toBe(false);
+		});
+
+		it("is true while a write waits in the queue", async () => {
+			await enqueueMutation(sample());
+			expect(await hasQueuedWork()).toBe(true);
+		});
+
+		it("stays true mid-drain, even once the store has emptied", async () => {
+			// The race the drain flag exists for: drainPending has replayed
+			// the last entry (the store is empty) but has not returned. A
+			// write arriving in that window must still join the back of the
+			// queue, not go straight out ahead of whatever the drain does next.
+			await enqueueMutation(sample());
+			let observedMidDrain: boolean | undefined;
+			await drainPending(async () => {
+				await clearAll(); // the store empties while the drain still runs
+				observedMidDrain = await hasQueuedWork();
+			});
+			expect(observedMidDrain).toBe(true);
+			expect(await hasQueuedWork()).toBe(false);
+		});
+
+		it("clears the drain flag when a replay throws", async () => {
+			await enqueueMutation(sample());
+			await drainPending(async () => {
+				throw new Error("offline");
+			});
+			// Still true — the write is kept — but via the store, not a
+			// drain flag stuck on by the failed pass.
+			expect(await hasQueuedWork()).toBe(true);
+			await clearAll();
+			expect(await hasQueuedWork()).toBe(false);
+		});
 	});
 
 	it("preserves client id across retries (for idempotency on the server)", async () => {
