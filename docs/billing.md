@@ -1282,6 +1282,11 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
   "This report link is no longer available."
 - **The SPA still prices nothing**: every hour and amount on the page is the
   API's, `formatMoney` with the API's `minor_units` as everywhere else.
+- **Removing a passkey** in Settings asks first, and the question says how
+  many report links still work. A link needs no sign-in, so removing a
+  passkey, one answer to a stolen session, leaves every link that session
+  made. The count reads each client's links, archived clients' too, when the
+  button is pressed; there is no route for it of its own.
 
 ### Left out of 1c
 
