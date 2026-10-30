@@ -178,6 +178,75 @@ async def list_credentials(
     return await webauthn.get_credentials_info(user_id)
 
 
+class AddCredentialStartResponse(BaseModel):
+    options: dict[str, Any]
+
+
+class AddCredentialVerifyRequest(BaseModel):
+    credential: dict[str, Any]
+    device_name: str | None = None
+
+
+class AddCredentialVerifyResponse(BaseModel):
+    verified: bool
+
+
+# Adding a passkey to an account that already has one. `/api/auth/register/*`
+# cannot do this: it answers 409 for an email that already has a credential,
+# because there it is the sign-up door and matching an existing account by
+# email is how someone else's account would be taken over. Here the account
+# is the session's, so there is nothing to match — which is also why the
+# ceremony issues no second token, and why the two use separate challenge
+# slots. Without this route an account could hold exactly one passkey, so a
+# second device was impossible and losing the one locked the account out
+# unless an SSO identity was linked (#376).
+@router.post("/credentials/start", response_model=AddCredentialStartResponse)
+@limiter.limit("5/minute")
+async def add_credential_start(
+    request: Request,
+    user_id: CurrentUserId,
+    user_repo: UserRepoDep,
+    webauthn: WebAuthnDep,
+) -> AddCredentialStartResponse:
+    """Start adding a passkey to the signed-in account."""
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    options = await webauthn.get_registration_options(user, challenge_type="add-credential")
+    return AddCredentialStartResponse(options=options)
+
+
+@router.post("/credentials/verify", response_model=AddCredentialVerifyResponse)
+@limiter.limit("5/minute")
+async def add_credential_verify(
+    request: Request,
+    body: AddCredentialVerifyRequest,
+    user_id: CurrentUserId,
+    user_repo: UserRepoDep,
+    webauthn: WebAuthnDep,
+) -> AddCredentialVerifyResponse:
+    """Store the passkey the signed-in account just created.
+
+    The account is the session's, never the ceremony's: a verified credential
+    is saved against `user_id` from the token and nowhere else.
+    """
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    try:
+        result = await webauthn.verify_registration(
+            credential=body.credential,
+            user=user,
+            device_name=body.device_name,
+            challenge_type="add-credential",
+            issue_token=False,
+        )
+    except ValueError as e:
+        logger.warning("Adding a passkey failed: %s", e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return AddCredentialVerifyResponse(verified=result["verified"])
+
+
 @router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_credential(
     user_id: CurrentUserId,

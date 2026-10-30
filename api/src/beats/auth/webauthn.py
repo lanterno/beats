@@ -78,11 +78,20 @@ class WebAuthnManager:
         self.session = session_manager
         self.user_repo = user_repo
 
-    async def get_registration_options(self, user: User) -> dict[str, Any]:
+    async def get_registration_options(
+        self, user: User, challenge_type: str = "registration"
+    ) -> dict[str, Any]:
         """Generate registration options for a new passkey.
 
         Args:
             user: The user registering a passkey.
+            challenge_type: Which ceremony this challenge belongs to.
+                "registration" is signing up, where the account is known only
+                by the pending-registration map this writes. "add-credential"
+                is a signed-in account putting a passkey on another device:
+                the account comes from the session, so the two ceremonies are
+                kept in separate challenge slots and one cannot be finished
+                with the other's challenge.
 
         Returns a dict that can be JSON-serialized for the frontend.
         """
@@ -111,7 +120,7 @@ class WebAuthnManager:
         )
 
         # Store the challenge and pending registration user_id
-        self.session.store_challenge(options.challenge, "registration")
+        self.session.store_challenge(options.challenge, challenge_type)
         self.session.store_pending_registration(options.challenge, user.id or "")
 
         # Walk authenticator_selection defensively: the call site above
@@ -155,6 +164,8 @@ class WebAuthnManager:
         credential: dict[str, Any],
         user: User,
         device_name: str | None = None,
+        challenge_type: str = "registration",
+        issue_token: bool = True,
     ) -> dict[str, Any]:
         """Verify a registration response and store the credential.
 
@@ -162,9 +173,16 @@ class WebAuthnManager:
             credential: The credential response from the browser
             user: The user who is registering
             device_name: Optional friendly name for the device
+            challenge_type: The slot `get_registration_options` put this
+                ceremony's challenge in. See it for the two.
+            issue_token: Whether to mint a session for the account. Signing
+                up does, since the ceremony is how the account proves itself.
+                Adding a passkey to a signed-in account does not: the caller
+                already holds a session, and a second one would have to be
+                revoked on logout like the first.
 
         Returns:
-            Dict with success status and session token
+            Dict with success status, and a session token when one was issued
         """
         count = await self.storage.count_credentials(user.id or "")
         if count >= MAX_CREDENTIALS_PER_USER:
@@ -173,7 +191,7 @@ class WebAuthnManager:
                 "Remove an existing one before registering a new one."
             )
 
-        expected_challenge = self.session.get_stored_challenge("registration")
+        expected_challenge = self.session.get_stored_challenge(challenge_type)
         if expected_challenge is None:
             raise ValueError("No pending registration challenge found")
 
@@ -193,16 +211,15 @@ class WebAuthnManager:
                 device_name=device_name,
             )
 
-            token = self.session.create_session_token(
-                user_id=user.id or "",
-                email=user.email,
-            )
+            result: dict[str, Any] = {"verified": True}
+            if issue_token:
+                result["token"] = self.session.create_session_token(
+                    user_id=user.id or "",
+                    email=user.email,
+                )
 
             logger.info("Successfully registered new passkey for user %s", user.email)
-            return {
-                "verified": True,
-                "token": token,
-            }
+            return result
 
         except Exception as e:
             logger.error("Registration verification failed: %s", e)
