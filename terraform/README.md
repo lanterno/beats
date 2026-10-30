@@ -347,7 +347,6 @@ Terraform automatically manages Cloudflare DNS records for your custom domains. 
    ```hcl
    cloudflare_api_token  = "your-cloudflare-api-token"
    cloudflare_zone_name  = "elghareeb.space"  # Optional: auto-detected from api_domain
-   dns_proxied           = true  # Enable Cloudflare CDN/DDoS protection
    dns_ttl               = 1     # Use 1 for automatic TTL
    ```
 
@@ -381,12 +380,13 @@ The zone id is the `cloudflare_zone_id` output and the record id is
 
 - `cloudflare_api_token`: Your Cloudflare API token (required, sensitive)
 - `cloudflare_zone_name`: Your Cloudflare zone name (optional, auto-detected from `api_domain`)
-- `dns_proxied`: Enable Cloudflare proxy/CDN (default: `true`)
 - `dns_ttl`: DNS record TTL in seconds (default: `1` for automatic)
 
 ### Notes
 
 - Cloudflare DNS management is required and enabled by default
-- Cloudflare proxying (`dns_proxied = true`) enables CDN, DDoS protection, and SSL
-- Setting `dns_proxied = false` will expose the origin IP and may affect SSL certificate provisioning
+- The `api` record is DNS-only (`proxied = false`, hardcoded in `cloudflare.tf`): Cloud Run's
+  domain mapping needs to terminate SSL itself, and `FORWARDED_ALLOW_IPS` in `cloudrun.tf`
+  assumes Cloud Run's front end is the only proxy, so the rate limits key on the real
+  visitor's address. Proxying it through Cloudflare would break both.
 
