@@ -175,6 +175,20 @@ Coach prompts are sent to the [Anthropic Claude API](https://www.anthropic.com/)
 
 - **Wall clock pairing**: device id, pairing token, last heartbeat, favorites, weekly bars
 
+### Short-lived records
+
+Kept only as long as it takes to finish one request, then deleted by a TTL index
+(MongoDB's monitor runs about once a minute, so within a minute or so of the time given):
+
+- **Idempotency records** (`mutation_log`): a write's client id under your account, and the
+  response the API sent for it, timer start and stop included, so a write retried over a bad
+  connection is answered from the record instead of applied twice. 72 hours.
+- **Single sign-on flows** (`sso_flows`): for each sign-in through a provider, a hash of its
+  `state`, the provider, the nonce, the PKCE verifier and, when linking, the account that
+  asked. Taken when the browser comes back; otherwise ten minutes.
+- **Pairing codes** (`pairing_codes`): the hash of a code shown once to pair a device, and
+  your account id. Taken when used; otherwise five minutes.
+
 ## Encryption
 
 - **In transit**: on lifepete.com, HTTPS to the API and TLS to the MongoDB cluster. Self-hosted, the API reaches MongoDB over the stack's internal Docker network without TLS; the database is not published outside the stack.
@@ -183,7 +197,7 @@ Coach prompts are sent to the [Anthropic Claude API](https://www.anthropic.com/)
 
 ## Retention
 
-Beats does not auto-delete anything. Beats, notes, coach history, and biometrics persist until you delete them or delete your account.
+Beats deletes none of your own records on its own. Beats, notes, coach history, and biometrics persist until you delete them or delete your account. The only things that expire are the short-lived records above, which exist to finish a request.
 
 **One bounded exception, for an organisation's working-time record.** An
 organisation keeps the hours on its own projects for a retention period —
