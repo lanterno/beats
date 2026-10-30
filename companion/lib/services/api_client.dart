@@ -309,11 +309,16 @@ class ApiClient {
   }
 
   // ---- Coach ----
+  //
+  // The API reads the coach's days and weeks in the request's `tz` and falls
+  // back to UTC's without one, so every call that takes a timezone requires
+  // it, null or not: a caller passes `await localTimezone()` rather than
+  // forgetting it.
 
   /// Today's brief, or null. "Today" is the local day in [timezone] (an IANA
   /// name); without one the API reads the UTC day, which near midnight is
   /// not the day the brief was written for.
-  Future<Map<String, dynamic>?> getTodayBrief({String? timezone}) async {
+  Future<Map<String, dynamic>?> getTodayBrief({required String? timezone}) async {
     final resp = await http.get(
       Uri.parse('$baseUrl/api/coach/brief/today')
           .replace(queryParameters: timezone == null ? null : {'tz': timezone}),
@@ -327,7 +332,7 @@ class ApiClient {
 
   /// Asks the coach to write today's brief now. Spends a little of the
   /// month's coach budget (429 BUDGET_EXCEEDED once it is spent).
-  Future<Map<String, dynamic>> generateBrief({String? timezone}) async {
+  Future<Map<String, dynamic>> generateBrief({required String? timezone}) async {
     final resp = await http.post(
       Uri.parse('$baseUrl/api/coach/brief/generate')
           .replace(queryParameters: timezone == null ? null : {'tz': timezone}),
@@ -382,8 +387,17 @@ class ApiClient {
   /// SSE events: `{type: 'text', text}`, `{type: 'tool_use', name}`,
   /// `{type: 'error', error, code}` and finally `{type: 'done',
   /// conversation_id}`. A non-200 throws before anything is yielded.
-  Stream<Map<String, dynamic>> streamChat(String message, {String? conversationId}) async* {
-    final request = http.Request('POST', Uri.parse('$baseUrl/api/coach/chat'))
+  /// The coach's today and each day job's contract week are the local ones
+  /// in [timezone], sent as `tz` in the query as the web app sends it; with
+  /// null the API answers for UTC's.
+  Stream<Map<String, dynamic>> streamChat(
+    String message, {
+    String? conversationId,
+    required String? timezone,
+  }) async* {
+    final uri = Uri.parse('$baseUrl/api/coach/chat')
+        .replace(queryParameters: timezone == null ? null : {'tz': timezone});
+    final request = http.Request('POST', uri)
       ..headers.addAll(_headers)
       ..body = jsonEncode({
         'message': message,

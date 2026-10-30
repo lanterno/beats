@@ -192,7 +192,9 @@ class _CoachScreenState extends State<CoachScreen> {
     });
     _scrollToEnd();
     try {
-      await for (final event in widget.client.streamChat(message, conversationId: _conversationId)) {
+      final timezone = await localTimezone();
+      await for (final event
+          in widget.client.streamChat(message, conversationId: _conversationId, timezone: timezone)) {
         if (!mounted) return;
         setState(() => _reply = applyChatEvent(_reply!, event));
         _scrollToEnd();

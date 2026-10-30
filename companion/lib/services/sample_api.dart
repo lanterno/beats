@@ -338,10 +338,10 @@ class SampleApi extends ApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>?> getTodayBrief({String? timezone}) async => _brief;
+  Future<Map<String, dynamic>?> getTodayBrief({required String? timezone}) async => _brief;
 
   @override
-  Future<Map<String, dynamic>> generateBrief({String? timezone}) async => _brief;
+  Future<Map<String, dynamic>> generateBrief({required String? timezone}) async => _brief;
 
   @override
   Future<Map<String, dynamic>> setBriefFeedback(String date, String? rating) async {
@@ -369,7 +369,11 @@ class SampleApi extends ApiClient {
       ];
 
   @override
-  Stream<Map<String, dynamic>> streamChat(String message, {String? conversationId}) async* {
+  Stream<Map<String, dynamic>> streamChat(
+    String message, {
+    String? conversationId,
+    required String? timezone,
+  }) async* {
     const reply = 'This is sample data, so I can only talk about the made-up week you\'re looking at: '
         'Northwind is on pace, Field Notes is most of the way to its goal, and Spanish '
         'has been quiet for a few days. Pair your own account and I\'ll answer from your real time.';
