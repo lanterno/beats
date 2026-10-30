@@ -19,6 +19,32 @@ from beats.settings import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# Every rate limit in the API is this one limiter, keyed on the visitor's
+# address (`ProxyHeadersMiddleware` in src/server.py is what makes that the
+# visitor's and not the proxy's).
+#
+# **The counts are per instance, and that is a decision, not an oversight**
+# (#376). slowapi keeps them in the process's memory, so on Cloud Run with
+# `max_instances = 2` every limit is worth up to twice what it says, and with
+# `min_instances = 0` the counts go when the service scales to zero.
+#
+# Shared storage is available — `limits` has a MongoDB backend and slowapi
+# takes a `storage_uri` — and it is not used, because slowapi builds the
+# *synchronous* storage (`storage_from_string`), so every rate-limited
+# request would make a blocking Mongo round-trip on the event loop of a
+# 1-CPU instance that already runs out of capacity under the ledger reads
+# (#376 item 3). Paying that on the sign-in path to tighten 10/min to 5/min
+# is the wrong trade.
+#
+# It is the right trade when the limits are protecting something guessable.
+# These are not: the login and registration limits stand in front of a
+# WebAuthn ceremony, the pairing exchange in front of a code that expires,
+# and `/api/reports` in front of a 32-byte token. They are there so a leaked
+# link or a stuck client cannot hammer the service, and 2× of that is still
+# no hammering. Revisit if a limit ever guards a password, a one-time code
+# short enough to enumerate, or anything billed per request — or if slowapi
+# grows an async storage path, which removes the cost of the fix.
 limiter = Limiter(key_func=get_remote_address)
 
 # Shared singleton for session manager (needed by middleware)
