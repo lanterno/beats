@@ -17,8 +17,11 @@ export type {
 	UserInfo,
 } from "./api/authApi";
 export {
+	addPasskeyStart,
+	addPasskeyVerify,
 	completeSso,
 	deleteCredential,
+	deviceName,
 	getCurrentUser,
 	getSsoProviders,
 	listCredentials,

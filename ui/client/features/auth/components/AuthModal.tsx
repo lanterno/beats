@@ -11,6 +11,7 @@ import { APP_NAME } from "@/shared/config";
 import { leaveLanding } from "@/shared/lib";
 import { BrandMark, Button } from "@/shared/ui";
 import {
+	deviceName,
 	getCurrentUser,
 	getLoginOptions,
 	getSsoProviders,
@@ -124,7 +125,7 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 				optionsJSON: registrationOptions.options,
 			});
 
-			const result = await verifyRegistration(credential, getDeviceName());
+			const result = await verifyRegistration(credential, deviceName());
 
 			if (result.verified) {
 				setSessionToken(result.token);
@@ -180,17 +181,6 @@ export default function AuthModal({ open, onClose, initialMode = "login" }: Auth
 		} finally {
 			setIsProcessing(false);
 		}
-	};
-
-	const getDeviceName = (): string => {
-		const ua = navigator.userAgent;
-		if (ua.includes("Mac")) return "Mac";
-		if (ua.includes("Windows")) return "Windows PC";
-		if (ua.includes("iPhone")) return "iPhone";
-		if (ua.includes("iPad")) return "iPad";
-		if (ua.includes("Android")) return "Android";
-		if (ua.includes("Linux")) return "Linux";
-		return "Unknown Device";
 	};
 
 	return (

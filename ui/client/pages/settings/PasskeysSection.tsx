@@ -1,11 +1,11 @@
-import { Fingerprint, Trash2 } from "lucide-react";
+import { Fingerprint, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useCountReportLinks } from "@/entities/billing";
 import { useClients } from "@/entities/client";
 import type { CredentialInfo } from "@/features/auth";
 import { describeError } from "@/shared/api";
-import { type ConfirmRequest, Panel, useConfirm } from "@/shared/ui";
+import { Button, type ConfirmRequest, Panel, useConfirm } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
 function formatDate(iso: string) {
@@ -99,6 +99,39 @@ export function PasskeysSection() {
 		}
 	};
 
+	const [adding, setAdding] = useState(false);
+
+	/**
+	 * The same ceremony sign-up runs, for an account that already exists:
+	 * a second device's passkey, or a first for an account single sign-on
+	 * provisioned. The API excludes the credentials already registered, so
+	 * an authenticator that holds one offers to make another, not reuse it.
+	 */
+	const handleAdd = async () => {
+		setAdding(true);
+		try {
+			const { addPasskeyStart, addPasskeyVerify, deviceName } = await import("@/features/auth");
+			const { startRegistration } = await import("@simplewebauthn/browser");
+			const { options } = await addPasskeyStart();
+			const credential = await startRegistration({ optionsJSON: options });
+			const { verified } = await addPasskeyVerify(credential, deviceName());
+			if (!verified) {
+				toast.error("The passkey could not be added");
+				return;
+			}
+			await loadCredentials();
+			toast.success("Passkey added");
+		} catch (err) {
+			if (err instanceof Error && err.name === "NotAllowedError") {
+				toast.error("Adding the passkey was cancelled or timed out");
+			} else {
+				toast.error(describeError(err, "Failed to add passkey"));
+			}
+		} finally {
+			setAdding(false);
+		}
+	};
+
 	const handleDelete = async (passkey: CredentialInfo, all: CredentialInfo[]) => {
 		setDeleting(passkey.id);
 		try {
@@ -131,7 +164,10 @@ export function PasskeysSection() {
 				{credentials === null && !loadError && <p className={LEAD}>Loading...</p>}
 
 				{credentials?.length === 0 && (
-					<p className={LEAD}>No passkeys on this account. It signs in through single sign-on.</p>
+					<p className={LEAD}>
+						No passkeys on this account. It signs in through single sign-on; adding a passkey gives
+						it a second way in.
+					</p>
 				)}
 
 				{loadError && (
@@ -168,6 +204,13 @@ export function PasskeysSection() {
 							</div>
 						))}
 					</div>
+				)}
+
+				{credentials !== null && (
+					<Button variant="secondary" size="sm" onClick={handleAdd} disabled={adding}>
+						<Plus className="w-3.5 h-3.5" />
+						{adding ? "Waiting for the authenticator…" : "Add a passkey"}
+					</Button>
 				)}
 			</Panel>
 			{confirmDialog}

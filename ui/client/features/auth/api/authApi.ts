@@ -193,6 +193,44 @@ export async function listCredentials(): Promise<CredentialInfo[]> {
 	return get<CredentialInfo[]>("/api/account/credentials");
 }
 
+/**
+ * Add one more passkey to the signed-in account — how a second device gets
+ * one, and how an SSO-provisioned account gets its first. Sign-up stays
+ * /api/auth/register, which refuses an email that already has a passkey.
+ */
+export async function addPasskeyStart(): Promise<{
+	options: PublicKeyCredentialCreationOptionsJSON;
+}> {
+	const { post } = await import("@/shared/api");
+	return post("/api/account/credentials/add/start");
+}
+
+export async function addPasskeyVerify(
+	credential: unknown,
+	deviceName?: string,
+): Promise<{ verified: boolean }> {
+	const { post } = await import("@/shared/api");
+	return post("/api/account/credentials/add/verify", {
+		credential,
+		device_name: deviceName,
+	});
+}
+
+/**
+ * The rough name a new passkey is filed under — the platform, not the
+ * browser, since the passkey usually lives in the platform's keychain.
+ */
+export function deviceName(): string {
+	const ua = navigator.userAgent;
+	if (ua.includes("Mac")) return "Mac";
+	if (ua.includes("Windows")) return "Windows PC";
+	if (ua.includes("iPhone")) return "iPhone";
+	if (ua.includes("iPad")) return "iPad";
+	if (ua.includes("Android")) return "Android";
+	if (ua.includes("Linux")) return "Linux";
+	return "Unknown Device";
+}
+
 export async function deleteCredential(credentialId: string): Promise<void> {
 	const { del } = await import("@/shared/api");
 	await del(`/api/account/credentials/${encodeURIComponent(credentialId)}`);
