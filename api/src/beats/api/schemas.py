@@ -859,6 +859,14 @@ class InvitePreviewResponse(BaseModel):
     already_member: bool
 
 
+class JoinRequest(BaseModel):
+    """The invite token, in the body rather than the path: request logs keep
+    every URL for 30 days, and an unused invitation must not be readable
+    there. The `/join/<token>` link people share is the SPA's own route."""
+
+    token: str
+
+
 class JoinResponse(BaseModel):
     """`joined`, with the membership; or `pending`, when the link has an
     approval step and a request is now waiting."""

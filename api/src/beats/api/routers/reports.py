@@ -6,8 +6,12 @@ no session, so the rules it follows are worth stating in one place
 
 - **The token is the whole of the authorisation.** It resolves to a stored
   link, which names the account, the client and the range. Nothing else about
-  the request is trusted: not a header, not a query parameter, not a timezone
-  the reader asks for.
+  the request is trusted: not another header, not a query parameter, not a
+  timezone the reader asks for.
+- **The token rides a header (`X-Report-Token`), never the URL.** Request
+  logs keep every URL (path and query string) for 30 days; headers stay out
+  of them. The shared `/r/<token>` link is the SPA's own route and never
+  reaches this API as a path.
 - **The read is as user-scoped as any other.** `billing_service_for` builds
   the same repositories a signed-in route is given, bound to the owner the
   token resolved to. The only question this route answers differently from
@@ -22,7 +26,9 @@ no session, so the rules it follows are worth stating in one place
   session learns nothing from the difference.
 """
 
-from fastapi import APIRouter, Request, Response
+from typing import Annotated
+
+from fastapi import APIRouter, Header, Request, Response
 
 from beats.api.dependencies import ReportLinkLookupDep, billing_service_for
 from beats.api.routers.auth import limiter
@@ -84,13 +90,13 @@ def _report(link: ReportLink, billing: ClientBilling) -> ReportResponse:
     )
 
 
-@router.get("/{token}", response_model=ReportResponse)
+@router.get("", response_model=ReportResponse)
 @limiter.limit("30/minute")
 async def read_report(
     request: Request,
-    token: str,
     response: Response,
     lookup: ReportLinkLookupDep,
+    token: Annotated[str | None, Header(alias="X-Report-Token")] = None,
 ) -> ReportResponse:
     """One client's billable work over a report link's frozen range.
 
@@ -98,8 +104,13 @@ async def read_report(
     runs (`device_may_reach` in `server.py`). Rate-limited less against
     guessing — 32 bytes are not guessed — than against a leaked link being
     hammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.
+
+    The token rides the X-Report-Token header, not the path: Cloud Run's
+    request log keeps every requestUrl for 30 days, and a URL that *is* the
+    authorisation must not be readable there (the `/r/<token>` link people
+    share is the SPA's route; only this call changes).
     """
-    owned = await lookup.find_by_token(token)
+    owned = await lookup.find_by_token(token) if token else None
     if owned is None:
         raise ReportNotFound()
     # The one place in the API where a request's account comes from a stored

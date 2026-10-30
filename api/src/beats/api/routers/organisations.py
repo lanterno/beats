@@ -22,7 +22,7 @@ are worth stating where they apply:
 import http
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Header, Query, Response
 
 from beats.api.dependencies import (
     AbsenceRepoDep,
@@ -44,6 +44,7 @@ from beats.api.schemas import (
     InvitePreviewResponse,
     InviteRequest,
     InviteResponse,
+    JoinRequest,
     JoinRequestResponse,
     JoinResponse,
     MemberBalanceResponse,
@@ -222,13 +223,20 @@ async def list_invitations(user_id: CurrentUserId, service: OrganisationServiceD
     ]
 
 
-@router.get("/join/{token}", response_model=InvitePreviewResponse)
-async def preview_invite(token: str, user_id: CurrentUserId, service: OrganisationServiceDep):
+@router.get("/join", response_model=InvitePreviewResponse)
+async def preview_invite(
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+    token: Annotated[str | None, Header(alias="X-Invite-Token")] = None,
+):
     """What an invite token opens: the organisation's name and the role it
-    gives. 404 for a token that is unknown or addressed to another address
+    gives. The token rides the X-Invite-Token header, not the path, so an
+    unused invitation never lands in request logs (the `/join/<token>` link
+    people share is the SPA's route; only this call carries it). 404 for a
+    token that is missing, unknown or addressed to another address
     (INVITE_NOT_FOUND), 410 for one that was real and is closed
     (INVITE_EXPIRED)."""
-    invite, organisation, membership = await service.preview_invite(token, user_id)
+    invite, organisation, membership = await service.preview_invite(token or "", user_id)
     return InvitePreviewResponse(
         organisation=_card(organisation),
         role=invite.role,
@@ -238,14 +246,15 @@ async def preview_invite(token: str, user_id: CurrentUserId, service: Organisati
     )
 
 
-@router.post("/join/{token}", response_model=JoinResponse)
-async def join(token: str, user_id: CurrentUserId, service: OrganisationServiceDep):
-    """Take an invite. Joining makes one membership document and nothing
+@router.post("/join", response_model=JoinResponse)
+async def join(request: JoinRequest, user_id: CurrentUserId, service: OrganisationServiceDep):
+    """Take an invite — the token in the body, never the path (see
+    `preview_invite`). Joining makes one membership document and nothing
     else: no second account, no moved data (rule 1). A link with an approval
     step answers `pending` and leaves a request for an admin. 409 when
     already a member (ALREADY_A_MEMBER) or already waiting
     (JOIN_REQUEST_PENDING)."""
-    member, _request = await service.join(token, user_id)
+    member, _request = await service.join(request.token, user_id)
     if member is not None:
         return JoinResponse(status="joined", membership=_membership(member))
     return JoinResponse(status="pending")
