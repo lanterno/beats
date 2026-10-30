@@ -1109,7 +1109,7 @@ and change none of them; "decision N" in this section means one of its own.
 
 1. **A link is a capability in its URL**, 32 bytes from
    `secrets.token_urlsafe`, and it is stored as it is read, not hashed. A
-   pairing code is hashed because it is eight guessable characters that live
+   pairing code is hashed because it is six guessable characters that live
    for minutes; this is neither. Hashing would protect nothing here — whoever
    can read the `report_links` collection can read the hours it serves, out of
    the same database — and it would cost the one thing the owner needs, which
@@ -1163,7 +1163,12 @@ and change none of them; "decision N" in this section means one of its own.
    exactly one shape. The route is rate-limited to 30/minute, answers
    `Cache-Control: no-store` so a shared machine's browser keeps no copy, and
    `X-Robots-Tag: noindex` so a link pasted into something that crawls does
-   not land in an index. A device token reaching it still gets 403: the
+   not land in an index. **The token travels in `X-Report-Token`, never in
+   the path**: Cloud Run's request log records every request's full URL and
+   the project's `_Default` bucket keeps it 30 days, so a token in the path
+   is a live report link anyone who can read those logs can open (#376). The
+   link people share is unchanged — `/r/<token>` on the web app, which reads
+   the token out of its own URL and puts it in the header. A device token reaching it still gets 403: the
    middleware resolves a Bearer token and checks `device_may_reach` before a
    path's publicness is ever considered.
 9. **One 404 for every way a link fails.** Not found, mistyped, revoked, or
@@ -1228,7 +1233,7 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
 ### What a link shows
 
 ```jsonc
-// GET /api/reports/{token}
+// GET /api/reports, X-Report-Token: <token>
 { "client_name": "Studio Kite",
   "first": "2026-10-01", "last": "2026-10-31",
   "show_amounts": true, "show_entries": true,
@@ -1262,7 +1267,7 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
 | GET | `/api/clients/{id}/links` | | the client's links, newest first; 404 `CLIENT_NOT_FOUND` |
 | POST | `/api/clients/{id}/links` | `ReportLinkFields` | 201 with the token; 404 `CLIENT_NOT_FOUND`; 400 `INVALID_TIMEZONE`; 422 |
 | DELETE | `/api/clients/{id}/links/{link_id}` | | 204, always: with no such link there is nothing left to clear |
-| GET | `/api/reports/{token}` | **public** | the report; 404 `REPORT_NOT_FOUND`; 429 |
+| GET | `/api/reports` | **public**, `X-Report-Token` | the report; 404 `REPORT_NOT_FOUND`; 422 without the header; 429 |
 
 ### The UI's rules
 

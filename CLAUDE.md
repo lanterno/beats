@@ -69,7 +69,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 1392 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 1446 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -101,7 +101,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full suite (1392 tests) takes about 30 seconds. `src/test_organisations.py` holds
+  the full suite (1446 tests) takes about 30 seconds. `src/test_organisations.py` holds
   the organisations contract, including the wall tests in the shape of 1c's: a sentinel
   planted on a personal project, a tag, a flow window and a biometric is in no byte the
   organisation can read.
@@ -121,7 +121,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   Dropping and rebuilding them per class is what previously exhausted mongod's
   file descriptors and crashed the database partway through a run.
   The pytest suite covers the HTTP contract end-to-end (TestClient, real Mongo).
-- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 842 of them across 113 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
+- **UI unit tests** are in `client/**/*.test.{ts,tsx}` (Vitest, jsdom env) — 868 of them across 114 files. The `.ts` files cover pure helpers and stores — `shared/lib/`, the entity models and query helpers, the auth store; the `.tsx` files cover React components and hooks via `@testing-library/react`. Both globs are wired in `vitest.config.ts`.
 - **E2E tests** are in `ui/e2e/` (Playwright, Chromium only) — 39 of them, last
   run green against a real API + Mongo. They need the API on :7999 and a
   MongoDB behind it; the dev server starts itself. A `setup` project
@@ -143,7 +143,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
-- **Companion tests** are in `companion/test/` (flutter_test) — 361 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
+- **Companion tests** are in `companion/test/` (flutter_test) — 362 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
   The SDK is the Homebrew install at `/opt/homebrew/share/flutter` (stable), on
   `PATH` through `/opt/homebrew/bin`, which the lefthook gates inherit from the
   shell that runs `git`. `flutter doctor`
@@ -470,9 +470,9 @@ changing anything both ends share.
 | `/api/signals` | Daemon-emitted flow windows and signal summaries |
 | `/api/device` | Wall clock status, favorites, weekly bars, heartbeat, pairing |
 | `/api/export` | CSV/JSON export and import |
-| `/api/account` | User account management (me, refresh, credentials, logout, linking SSO identities) |
+| `/api/account` | User account management (me, refresh, credentials — including `/credentials/start` and `/verify`, the ceremony that puts another passkey on a signed-in account — logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
-| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join/{token}`; per organisation its settings, `/close` (notice, then `DELETE /{id}` hands members their projects back), `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments and `/{pid}/merge`, `/connect`, `/record` (readers; a manager their teams), `/visible`, `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
-| `/api/reports` | **Public.** `GET /{token}`: one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
+| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join` (GET to preview, POST to take, the token in `X-Invite-Token` rather than the path); per organisation its settings, `/close` (notice, then `DELETE /{id}` hands members their projects back), `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments and `/{pid}/merge`, `/connect`, `/record` (readers; a manager their teams), `/visible`, `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
+| `/api/reports` | **Public.** `GET` with the link's token in `X-Report-Token`, never in the path (Cloud Run logs every URL for 30 days): one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |

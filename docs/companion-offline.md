@@ -93,7 +93,10 @@ not re-litigate them.
 
 9. **Some writes are never queued.** Reopening a finished session (undoing
    a stop that has synced) could, replayed later, set it running beside a
-   timer started elsewhere, which the API's reopen does not check for. A
+   timer started elsewhere. The API's reopen refuses that since #376 — it
+   makes the check a start makes — so the rule is now belt and braces
+   rather than the only guard; a replayed reopen would be refused, not
+   applied. A
    stop or an edit that names no session cannot be replayed safely. Offline,
    these are refused on the spot with a sentence saying a connection is
    needed.
