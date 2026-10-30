@@ -5,11 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-/// Zen Maru Gothic draws the em dash as the full-width Japanese bar, so body
-/// text takes that one character from the LatinDash face (#324). A
+/// Zen Maru Gothic draws the em dash as the full-width Japanese bar, and the
+/// minus sign and the ellipsis about twice a digit's width, so body text takes
+/// those three characters from the LatinDash face (#324, #380). A
 /// family name that drifts between pubspec.yaml and sky.dart, a face left out
-/// of the bundle or cut with more than the dash would all fail silently: the
-/// text still draws, from the wrong face.
+/// of the bundle or cut with more or fewer characters would all fail silently:
+/// the text still draws, from the wrong face.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -36,14 +37,17 @@ void main() {
     return width;
   }
 
-  test('body text takes the em dash from the Latin face and nothing else', () {
+  test('body text takes its dash, minus and ellipsis from the Latin face and nothing else', () {
     final theme = buildSkyTheme(SkyPalette.afternoon, Brightness.light);
     // Zen Maru is fetched at run time, so here the rest falls through to the
     // test font, the one an unstyled TextStyle gets.
     const plain = TextStyle(fontSize: 100);
     for (final body in [SkyType.body(100), theme.textTheme.bodyMedium!.copyWith(fontSize: 100)]) {
-      // M PLUS Rounded 1c's em dash is 946 units of 1000.
+      // M PLUS Rounded 1c's em dash is 946 units of 1000, its ellipsis 1000
+      // and its minus sign 734.
       expect(width('\u{2014}', body), closeTo(94.6, 0.1));
+      expect(width('\u{2026}', body), closeTo(100.0, 0.1));
+      expect(width('\u{2212}', body), closeTo(73.4, 0.1));
       // The en dash among them: Zen Maru's is already a Latin one.
       for (final other in ['\u{2013}', '-', 'a', 'M', '1']) {
         expect(width(other, body), width(other, plain), reason: other);
