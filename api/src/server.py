@@ -13,6 +13,7 @@ from fastapi.responses import Response
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
@@ -55,6 +56,7 @@ from beats.infrastructure.migrations import (
 )
 from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
+from beats.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -356,7 +358,7 @@ async def health_check():
     return {"status": "healthy", "service": "beats-api"}
 
 
-# CORS middleware - should be last (wraps all other middleware)
+# CORS middleware - wraps every middleware above
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -364,3 +366,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Outermost: the client's address and scheme as the proxies in front of this
+# API saw them, so the rate limits (keyed on `request.client.host`) count per
+# visitor rather than per proxy. Only a peer in FORWARDED_ALLOW_IPS is believed,
+# and of its X-Forwarded-For, only the right-most entry no trusted proxy wrote:
+# the entries left of it are the client's own and could be anything. Applied
+# here rather than by uvicorn's flags, so the one checked setting decides
+# however the server is started; the launch commands pass --no-proxy-headers
+# so uvicorn's own copy, with its loopback default, stays out of it.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=settings.forwarded_allow_ips)
