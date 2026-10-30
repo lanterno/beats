@@ -224,7 +224,9 @@ class BeatRepository(Protocol):
     async def list(
         self, project_id: str | None = None, date_filter: date | None = None
     ) -> builtins.list[Beat]: ...
-    async def list_by_project(self, project_id: str) -> builtins.list[Beat]: ...
+    async def list_by_project(
+        self, project_id: str, since: datetime | None = None
+    ) -> builtins.list[Beat]: ...
     async def list_grouped_by_project_ids(
         self, project_ids: builtins.list[str]
     ) -> dict[str, builtins.list[Beat]]: ...
@@ -317,8 +319,21 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
             }
         return await self._find_many(extra)
 
-    async def list_by_project(self, project_id: str) -> builtins.list[Beat]:
-        return await self._find_many({"project_id": project_id})
+    async def list_by_project(
+        self, project_id: str, since: datetime | None = None
+    ) -> builtins.list[Beat]:
+        """A project's sessions, those that started at or after `since` when
+        one is given.
+
+        The bound is served by the `(user_id, project_id, start)` index, so a
+        caller that knows the earliest day it can use — the ledger does, and
+        its reads were the API's slowest (#376) — fetches and parses only
+        those documents instead of every session ever tracked on the project.
+        """
+        query: dict[str, Any] = {"project_id": project_id}
+        if since is not None:
+            query["start"] = {"$gte": since}
+        return await self._find_many(query)
 
     async def list_grouped_by_project_ids(
         self, project_ids: builtins.list[str]

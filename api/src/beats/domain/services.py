@@ -3,7 +3,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from beats.domain.contracts import (
@@ -899,10 +899,21 @@ class ContractService:
         this project's own error (400), as it is on the week route.
         """
         project = await self.project_repo.get_by_id(project_id)
-        beats = await self.beat_repo.list_by_project(project_id)
         today = self._now(tz).date()
         monday = today - timedelta(days=today.weekday())
         contract = project.contract if project.kind is ProjectKind.DAY_JOB else None
+        # Only the sessions that can reach a day the ledger shows: from the
+        # contract's first day, since every close needs every day since then,
+        # or from the oldest week shown when nothing governs. A day before
+        # that is in no figure, and reading every session a project ever had
+        # was the API's slowest read (#376). The extra day is for the
+        # timezone: a session is bucketed by its local start day, and a tz
+        # behind UTC can pull a UTC instant back onto the day before.
+        first_day = monday - timedelta(weeks=weeks - 1)
+        if contract is not None:
+            first_day = min(contract.starts_on, first_day)
+        since = datetime.combine(first_day - timedelta(days=1), time.min, tzinfo=UTC)
+        beats = await self.beat_repo.list_by_project(project_id, since)
         absences: list[Absence] = []
         adjustments: list[BalanceAdjustment] = []
         holidays: dict[date, str] = {}

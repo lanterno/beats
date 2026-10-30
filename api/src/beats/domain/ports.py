@@ -133,9 +133,12 @@ class ProjectStore(Protocol):
 
 
 class ProjectBeatReader(Protocol):
-    """One project's beats. All `ProjectService` asks of beat storage."""
+    """One project's beats, optionally only those from an instant on. All
+    `ProjectService` asks of beat storage."""
 
-    async def list_by_project(self, project_id: str) -> list[Beat]: ...
+    async def list_by_project(
+        self, project_id: str, since: datetime | None = None
+    ) -> list[Beat]: ...
 
 
 class ProjectReader(Protocol):
