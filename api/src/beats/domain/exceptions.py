@@ -86,6 +86,16 @@ class InvalidEndTime(DomainException):
     message = "End time must be after start time"
 
 
+class TimerChanged(DomainException):
+    """Raised when a stop names the timer it was meant for and a different
+    one is running: another device changed the timer after the client last
+    saw it. A stop replayed from an offline queue must not stop that one."""
+
+    status_code = 409
+    message = "A different timer is running now"
+    code = "TIMER_CHANGED"
+
+
 # Project-related exceptions
 class ProjectNotFound(DomainException):
     """Raised when a project cannot be found by ID."""

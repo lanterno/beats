@@ -36,6 +36,7 @@ from beats.domain.exceptions import (
     ProjectHasBilling,
     ProjectNotFound,
     TimerAlreadyRunning,
+    TimerChanged,
     UnknownHolidayRegion,
     VacationOpeningOutsideContract,
     VacationYearOutOfRange,
@@ -57,6 +58,7 @@ from beats.domain.models import (
     ContractDay,
     ContractWeek,
     DayAbsence,
+    ExpectedBeat,
     Ledger,
     Project,
     ProjectKind,
@@ -224,22 +226,29 @@ class TimerService:
         beat = Beat(project_id=project_id, start=start, organisation_id=organisation_of(project))
         return await self.beat_repo.create(beat)
 
-    async def stop_timer(self, end_time: datetime | None = None) -> Beat:
+    async def stop_timer(
+        self, end_time: datetime | None = None, expected: ExpectedBeat | None = None
+    ) -> Beat:
         """Stop the currently running timer.
 
         Args:
             end_time: When the timer stopped. Defaults to now.
+            expected: The running session the stop was made against, when the
+                caller names it (an offline client replaying a queued stop).
 
         Returns:
             The updated Beat with end time set.
 
         Raises:
             NoActiveTimer: If no timer is currently running.
+            TimerChanged: If `expected` is given and another session is running.
             InvalidEndTime: If end_time is before the start time.
         """
         active = await self.beat_repo.get_active()
         if not active:
             raise NoActiveTimer()
+        if expected is not None and not expected.matches(active):
+            raise TimerChanged()
 
         end = end_time or datetime.now(UTC)
 

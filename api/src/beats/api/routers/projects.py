@@ -28,6 +28,7 @@ from beats.api.schemas import (
     ProjectResponse,
     ProjectsListItemResponse,
     RecordTimeRequest,
+    StopTimerRequest,
     UpdateProjectRequest,
 )
 from beats.domain.holidays import Holiday
@@ -521,12 +522,13 @@ async def start_project_timer(
 
 @router.post("/stop")
 async def end_project_timer(
-    time_validator: RecordTimeRequest,
+    time_validator: StopTimerRequest,
     service: TimerServiceDep,
     webhook_repo: WebhookRepoDep,
 ):
-    """Stop the currently running timer."""
-    beat = await service.stop_timer(time_validator.time)
+    """Stop the currently running timer — or, with `expected`, only the one
+    the caller saw running (409 TIMER_CHANGED when another runs)."""
+    beat = await service.stop_timer(time_validator.time, expected=time_validator.expected)
     await dispatch_webhook_event(
         "timer.stop",
         {
