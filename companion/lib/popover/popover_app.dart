@@ -8,6 +8,8 @@ import '../brand.dart';
 import '../screens/palette.dart';
 import '../screens/timer_actions.dart';
 import '../services/api_client.dart';
+import '../services/offline_api.dart';
+import '../services/sync_story.dart';
 import '../services/time_format.dart';
 import '../services/token_storage.dart';
 import '../state/hour.dart';
@@ -15,6 +17,7 @@ import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
 import '../ui/kit.dart';
+import '../ui/sync_note.dart';
 
 /// The menu bar popover: a second Flutter engine started by
 /// `StatusItemController.swift` on the first click, through `popoverMain`
@@ -57,7 +60,9 @@ class _PopoverAppState extends State<PopoverApp> {
     final token = await storage.loadToken();
     final apiUrl = await storage.loadApiUrl();
     if (token != null && apiUrl != null) {
-      final client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+      // The window's store, the window's queue: a start or stop made here
+      // offline waits there, and the window replays it.
+      final client = OfflineApi(ApiClient(baseUrl: apiUrl, deviceToken: token), drains: false);
       final timer = TimerController(client)..start();
       timer.addListener(_onTimer);
       _timer = timer;
@@ -184,6 +189,8 @@ class _Panel extends StatelessWidget {
             _progress(context),
             const SizedBox(height: 10),
             Expanded(child: _projects(context)),
+            if (timer.syncLine.tone != SyncTone.synced)
+              Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 10), child: SyncNote(timer.syncLine)),
             Divider(height: 1, color: p.hairline),
             const SizedBox(height: 4),
             Row(children: [

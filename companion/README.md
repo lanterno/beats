@@ -33,6 +33,11 @@ app's sky (afternoon or dusk):
   mouse, asks whether to keep that time or take it off
 - **Notifications** — the morning brief, drift nudges and auto-timer suggestions,
   each switchable, and held while you're in flow
+- **Offline** — the timer, the projects and today's sessions open without a network; a
+  start, a stop, a session logged after the fact or a moved start waits on the device and
+  syncs, at the time you pressed, once the server answers again. The sidebar says what
+  waits, and Today lists anything the server turned down
+  ([docs/companion-offline.md](../docs/companion-offline.md))
 
 On a phone (or any window under 720 points) the same four places sit behind a
 floating tab bar instead of the sidebar:
@@ -81,7 +86,7 @@ flutter build appbundle --release --dart-define-from-file=config/lifepete.json
 flutter build macos --release --dart-define-from-file=config/lifepete.json
 
 flutter analyze             # zero issues expected
-flutter test                # widget + unit tests (322)
+flutter test                # widget + unit tests (361)
 
 # A debug build opens on any surface, for looking at one without clicking:
 open --env LIFEPETE_SECTION=flow   build/macos/Build/Products/Debug/beats_companion.app
@@ -109,11 +114,14 @@ lib/
 │   ├── prefs.dart, hour.dart      Settings, and afternoon / dusk / follow macOS
 ├── services/               API client and the pure logic each screen tells its story with
 │   ├── api_client.dart            HTTP client → API (and decodeSse for chat)
+│   ├── offline_api.dart           The client the app runs on: kept answers, queued writes, replay
+│   ├── offline_queue.dart, offline_view.dart, local_store.dart, sqlite_store.dart
 │   ├── *_story.dart, day_ribbon.dart, quick_parse.dart, time_format.dart
 │   ├── tray_service.dart, status_menu.dart, mac_ambient.dart   Menu bar, Dock, login item
 │   └── ...
 ├── theme/sky.dart          The web's tokens and faces (ui/client/global.css), in two hours
-└── ui/kit.dart             Panels, pill buttons, rings, the sky backdrop
+├── ui/kit.dart             Panels, pill buttons, rings, the sky backdrop
+└── ui/sync_note.dart       The sync line and the note of changes the server refused
 macos/Runner/
 ├── StatusItemController.swift     Menu bar item, popover engine, ⌃⌥T hot key
 └── MacAmbientBridge.swift         Dock badge and icon, open at login
@@ -122,7 +130,8 @@ macos/Runner/
 The popover is a second `FlutterEngine` that `StatusItemController` starts on the
 first click, running `popoverMain`. It reads the same token and keeps its own
 `TimerController`; when either side changes the timer it tells the other over
-`companion/menubar` and `companion/popover`.
+`companion/menubar` and `companion/popover`. Offline, it queues into the window's
+store and leaves the replay to the window.
 
 ## API
 
@@ -145,6 +154,15 @@ reaches the routes in `DEVICE_ALLOWED_PREFIXES` (`api/src/server.py`), matched b
 `/api/projects` admits each project's `/ledger`, which is where the week and the day-job
 balance on Today come from; append to it when the companion needs a new route. The error envelope `{detail, code, fields?}` is parsed into `ApiException` with a `code` field that callers can branch on (mirrors the daemon Go client and UI's `ApiError`).
 
+A paired app talks to the API through `OfflineApi` (`lib/services/offline_api.dart`), an
+`ApiClient` that keeps the timer, the projects, recent days' sessions and ledgers in SQLite
+as it reads them, and queues a timer start or stop, a logged session and an edit when the
+server can't be reached. Each queued write carries its own `X-Client-Id`, the key the API's
+idempotency middleware answers a repeat from, and a stop or an edit names the session it
+was made against (`expected`), so the API refuses it with 409 `TIMER_CHANGED` or
+`BEAT_CHANGED` rather than stop or rewrite what another device changed meanwhile. The
+decisions are in [docs/companion-offline.md](../docs/companion-offline.md).
+
 Read-only analytics methods (`getHeatmap`, `getFlowWindows`, `getSignalSummaries`, `getBiometrics`) throw `ApiException` on non-200 — callers wrap in try/catch where graceful degradation is desired. `getFlowWindowsSummary` and `getTodayBrief` deliberately return `Map?` for the empty-state render path.
 
 Fitbit on desktop opens the consent URL in the browser; Fitbit redirects to the web's
@@ -161,6 +179,11 @@ flutter test
 Tests cover the logic, not the widgets:
 - The timer's switch, stop and undo against a scripted API (a switch closes one
   session and opens the next at the same instant; undo reopens the same session)
+- The offline queue against a scripted server that can lose the network or an answer:
+  writes replay in order with the time they were made, a lost answer is replayed once
+  under its key, a timer started on another device survives this one's stop, a refusal
+  is kept to read while a failure worth waiting out keeps the write, and undo and a
+  moved start reach a write still queued; the kept answers with the queue on top
 - The week read off ledgers, today's running total, and overlapping reloads
 - What each screen says: the day strip's geometry, Flow's best stretch and shares,
   the Coach's week standings and chat stream fold, the Body's recovery and

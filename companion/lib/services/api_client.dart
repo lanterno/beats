@@ -7,6 +7,29 @@ class PairResult {
   PairResult({required this.deviceToken, required this.deviceId});
 }
 
+/// A session as a write was made against it. Sent with a stop or an edit,
+/// it makes the API refuse the write (409 TIMER_CHANGED, BEAT_CHANGED) when
+/// the stored session is no longer this one, rather than stopping or
+/// rewriting what another device changed. `end` null is a running session.
+class ExpectedBeat {
+  final String projectId;
+  final DateTime start;
+  final DateTime? end;
+  const ExpectedBeat({required this.projectId, required this.start, this.end});
+
+  factory ExpectedBeat.fromJson(Map<String, dynamic> j) => ExpectedBeat(
+        projectId: j['project_id'] as String,
+        start: DateTime.parse(j['start'] as String),
+        end: j['end'] == null ? null : DateTime.parse(j['end'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'project_id': projectId,
+        'start': start.toUtc().toIso8601String(),
+        'end': end?.toUtc().toIso8601String(),
+      };
+}
+
 class ApiClient {
   final String baseUrl;
   String? deviceToken;
@@ -18,6 +41,11 @@ class ApiClient {
     if (deviceToken != null) h['Authorization'] = 'Bearer $deviceToken';
     return h;
   }
+
+  /// A write's headers: with [clientId], the `X-Client-Id` under which the
+  /// API answers a repeat of the write from its record instead of applying
+  /// it twice.
+  Map<String, String> _writeHeaders(String? clientId) => {..._headers, 'X-Client-Id': ?clientId};
 
   Future<PairResult> exchangePairCode(String code, {String? deviceName}) async {
     final resp = await http.post(
@@ -138,11 +166,11 @@ class ApiClient {
     return jsonDecode(resp.body);
   }
 
-  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime}) async {
+  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime, String? clientId}) async {
     final time = startTime ?? DateTime.now().toUtc().toIso8601String();
     final resp = await http.post(
       Uri.parse('$baseUrl/api/projects/$projectId/start'),
-      headers: _headers,
+      headers: _writeHeaders(clientId),
       body: jsonEncode({'time': time}),
     );
     if (resp.statusCode != 200) {
@@ -151,12 +179,14 @@ class ApiClient {
     return jsonDecode(resp.body);
   }
 
-  Future<Map<String, dynamic>> stopTimer({String? stopTime}) async {
+  /// Stops the running timer at [stopTime]; with [expected], only if it is
+  /// still that session (409 TIMER_CHANGED otherwise).
+  Future<Map<String, dynamic>> stopTimer({String? stopTime, ExpectedBeat? expected, String? clientId}) async {
     final time = stopTime ?? DateTime.now().toUtc().toIso8601String();
     final resp = await http.post(
       Uri.parse('$baseUrl/api/projects/stop'),
-      headers: _headers,
-      body: jsonEncode({'time': time}),
+      headers: _writeHeaders(clientId),
+      body: jsonEncode({'time': time, 'expected': ?expected?.toJson()}),
     );
     if (resp.statusCode != 200) {
       throw _apiError(resp, 'Stop timer failed');
@@ -441,10 +471,11 @@ class ApiClient {
     required String projectId,
     required DateTime start,
     required DateTime end,
+    String? clientId,
   }) async {
     final resp = await http.post(
       Uri.parse('$baseUrl/api/beats/'),
-      headers: _headers,
+      headers: _writeHeaders(clientId),
       body: jsonEncode({
         'project_id': projectId,
         'start': start.toUtc().toIso8601String(),
@@ -459,21 +490,25 @@ class ApiClient {
 
   /// Rewrites one session's times. `end: null` reopens it as the running
   /// timer, which is how a stop is undone and how a running timer's start
-  /// is moved earlier.
+  /// is moved earlier. With [expected], only while the stored session is
+  /// still that one (409 BEAT_CHANGED otherwise).
   Future<Map<String, dynamic>> updateBeat({
     required String id,
     required String projectId,
     required DateTime start,
     DateTime? end,
+    ExpectedBeat? expected,
+    String? clientId,
   }) async {
     final resp = await http.put(
       Uri.parse('$baseUrl/api/beats/'),
-      headers: _headers,
+      headers: _writeHeaders(clientId),
       body: jsonEncode({
         'id': id,
         'project_id': projectId,
         'start': start.toUtc().toIso8601String(),
         'end': end?.toUtc().toIso8601String(),
+        'expected': ?expected?.toJson(),
       }),
     );
     if (resp.statusCode != 200) {

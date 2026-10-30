@@ -99,7 +99,7 @@ class SampleApi extends ApiClient {
   Future<List<Map<String, dynamic>>> getProjects() async => [for (final p in _projects) Map.of(p)];
 
   @override
-  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime}) async {
+  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime, String? clientId}) async {
     if (_running != null) throw ApiException(409, 'A timer is already running.');
     _running = projectId;
     _since = (startTime == null ? _clock() : DateTime.parse(startTime)).toUtc();
@@ -107,7 +107,7 @@ class SampleApi extends ApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> stopTimer({String? stopTime}) async {
+  Future<Map<String, dynamic>> stopTimer({String? stopTime, ExpectedBeat? expected, String? clientId}) async {
     final project = _running;
     if (project == null) throw ApiException(409, 'Nothing is running.');
     final beat = _beat(project, _since, stopTime == null ? _clock() : DateTime.parse(stopTime));
@@ -131,6 +131,7 @@ class SampleApi extends ApiClient {
     required String projectId,
     required DateTime start,
     required DateTime end,
+    String? clientId,
   }) async {
     final beat = _beat(projectId, start, end);
     _beats.add(beat);
@@ -143,6 +144,8 @@ class SampleApi extends ApiClient {
     required String projectId,
     required DateTime start,
     DateTime? end,
+    ExpectedBeat? expected,
+    String? clientId,
   }) async {
     if (id == 'sample-running') {
       _running = projectId;

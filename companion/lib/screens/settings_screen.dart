@@ -9,7 +9,9 @@ import 'package:window_manager/window_manager.dart';
 import '../services/api_client.dart';
 import '../services/mac_ambient.dart';
 import '../services/notifications.dart';
+import '../services/offline_api.dart';
 import '../services/settings_story.dart';
+import '../services/sync_story.dart';
 import '../services/token_storage.dart';
 import '../state/hour.dart';
 import '../state/prefs.dart';
@@ -819,16 +821,26 @@ class _AccountTabState extends State<_AccountTab> {
 
   Future<void> _unpair() async {
     final p = context.sky;
+    final waiting = unpairWarning(switch (widget.client) {
+      OfflineApi api => api.status.pending,
+      _ => 0,
+    });
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(Platform.isMacOS ? 'Unpair this Mac?' : 'Unpair this device?', style: SkyType.display(20)),
         content: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 380),
-          child: Text(
-            'Your tracked time stays on the server. You\'ll need a new pairing code to use LifePete here again.',
-            style: SkyType.body(14, height: 1.6).copyWith(color: p.inkMuted),
-          ),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              'Your tracked time stays on the server. You\'ll need a new pairing code to use LifePete here again.',
+              style: SkyType.body(14, height: 1.6).copyWith(color: p.inkMuted),
+            ),
+            if (waiting != null) ...[
+              const SizedBox(height: 10),
+              Text(waiting, style: SkyType.body(14, height: 1.6).copyWith(color: p.persimmonInk)),
+            ],
+          ]),
         ),
         actions: [
           SkyButton(label: 'Cancel', onPressed: () => Navigator.pop(ctx, false)),

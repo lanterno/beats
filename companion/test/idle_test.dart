@@ -23,14 +23,14 @@ class _Api extends ApiClient {
   @override
   Future<List<Map<String, dynamic>>> getProjects() async => [project];
   @override
-  Future<Map<String, dynamic>> stopTimer({String? stopTime}) async {
+  Future<Map<String, dynamic>> stopTimer({String? stopTime, ExpectedBeat? expected, String? clientId}) async {
     calls.add('stop $stopTime');
     status = {'isBeating': false};
     return {'id': 'b1', 'project_id': 'p1', 'start': '', 'end': stopTime};
   }
 
   @override
-  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime}) async {
+  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime, String? clientId}) async {
     calls.add('start $startTime');
     status = {'isBeating': true, 'project': project, 'since': startTime};
     return {};

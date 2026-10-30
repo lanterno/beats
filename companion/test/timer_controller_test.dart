@@ -25,14 +25,14 @@ class FakeApi extends ApiClient {
   Future<List<Map<String, dynamic>>> getProjects() async => projects;
 
   @override
-  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime}) async {
+  Future<Map<String, dynamic>> startTimer(String projectId, {String? startTime, String? clientId}) async {
     calls.add('start $projectId $startTime');
     status = {'isBeating': true, 'project': projects.firstWhere((p) => p['id'] == projectId), 'since': startTime};
     return {};
   }
 
   @override
-  Future<Map<String, dynamic>> stopTimer({String? stopTime}) async {
+  Future<Map<String, dynamic>> stopTimer({String? stopTime, ExpectedBeat? expected, String? clientId}) async {
     calls.add('stop $stopTime');
     final beat = {
       'id': 'b1',
@@ -50,6 +50,8 @@ class FakeApi extends ApiClient {
     required String projectId,
     required DateTime start,
     DateTime? end,
+    ExpectedBeat? expected,
+    String? clientId,
   }) async {
     calls.add('update $id $projectId ${start.toIso8601String()} end=$end');
     status = {

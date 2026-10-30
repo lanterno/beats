@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 import '../services/api_client.dart';
+import '../services/offline_api.dart';
 import '../services/recent_projects.dart';
+import '../services/sync_story.dart';
 import '../ui/kit.dart';
 
 /// One project, as every screen needs it.
@@ -69,11 +71,47 @@ class StoppedSession {
 /// sidebar, the palette, focus mode. Polls the API every 15 seconds (another
 /// device, the web app or the daemon may have started or stopped it) and
 /// ticks [now] every second while a timer runs.
+///
+/// Over an [OfflineApi] it keeps going without a network: the timer reads
+/// as this device last had it, with what waits to sync applied, and a
+/// start, stop or moved start made offline waits in the queue
+/// (docs/companion-offline.md).
 class TimerController extends ChangeNotifier {
   final ApiClient client;
   final RecentProjects _recents;
+  int _settled = 0;
+  bool _disposed = false;
 
-  TimerController(this.client, {RecentProjects? recents}) : _recents = recents ?? RecentProjects();
+  TimerController(this.client, {RecentProjects? recents}) : _recents = recents ?? RecentProjects() {
+    sync?.addListener(_onSync);
+  }
+
+  /// Whether the API is reachable and what waits to sync; null on a client
+  /// that keeps nothing (sample data).
+  SyncStatus? get sync => switch (client) {
+        OfflineApi api => api.status,
+        _ => null,
+      };
+
+  /// The connection as the status card and the sync lines say it.
+  SyncLine get syncLine => describeSync(
+        online: sync?.online ?? true,
+        syncing: sync?.syncing ?? false,
+        pending: sync?.pending ?? 0,
+        failing: error != null,
+      );
+
+  /// A replay changed what the API holds: read the timer afresh. Anything
+  /// else (offline, a count) only redraws.
+  void _onSync() {
+    final s = sync!;
+    if (s.settled != _settled) {
+      _settled = s.settled;
+      unawaited(refresh());
+    } else {
+      notifyListeners();
+    }
+  }
 
   List<Project> projects = const [];
   List<String> recentIds = const [];
@@ -137,6 +175,9 @@ class TimerController extends ChangeNotifier {
     } catch (e) {
       error = e;
     }
+    // A replay that settles can set off a read just as the window lets go
+    // of this controller (unpairing).
+    if (_disposed) return;
     loaded = true;
     _syncTicker();
     notifyListeners();
@@ -182,7 +223,12 @@ class TimerController extends ChangeNotifier {
     _syncTicker();
     notifyListeners();
     try {
-      final beat = await client.stopTimer(stopTime: end.toIso8601String());
+      // Named, so the API stops this session and no other: another device
+      // may have switched the timer since this one last looked.
+      final beat = await client.stopTimer(
+        stopTime: end.toIso8601String(),
+        expected: ExpectedBeat(projectId: project.id, start: started),
+      );
       lastStopped = StoppedSession(beat, project, end.difference(started), DateTime.now());
       return lastStopped;
     } finally {
@@ -199,23 +245,36 @@ class TimerController extends ChangeNotifier {
   }
 
   /// Reopens the session the last stop closed, as if it had never stopped.
+  /// A stop still waiting to sync is simply taken back.
   Future<void> undoStop() async {
     final s = lastStopped;
     if (s == null || running) return;
     lastStopped = null;
     notifyListeners();
     try {
+      final queued = s.beat['queued'];
+      if (queued is int && client is OfflineApi) {
+        if (await (client as OfflineApi).cancelQueued(queued)) return;
+        throw const NotWhileOffline('That stop is already on its way to the server.');
+      }
+      final start = DateTime.parse(s.beat['start'] as String);
       await client.updateBeat(
         id: s.beat['id'] as String,
         projectId: s.beat['project_id'] as String,
-        start: DateTime.parse(s.beat['start'] as String),
+        start: start,
+        expected: ExpectedBeat(
+          projectId: s.beat['project_id'] as String,
+          start: start,
+          end: DateTime.parse(s.beat['end'] as String),
+        ),
       );
     } finally {
       await refresh();
     }
   }
 
-  /// Moves the running timer's start to [start] ("I started earlier").
+  /// Moves the running timer's start to [start] ("I started earlier"). A
+  /// start still waiting to sync is rewritten where it waits.
   Future<void> moveStart(DateTime start) async {
     final project = current;
     final started = since;
@@ -224,8 +283,25 @@ class TimerController extends ChangeNotifier {
     final beats = await client.getBeatsOn(started.toUtc());
     final active = beats.where((b) => b['end'] == null && b['project_id'] == project.id).firstOrNull;
     if (active == null) throw StateError('The running session was not found');
-    await client.updateBeat(id: active['id'] as String, projectId: project.id, start: start);
+    final queued = active['queued'];
+    if (queued is int && client is OfflineApi) {
+      if (!await (client as OfflineApi).retimeQueued(queued, start)) {
+        throw const NotWhileOffline('That start is already on its way to the server; move it once it has synced.');
+      }
+    } else {
+      await client.updateBeat(
+        id: active['id'] as String,
+        projectId: project.id,
+        start: start,
+        expected: ExpectedBeat(projectId: project.id, start: DateTime.parse(active['start'] as String)),
+      );
+    }
     await refresh();
+  }
+
+  /// Dismisses the writes the API refused, once they have been read.
+  Future<void> dismissRefused() async {
+    if (client case OfflineApi api) await api.dismissRefused();
   }
 
   void forgetStopped() {
@@ -236,6 +312,8 @@ class TimerController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    sync?.removeListener(_onSync);
     _poll?.cancel();
     _tick?.cancel();
     now.dispose();
