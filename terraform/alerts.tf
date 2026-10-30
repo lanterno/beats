@@ -215,3 +215,99 @@ resource "google_monitoring_alert_policy" "api_instances_at_max" {
     EOT
   }
 }
+
+# Abuse signals, on monitoring.tf's log-based metrics. A policy on a
+# log-based metric can only be created once the metric is visible to Cloud
+# Monitoring, up to ten minutes after the metric itself; the two land in
+# separate deploys so the apply never races it.
+
+# More than 20 failures (401, 403, 404, 429) on one public route in ten
+# minutes: someone trying passkey or SSO sign-ins, report links or pairing
+# codes. In the 30 days to 2026-10-30 the most on any route was 7 (404s on
+# /api/auth/sso); sign-in, report links and pairing had none at all. The
+# routes' rate limits let through 5 to 30 attempts a minute, so even a slow
+# guesser crosses 20 within minutes, while a person mistyping a code or
+# reloading a revoked link (the report page does not retry) stays well under
+# it.
+resource "google_monitoring_alert_policy" "public_route_failures" {
+  display_name          = "${var.api_service_name}: failures spiking on a public route"
+  project               = var.project_id
+  combiner              = "OR"
+  severity              = "WARNING"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "More than 20 failures on one public route in 10 minutes"
+
+    condition_threshold {
+      filter = join(" AND ", [
+        "resource.type=\"cloud_run_revision\"",
+        "metric.type=\"logging.googleapis.com/user/${google_logging_metric.public_route_requests.name}\"",
+        "metric.label.status=one_of(\"401\", \"403\", \"404\", \"429\")",
+      ])
+
+      aggregations {
+        alignment_period     = "600s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["metric.label.route"]
+      }
+
+      comparison              = "COMPARISON_GT"
+      threshold_value         = 20
+      duration                = "0s"
+      evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
+    }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      A public route of ${var.api_service_name} is failing more than 20 times in ten minutes; the incident names the route. Query the request log for that route and group by httpRequest.remoteIp to see who is behind it.
+    EOT
+  }
+}
+
+# More than 200 rejections (401, 403, 429) under /api/ in ten minutes. In the
+# 30 days to 2026-10-30 the most was 52, scanners probing paths like
+# /api/.env; next came 48 403s from a companion build that called a route its
+# device token may not, since fixed. 200 is four times either, low enough to
+# catch a client stuck retrying with a revoked token or someone spraying
+# tokens.
+resource "google_monitoring_alert_policy" "api_rejections" {
+  display_name          = "${var.api_service_name}: rejections spiking"
+  project               = var.project_id
+  combiner              = "OR"
+  severity              = "WARNING"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "More than 200 rejections under /api/ in 10 minutes"
+
+    condition_threshold {
+      filter = join(" AND ", [
+        "resource.type=\"cloud_run_revision\"",
+        "metric.type=\"logging.googleapis.com/user/${google_logging_metric.api_rejections.name}\"",
+      ])
+
+      aggregations {
+        alignment_period     = "600s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      comparison              = "COMPARISON_GT"
+      threshold_value         = 200
+      duration                = "0s"
+      evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
+    }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      ${var.api_service_name} has turned away more than 200 requests under /api/ in ten minutes. The dashboard splits them by status; the request log, grouped by httpRequest.remoteIp and httpRequest.userAgent, shows whether it is one client retrying or many addresses.
+    EOT
+  }
+}
