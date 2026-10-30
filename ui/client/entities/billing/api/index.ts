@@ -3,6 +3,7 @@ export {
 	useBillingBudgets,
 	useBillingMonth,
 	useClearEntryBillable,
+	useCountReportLinks,
 	useCreateReportLink,
 	useDeleteReportLink,
 	useProjectBillings,

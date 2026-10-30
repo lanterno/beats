@@ -1,10 +1,67 @@
 import { Fingerprint, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useCountReportLinks } from "@/entities/billing";
+import { useClients } from "@/entities/client";
 import type { CredentialInfo } from "@/features/auth";
 import { describeError } from "@/shared/api";
-import { Panel } from "@/shared/ui";
+import { type ConfirmRequest, Panel, useConfirm } from "@/shared/ui";
 import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
+
+function formatDate(iso: string) {
+	try {
+		return new Date(iso).toLocaleDateString(undefined, {
+			year: "numeric",
+			month: "short",
+			day: "numeric",
+		});
+	} catch {
+		return iso;
+	}
+}
+
+/**
+ * What removing a passkey costs, asked before it happens: the passkey by name and
+ * date (two can share a device's name), the one left when only one will be, and the
+ * report links still working. Those need no sign-in, so removing a passkey after a
+ * session was stolen leaves every link that session made. `liveLinks` is null when
+ * they could not be counted; the question is asked all the same.
+ */
+function removalQuestion(
+	passkey: CredentialInfo,
+	others: CredentialInfo[],
+	liveLinks: number | null,
+): ConfirmRequest {
+	const sentences = [
+		`Added ${formatDate(passkey.created_at)}, it stops signing you in on every device that holds it.`,
+	];
+	if (others.length === 1) {
+		const [last] = others;
+		sentences.push(
+			last.device_name
+				? `The ${last.device_name} passkey will be the only one left.`
+				: "Your other passkey will be the only one left.",
+		);
+	}
+	if (liveLinks === 1) {
+		sentences.push(
+			"Your report link keeps working, since it needs no sign-in; revoke it on the Clients page if it should stop too.",
+		);
+	} else if (liveLinks) {
+		sentences.push(
+			`Your ${liveLinks} report links keep working, since they need no sign-in; revoke them on the Clients page if they should stop too.`,
+		);
+	}
+	return {
+		title: passkey.device_name
+			? `Remove the ${passkey.device_name} passkey?`
+			: "Remove this passkey?",
+		detail: sentences.join(" "),
+		confirmLabel: "Remove",
+		cancelLabel: "Keep it",
+		tone: "danger",
+	};
+}
 
 export function PasskeysSection() {
 	// null until the first load answers, so an account with no passkeys (one that signs in
@@ -12,6 +69,12 @@ export function PasskeysSection() {
 	const [credentials, setCredentials] = useState<CredentialInfo[] | null>(null);
 	const [loadError, setLoadError] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);
+	const { confirm, confirmDialog } = useConfirm();
+	// Both lists, since an archived client's links still serve. The sidebar reads them
+	// as well, so they are usually in the cache already.
+	const { data: activeClients } = useClients();
+	const { data: archivedClients } = useClients({ archived: true });
+	const countReportLinks = useCountReportLinks();
 
 	const loadCredentials = useCallback(async () => {
 		try {
@@ -27,29 +90,29 @@ export function PasskeysSection() {
 		loadCredentials();
 	}, [loadCredentials]);
 
-	const handleDelete = async (id: string) => {
-		setDeleting(id);
+	const liveReportLinks = async (): Promise<number | null> => {
+		if (!activeClients || !archivedClients) return null;
 		try {
+			return await countReportLinks([...activeClients, ...archivedClients].map((c) => c.id));
+		} catch {
+			return null;
+		}
+	};
+
+	const handleDelete = async (passkey: CredentialInfo, all: CredentialInfo[]) => {
+		setDeleting(passkey.id);
+		try {
+			const others = all.filter((cred) => cred.id !== passkey.id);
+			const ok = await confirm(removalQuestion(passkey, others, await liveReportLinks()));
+			if (!ok) return;
 			const { deleteCredential } = await import("@/features/auth");
-			await deleteCredential(id);
+			await deleteCredential(passkey.id);
 			await loadCredentials();
 			toast.success("Passkey removed");
 		} catch (err) {
 			toast.error(describeError(err, "Failed to remove passkey"));
 		} finally {
 			setDeleting(null);
-		}
-	};
-
-	const formatDate = (iso: string) => {
-		try {
-			return new Date(iso).toLocaleDateString(undefined, {
-				year: "numeric",
-				month: "short",
-				day: "numeric",
-			});
-		} catch {
-			return iso;
 		}
 	};
 
@@ -94,7 +157,7 @@ export function PasskeysSection() {
 								{credentials.length > 1 && (
 									<button
 										type="button"
-										onClick={() => handleDelete(cred.id)}
+										onClick={() => handleDelete(cred, credentials)}
 										disabled={deleting === cred.id}
 										className={REMOVE}
 										title="Remove passkey"
@@ -107,6 +170,7 @@ export function PasskeysSection() {
 					</div>
 				)}
 			</Panel>
+			{confirmDialog}
 		</section>
 	);
 }
