@@ -127,9 +127,11 @@ const controller = new SyncController();
 /**
  * Replay a queued mutation with "poison-aware" handling: if the
  * server returns a 4xx, the mutation is permanently dropped from
- * the queue (resolves successfully so drainPending removes it).
- * Network errors and 5xx still bubble up so the queue keeps the
- * mutation for the next reconnect.
+ * the queue (resolves successfully so drainPending removes it) —
+ * except 409 IDEMPOTENT_IN_PROGRESS, which means "the first copy
+ * is still being handled, ask again" and stays queued. Network
+ * errors and 5xx still bubble up so the queue keeps the mutation
+ * for the next reconnect.
  *
  * Without this, a single poisoned mutation (validation against a
  * since-changed schema, a 404 for a deleted project, an
@@ -145,6 +147,15 @@ export async function replayPoisonAware(mutation: PendingMutation): Promise<void
 		await replayMutation(mutation);
 	} catch (err) {
 		if (err instanceof ApiError && err.statusCode >= 400 && err.statusCode < 500) {
+			// One 4xx is retryable: 409 IDEMPOTENT_IN_PROGRESS means the
+			// first copy of this write is still being handled server-side
+			// and the answer is "ask again" (the API's idempotency
+			// middleware). Rethrow so the queue keeps the mutation; the
+			// engine's next pass — reconnect, or the active poll — retries
+			// at the drain's own pace instead of spinning here.
+			if (err.statusCode === 409 && err.code === "IDEMPOTENT_IN_PROGRESS") {
+				throw err;
+			}
 			// Server-confirmed permanent failure — log and drop. The
 			// alternative (keep retrying) would never succeed and
 			// would block the rest of the queue.

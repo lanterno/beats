@@ -121,6 +121,26 @@ export interface DrainResult {
 	error?: string;
 }
 
+// True while drainPending is replaying. A mutation stays in the store until
+// the server applies it, so listPending already shows mid-drain entries; this
+// flag covers the sliver between the last removal and drainPending returning.
+let draining = false;
+
+/**
+ * Whether a new write must join the back of the queue instead of being sent:
+ * earlier writes still wait in the store, or a drain is replaying them right
+ * now. An unavailable IndexedDB (private mode, SSR) reads as no queued work —
+ * nothing could have been queued in it either.
+ */
+export async function hasQueuedWork(): Promise<boolean> {
+	if (draining) return true;
+	try {
+		return (await listPending()).length > 0;
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Replay queued mutations in insertion order. Returns when either the queue
  * is empty or a replay throws — the latter keeps the mutation in place so it
@@ -129,20 +149,25 @@ export interface DrainResult {
 export async function drainPending(
 	replay: (mutation: PendingMutation) => Promise<void>,
 ): Promise<DrainResult> {
-	const pending = await listPending();
-	let drained = 0;
+	draining = true;
+	try {
+		const pending = await listPending();
+		let drained = 0;
 
-	for (const mutation of pending) {
-		try {
-			await replay(mutation);
-			if (mutation.id !== undefined) await removeMutation(mutation.id);
-			drained += 1;
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			if (mutation.id !== undefined) await markAttempt(mutation.id, message);
-			return { drained, remaining: pending.length - drained, error: message };
+		for (const mutation of pending) {
+			try {
+				await replay(mutation);
+				if (mutation.id !== undefined) await removeMutation(mutation.id);
+				drained += 1;
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				if (mutation.id !== undefined) await markAttempt(mutation.id, message);
+				return { drained, remaining: pending.length - drained, error: message };
+			}
 		}
-	}
 
-	return { drained, remaining: 0 };
+		return { drained, remaining: 0 };
+	} finally {
+		draining = false;
+	}
 }

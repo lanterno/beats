@@ -9,6 +9,7 @@ import { config } from "../config";
 import {
 	enqueueMutation,
 	type HttpMethod,
+	hasQueuedWork,
 	newClientId,
 	type PendingMutation,
 } from "../lib/mutationQueue";
@@ -280,7 +281,11 @@ export interface MutateOptions {
 	idempotent?: boolean;
 	/** Override the auto-generated client id (useful for retries). */
 	clientId?: string;
-	/** Opt out of queuing on network failure. Defaults to true. */
+	/**
+	 * Opt out of queuing entirely. Defaults to true. `false` also skips the
+	 * order check: the caller handles failure inline and accepts that its
+	 * write may land ahead of queued ones.
+	 */
 	queueOnFailure?: boolean;
 }
 
@@ -292,9 +297,42 @@ export interface MutateResult<T> {
 }
 
 /**
+ * Write the mutation to IndexedDB and answer `{status: "queued"}`. A queue
+ * that cannot be written (private mode, quota) still answers "queued" with
+ * `queueError` set — the caller already updated its optimistic state, and
+ * throwing here would roll that back for a storage problem, not an API one.
+ */
+async function queueBehind<T>(
+	method: HttpMethod,
+	path: string,
+	body: unknown,
+	clientId: string,
+): Promise<MutateResult<T>> {
+	try {
+		const pending: Omit<PendingMutation, "id" | "enqueuedAt" | "attempts"> = {
+			method,
+			path,
+			body,
+			clientId,
+		};
+		await enqueueMutation(pending);
+		return { status: "queued", clientId };
+	} catch (queueErr) {
+		const message = queueErr instanceof Error ? queueErr.message : String(queueErr);
+		return { status: "queued", clientId, queueError: message };
+	}
+}
+
+/**
  * Perform a mutation with offline queueing + idempotency.
  *
  * - Attaches `X-Client-Id` so the server can de-dupe replays.
+ * - While earlier writes wait in the queue, or the sync engine is draining
+ *   them, joins the back of the queue instead of sending, and returns
+ *   `{status: "queued"}` — otherwise this write could land before them
+ *   (a new start before a queued stop). A queued entry leaves the store only
+ *   after the server applies it, so a write arriving mid-drain still sees the
+ *   ones not yet landed.
  * - On a TypeError (network failure) or navigator.onLine === false, writes the
  *   mutation to IndexedDB and returns `{status: "queued"}`. The sync engine
  *   drains the queue on reconnect.
@@ -309,6 +347,10 @@ export async function apiMutate<T>(
 	const { idempotent = true, queueOnFailure = true } = options;
 	const clientId = options.clientId ?? newClientId();
 
+	if (queueOnFailure && (await hasQueuedWork())) {
+		return queueBehind<T>(method, path, body, clientId);
+	}
+
 	const headers: Record<string, string> = {};
 	if (idempotent) headers["X-Client-Id"] = clientId;
 
@@ -321,19 +363,7 @@ export async function apiMutate<T>(
 		return { status: "sent", data, clientId };
 	} catch (err) {
 		if (queueOnFailure && isNetworkError(err)) {
-			try {
-				const pending: Omit<PendingMutation, "id" | "enqueuedAt" | "attempts"> = {
-					method,
-					path,
-					body,
-					clientId,
-				};
-				await enqueueMutation(pending);
-				return { status: "queued", clientId };
-			} catch (queueErr) {
-				const message = queueErr instanceof Error ? queueErr.message : String(queueErr);
-				return { status: "queued", clientId, queueError: message };
-			}
+			return queueBehind<T>(method, path, body, clientId);
 		}
 		throw err;
 	}
