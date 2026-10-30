@@ -39,5 +39,7 @@ EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Use uv to run the server with the project virtualenv
-CMD uv run --no-dev uvicorn server:app --host 0.0.0.0 --port ${PORT} --app-dir src
+# Use uv to run the server with the project virtualenv. --no-proxy-headers:
+# the app reads X-Forwarded-For itself, from the proxies FORWARDED_ALLOW_IPS
+# names (server.py); uvicorn's own copy would trust loopback by default.
+CMD uv run --no-dev uvicorn server:app --host 0.0.0.0 --port ${PORT} --app-dir src --no-proxy-headers

@@ -924,6 +924,51 @@ class TestJwtSecretValidator:
         assert s.jwt_secret == multibyte
 
 
+class TestForwardedAllowIps:
+    """FORWARDED_ALLOW_IPS names the proxies whose X-Forwarded-For the rate
+    limits believe. Both ways it can be wrong are quiet — trust too little and
+    every visitor shares the proxy's bucket, trust everything and a client
+    picks its own — so it has no default, and an entry uvicorn would read as a
+    name no address matches is refused rather than trusting nothing."""
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "*",
+            "0.0.0.0/0",
+            "::/0",
+            "169.254.169.126/16",  # host bits set: a typo for /32 or for .0.0/16
+            "cloud-run",
+            "169.254.0.0/16,",
+            "",
+        ],
+    )
+    def test_refused(self, monkeypatch, value):
+        from pydantic import ValidationError
+
+        from beats.settings import Settings
+
+        monkeypatch.setenv("FORWARDED_ALLOW_IPS", value)
+        with pytest.raises(ValidationError, match="FORWARDED_ALLOW_IPS"):
+            Settings()
+
+    def test_addresses_and_networks_are_read_as_one_list(self, monkeypatch):
+        from beats.settings import Settings
+
+        monkeypatch.setenv("FORWARDED_ALLOW_IPS", " 169.254.0.0/16 , 172.30.208.10,::1")
+        assert Settings().forwarded_allow_ips == "169.254.0.0/16,172.30.208.10,::1"
+
+    def test_required(self, monkeypatch):
+        from pydantic import ValidationError
+
+        from beats.settings import Settings
+
+        monkeypatch.delenv("FORWARDED_ALLOW_IPS", raising=False)
+        monkeypatch.setenv("JWT_SECRET", "x" * 32)
+        with pytest.raises(ValidationError, match="FORWARDED_ALLOW_IPS"):
+            Settings(_env_file=None)
+
+
 # MongoCredentialStorage — real-Mongo CRUD coverage
 
 

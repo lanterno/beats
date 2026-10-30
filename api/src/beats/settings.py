@@ -1,3 +1,4 @@
+import ipaddress
 import os
 from pathlib import Path
 from urllib.parse import urlparse
@@ -102,6 +103,52 @@ class Settings(BaseSettings):
                 "Generate one with: openssl rand -base64 48"
             )
         return v
+
+    # The proxies in front of this API whose X-Forwarded-For is believed, as
+    # IP addresses and CIDR networks, comma-separated. The client's address —
+    # what every rate limit keys on — is the right-most X-Forwarded-For entry
+    # not written by one of them (uvicorn's ProxyHeadersMiddleware, which
+    # server.py installs with this list). Each proxy appends the address it
+    # saw, so that entry is the one a client cannot write itself; the entries
+    # to its left are whatever the client sent.
+    #
+    # Required, and no `*`: every deployment names its own proxies, because a
+    # wrong value fails quietly in one of two ways. Trust too little and every
+    # visitor shares the proxy's address and one rate-limit bucket (what Cloud
+    # Run's front end did to all of them, at 169.254.169.126); trust everything
+    # and a client picks its own address, and with it a fresh bucket per
+    # request.
+    #   Cloud Run  169.254.0.0/16 (terraform/cloudrun.tf: the platform connects
+    #              from link-local, which nothing on the internet can)
+    #   self-host  the compose network nginx proxies from (compose.selfhost.yml)
+    #   local      127.0.0.1: nothing stands in front, and loopback is this machine
+    forwarded_allow_ips: str = Field(validation_alias="FORWARDED_ALLOW_IPS")
+
+    @field_validator("forwarded_allow_ips")
+    @classmethod
+    def _validate_forwarded_allow_ips(cls, v: str) -> str:
+        """Every entry an address or a network, checked here because uvicorn
+        reads one it cannot parse as a name no address ever matches, which
+        would trust nothing without saying so."""
+        entries = [entry.strip() for entry in v.split(",")]
+        for entry in entries:
+            if entry == "*":
+                raise ValueError(
+                    "FORWARDED_ALLOW_IPS must name the proxies, not '*': trusting every "
+                    "address lets a client choose its own address in X-Forwarded-For"
+                )
+            try:
+                network = ipaddress.ip_network(entry)
+            except ValueError:
+                raise ValueError(
+                    f"FORWARDED_ALLOW_IPS entry {entry!r} is not an IP address or a "
+                    "CIDR network (one with no host bits set, e.g. 169.254.0.0/16)"
+                ) from None
+            if network.prefixlen == 0:
+                raise ValueError(
+                    f"FORWARDED_ALLOW_IPS entry {entry!r} spans every address, which is '*'"
+                )
+        return ",".join(entries)
 
     # Google Calendar OAuth (optional)
     google_client_id: str = Field(default="", validation_alias="GOOGLE_CLIENT_ID")

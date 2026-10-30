@@ -23,8 +23,9 @@ clean:
 lint:
     uv run --group dev ruff check
 
+# --no-proxy-headers: the app reads X-Forwarded-For itself (FORWARDED_ALLOW_IPS).
 run-locally:
-    cd src && uv run uvicorn server:app --reload --host 0.0.0.0 --port 7999
+    cd src && uv run uvicorn server:app --reload --host 0.0.0.0 --port 7999 --no-proxy-headers
 
 # Cloud Build targets
 

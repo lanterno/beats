@@ -139,7 +139,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   ```bash
   docker run -d --name beats-dev-mongo -p 27019:27017 mongo:9
   cd api && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<32+ bytes> \
-    uv run uvicorn --app-dir src server:app --port 7999 &
+    FORWARDED_ALLOW_IPS=127.0.0.1 uv run uvicorn --app-dir src server:app --port 7999 --no-proxy-headers &
   cd ui && DB_DSN=mongodb://localhost:27019 DB_NAME=beats_dev JWT_SECRET=<same> pnpm e2e
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
@@ -375,8 +375,12 @@ Nothing you run locally resembles it, and that is the trap: the entries in
 `origins` (`api/src/server.py`) that keep lifepete.com working read as dead
 config from inside the repo. They are not: removing them breaks the site in a
 browser with every test still green. The same goes for the Firebase `deploy`
-job and `ui/firebase.json`. A change that touches origins, hosts, auth cookies,
-or the deploy pipeline has to be considered against that topology.
+job and `ui/firebase.json`, and for `FORWARDED_ALLOW_IPS` in `terraform/cloudrun.tf`:
+it names Cloud Run's front end as the one proxy whose `X-Forwarded-For` the API
+believes, and the rate limits key on the visitor's address only because of it (a
+Cloudflare proxy on `api.lifepete.com` would be a second hop to name). A change that
+touches origins, hosts, proxies, auth cookies, or the deploy pipeline has to be
+considered against that topology.
 
 Anything else LifePete talks to — another identity provider, a service of
 your own — connects through single sign-on or an integration.
@@ -389,7 +393,8 @@ API on an internal network, plus an nginx that serves the built SPA and proxies
 `/api`, on **one** published port, 6008. The root `justfile` wraps it
 (`up-detached`, `down`, `build`, `health`, `logs`, `backup`, `restore`).
 `BEATS_DB_PASSWORD`, `BEATS_RP_ID` and `BEATS_ORIGIN` are required; the rest
-comes from `api/.env`. The SPA and the API share one origin, so it needs no CORS
+comes from `api/.env`, except `FORWARDED_ALLOW_IPS`, which the file sets to nginx's
+fixed address on its pinned network. The SPA and the API share one origin, so it needs no CORS
 entry: `ui/Dockerfile` builds with `VITE_API_URL=""` and fails the build if the
 bundle still names `localhost:7999`.
 
