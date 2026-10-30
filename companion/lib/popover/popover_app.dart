@@ -47,6 +47,13 @@ class _PopoverAppState extends State<PopoverApp> {
   bool _loaded = false;
   String _mode = 'panel';
   String _timerKey = '';
+  // What `_connect` built its client from. Kept so showing the popover can
+  // tell whether the pairing it holds is still the stored one: this engine
+  // read the token once, at startup, and an unpair or a re-pair in the
+  // window never reached it, so it went on calling the API with a token
+  // that had been revoked (#376).
+  String? _token;
+  String? _apiUrl;
 
   @override
   void initState() {
@@ -55,10 +62,16 @@ class _PopoverAppState extends State<PopoverApp> {
     _connect();
   }
 
+  /// Build the clients from the stored pairing, after dropping any built
+  /// from an older one. Safe to call again: `_disconnect` is a no-op when
+  /// there is nothing to drop.
   Future<void> _connect() async {
     final storage = TokenStorage();
     final token = await storage.loadToken();
     final apiUrl = await storage.loadApiUrl();
+    _disconnect();
+    _token = token;
+    _apiUrl = apiUrl;
     if (token != null && apiUrl != null) {
       // The window's store, the window's queue: a start or stop made here
       // offline waits there, and the window replays it.
@@ -69,6 +82,28 @@ class _PopoverAppState extends State<PopoverApp> {
       _week = WeekController(client, timer)..start();
     }
     if (mounted) setState(() => _loaded = true);
+  }
+
+  void _disconnect() {
+    _timer?.removeListener(_onTimer);
+    _week?.dispose();
+    _timer?.dispose();
+    _week = null;
+    _timer = null;
+    _timerKey = '';
+  }
+
+  /// Rebuild when the stored pairing is no longer the one in hand — the
+  /// window unpaired, or paired somewhere else — and leave everything alone
+  /// when it is. Called every time the popover is shown, which is the only
+  /// time it is being read.
+  Future<bool> _repairedPairing() async {
+    final storage = TokenStorage();
+    final token = await storage.loadToken();
+    final apiUrl = await storage.loadApiUrl();
+    if (token == _token && apiUrl == _apiUrl) return false;
+    await _connect();
+    return true;
   }
 
   /// Tells the window (through the native side) when this popover changed
@@ -89,7 +124,11 @@ class _PopoverAppState extends State<PopoverApp> {
         // Settings live in the window's engine; pick up a changed hour.
         await (await SharedPreferences.getInstance()).reload();
         await widget.hour.load();
-        if (_timer == null) await _connect();
+        // The token is in the keychain, which both engines read live, and
+        // SharedPreferences was just reloaded above for the API URL — so
+        // this reads the window's pairing, not this engine's cached view.
+        final repaired = await _repairedPairing();
+        if (_timer == null && !repaired) await _connect();
         unawaited(_timer?.refresh());
         if (mounted) setState(() => _mode = mode);
       case 'popover.hidden':
@@ -101,9 +140,7 @@ class _PopoverAppState extends State<PopoverApp> {
 
   @override
   void dispose() {
-    _timer?.removeListener(_onTimer);
-    _week?.dispose();
-    _timer?.dispose();
+    _disconnect();
     super.dispose();
   }
 
