@@ -19,15 +19,16 @@
 /*
   Zen Maru Gothic (and Hiragino, behind it) draws the en and em dash as the
   full-width Japanese bar: a hairline the width of a character, touching the
-  words either side. This face covers those two characters alone, from a
-  system Latin face, and sits first in the body stack, so every dash in copy
-  reads as a dash while every other character stays Zen Maru's.
+  words either side, and the ellipsis and the minus sign about twice a
+  digit's width. This face covers those four characters alone, from a system
+  Latin face, and sits first in the body stack, so each of them reads at a
+  Latin width while every other character stays Zen Maru's.
 */
 @font-face {
   font-family: "Latin Dash";
   src: local("Helvetica Neue"), local("HelveticaNeue"), local("Segoe UI"), local("Roboto"),
     local("Arial"), local("DejaVu Sans");
-  unicode-range: U+2013-2014;
+  unicode-range: U+2013-2014, U+2026, U+2212;
 }
 
 /*
