@@ -266,14 +266,30 @@ Terraform configuration for cloud deployment (GCP Cloud Run, MongoDB Atlas, etc.
 
 ## Configuration
 
-The API uses Pydantic Settings with environment variable overrides:
+The API uses Pydantic Settings (`api/src/beats/settings.py`), each value overridable by an
+environment variable of the same name:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `DB_DSN` | `mongodb://localhost:27017` | MongoDB connection string |
-| `DB_NAME` | `ptc` | Database name |
-| `JWT_SECRET` | `change-me-in-production` | JWT signing key |
-| `WEBAUTHN_RP_ID` | `localhost` | WebAuthn relying party ID |
+| `DB_NAME` | `beats` | Database name |
+| `JWT_SECRET` | none: required | JWT signing key. At least 32 bytes, or the API refuses to start (`openssl rand -base64 48`) |
+| `WEBAUTHN_RP_ID` | `localhost` | WebAuthn relying party ID; every passkey is bound to it |
+| `WEBAUTHN_RP_NAME` | the product name (`beats/brand.py`) | The name in the passkey prompt; display only |
 | `WEBAUTHN_ORIGIN` | `http://localhost:8080` | WebAuthn origin |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | empty: Calendar off | Google Calendar's OAuth app |
+| `GOOGLE_REDIRECT_URI` | `http://localhost:8080/settings?calendar=callback` | Registered with that app |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | empty: GitHub off | GitHub's OAuth app |
+| `GITHUB_REDIRECT_URI` | `http://localhost:8080/settings?github=callback` | Registered with that app |
+| `FITBIT_CLIENT_ID`, `FITBIT_CLIENT_SECRET` | empty: Fitbit off | Fitbit's OAuth app |
+| `FITBIT_REDIRECT_URI` | `http://localhost:8080/settings?fitbit=callback` | Registered with that app |
+| `OIDC_PROVIDERS` | empty: no single sign-on | The OpenID Connect providers, as JSON (shape in `api/.env.example`) |
+| `OIDC_REDIRECT_URI` | empty, and required once a provider is set | The web app's `/auth/callback`; https, except localhost |
+| `ANTHROPIC_API_KEY` | empty: the coach answers 503 `COACH_NOT_CONFIGURED` | The coach's Anthropic key |
+| `COACH_MODEL` | `claude-sonnet-5-5` | The model the coach talks with |
+| `COACH_MONTHLY_BUDGET_USD` | `10.0` | What one account's coach may spend a month before it answers 429 |
 
-Settings auto-detect test mode: if `pytest` is in `sys.argv` or `BEATS_TEST_ENV=1`, the `.env.test` file is loaded instead of `.env`.
+Which env file they load is named, not guessed: `BEATS_ENV_FILE`, a path under `api/`
+(default `.env`), which `conftest.py` points at the committed `.env.test` before anything
+imports the settings. `BEATS_TEST_ENV=1` is the suite's own switch, not the settings': it
+skips testcontainers and uses the `DB_DSN` and `DB_NAME` already set.
