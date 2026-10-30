@@ -4289,6 +4289,52 @@ class TestBeatEdit:
         assert stored["end"] is None
         assert stored["note"] == "Deep work"
 
+    def test_reopening_refuses_while_another_timer_runs(self, client, auth_headers):
+        """`end: null` is a start in disguise: while a timer runs it answers
+        exactly what a second start answers, else two sessions run at once."""
+        # The test above leaves its reopened session running; nothing may run.
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+        beat = self._session(client, auth_headers)
+        project_id = self._project(client, auth_headers)
+        started = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-02T09:00:00Z"},
+            headers=auth_headers,
+        )
+        assert started.status_code in (200, 201), started.text
+
+        refused = self._edit(client, auth_headers, beat, end=None)
+        second_start = client.post(
+            f"/api/projects/{project_id}/start", json={}, headers=auth_headers
+        )
+
+        assert refused.status_code == second_start.status_code, refused.text
+        assert refused.json()["code"] == second_start.json()["code"]
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"] is not None
+        client.post(
+            "/api/projects/stop", json={"time": "2026-04-02T10:00:00Z"}, headers=auth_headers
+        )
+
+    def test_editing_the_running_session_is_not_a_conflict(self, client, auth_headers):
+        """Moving the running timer's own start carries `end: null`; the one
+        running beat being itself is no second timer."""
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+        project_id = self._project(client, auth_headers)
+        running = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-02T09:00:00Z"},
+            headers=auth_headers,
+        ).json()
+
+        resp = self._edit(client, auth_headers, running, start="2026-04-02T08:30:00Z")
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["end"] is None
+        client.post(
+            "/api/projects/stop", json={"time": "2026-04-02T10:00:00Z"}, headers=auth_headers
+        )
+
     def test_an_edit_with_no_flow_windows_keeps_the_tags(self, client, auth_headers):
         beat = self._session(client, auth_headers, tags=["imported"])
 
