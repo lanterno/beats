@@ -52,7 +52,7 @@ resource "google_monitoring_uptime_check_config" "api_health" {
   }
 
   content_matchers {
-    content = "healthy"
+    content = jsonencode("healthy") # a JSON value, as the JSON-path matcher reads it
     matcher = "MATCHES_JSON_PATH"
 
     json_path_matcher {
