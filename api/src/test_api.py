@@ -7251,12 +7251,61 @@ class TestAccountAPI:
         )
         assert resp.status_code == 404
 
+    def test_add_passkey_start_answers_options_for_the_signed_in_account(self, client, auth_info):
+        """The add flow is how a second device gets a passkey, and how an
+        SSO-provisioned account gets its first. The options are the
+        account's — its email, its existing credentials excluded — with no
+        new user minted (register/start would 409 on this email). The seeded
+        id must be base64url: the options builder decodes each stored id."""
+        existing = "Y3JlZC1leGlzdGluZw"  # base64url("cred-existing")
+        self._seed_credential(auth_info["user_id"], existing)
+
+        resp = client.post("/api/account/credentials/add/start", headers=auth_info["headers"])
+
+        assert resp.status_code == 200, resp.text
+        options = resp.json()["options"]
+        assert options["user"]["name"] == "test@example.com"
+        excluded = [c["id"] for c in options["excludeCredentials"]]
+        assert existing in excluded
+
+    def test_add_passkey_verify_without_a_start_is_400(self, client, auth_info):
+        from beats.api.routers.auth import _session_manager
+
+        _session_manager._challenges.clear()
+        _session_manager._pending_registrations.clear()
+        resp = client.post(
+            "/api/account/credentials/add/verify",
+            json={"credential": {"id": "x", "rawId": "x", "response": {}, "type": "public-key"}},
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 400
+        assert "pending registration" in resp.json()["detail"].lower()
+
+    def test_add_passkey_verify_rejects_a_malformed_ceremony(self, client, auth_info):
+        """A started flow with a credential no authenticator made is a 400
+        envelope, not a crash — the crypto itself is py_webauthn's."""
+        started = client.post("/api/account/credentials/add/start", headers=auth_info["headers"])
+        assert started.status_code == 200, started.text
+
+        resp = client.post(
+            "/api/account/credentials/add/verify",
+            json={
+                "credential": {"id": "x", "rawId": "x", "response": {}, "type": "public-key"},
+                "device_name": "Mac",
+            },
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 400
+        assert "failed" in resp.json()["detail"].lower()
+
     def test_account_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/account/me"),
             ("POST", "/api/account/refresh"),
             ("GET", "/api/account/credentials"),
             ("DELETE", "/api/account/credentials/anything"),
+            ("POST", "/api/account/credentials/add/start"),
+            ("POST", "/api/account/credentials/add/verify"),
         ]:
             resp = client.request(method, path)
             assert resp.status_code == 401, f"{method} {path} should require auth"
