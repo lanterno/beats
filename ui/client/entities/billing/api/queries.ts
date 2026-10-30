@@ -257,7 +257,7 @@ export function useCountReportLinks(): (clientIds: readonly string[]) => Promise
 		async (clientIds) => {
 			const lists = await Promise.all(
 				clientIds.map((clientId) =>
-					queryClient.fetchQuery({
+					queryClient.query({
 						queryKey: billingKeys.links(clientId),
 						queryFn: (): Promise<ReportLink[]> => fetchReportLinks(clientId),
 						staleTime: 0,
