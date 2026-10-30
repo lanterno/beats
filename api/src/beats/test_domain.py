@@ -49,7 +49,7 @@ from beats.domain.models import (
     ProjectKind,
     ScheduleType,
 )
-from beats.domain.utils import local_date, local_dt
+from beats.domain.utils import local_date, local_dt, normalize_tz
 
 
 class TestLocalDateHelpers:
@@ -3005,6 +3005,9 @@ class _FakeBeatRepoForServices:
     def __init__(self, beats: builtins.list[Beat] | None = None):
         self._beats: list[Beat] = list(beats or [])
         self._counter = 1
+        # (project_id, since) per `list_by_project`, so a test can say what
+        # a caller asked storage for and not only what it did with it.
+        self.ranges_read: list[tuple[str, datetime | None]] = []
 
     async def get_active(self) -> Beat | None:
         for b in self._beats:
@@ -3061,8 +3064,14 @@ class _FakeBeatRepoForServices:
             out = [b for b in out if b.start.date() == date_filter]
         return out
 
-    async def list_by_project(self, project_id: str) -> builtins.list[Beat]:
-        return [b for b in self._beats if b.project_id == project_id]
+    async def list_by_project(
+        self, project_id: str, since: datetime | None = None
+    ) -> builtins.list[Beat]:
+        self.ranges_read.append((project_id, since))
+        out = [b for b in self._beats if b.project_id == project_id]
+        if since is not None:
+            out = [b for b in out if normalize_tz(b.start) >= since]
+        return out
 
     async def list_grouped_by_project_ids(
         self, project_ids: builtins.list[str]
@@ -3924,6 +3933,60 @@ class TestContractServiceLedger:
         )
         with pytest.raises(UnknownHolidayRegion):
             await service.ledger("p2", 1, self.UTC_TZ)
+
+    async def test_it_reads_only_the_sessions_it_can_use(self):
+        """The read is bounded at the contract's first day, because that is
+        as far back as any figure reaches: every close is built from every
+        day since the contract started, and no day before it is in anything.
+
+        Reading every session a project ever had was the API's slowest read
+        (#376) — the companion asks for one ledger per project on every timer
+        change, so the cost is paid again and again on a project tracked for
+        years, for documents in no figure.
+        """
+        service = self._service(at=datetime(2026, 3, 5, 12, tzinfo=UTC))
+        repo = service.beat_repo
+
+        await service.ledger("p1", 8, self.UTC_TZ)
+
+        [(project_id, since)] = repo.ranges_read
+        assert project_id == "p1"
+        assert since is not None
+        # A day before the contract's first, for the timezone: a session is
+        # bucketed by its local start day, and a tz behind UTC can pull a UTC
+        # instant back onto the day before.
+        assert since.date() == CONTRACT_START - timedelta(days=1)
+
+    async def test_the_bound_is_the_oldest_week_when_no_contract_governs(self):
+        """On a project with no contract there are no closes, so nothing
+        reaches further back than the oldest week shown."""
+        side = _project("p3", "Side", weekly_goal=5.0)
+        service = self._service(at=datetime(2026, 3, 5, 12, tzinfo=UTC), project=side)
+
+        await service.ledger("p3", 2, self.UTC_TZ)
+
+        [(_, since)] = service.beat_repo.ranges_read
+        assert since is not None
+        # Monday 2 March is the open week; two weeks reaches 23 February.
+        assert since.date() == date(2026, 2, 23) - timedelta(days=1)
+
+    async def test_a_session_before_the_bound_is_in_no_figure(self):
+        """The bound is safe because nothing before it counts — pinned
+        against the figures, not only against the query."""
+        old = datetime(2025, 6, 2, 9, tzinfo=UTC)
+        service = self._service(
+            at=datetime(2026, 3, 5, 12, tzinfo=UTC),
+            beats=[Beat(id="b0", project_id="p1", start=old, end=old + timedelta(hours=8))],
+        )
+        bare = self._service(at=datetime(2026, 3, 5, 12, tzinfo=UTC))
+
+        with_old = await service.ledger("p1", 8, self.UTC_TZ)
+        without = await bare.ledger("p1", 8, self.UTC_TZ)
+
+        assert with_old.totals is not None
+        assert without.totals is not None
+        assert with_old.totals.worked == without.totals.worked
+        assert [w.balance_end for w in with_old.weeks] == [w.balance_end for w in without.weeks]
 
 
 def _adjustment(day: date, project_id: str = "p1") -> BalanceAdjustment:
