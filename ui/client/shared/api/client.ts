@@ -206,8 +206,8 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	return response.json();
 }
 
-export function get<T>(endpoint: string): Promise<T> {
-	return apiClient<T>(endpoint, { method: "GET" });
+export function get<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
+	return apiClient<T>(endpoint, { method: "GET", headers });
 }
 
 export function post<T>(endpoint: string, body?: unknown): Promise<T> {
@@ -238,9 +238,9 @@ export function del<T>(endpoint: string): Promise<T> {
 /**
  * A GET that never carries the session.
  *
- * The one public route the SPA reads is a report link
- * (`/api/reports/{token}`, docs/billing.md phase 1c). The token in the URL
- * is the whole of its authorisation, and the page has to work for a client
+ * The one public route the SPA reads is a report link (`GET /api/reports`
+ * with the token in X-Report-Token, docs/billing.md phase 1c). The token is
+ * the whole of its authorisation, and the page has to work for a client
  * who has no account at all. Attaching the owner's bearer token when they
  * happen to be signed in would make the page behave differently for them
  * than for the person they sent it to, which is the one thing a "see what
@@ -249,10 +249,10 @@ export function del<T>(endpoint: string): Promise<T> {
  * Not `get` with headers overridden: `apiClient` spreads its own headers
  * first, so an override can replace `Authorization` but never remove it.
  */
-export async function getPublic<T>(endpoint: string): Promise<T> {
+export async function getPublic<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
 	const response = await fetch(`${config.apiBaseUrl}${endpoint}`, {
 		method: "GET",
-		headers: { Accept: "application/json" },
+		headers: { Accept: "application/json", ...headers },
 	});
 
 	if (!response.ok) {

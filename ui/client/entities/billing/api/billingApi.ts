@@ -188,9 +188,11 @@ export async function deleteReportLink(clientId: string, linkId: string): Promis
 /**
  * Read a report link. The one call in the SPA that sends no session
  * (`getPublic`): the token is the whole of the authorisation, and the page
- * must read the same for the client it was sent to as for its owner.
+ * must read the same for the client it was sent to as for its owner. It
+ * rides the X-Report-Token header, never the URL — request logs keep URLs,
+ * and this one would be the authorisation itself.
  */
 export async function fetchReport(token: string): Promise<Report> {
-	const data = await getPublic<unknown>(`/api/reports/${encodeURIComponent(token)}`);
+	const data = await getPublic<unknown>("/api/reports", { "X-Report-Token": token });
 	return toReport(parseApiResponse(ReportSchema, data));
 }

@@ -157,15 +157,20 @@ export async function fetchInvitations(): Promise<Invitation[]> {
 	return parseApiResponse(ApiInvitationListSchema, data).map(toInvitation);
 }
 
-/** 404 INVITE_NOT_FOUND for an unknown token or another's; 410 INVITE_EXPIRED for a closed one. */
+/**
+ * 404 INVITE_NOT_FOUND for an unknown token or another's; 410 INVITE_EXPIRED
+ * for a closed one. The token rides X-Invite-Token rather than the URL (and
+ * the body on join): request logs keep URLs, and an unused invitation is a
+ * standing way in. The /join/<token> link people share is the SPA's route.
+ */
 export async function fetchInvitePreview(token: string): Promise<InvitePreview> {
-	const data = await get<unknown>(`${BASE}/join/${encodeURIComponent(token)}`);
+	const data = await get<unknown>(`${BASE}/join`, { "X-Invite-Token": token });
 	return toInvitePreview(parseApiResponse(ApiInvitePreviewSchema, data));
 }
 
 /** 409 ALREADY_A_MEMBER, or JOIN_REQUEST_PENDING while a request waits. */
 export async function joinOrganisation(token: string): Promise<JoinResult> {
-	const data = await post<unknown>(`${BASE}/join/${encodeURIComponent(token)}`);
+	const data = await post<unknown>(`${BASE}/join`, { token });
 	return toJoinResult(parseApiResponse(ApiJoinSchema, data));
 }
 
