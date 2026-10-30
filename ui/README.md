@@ -13,7 +13,7 @@ See `CLAUDE.md` for runtime + testing conventions, and the repo-root `README.md`
 - **Validation**: Zod v4
 - **Tests**: Vitest (unit) + Playwright (e2e, Chromium-only)
 - **Lint/format**: Biome (replaces ESLint + Prettier)
-- **PWA**: vite-plugin-pwa with workbox runtime caching
+- **PWA**: vite-plugin-pwa — the built app precached, Google Fonts cached, the API never
 - **Package manager**: pnpm
 
 ## Getting Started
@@ -184,7 +184,7 @@ E2E (Playwright, Chromium-only) auto-starts the dev server.
 
 ## PWA
 
-`vite-plugin-pwa` is configured for `autoUpdate` registration. The service worker caches the API at a 5-minute TTL (good for dynamic data; avoid stale dashboards on a stale-while-revalidate refresh) and Google Fonts for a year. Config lives in `vite.config.ts`.
+`vite-plugin-pwa` is configured for `autoUpdate` registration. The service worker precaches the built app and caches Google Fonts for a year. It never caches the API: a cached response is keyed by URL alone, so it would outlive sign-out and ignore the report's `no-store`. Offline, the timer keeps its own state and writes wait in an IndexedDB queue (`shared/lib/mutationQueue.ts`). Config lives in `vite.config.ts`, and `public/sw-retired-caches.js` deletes the `api-cache` that older workers left behind.
 
 ## Further reading
 

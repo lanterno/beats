@@ -73,7 +73,8 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
   check, all but `noAutofocus` (dialogs focus their first field on purpose).
 - **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives (see
   Theme below)
-- **PWA**: vite-plugin-pwa with workbox runtime caching
+- **PWA**: vite-plugin-pwa — the built app precached, Google Fonts cached, the API
+  never (the note in `vite.config.ts`)
 - **Node**: >=25.0.0
 
 ## Theme
