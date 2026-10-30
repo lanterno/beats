@@ -1228,7 +1228,9 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
 ### What a link shows
 
 ```jsonc
-// GET /api/reports/{token}
+// GET /api/reports  (the token in X-Report-Token, never the URL:
+//  request logs keep every URL for 30 days, and this one would be the
+//  authorisation itself)
 { "client_name": "Studio Kite",
   "first": "2026-10-01", "last": "2026-10-31",
   "show_amounts": true, "show_entries": true,
@@ -1262,7 +1264,7 @@ class ReportLink(ReportLinkFields):  # collection `report_links`
 | GET | `/api/clients/{id}/links` | | the client's links, newest first; 404 `CLIENT_NOT_FOUND` |
 | POST | `/api/clients/{id}/links` | `ReportLinkFields` | 201 with the token; 404 `CLIENT_NOT_FOUND`; 400 `INVALID_TIMEZONE`; 422 |
 | DELETE | `/api/clients/{id}/links/{link_id}` | | 204, always: with no such link there is nothing left to clear |
-| GET | `/api/reports/{token}` | **public** | the report; 404 `REPORT_NOT_FOUND`; 429 |
+| GET | `/api/reports` | **public**; the token in `X-Report-Token` | the report; 404 `REPORT_NOT_FOUND`, a missing header included; 429 |
 
 ### The UI's rules
 
