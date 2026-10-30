@@ -45,7 +45,8 @@ src/beats/
 ├── infrastructure/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
 │   ├── migrations.py    Startup passes: a project without `kind` gets one (a day job its
-│   │                    contract too); a day job whose term governs loses `weekly_goal`
+│   │                    contract too); a day job whose term governs loses `weekly_goal`;
+│   │                    a pairing code stored with string dates gets BSON dates, or goes if expired
 │   ├── plan_migration.py Startup pass: weekly plans stored under a Sunday move to their Monday
 │   ├── organisations.py MongoOrganisationStore (the organisation's own collections, scoped by organisation) and MongoOrganisationRecords (its read of beats and absences by its stamp) — the two classes not scoped by user_id
 │   ├── erasure.py       Erase an account, keeping each organisation's working-time record under a tombstone
@@ -76,7 +77,7 @@ Sixteen test files cover different layers; the full run takes about 30 seconds, 
 - **`src/beats/test_billing.py`** — the billing arithmetic on fixed dates: rate and flag resolution at both levels, lines as runs of days, bucketing by the local start day across midnight, month ends and DST, the running timer and a beat that ends before it starts, half-up rounding in JPY, EUR and KWD, totals that are sums of lines, who a report lists, the closed-past check, and the term lists' validators.
 - **`src/beats/test_billing_budgets.py`** — the billing budget arithmetic on fixed dates: a run across a month boundary summed month by month (2.02 h, not 2.01), the monthly reading equal to the month report, project beside client scope, overrides, a late beat in Berlin, the integer thresholds and the floored percent, unpriced hours under a money budget, an upcoming total, a running timer's crossing instants (a rate change at midnight, an override of false, two timers, a DST night), every projection guard and the 28-day window, and the model's unit, period and warning rules.
 - **`src/beats/test_vacation.py`** — the vacation arithmetic on fixed dates: the opening on a contract started years before it, each carry-over rule, the end year's pro-rating and rounding, which days cost leave.
-- **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, and the one that moves weekly plans stored under a Sunday to their Monday.
+- **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, the one that moves weekly plans stored under a Sunday to their Monday, and the one that gives pairing codes stored with string dates the BSON dates their TTL index expires.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses.
 - **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation.
 - **`src/beats/test_sso.py`** — OpenID Connect sign-in against `src/fake_idp.py` (a scripted provider, real RS256 tokens) and the account rules.
