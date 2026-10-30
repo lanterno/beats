@@ -1033,6 +1033,40 @@ class Beat(TzNormalizedModel):
         return self.start.date()
 
 
+def _same_instant(a: datetime | None, b: datetime | None) -> bool:
+    """Equal to the millisecond, the precision a BSON date keeps: a client
+    that sent an instant with microseconds reads it back truncated."""
+    if a is None or b is None:
+        return a is b
+
+    def ms(dt: datetime) -> datetime:
+        dt = normalize_tz(dt)
+        return dt.replace(microsecond=dt.microsecond - dt.microsecond % 1000)
+
+    return ms(a) == ms(b)
+
+
+class ExpectedBeat(TzNormalizedModel):
+    """A session as a client last saw it, sent with a write made against it.
+
+    A client that queues writes while offline replays them later, when another
+    device may have changed the same session in between. A write carrying this
+    applies only while the stored session still matches, and is refused with a
+    409 otherwise, so a replay never stops or rewrites what someone else
+    changed meanwhile. `end` None is a running session."""
+
+    project_id: str
+    start: datetime
+    end: datetime | None = None
+
+    def matches(self, beat: Beat) -> bool:
+        return (
+            beat.project_id == self.project_id
+            and _same_instant(beat.start, self.start)
+            and _same_instant(beat.end, self.end)
+        )
+
+
 class ProjectOrganisation(BaseModel):
     """The organisation that owns a project, as its member sees it on the
     project: enough to mark it in a list, and the instant from which the

@@ -52,6 +52,12 @@ IDEMPOTENT_PATH_PREFIXES: tuple[str, ...] = (
 # like GET /api/projects/{id} out of the cache.
 IDEMPOTENT_PATH_SUFFIXES: tuple[str, ...] = ("/start", "/stop")
 
+# Whole paths guarded as they stand. The companion queues a session logged
+# after the fact (POST) and an edit to one (PUT) while offline: a replayed
+# create would log the session twice, and a replayed edit would be judged
+# again against a session it had already changed.
+IDEMPOTENT_EXACT_PATHS: tuple[str, ...] = ("/api/beats/",)
+
 _MUTATION_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _TTL_SECONDS = 72 * 60 * 60  # 72 hours
 
@@ -62,6 +68,8 @@ _RESERVATION_STALE_SECONDS = 60
 
 
 def _is_idempotent_path(path: str) -> bool:
+    if path in IDEMPOTENT_EXACT_PATHS:
+        return True
     if not any(path.startswith(prefix) for prefix in IDEMPOTENT_PATH_PREFIXES):
         return False
     return any(path.endswith(suffix) for suffix in IDEMPOTENT_PATH_SUFFIXES)

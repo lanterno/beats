@@ -86,6 +86,16 @@ class InvalidEndTime(DomainException):
     message = "End time must be after start time"
 
 
+class TimerChanged(DomainException):
+    """Raised when a stop names the timer it was meant for and a different
+    one is running: another device changed the timer after the client last
+    saw it. A stop replayed from an offline queue must not stop that one."""
+
+    status_code = 409
+    message = "A different timer is running now"
+    code = "TIMER_CHANGED"
+
+
 # Project-related exceptions
 class ProjectNotFound(DomainException):
     """Raised when a project cannot be found by ID."""
@@ -449,6 +459,16 @@ class BeatNotFound(DomainException):
             super().__init__(f"Beat not found: {beat_id}")
         else:
             super().__init__()
+
+
+class BeatChanged(DomainException):
+    """Raised when an edit names the session as it was when the edit was made
+    and the stored one no longer matches: another device changed it since.
+    An edit replayed from an offline queue must not overwrite that change."""
+
+    status_code = 409
+    message = "This session was changed after the edit was made"
+    code = "BEAT_CHANGED"
 
 
 # General data exceptions

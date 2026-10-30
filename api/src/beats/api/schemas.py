@@ -18,6 +18,7 @@ from beats.domain.models import (
     BillingTerm,
     ClientFields,
     Contract,
+    ExpectedBeat,
     GoalType,
     JoinDecision,
     MembershipEnd,
@@ -38,6 +39,16 @@ class RecordTimeRequest(BaseModel):
     """Request body for recording time (start/stop timer)."""
 
     time: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class StopTimerRequest(RecordTimeRequest):
+    """Request body for stopping the timer. `expected` names the running
+    session the stop was made against; when another one is running, the stop
+    is refused (409 TIMER_CHANGED) rather than stopping it. A client replaying
+    a stop it queued offline sends it; one that leaves it out stops whatever
+    runs, as ever."""
+
+    expected: ExpectedBeat | None = None
 
 
 class CreateProjectRequest(BaseModel):
@@ -140,6 +151,11 @@ class UpdateBeatRequest(BaseModel):
     start: datetime
     end: datetime | None = None
     note: str | None = Field(default=None, max_length=2000)
+    # The session as the edit was made against it. Sent, the edit applies
+    # only while the stored session still matches (409 BEAT_CHANGED
+    # otherwise): the companion replays edits it queued offline, and another
+    # device may have changed the session in between.
+    expected: ExpectedBeat | None = None
 
 
 class GoalOverrideResponse(BaseModel):

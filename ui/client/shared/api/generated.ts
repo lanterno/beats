@@ -390,7 +390,8 @@ export interface paths {
          *     a string sets it, an empty string clears it, omitted keeps it as stored
          *     (#348). Every other stored field stays; the tags are re-derived from the
          *     new times when the daemon has flow windows for them, and kept when it
-         *     has none. A beat the caller does not hold is a 404.
+         *     has none. A beat the caller does not hold is a 404; with `expected`, one
+         *     changed since the edit was made is a 409 BEAT_CHANGED.
          */
         put: operations["update_beat_api_beats__put"];
         /**
@@ -2955,7 +2956,8 @@ export interface paths {
         put?: never;
         /**
          * End Project Timer
-         * @description Stop the currently running timer.
+         * @description Stop the currently running timer — or, with `expected`, only the one
+         *     the caller saw running (409 TIMER_CHANGED when another runs).
          */
         post: operations["end_project_timer_api_projects_stop_post"];
         delete?: never;
@@ -4982,6 +4984,27 @@ export interface components {
              */
             start: string;
         };
+        /**
+         * ExpectedBeat
+         * @description A session as a client last saw it, sent with a write made against it.
+         *
+         *     A client that queues writes while offline replays them later, when another
+         *     device may have changed the same session in between. A write carrying this
+         *     applies only while the stored session still matches, and is refused with a
+         *     409 otherwise, so a replay never stops or rewrites what someone else
+         *     changed meanwhile. `end` None is a running session.
+         */
+        ExpectedBeat: {
+            /** End */
+            end?: string | null;
+            /** Project Id */
+            project_id: string;
+            /**
+             * Start
+             * Format: date-time
+             */
+            start: string;
+        };
         /** FlowWindowResponse */
         FlowWindowResponse: {
             /** Active Project Id */
@@ -6654,6 +6677,22 @@ export interface components {
             /** Total Samples */
             total_samples: number;
         };
+        /**
+         * StopTimerRequest
+         * @description Request body for stopping the timer. `expected` names the running
+         *     session the stop was made against; when another one is running, the stop
+         *     is refused (409 TIMER_CHANGED) rather than stopping it. A client replaying
+         *     a stop it queued offline sends it; one that leaves it out stops whatever
+         *     runs, as ever.
+         */
+        StopTimerRequest: {
+            expected?: components["schemas"]["ExpectedBeat"] | null;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time?: string;
+        };
         /** Subdivision */
         Subdivision: {
             /** Code */
@@ -6810,6 +6849,7 @@ export interface components {
         UpdateBeatRequest: {
             /** End */
             end?: string | null;
+            expected?: components["schemas"]["ExpectedBeat"] | null;
             /** Id */
             id: string;
             /** Note */
@@ -12441,7 +12481,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RecordTimeRequest"];
+                "application/json": components["schemas"]["StopTimerRequest"];
             };
         };
         responses: {

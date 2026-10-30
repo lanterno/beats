@@ -42,6 +42,7 @@ from beats.domain.models import (
     BiometricDay,
     Contract,
     ContractTerm,
+    ExpectedBeat,
     GoalOverride,
     GoalType,
     Project,
@@ -153,6 +154,37 @@ class TestBeatModel:
         assert beat.day.year == 2020
         assert beat.day.month == 1
         assert beat.day.day == 11
+
+
+class TestExpectedBeat:
+    """A write's precondition compares instants to the millisecond, because
+    a BSON date keeps no more: what a client sent with microseconds comes
+    back truncated, not rounded, and must still match."""
+
+    START = datetime(2026, 4, 16, 9, 0, 0, 123000, tzinfo=UTC)
+
+    def _stored(self, end: datetime | None = None) -> Beat:
+        return Beat(id="b1", project_id="p1", start=self.START, end=end)
+
+    def test_microseconds_mongo_dropped_still_match(self):
+        sent = ExpectedBeat(project_id="p1", start=self.START.replace(microsecond=123999))
+        assert sent.matches(self._stored())
+
+    def test_the_next_millisecond_does_not(self):
+        sent = ExpectedBeat(project_id="p1", start=self.START.replace(microsecond=124000))
+        assert not sent.matches(self._stored())
+
+    def test_a_naive_instant_reads_as_utc(self):
+        sent = ExpectedBeat(project_id="p1", start=self.START.replace(tzinfo=None))
+        assert sent.matches(self._stored())
+
+    def test_a_running_session_does_not_match_a_finished_one(self):
+        end = datetime(2026, 4, 16, 10, 0, tzinfo=UTC)
+        assert not ExpectedBeat(project_id="p1", start=self.START).matches(self._stored(end=end))
+        assert not ExpectedBeat(project_id="p1", start=self.START, end=end).matches(self._stored())
+
+    def test_another_project_does_not_match(self):
+        assert not ExpectedBeat(project_id="p2", start=self.START).matches(self._stored())
 
 
 class TestProjectModel:

@@ -4332,6 +4332,78 @@ class TestBeatEdit:
         assert stored["end"].startswith("2026-04-01T09:30:00")
         assert (stored["note"], stored["tags"]) == ("Mine", [])
 
+    # An edit can carry `expected`, the session as it was made against it:
+    # the companion replays edits it queued offline, after another device
+    # may have changed the same session.
+
+    @staticmethod
+    def _expected(beat: dict) -> dict:
+        return {k: beat[k] for k in ("project_id", "start", "end")}
+
+    def test_an_edit_made_against_the_stored_session_applies(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+
+        resp = self._edit(
+            client, auth_headers, beat, start="2026-04-01T08:45:00Z", expected=self._expected(beat)
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["start"].startswith("2026-04-01T08:45:00")
+
+    def test_an_edit_made_before_another_device_changed_it_is_refused(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+        assert self._edit(client, auth_headers, beat, end="2026-04-01T10:00:00Z").status_code == 200
+
+        resp = self._edit(
+            client, auth_headers, beat, start="2026-04-01T08:45:00Z", expected=self._expected(beat)
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "BEAT_CHANGED"
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["start"].startswith("2026-04-01T09:00:00")
+        assert stored["end"].startswith("2026-04-01T10:00:00")
+
+    def test_moving_a_running_start_does_not_reopen_a_session_stopped_elsewhere(
+        self, client, auth_headers
+    ):
+        """The companion moved the running timer's start while offline; by
+        the replay another device had stopped it. The edit carries end None,
+        and applied it would set the session running again."""
+        # An earlier test in the class reopened a session; nothing may run.
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+        project_id = self._project(client, auth_headers)
+        running = client.post(
+            f"/api/projects/{project_id}/start",
+            json={"time": "2026-04-02T09:00:00Z"},
+            headers=auth_headers,
+        ).json()
+        stopped = client.post(
+            "/api/projects/stop", json={"time": "2026-04-02T10:00:00Z"}, headers=auth_headers
+        )
+        assert stopped.status_code == 200, stopped.text
+
+        resp = self._edit(
+            client,
+            auth_headers,
+            running,
+            start="2026-04-02T08:30:00Z",
+            expected=self._expected(running),
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert client.get("/api/timer/status", headers=auth_headers).json()["isBeating"] is False
+
+    def test_an_edit_to_a_session_deleted_elsewhere_is_404(self, client, auth_headers):
+        beat = self._session(client, auth_headers)
+        assert client.delete(f"/api/beats/{beat['id']}", headers=auth_headers).status_code == 200
+
+        resp = self._edit(
+            client, auth_headers, beat, start="2026-04-01T08:45:00Z", expected=self._expected(beat)
+        )
+
+        assert resp.status_code == 404, resp.text
+
 
 class TestTimerAPI:
     """Test suite for Timer status endpoints"""
@@ -5552,6 +5624,121 @@ class TestErrorEnvelope:
         assert "No timer" in body["detail"]
 
 
+class TestStopNamesItsTimer:
+    """POST /api/projects/stop with `expected`: the companion replays a stop
+    it queued offline, and by then another device may have changed the
+    timer. The stop applies only to the session it names; any other running
+    session is left alone with a 409 TIMER_CHANGED."""
+
+    @pytest.fixture(autouse=True)
+    def _nothing_running(self, client, auth_headers):
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+        yield
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+
+    @staticmethod
+    def _project(client, headers, name: str) -> str:
+        resp = client.post("/api/projects/", json={"name": name}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    @staticmethod
+    def _start(client, headers, project_id: str, at: str) -> None:
+        resp = client.post(f"/api/projects/{project_id}/start", json={"time": at}, headers=headers)
+        assert resp.status_code == 200, resp.text
+
+    @staticmethod
+    def _stop(client, headers, at: str) -> None:
+        resp = client.post("/api/projects/stop", json={"time": at}, headers=headers)
+        assert resp.status_code == 200, resp.text
+
+    @staticmethod
+    def _running(client, headers) -> dict:
+        return client.get("/api/timer/status", headers=headers).json()
+
+    def test_the_named_timer_stops(self, client, auth_headers):
+        # The start the client sent carried microseconds; Mongo keeps
+        # milliseconds, and the client names the timer by what it sent.
+        project = self._project(client, auth_headers, "Northwind")
+        self._start(client, auth_headers, project, "2026-04-16T09:00:00.123456Z")
+
+        resp = client.post(
+            "/api/projects/stop",
+            json={
+                "time": "2026-04-16T10:30:00Z",
+                "expected": {"project_id": project, "start": "2026-04-16T09:00:00.123456Z"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["end"].startswith("2026-04-16T10:30:00")
+        assert self._running(client, auth_headers)["isBeating"] is False
+
+    def test_a_timer_switched_elsewhere_keeps_running(self, client, auth_headers):
+        northwind = self._project(client, auth_headers, "Northwind")
+        kite = self._project(client, auth_headers, "Studio Kite")
+        self._start(client, auth_headers, northwind, "2026-04-16T09:00:00Z")
+        # Another device switches while this one is offline.
+        self._stop(client, auth_headers, "2026-04-16T10:00:00Z")
+        self._start(client, auth_headers, kite, "2026-04-16T10:00:00Z")
+
+        resp = client.post(
+            "/api/projects/stop",
+            json={
+                "time": "2026-04-16T10:30:00Z",
+                "expected": {"project_id": northwind, "start": "2026-04-16T09:00:00Z"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "TIMER_CHANGED"
+        status = self._running(client, auth_headers)
+        assert status["isBeating"] is True
+        assert status["project"]["id"] == kite
+
+    def test_the_same_project_restarted_elsewhere_keeps_running(self, client, auth_headers):
+        project = self._project(client, auth_headers, "Northwind")
+        self._start(client, auth_headers, project, "2026-04-16T09:00:00Z")
+        self._stop(client, auth_headers, "2026-04-16T09:45:00Z")
+        self._start(client, auth_headers, project, "2026-04-16T10:00:00Z")
+
+        resp = client.post(
+            "/api/projects/stop",
+            json={
+                "time": "2026-04-16T10:30:00Z",
+                "expected": {"project_id": project, "start": "2026-04-16T09:00:00Z"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert self._running(client, auth_headers)["since"].startswith("2026-04-16T10:00:00")
+
+    def test_a_replayed_stop_answers_as_it_did_rather_than_refusing(self, client, auth_headers):
+        """The stop landed but its response was lost; meanwhile another
+        timer started. The replay carries the same X-Client-Id, so it is
+        answered from the record, not judged again against the new timer."""
+        northwind = self._project(client, auth_headers, "Northwind")
+        kite = self._project(client, auth_headers, "Studio Kite")
+        self._start(client, auth_headers, northwind, "2026-04-16T09:00:00Z")
+        stop = {
+            "time": "2026-04-16T10:30:00Z",
+            "expected": {"project_id": northwind, "start": "2026-04-16T09:00:00Z"},
+        }
+        headers = {**auth_headers, "X-Client-Id": "offline-stop-1"}
+        first = client.post("/api/projects/stop", json=stop, headers=headers)
+        assert first.status_code == 200, first.text
+        self._start(client, auth_headers, kite, "2026-04-16T10:30:00Z")
+
+        replay = client.post("/api/projects/stop", json=stop, headers=headers)
+
+        assert replay.status_code == 200
+        assert replay.headers.get("X-Idempotent-Replay") == "true"
+        assert self._running(client, auth_headers)["project"]["id"] == kite
+
+
 class TestIdempotentReplay:
     """Timer start/stop must be idempotent under retries keyed by X-Client-Id."""
 
@@ -5631,8 +5818,8 @@ class TestIdempotentReplay:
         in the middleware: a regression that cached failures
         would lock the user out of retrying the same operation.
 
-        Idempotency middleware ONLY covers /api/projects/{id}/start
-        and /stop (per IDEMPOTENT_PATH_SUFFIXES) — so we trigger
+        Idempotency middleware covers /api/projects/{id}/start and
+        /stop and the session writes on /api/beats/ — so we trigger
         the failure on /start with a malformed body."""
         project_id = self._create_project(client, auth_headers)
         headers = {**auth_headers, "X-Client-Id": "test-failed-mutation-start"}
@@ -5666,6 +5853,59 @@ class TestIdempotentReplay:
             json={"time": "2026-04-16T12:00:30Z"},
             headers=auth_headers,
         )
+
+    def test_a_replayed_session_create_logs_it_once(self, client, auth_headers):
+        """The companion queues "log time you forgot" while offline; a create
+        whose response was lost is sent again with the same X-Client-Id."""
+        project_id = self._create_project(client, auth_headers)
+        session = {
+            "project_id": project_id,
+            "start": "2026-04-17T09:00:00Z",
+            "end": "2026-04-17T10:00:00Z",
+        }
+        headers = {**auth_headers, "X-Client-Id": "offline-create-1"}
+        first = client.post("/api/beats/", json=session, headers=headers)
+        assert first.status_code == 201, first.text
+
+        second = client.post("/api/beats/", json=session, headers=headers)
+
+        assert second.status_code == 201
+        assert second.headers.get("X-Idempotent-Replay") == "true"
+        assert second.json()["id"] == first.json()["id"]
+        beats = client.get(f"/api/beats/?project_id={project_id}", headers=auth_headers).json()
+        assert len(beats) == 1
+
+    def test_a_replayed_edit_does_not_undo_a_later_one(self, client, auth_headers):
+        """An edit landed, its response was lost, and the session was edited
+        again elsewhere. The replay is answered from the record and leaves
+        the later edit standing."""
+        project_id = self._create_project(client, auth_headers)
+        beat = client.post(
+            "/api/beats/",
+            json={
+                "project_id": project_id,
+                "start": "2026-04-17T11:00:00Z",
+                "end": "2026-04-17T12:00:00Z",
+            },
+            headers=auth_headers,
+        ).json()
+        edit = {
+            "id": beat["id"],
+            "project_id": project_id,
+            "start": "2026-04-17T10:30:00Z",
+            "end": "2026-04-17T12:00:00Z",
+        }
+        headers = {**auth_headers, "X-Client-Id": "offline-edit-1"}
+        assert client.put("/api/beats/", json=edit, headers=headers).status_code == 200
+        later = {**edit, "start": "2026-04-17T10:45:00Z"}
+        assert client.put("/api/beats/", json=later, headers=auth_headers).status_code == 200
+
+        replay = client.put("/api/beats/", json=edit, headers=headers)
+
+        assert replay.status_code == 200
+        assert replay.headers.get("X-Idempotent-Replay") == "true"
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["start"].startswith("2026-04-17T10:45:00")
 
 
 class TestCsvAndJsonExport:
