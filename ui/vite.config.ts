@@ -76,29 +76,18 @@ export default defineConfig(() => ({
 			},
 			workbox: {
 				globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
+				// Deletes the `api-cache` an older worker left on the device (see below).
+				importScripts: ["sw-retired-caches.js"],
+				// No rule here matches the API, on purpose, so the worker never sees an
+				// /api/ request and every read goes to the network. A Cache Storage
+				// entry is keyed by URL alone: it ignores the Authorization header and
+				// outlives sign-out, so a cached read could answer whoever uses the
+				// device next. It ignores Cache-Control too, so it would also keep the
+				// public report (`/api/reports/`), which the API sends `no-store` so a
+				// shared machine keeps no copy of a client's hours. Nothing offline
+				// reads it either: the timer keeps its own state and queued writes wait
+				// in IndexedDB (`shared/lib/mutationQueue.ts`).
 				runtimeCaching: [
-					{
-						// A report link's answer is never cached, by anything. The API
-						// sends `Cache-Control: no-store`, but the Cache Storage API
-						// does not read Cache-Control, so the generic /api/ rule below
-						// would keep a client's hours in this origin's cache for five
-						// minutes after they closed the tab — on a shared machine,
-						// exactly what `no-store` was set to prevent. Workbox matches
-						// routes in registration order, so this has to stay first.
-						urlPattern: /^https?:\/\/.*\/api\/reports\//,
-						handler: "NetworkOnly",
-					},
-					{
-						urlPattern: /^https?:\/\/.*\/api\//,
-						handler: "NetworkFirst",
-						options: {
-							cacheName: "api-cache",
-							expiration: {
-								maxEntries: 50,
-								maxAgeSeconds: 60 * 5, // 5 minutes
-							},
-						},
-					},
 					{
 						urlPattern: /^https?:\/\/fonts\.googleapis\.com\/.*/,
 						handler: "CacheFirst",
