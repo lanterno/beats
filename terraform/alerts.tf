@@ -103,7 +103,7 @@ resource "google_monitoring_alert_policy" "api_5xx" {
 
       comparison              = "COMPARISON_GT"
       threshold_value         = 0.02
-      duration                = "0s"
+      duration                = "60s"
       evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
     }
   }
@@ -123,7 +123,7 @@ resource "google_monitoring_alert_policy" "api_5xx" {
 
       comparison              = "COMPARISON_GT"
       threshold_value         = 2
-      duration                = "0s"
+      duration                = "60s"
       evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
     }
   }
@@ -255,7 +255,7 @@ resource "google_monitoring_alert_policy" "public_route_failures" {
 
       comparison              = "COMPARISON_GT"
       threshold_value         = 20
-      duration                = "0s"
+      duration                = "60s"
       evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
     }
   }
@@ -299,7 +299,7 @@ resource "google_monitoring_alert_policy" "api_rejections" {
 
       comparison              = "COMPARISON_GT"
       threshold_value         = 200
-      duration                = "0s"
+      duration                = "60s"
       evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
     }
   }
