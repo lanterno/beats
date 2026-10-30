@@ -1662,8 +1662,9 @@ class _FakeBeatRepoForTools:
     async def list_completed_in_range(self, start, end):
         return [b for b in self._beats if b.end is not None and start <= b.start.date() <= end]
 
-    async def list_by_project(self, project_id):
-        return [b for b in self._beats if b.project_id == project_id]
+    async def list_by_project(self, project_id, since=None):
+        out = [b for b in self._beats if b.project_id == project_id]
+        return out if since is None else [b for b in out if b.start >= since]
 
 
 class _FakeAbsenceStoreForCoach:
