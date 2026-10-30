@@ -6,7 +6,7 @@ Personal time-tracking system: Python API + React SPA + Go daemon + Flutter comp
 
 ```
 shared/                       Cross-surface data (app-labels.json, brand.json, brand/ — the logo's SVGs)
-scripts/                      Cross-surface codegen (gen_app_labels.py, gen_brand.py, gen_icons.py)
+scripts/                      Cross-surface codegen (gen_app_labels.py, gen_brand.py, gen_icons.py, gen_latin_dash.py)
 api/                          Python (FastAPI + PyMongo/MongoDB)
 ui/                           React 19 SPA (Vite + TypeScript)
 daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
@@ -351,7 +351,10 @@ nothing.
   background. Surfaces are `Panel` (rounded, the panel shadow, no border) and controls are
   pills. Two rounded faces: M PLUS Rounded 1c for display figures and every column of digits
   (`font-heading`, `font-mono`), Zen Maru Gothic for everything read (`font-body`); real code
-  is `font-code`. A script in `ui/index.html` stamps the stored hour and density before first
+  is `font-code`. Zen Maru's em dash is the full-width Japanese bar, so body text takes that
+  character from a Latin face in front of it: on the web the `Latin Dash` `@font-face` in
+  `global.css`, in the companion the `LatinDash` family that `scripts/gen_latin_dash.py` cuts
+  from M PLUS Rounded 1c (rerun it and commit what it wrote to change it). A script in `ui/index.html` stamps the stored hour and density before first
   paint, so a stored dusk does not flash the afternoon; it repeats the keys and the dusk
   sky's hex, so a change to either is made in both places. The Mac companion is drawn
   in the same two hours from the same tokens, copied into `companion/lib/theme/sky.dart`;
