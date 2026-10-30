@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../state/prefs.dart';
 import 'api_client.dart';
+import 'local_timezone.dart';
 import 'notification_dedupe.dart';
 import 'notifications.dart';
 import 'tray_service.dart' show flowScoresFromWindows;
@@ -80,7 +81,9 @@ class NotificationPoller {
 
   Future<void> _pollBrief() async {
     try {
-      final brief = await client.getTodayBrief();
+      // Today is the local day: UTC's would miss the morning's brief east
+      // of UTC until UTC caught up, and find yesterday's west of it.
+      final brief = await client.getTodayBrief(timezone: await localTimezone());
       if (brief == null) return;
       final id = (brief['id'] as String?) ?? (brief['date'] as String?);
       if (id == null) return;
