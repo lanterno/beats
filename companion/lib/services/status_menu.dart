@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 /// (`macos/Runner/StatusItemController.swift`): sets what the item shows,
 /// tells an open popover the timer changed, and hears the popover ask for
 /// the window. Every method is a no-op off macOS, where TrayService uses the
-/// system_tray plugin instead.
+/// tray_manager plugin instead.
 class StatusMenu {
   static const _channel = MethodChannel('companion/menubar');
 

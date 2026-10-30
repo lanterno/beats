@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:material_ui/material_ui.dart';
-import 'package:system_tray/system_tray.dart';
+import 'package:tray_manager/tray_manager.dart' as tray;
 import '../brand.dart';
 import '../state/prefs.dart';
 import '../state/timer_controller.dart';
@@ -86,14 +86,25 @@ String menuBarTitle(MenuBarShows shows, {String? project, Duration? elapsed}) {
 ///
 /// On macOS the item is native (StatusItemController.swift, via
 /// [StatusMenu]) and a click opens the popover; elsewhere it is the
-/// system_tray plugin with a menu to start and stop.
+/// tray_manager plugin with a menu to start and stop. tray_manager replaced
+/// system_tray (#395): same four calls — icon, title, tooltip, menu — but
+/// maintained, and its native core is built by Dart's build hooks, so the
+/// macOS build has no tray pod or Swift package to host at all.
 class TrayService {
   final ApiClient client;
   final TimerController timer;
   final VoidCallback onShowWindow;
 
   final bool _native = Platform.isMacOS;
-  SystemTray? _tray;
+  tray.TrayIcon? _tray;
+  // The menu in the tray and its items, held on purpose: a wrapper that is
+  // garbage-collected releases its native handle, which would strip the
+  // click listeners (and the icon, were _tray not a field) mid-session.
+  // Never read — being referenced is their whole job.
+  // ignore: unused_field
+  tray.Menu? _menu;
+  // ignore: unused_field
+  List<tray.MenuItem> _menuItems = const [];
   final TrayIconRenderer _iconRenderer = TrayIconRenderer();
   Prefs? _prefs;
   Timer? _flowTimer;
@@ -128,14 +139,20 @@ class TrayService {
         tooltip: appName,
       );
     } else {
-      final tray = SystemTray();
-      _tray = tray;
-      await tray.initSystemTray(title: '', iconPath: _iconPath!, toolTip: appName);
-      tray.registerSystemTrayEventHandler((eventName) {
-        if (eventName == kSystemTrayEventClick || eventName == kSystemTrayEventRightClick) {
-          tray.popUpContextMenu();
-        }
+      final icon = tray.TrayIcon.create();
+      if (icon == null) return; // No tray on this desktop; the window stands alone.
+      _tray = icon;
+      final image = tray.Image.fromFile(_iconPath!);
+      if (image != null) icon.icon = image;
+      icon.setTooltip(appName);
+      // The menu opens on either button, as it always has here: the right
+      // click natively, the left through the event. Linux reports no tray
+      // clicks at all — the panel holds them and opens the menu itself.
+      icon.setContextMenuTrigger(tray.ContextMenuTrigger.rightClicked);
+      icon.addListener((event) {
+        if (event is tray.TrayIconClickedEvent) icon.openContextMenu();
       });
+      icon.setVisible(true);
     }
 
     timer.addListener(_onTimer);
@@ -191,7 +208,8 @@ class TrayService {
       _lastTitle = null; // resend the title with the new icon
       _tick();
     } else {
-      await _tray?.setImage(_iconPath!);
+      final image = tray.Image.fromFile(_iconPath!);
+      if (image != null) _tray?.icon = image;
     }
   }
 
@@ -228,39 +246,76 @@ class TrayService {
     }
   }
 
+  /// One labelled item: disabled for a line that only reads, otherwise
+  /// running [onClick] on a click. Null when the native side cannot make
+  /// one, which the assembly below skips.
+  tray.MenuItem? _item(String label, {VoidCallback? onClick}) {
+    final item = tray.MenuItem.createWithLabelAndType(label, tray.MenuItemType.normal);
+    if (item == null) return null;
+    if (onClick == null) {
+      item.isEnabled = false;
+    } else {
+      item.addListener((event) {
+        if (event is tray.MenuItemClickedEvent) onClick();
+      });
+    }
+    return item;
+  }
+
   /// The tray menu off macOS: what runs and Stop, or a Start submenu.
   Future<void> _updateMenu() async {
-    final tray = _tray;
-    if (tray == null) return;
-    final menu = Menu();
-    final items = <MenuItemBase>[];
-    final current = timer.current;
+    final icon = _tray;
+    if (icon == null) return;
+    final menu = tray.Menu.create();
+    if (menu == null) return;
+    final kept = <tray.MenuItem>[];
 
+    void add(tray.MenuItem? item) {
+      if (item == null) return;
+      menu.addItem(item);
+      kept.add(item);
+    }
+
+    final current = timer.current;
     if (current != null) {
-      items.addAll([
-        MenuItemLabel(label: '● ${current.name} — ${formatTrayElapsed(timer.elapsed)}', enabled: false),
-        MenuSeparator(),
-        MenuItemLabel(label: '■  Stop Timer', onClicked: (_) => timer.stop()),
-        MenuSeparator(),
-      ]);
+      add(_item('\u25cf ${current.name} \u2014 ${formatTrayElapsed(timer.elapsed)}'));
+      menu.addSeparator();
+      add(_item('\u25a0  Stop Timer', onClick: () => timer.stop()));
+      menu.addSeparator();
     } else {
-      items.add(MenuItemLabel(label: 'No timer running', enabled: false));
-      items.add(MenuSeparator());
+      add(_item('No timer running'));
+      menu.addSeparator();
       final projects = timer.recentFirst.take(12).toList();
       if (projects.isNotEmpty) {
-        items.add(SubMenu(label: '▶  Start Timer', children: [
-          for (final p in projects) MenuItemLabel(label: p.name, onClicked: (_) => timer.startProject(p)),
-        ]));
-        items.add(MenuSeparator());
+        final start = tray.MenuItem.createWithLabelAndType(
+          '\u25b6  Start Timer',
+          tray.MenuItemType.submenu,
+        );
+        final submenu = tray.Menu.create();
+        if (start != null && submenu != null) {
+          for (final p in projects) {
+            final entry = _item(p.name, onClick: () => timer.startProject(p));
+            if (entry != null) {
+              submenu.addItem(entry);
+              kept.add(entry);
+            }
+          }
+          start.submenu = submenu;
+          add(start);
+          menu.addSeparator();
+        }
       }
     }
 
-    items.add(MenuItemLabel(label: 'Open $appName', onClicked: (_) => onShowWindow()));
-    items.add(MenuSeparator());
-    items.add(MenuItemLabel(label: 'Quit', onClicked: (_) => exit(0)));
+    add(_item('Open $appName', onClick: () => onShowWindow()));
+    menu.addSeparator();
+    add(_item('Quit', onClick: () => exit(0)));
 
-    await menu.buildFrom(items);
-    await tray.setContextMenu(menu);
+    icon.setContextMenu(menu);
+    // Swap the kept references only once the new menu is in the tray, so the
+    // old one's listeners outlive it rather than the other way round.
+    _menu = menu;
+    _menuItems = kept;
   }
 
   void dispose() {
@@ -270,7 +325,10 @@ class TrayService {
     if (_native) {
       StatusMenu.update(visible: false);
     } else {
-      _tray?.destroy();
+      _tray?.dispose();
+      _tray = null;
+      _menu = null;
+      _menuItems = const [];
     }
     MacAmbient.setDockBadge(null);
   }

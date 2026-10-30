@@ -3,7 +3,7 @@ import FlutterMacOS
 import ServiceManagement
 
 /// Bridges the companion's Dart layer to macOS-only AppKit features the
-/// `window_manager` and `system_tray` plugins don't cover: the Dock badge
+/// `window_manager` and `tray_manager` plugins don't cover: the Dock badge
 /// and icon, opening at login, and how long the Mac has been idle. Method names
 /// are namespaced by surface (`dock.setBadge`) so future bridges can
 /// land here without colliding.
