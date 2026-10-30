@@ -4,7 +4,9 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from limits.storage import MongoDBStorage
 from pydantic import BaseModel
+from pymongo import MongoClient
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -19,7 +21,48 @@ from beats.settings import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-limiter = Limiter(key_func=get_remote_address)
+
+
+class _MongoRateLimitStorage(MongoDBStorage):
+    """`mongodb://` rate-limit storage whose destructor never dials Mongo.
+
+    Upstream's `__del__` goes through the lazy `storage` property, so a
+    process that imported the app but never served a limited route — the
+    OpenAPI dump behind `pnpm gen:types`, any script — would connect to
+    Mongo at interpreter exit and print an ignored traceback when it is
+    unreachable. Registered under its own scheme (the metaclass keys on
+    STORAGE_SCHEME), which `_init_mongo_client` strips back off before
+    pymongo sees the URI.
+    """
+
+    # Upstream types this as an instance attribute, so ClassVar would break
+    # the override check; the noqa stands in for it.
+    STORAGE_SCHEME: list[str] | None = ["beats-mongodb", "beats-mongodb+srv"]  # noqa: RUF012
+
+    def _init_mongo_client(self, uri: str | None, **options: int | str | bool) -> MongoClient:
+        return super()._init_mongo_client((uri or "").removeprefix("beats-"), **options)
+
+    def __del__(self) -> None:
+        if self._storage is not None:
+            self._storage.close()
+
+
+# The counts live beside the data in Mongo, not in process memory: Cloud Run
+# runs up to two instances, and a per-instance store both doubles every limit
+# and forgets all of them whenever the service scales to zero (#391). The
+# storage makes its own TTL indexes, so the collections clean themselves; when
+# Mongo is unreachable the limiter falls back to this process's memory — the
+# old behaviour — rather than failing the public routes.
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=f"beats-{settings.db_dsn}",
+    storage_options={
+        "database_name": settings.db_name,
+        "counter_collection_name": "rate_limit_counters",
+        "window_collection_name": "rate_limit_windows",
+    },
+    in_memory_fallback_enabled=True,
+)
 
 # Shared singleton for session manager (needed by middleware)
 _session_manager = SessionManager(settings.jwt_secret)
