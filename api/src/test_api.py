@@ -4405,6 +4405,152 @@ class TestBeatEdit:
         assert resp.status_code == 404, resp.text
 
 
+class TestOneTimerAtATime:
+    """A session with no `end` is a running timer whichever door opened it,
+    so the CRUD routes make the check `/start` makes. Before #376 only
+    `/start` did, and either of these left two sessions running at once —
+    after which `get_active` answers with whichever storage returns first,
+    and a single stop closes only one of them."""
+
+    @staticmethod
+    def _project(client, headers, name: str) -> str:
+        resp = client.post("/api/projects/", json={"name": name}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    @pytest.fixture(autouse=True)
+    def _no_timer_left_running(self, client, auth_headers):
+        """Each test here opens a timer; none may outlive its test."""
+        yield
+        with contextlib.suppress(Exception):
+            client.post(
+                "/api/projects/stop",
+                json={"time": datetime.now(UTC).isoformat()},
+                headers=auth_headers,
+            )
+
+    def test_create_without_end_is_refused_while_a_timer_runs(self, client, auth_headers):
+        running = self._project(client, auth_headers, f"running-{time.time()}")
+        other = self._project(client, auth_headers, f"other-{time.time()}")
+        client.post(
+            f"/api/projects/{running}/start",
+            json={"time": "2026-05-01T09:00:00Z"},
+            headers=auth_headers,
+        )
+
+        resp = client.post(
+            "/api/beats/",
+            json={"project_id": other, "start": "2026-05-01T10:00:00Z"},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 400, resp.text
+        # The running session is named, so a client can say which one blocks.
+        assert resp.json()["detail"]
+
+        status = client.get("/api/timer/status", headers=auth_headers).json()
+        assert status["isBeating"] is True
+        assert status["project"]["id"] == running
+
+    def test_create_without_end_is_allowed_when_nothing_runs(self, client, auth_headers):
+        project = self._project(client, auth_headers, f"first-{time.time()}")
+
+        resp = client.post(
+            "/api/beats/",
+            json={"project_id": project, "start": "2026-05-01T09:00:00Z"},
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["end"] is None
+
+    def test_reopening_is_refused_while_another_timer_runs(self, client, auth_headers):
+        finished_project = self._project(client, auth_headers, f"finished-{time.time()}")
+        beat = client.post(
+            "/api/beats/",
+            json={
+                "project_id": finished_project,
+                "start": "2026-05-01T09:00:00Z",
+                "end": "2026-05-01T10:00:00Z",
+            },
+            headers=auth_headers,
+        ).json()
+        running = self._project(client, auth_headers, f"running2-{time.time()}")
+        client.post(
+            f"/api/projects/{running}/start",
+            json={"time": "2026-05-01T11:00:00Z"},
+            headers=auth_headers,
+        )
+
+        resp = client.put(
+            "/api/beats/",
+            json={
+                "id": beat["id"],
+                "project_id": finished_project,
+                "start": beat["start"],
+                "end": None,
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 400, resp.text
+        # The edit did not land: the session is still finished.
+        stored = client.get(f"/api/beats/{beat['id']}", headers=auth_headers).json()
+        assert stored["end"] is not None
+
+    def test_reopening_is_allowed_when_nothing_else_runs(self, client, auth_headers):
+        project = self._project(client, auth_headers, f"reopen-{time.time()}")
+        beat = client.post(
+            "/api/beats/",
+            json={
+                "project_id": project,
+                "start": "2026-05-01T09:00:00Z",
+                "end": "2026-05-01T10:00:00Z",
+            },
+            headers=auth_headers,
+        ).json()
+
+        resp = client.put(
+            "/api/beats/",
+            json={
+                "id": beat["id"],
+                "project_id": project,
+                "start": beat["start"],
+                "end": None,
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["end"] is None
+
+    def test_editing_the_running_session_is_not_blocked_by_itself(self, client, auth_headers):
+        """The open session an edit is editing is not a second one — else a
+        running timer could never have its start corrected."""
+        project = self._project(client, auth_headers, f"self-{time.time()}")
+        client.post(
+            f"/api/projects/{project}/start",
+            json={"time": "2026-05-01T09:00:00Z"},
+            headers=auth_headers,
+        )
+        beats = client.get(f"/api/beats/?project_id={project}", headers=auth_headers).json()
+        active = next(b for b in beats if b["end"] is None)
+
+        resp = client.put(
+            "/api/beats/",
+            json={
+                "id": active["id"],
+                "project_id": project,
+                "start": "2026-05-01T08:30:00Z",
+                "end": None,
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["start"].startswith("2026-05-01T08:30")
+
+
 class TestTimerAPI:
     """Test suite for Timer status endpoints"""
 
@@ -7251,11 +7397,72 @@ class TestAccountAPI:
         )
         assert resp.status_code == 404
 
+    def test_add_credential_start_offers_options_for_the_session(self, client, auth_info):
+        """The add-passkey door (#376). /api/auth/register/start cannot do
+        this — it 409s for an email that already has a credential — so an
+        account could hold exactly one passkey and no second device."""
+        self._seed_credential(auth_info["user_id"], "AQIDBA", "Mac")
+
+        resp = client.post("/api/account/credentials/start", headers=auth_info["headers"])
+
+        assert resp.status_code == 200, resp.text
+        options = resp.json()["options"]
+        assert options["challenge"]
+        assert options["user"]["name"] == "test@example.com"
+        # The passkey already held is excluded, so the browser refuses to
+        # enrol the same authenticator twice instead of making a duplicate.
+        assert [c["id"] for c in options["excludeCredentials"]] == ["AQIDBA"]
+        # No token: the caller already holds a session, and a second would
+        # have to be revoked on logout like the first.
+        assert "token" not in resp.json()
+
+    def test_add_credential_verify_saves_against_the_session_user(
+        self, client, auth_info, monkeypatch
+    ):
+        """The account a verified passkey is saved against is the token's,
+        never anything the ceremony carries."""
+        from beats.auth import webauthn as webauthn_module
+
+        class _FakeVerification:
+            credential_id = b"\x0a\x0b\x0c"
+            credential_public_key = b"\x01\x02"
+            sign_count = 0
+
+        monkeypatch.setattr(
+            webauthn_module, "verify_registration_response", lambda **_kw: _FakeVerification()
+        )
+        self._seed_credential(auth_info["user_id"], "AQIDBA", "Mac")
+        assert (
+            client.post("/api/account/credentials/start", headers=auth_info["headers"]).status_code
+            == 200
+        )
+
+        resp = client.post(
+            "/api/account/credentials/verify",
+            json={"credential": {"id": "whatever"}, "device_name": "Work laptop"},
+            headers=auth_info["headers"],
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"verified": True}
+        listing = client.get("/api/account/credentials", headers=auth_info["headers"]).json()
+        assert sorted(c["device_name"] for c in listing) == ["Mac", "Work laptop"]
+
+    def test_add_credential_verify_without_a_start_is_400(self, client, auth_info):
+        resp = client.post(
+            "/api/account/credentials/verify",
+            json={"credential": {"id": "whatever"}},
+            headers=auth_info["headers"],
+        )
+        assert resp.status_code == 400, resp.text
+
     def test_account_endpoints_require_auth(self, client):
         for method, path in [
             ("GET", "/api/account/me"),
             ("POST", "/api/account/refresh"),
             ("GET", "/api/account/credentials"),
+            ("POST", "/api/account/credentials/start"),
+            ("POST", "/api/account/credentials/verify"),
             ("DELETE", "/api/account/credentials/anything"),
         ]:
             resp = client.request(method, path)
