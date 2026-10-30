@@ -194,3 +194,272 @@ resource "google_logging_metric" "public_route_requests" {
 
   depends_on = [google_project_service.logging]
 }
+
+# One dashboard reading all of the above beside Cloud Run's own metrics:
+# Monitoring > Dashboards in the Cloud console. Rates are per second whatever
+# the time range, so a chart reads the same zoomed in or out.
+#
+# A tile in the first row or column leaves out yPos or xPos rather than
+# saying 0: the API drops zero positions, and the provider would then see a
+# change to the dashboard on every apply.
+locals {
+  api_metrics = "resource.type=\"cloud_run_revision\" AND resource.label.service_name=\"${var.api_service_name}\""
+}
+
+resource "google_monitoring_dashboard" "api" {
+  project = var.project_id
+  dashboard_json = jsonencode({
+    displayName = "${var.api_service_name} and ${local.web_host}"
+    mosaicLayout = {
+      columns = 48
+      tiles = [
+        {
+          width  = 48
+          height = 7
+          widget = {
+            title = "Reading this dashboard"
+            text = {
+              format  = "MARKDOWN"
+              content = <<-EOT
+                Machines make most of the API's requests: the companion, the daemon and the wall clock poll it, and the uptime check calls `/health` 72 times an hour. The rejections leave out paths outside `/api/`, which are nearly all scanners probing for files.
+
+                To see who is behind a spike, open the request log in Logs Explorer (`log_id("run.googleapis.com/requests")` on `${var.api_service_name}`): `httpRequest.remoteIp` is the caller's address.
+              EOT
+            }
+          }
+        },
+        {
+          yPos   = 7
+          width  = 24
+          height = 16
+          widget = {
+            title = "Requests per second, by response class"
+            xyChart = {
+              dataSets = [{
+                plotType       = "STACKED_AREA"
+                legendTemplate = "$${metric.labels.response_code_class}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_count\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_RATE"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.response_code_class"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "requests/s", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos   = 24
+          yPos   = 7
+          width  = 24
+          height = 16
+          widget = {
+            title = "Share of requests answered 5xx"
+            xyChart = {
+              dataSets = [{
+                plotType       = "LINE"
+                legendTemplate = "5xx"
+                timeSeriesQuery = {
+                  timeSeriesFilterRatio = {
+                    numerator = {
+                      filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_count\" AND metric.label.response_code_class=\"5xx\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_RATE"
+                        crossSeriesReducer = "REDUCE_SUM"
+                        groupByFields      = ["resource.label.service_name"]
+                      }
+                    }
+                    denominator = {
+                      filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_count\""
+                      aggregation = {
+                        alignmentPeriod    = "60s"
+                        perSeriesAligner   = "ALIGN_RATE"
+                        crossSeriesReducer = "REDUCE_SUM"
+                        groupByFields      = ["resource.label.service_name"]
+                      }
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "share of requests", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          yPos   = 23
+          width  = 24
+          height = 16
+          widget = {
+            title = "Request latency, percentiles"
+            xyChart = {
+              dataSets = [for p in [50, 95, 99] : {
+                plotType       = "LINE"
+                legendTemplate = "p${p}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_latencies\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_DELTA"
+                      crossSeriesReducer = "REDUCE_PERCENTILE_${p}"
+                      groupByFields      = ["resource.label.service_name"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "ms", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos   = 24
+          yPos   = 23
+          width  = 24
+          height = 16
+          widget = {
+            title = "Instances, by state"
+            xyChart = {
+              dataSets = [{
+                plotType       = "STACKED_AREA"
+                legendTemplate = "$${metric.labels.state}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/container/instance_count\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_MAX"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.state"]
+                    }
+                  }
+                }
+              }]
+              # The same variable that sets the service's maxScale (cloudrun.tf).
+              thresholds = [{ label = "max instances", value = var.max_instances }]
+              yAxis      = { label = "instances", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          yPos   = 39
+          width  = 24
+          height = 16
+          widget = {
+            title = "Container startup latency: each point is a cold start"
+            xyChart = {
+              dataSets = [for p in [50, 99] : {
+                plotType       = "LINE"
+                legendTemplate = "p${p}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/container/startup_latencies\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_DELTA"
+                      crossSeriesReducer = "REDUCE_PERCENTILE_${p}"
+                      groupByFields      = ["resource.label.service_name"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "ms", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos   = 24
+          yPos   = 39
+          width  = 24
+          height = 16
+          widget = {
+            title = "Uptime checks: share of probe locations passing"
+            xyChart = {
+              dataSets = [{
+                plotType       = "LINE"
+                legendTemplate = "$${resource.labels.host}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = join(" AND ", [
+                      "resource.type=\"uptime_url\"",
+                      "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\"",
+                      "metric.label.check_id=one_of(\"${google_monitoring_uptime_check_config.api_health.uptime_check_id}\", \"${google_monitoring_uptime_check_config.web.uptime_check_id}\")",
+                    ])
+                    aggregation = {
+                      alignmentPeriod    = "300s"
+                      perSeriesAligner   = "ALIGN_FRACTION_TRUE"
+                      crossSeriesReducer = "REDUCE_MEAN"
+                      groupByFields      = ["resource.label.host"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "share passing", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          yPos   = 55
+          width  = 24
+          height = 16
+          widget = {
+            title = "Rejections under /api/ per second, by status"
+            xyChart = {
+              dataSets = [{
+                plotType       = "STACKED_BAR"
+                legendTemplate = "$${metric.labels.status}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.api_rejections.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_RATE"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.status"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "requests/s", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos   = 24
+          yPos   = 55
+          width  = 24
+          height = 16
+          widget = {
+            title = "Public routes per second, by route and status"
+            xyChart = {
+              dataSets = [{
+                plotType       = "STACKED_BAR"
+                legendTemplate = "$${metric.labels.route} $${metric.labels.status}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.public_route_requests.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_RATE"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.route", "metric.label.status"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "requests/s", scale = "LINEAR" }
+            }
+          }
+        },
+      ]
+    }
+  })
+
+  depends_on = [google_project_service.monitoring]
+}
