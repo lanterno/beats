@@ -3,21 +3,33 @@
 # requires-python = ">=3.11"
 # dependencies = ["fonttools>=4.50,<5"]
 # ///
-"""Cut the companion's Latin dash face out of M PLUS Rounded 1c.
+"""Cut the companion's Latin face for two characters out of M PLUS Rounded 1c.
 
 Zen Maru Gothic, the companion's body face, draws the em dash as the
 full-width Japanese bar: a hairline a whole character wide, set above the
 hyphen and running past its own advance, so it touches the words either side.
 Its en dash is already a Latin one. Flutter has no `unicode-range`, but it
-does fall back per character: a face that holds the em dash and nothing else,
-first in the body stack with Zen Maru behind it, draws every dash and leaves
+does fall back per character: a face that holds those characters and nothing
+else, first in the body stack with Zen Maru behind it, draws them and leaves
 every other character to Zen Maru. That is the web's "Latin Dash" face
 (`ui/client/global.css`) by the only route Flutter has; `SkyType` in
 `companion/lib/theme/sky.dart` puts it in front.
 
-The dash is M PLUS Rounded 1c's, the companion's other rounded face, at the
+The minus sign is the second character, added in #376. Zen Maru draws U+2212
+at 922 units against a digit's 504 — nearly two digits wide — and the balance
+chip and the coach's standing set it in body text ("−25m behind overall"), so
+the gap after the sign read as a gap in the sentence. M PLUS's is 734.
+
+The ellipsis, U+2026, was proposed with it and is not here: Zen Maru draws it
+at 922 and M PLUS at 1000, so taking it from M PLUS would make it wider, not
+narrower. Nothing in the two faces the companion already carries draws a
+Latin-width ellipsis, and the fix is a third face or different copy, not this
+script. The web has neither problem once its unicode-range covers both
+characters, because its Latin face is the system's.
+
+The glyphs are M PLUS Rounded 1c's, the companion's other rounded face, at the
 two weights body text is set in. The face takes Zen Maru's line metrics, so a
-line with a dash in it is as tall as a line without, and an underline runs
+line with one in it is as tall as a line without, and an underline runs
 straight through it.
 
 Run it with `uv run scripts/gen_latin_dash.py`, which brings fontTools, and
@@ -47,7 +59,13 @@ SHA256 = {
     "Regular": "b75708b53e45b06d17d470aeeca5b766e3d1b3999f03f13ec4eb863ca846c14c",
     "Bold": "c358630584e8e2d8fbd6121d0f4693255ffef6d1e6d4f3441fd6e5a963a11f9e",
 }
+# The characters this face stands in for, and only these: anything more would
+# take that character from Zen Maru in every line of body text. Each one is
+# here because Zen Maru's is the full-width Japanese form, and M PLUS's is
+# measurably narrower — check the advance before adding a third.
 EM_DASH = 0x2014
+MINUS = 0x2212
+HELD = {EM_DASH, MINUS}
 
 # Zen Maru Gothic's own line metrics, at the weight each face stands in for.
 # Flutter lays a line out to the tallest ascent and the deepest descent among
@@ -91,9 +109,9 @@ def cut(data: bytes, style: str) -> TTFont:
     font = TTFont(BytesIO(data), recalcTimestamp=False)
     options = subset.Options()
     options.name_IDs = NAME_IDS
-    options.layout_features = []  # one glyph: nothing to substitute or kern
+    options.layout_features = []  # a glyph each: nothing to substitute or kern
     subsetter = subset.Subsetter(options)
-    subsetter.populate(unicodes=[EM_DASH])
+    subsetter.populate(unicodes=sorted(HELD))
     subsetter.subset(font)
 
     for table, values in ZEN_MARU[style].items():
@@ -109,11 +127,12 @@ def cut(data: bytes, style: str) -> TTFont:
         elif record.nameID == 4:
             record.string = f"{FAMILY} {style}"
 
-    # Anything more than the dash would take that character from Zen Maru
-    # in every line of body text.
     held = set(font.getBestCmap())
-    if held != {EM_DASH}:
-        sys.exit(f"{style}: the face holds {sorted(hex(c) for c in held)}, not the em dash alone")
+    if held != HELD:
+        sys.exit(
+            f"{style}: the face holds {sorted(hex(c) for c in held)}, "
+            f"not {sorted(hex(c) for c in HELD)}"
+        )
     return font
 
 
