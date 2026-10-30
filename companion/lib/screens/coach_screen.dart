@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/coach_story.dart';
 import '../services/local_timezone.dart';
@@ -481,7 +482,7 @@ class _CoachScreenState extends State<CoachScreen> {
           child: EmptyNote(
             icon: Icons.cloud_off_rounded,
             title: 'Chat needs a newer server',
-            body: 'Update the LifePete server to chat with your coach here.',
+            body: 'Update the $appName server to chat with your coach here.',
           ),
         ),
       );
