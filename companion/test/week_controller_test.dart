@@ -117,6 +117,27 @@ void main() {
       timer.dispose();
     });
 
+    test('asks for a few ledgers at a time, not one per project at once',
+        () async {
+      // One per project at once is a burst the API answered with "no
+      // available instance" (#376): this runs on every timer change, and a
+      // ledger is its slowest read.
+      final api = _CountingLedgerApi();
+      final projects = [
+        for (var i = 0; i < 9; i++)
+          Project(id: 'p$i', name: 'P$i', color: const Color(0xFF4F8FD6), kind: 'side_project'),
+      ];
+      final timer = TimerController(api)..projects = projects;
+      final week = WeekController(api, timer);
+
+      await week.refresh();
+
+      expect(api.peak, lessThanOrEqualTo(3), reason: 'no more than a few in flight');
+      expect(api.calls, projects.length, reason: 'every project is still read');
+      expect(week.weeks, hasLength(projects.length));
+      timer.dispose();
+    });
+
     test('is complete only once a reload has covered the projects', () async {
       final api = _SlowLedgerApi();
       final timer = TimerController(api);
@@ -131,6 +152,24 @@ void main() {
       timer.dispose();
     });
   });
+}
+
+/// Counts how many ledger reads are in flight at once.
+class _CountingLedgerApi extends ApiClient {
+  _CountingLedgerApi() : super(baseUrl: 'http://test');
+  var calls = 0;
+  var inFlight = 0;
+  var peak = 0;
+
+  @override
+  Future<Map<String, dynamic>> getLedger(String projectId, {int weeks = 1, String? timezone}) async {
+    calls++;
+    inFlight++;
+    if (inFlight > peak) peak = inFlight;
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    inFlight--;
+    return ledger(worked: 1);
+  }
 }
 
 class _SlowLedgerApi extends ApiClient {
