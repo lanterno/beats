@@ -3,6 +3,8 @@
 This Terraform configuration deploys:
 - **Backend API**: FastAPI application on Cloud Run (accessible at `api.lifepete.com`)
 - **DNS**: the Cloudflare records for both hostnames
+- **Monitoring**: uptime checks on both hostnames, log-based metrics and a
+  dashboard — see [Monitoring](#monitoring)
 
 It does **not** deploy the frontend. The SPA at `lifepete.com` is served by
 Firebase Hosting and shipped by `.github/workflows/ui.yml` — see
@@ -20,10 +22,11 @@ The Terraform configuration is organized into logical modules for better maintai
 - **`providers.tf`** - Provider configurations (Google Cloud, Cloudflare)
 - **`locals.tf`** - Local values and computed variables
 - **`variables.tf`** - Input variable definitions
-- **`apis.tf`** - GCP API enablement (Cloud Build, Artifact Registry, Storage, Compute)
+- **`apis.tf`** - GCP API enablement (Cloud Build, Artifact Registry, Storage, Secret Manager, Monitoring, Logging)
 - **`cloudbuild.tf`** - Cloud Build resources (service account, IAM, artifact registry, build triggers)
 - **`cloudrun.tf`** - Cloud Run service, domain mapping, and IAM policies
 - **`cloudflare.tf`** - Cloudflare DNS record management (optional)
+- **`monitoring.tf`** - Uptime checks, log-based metrics and the dashboard
 - **`outputs.tf`** - Output values for accessing created resources
 
 This modular structure makes it easier to:
@@ -231,6 +234,43 @@ gcloud builds log $BUILD_ID --project=beats-476914 --stream
 1. Go to [Cloud Build Triggers](https://console.cloud.google.com/cloud-build/triggers)
 2. Find your trigger (`beats-api-build`)
 3. Click "Run" → Select branch → "Run"
+
+## Monitoring
+
+[`monitoring.tf`](monitoring.tf) watches the live deployment from Cloud
+Monitoring. Nothing in it pages anyone: it is read in the Cloud console of
+project `beats-476914`.
+
+- **Uptime checks** (Monitoring → Uptime checks). `https://api.lifepete.com/health`
+  must answer `"status": "healthy"`, and `https://lifepete.com/` must hold the
+  `<div id="root">` React mounts into. Each runs from Google's six probe
+  locations every five minutes, and a failure is logged with its reason.
+  `/health` does not touch MongoDB, so a pass says the API is up, not that its
+  database is.
+- **Log-based metrics** (Logging → Log-based metrics), built from Cloud Run's
+  own request log, so the API logs nothing for them. They count from the apply
+  that created them; nothing is backfilled.
+  - `beats-api/rejections`: 401, 403 and 429 under `/api/`, by status. Paths
+    outside `/api/` are left out: nearly all of their 401s are scanners probing
+    for files.
+  - `beats-api/public_route_requests`: every request to the routes that need no
+    session (`/api/auth`, `/api/auth/sso`, `/api/reports`,
+    `/api/device/pair/exchange`), by route and status. A guessed report link or
+    pairing code fails with 404, not 401, so guessing shows here.
+- **Dashboard** (Monitoring → Dashboards → *beats-api and lifepete.com*):
+  requests per second by response class, the share answered 5xx, latency
+  p50/p95/p99, instances against `max_instances`, cold-start latency, the
+  uptime checks, and both log-based metrics.
+
+To find who is behind a spike, query the request log in Logs Explorer, and
+read `httpRequest.remoteIp`, the caller's address:
+
+```
+resource.type="cloud_run_revision"
+resource.labels.service_name="beats-api"
+log_id("run.googleapis.com/requests")
+httpRequest.status=401
+```
 
 ---
 
