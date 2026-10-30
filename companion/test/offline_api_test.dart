@@ -12,7 +12,9 @@ import 'package:beats_companion/services/local_store.dart';
 import 'package:beats_companion/services/offline_api.dart';
 import 'package:beats_companion/services/offline_queue.dart';
 import 'package:beats_companion/services/offline_view.dart';
+import 'package:beats_companion/state/timer_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 14 Oct 2026 at [hhmm] UTC.
 String at(String hhmm) => '2026-10-14T$hhmm:00.000Z';
@@ -421,5 +423,95 @@ void main() {
 
     await api.drain();
     expect(server.applied, ['start p1 09:00']);
+  });
+
+  group('the timer over it', () {
+    late TimerController timer;
+    final today = DateTime.utc(2026, 10, 14);
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      timer = TimerController(api);
+    });
+    tearDown(() => timer.dispose());
+
+    /// The window has shown the timer and today's sessions, then lost the
+    /// network.
+    Future<void> offline() async {
+      await timer.refresh();
+      await api.getBeatsOn(today);
+      server.down = true;
+    }
+
+    test('undoing a stop that has not synced takes it back from the queue', () async {
+      server.elsewhere('p1', at('09:00'));
+      await offline();
+      await timer.stop(at: time('11:00'));
+      expect(timer.running, isFalse);
+
+      await timer.undoStop();
+
+      expect(timer.current?.id, 'p1');
+      expect(timer.since, time('09:00'));
+      expect(await store.queued(), isEmpty);
+      server.down = false;
+      await api.drain();
+      expect(server.applied, isEmpty);
+    });
+
+    test('undoing a stop that may already have reached the server says so, and the stop syncs', () async {
+      server.elsewhere('p1', at('09:00'));
+      await timer.refresh();
+      server.loseAnswers = true;
+      await timer.stop(at: time('11:00'));
+
+      await expectLater(timer.undoStop(), throwsA(isA<NotWhileOffline>()));
+
+      server.loseAnswers = false;
+      await api.drain();
+      expect(server.applied, ['stop p1 11:00']);
+      expect(server.running, isNull);
+    });
+
+    test('moving the start of a timer that has not synced rewrites the queued start', () async {
+      await offline();
+      await timer.startProject(timer.projectById('p1')!, at: time('09:00'));
+
+      await timer.moveStart(time('08:30'));
+
+      expect(timer.since, time('08:30'));
+      expect(api.status.pending, 1);
+      server.down = false;
+      await api.drain();
+      expect(server.applied, ['start p1 08:30']);
+    });
+
+    test('moving the start of a synced timer offline queues an edit, and a stop after it names the moved start',
+        () async {
+      final b = server.elsewhere('p1', at('09:00'));
+      await offline();
+
+      await timer.moveStart(time('08:30'));
+      expect(timer.since, time('08:30'));
+      await timer.stop(at: time('11:00'));
+
+      server.down = false;
+      await api.drain();
+      expect(server.applied, ['edit ${b['id']} 08:30-running', 'stop p1 11:00']);
+    });
+
+    test('a start refused on replay gives way to the timer started elsewhere', () async {
+      await offline();
+      await timer.startProject(timer.projectById('p1')!, at: time('09:00'));
+      expect(timer.current?.id, 'p1');
+
+      server.elsewhere('p2', at('09:30'));
+      server.down = false;
+      await api.drain();
+      await settle();
+
+      expect(timer.current?.id, 'p2');
+      expect(timer.sync?.refused.single.kind, WriteKind.start);
+    });
   });
 }
