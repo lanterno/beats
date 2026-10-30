@@ -18,5 +18,10 @@ resource "cloudflare_dns_record" "api_cname" {
   type    = "CNAME"
   content = "ghs.googlehosted.com"
   ttl     = var.dns_ttl
-  proxied = false # Must be DNS-only for Cloud Run domain mapping (both Cloudflare and Cloud Run terminate SSL)
+  # Must be DNS-only for Cloud Run domain mapping (both Cloudflare and Cloud Run
+  # terminate SSL). It is also what FORWARDED_ALLOW_IPS in cloudrun.tf assumes:
+  # Cloud Run's front end is the only proxy, so the right-most X-Forwarded-For
+  # entry is the visitor. Proxied, it would be a Cloudflare edge, and every
+  # visitor behind one edge would share a rate-limit bucket.
+  proxied = false
 }

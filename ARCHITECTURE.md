@@ -274,6 +274,7 @@ environment variable of the same name:
 | `DB_DSN` | `mongodb://localhost:27017` | MongoDB connection string |
 | `DB_NAME` | `beats` | Database name |
 | `JWT_SECRET` | none: required | JWT signing key. At least 32 bytes, or the API refuses to start (`openssl rand -base64 48`) |
+| `FORWARDED_ALLOW_IPS` | none: required | The proxies whose `X-Forwarded-For` is believed, as IP addresses and CIDR networks; never `*`. The rate limits key on the right-most entry none of them wrote. Cloud Run: `169.254.0.0/16` (terraform); self-hosted: nginx's fixed address (`compose.selfhost.yml`); local: `127.0.0.1` |
 | `WEBAUTHN_RP_ID` | `localhost` | WebAuthn relying party ID; every passkey is bound to it |
 | `WEBAUTHN_RP_NAME` | the product name (`beats/brand.py`) | The name in the passkey prompt; display only |
 | `WEBAUTHN_ORIGIN` | `http://localhost:8080` | WebAuthn origin |
