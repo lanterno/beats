@@ -1,21 +1,15 @@
 PODS:
   - FlutterMacOS (1.0.0)
-  - system_tray (0.0.1):
-    - FlutterMacOS
 
 DEPENDENCIES:
   - FlutterMacOS (from `Flutter/ephemeral`)
-  - system_tray (from `Flutter/ephemeral/.symlinks/plugins/system_tray/macos`)
 
 EXTERNAL SOURCES:
   FlutterMacOS:
     :path: Flutter/ephemeral
-  system_tray:
-    :path: Flutter/ephemeral/.symlinks/plugins/system_tray/macos
 
 SPEC CHECKSUMS:
   FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
-  system_tray: 53f0cdb020c3fbee711d3fe45ae7ce730e033d2b
 
 PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
 
