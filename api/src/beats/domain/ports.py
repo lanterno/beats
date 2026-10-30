@@ -131,6 +131,11 @@ class ProjectBeatReader(Protocol):
     """One project's beats. All `ProjectService` asks of beat storage."""
 
     async def list_by_project(self, project_id: str) -> list[Beat]: ...
+    # Hours per local calendar day, by the day each beat started, a running
+    # one counted up to now — `worked_by_local_day` as a storage question, so
+    # the contract reads (whose balance needs every day since the contract
+    # started) don't fetch and validate a project's whole history per request.
+    async def worked_by_day(self, project_id: str, tz: ZoneInfo) -> dict[date, float]: ...
 
 
 class ProjectReader(Protocol):

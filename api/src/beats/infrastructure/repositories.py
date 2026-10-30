@@ -60,6 +60,7 @@ from beats.domain.models import (
     WeeklyDigest,
     WeeklyPlan,
 )
+from beats.domain.utils import local_date
 
 
 def serialize_from_document(doc: dict[str, Any]) -> dict[str, Any]:
@@ -225,6 +226,7 @@ class BeatRepository(Protocol):
         self, project_id: str | None = None, date_filter: date | None = None
     ) -> builtins.list[Beat]: ...
     async def list_by_project(self, project_id: str) -> builtins.list[Beat]: ...
+    async def worked_by_day(self, project_id: str, tz: ZoneInfo) -> dict[date, float]: ...
     async def list_grouped_by_project_ids(
         self, project_ids: builtins.list[str]
     ) -> dict[str, builtins.list[Beat]]: ...
@@ -319,6 +321,44 @@ class MongoBeatRepository(MongoStore[Beat], BeatRepository):
 
     async def list_by_project(self, project_id: str) -> builtins.list[Beat]:
         return await self._find_many({"project_id": project_id})
+
+    async def worked_by_day(self, project_id: str, tz: ZoneInfo) -> dict[date, float]:
+        """Hours per local calendar day — `worked_by_local_day`, summed by
+        Mongo instead of in Python.
+
+        The ledger's balance needs every day since the contract started, and
+        reading it as raw beats meant fetching and validating the project's
+        whole history on every request — megabytes and thousands of model
+        validations that grew with the account's age, which is what ran the
+        API out of instances. The database groups finished beats by the
+        local date each one *started* (Mongo and `zoneinfo` read the same
+        IANA database, so `tz.key` names the same rules on both sides); the
+        running beat, which the week counts up to now, is read alone.
+        `test_worked_by_day_matches_the_python_fold` pins the two shapes
+        against each other across a DST change and a midnight crossing.
+        """
+        pipeline = [
+            {"$match": self._q({"project_id": project_id, "end": {"$ne": None}})},
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "date": "$start",
+                            "format": "%Y-%m-%d",
+                            "timezone": tz.key,
+                        }
+                    },
+                    "ms": {"$sum": {"$subtract": ["$end", "$start"]}},
+                }
+            },
+        ]
+        hours: dict[date, float] = {}
+        async for row in await self.collection.aggregate(pipeline):
+            hours[date.fromisoformat(row["_id"])] = row["ms"] / 3_600_000
+        for beat in await self._find_many({"project_id": project_id, "end": None}):
+            day = local_date(beat.start, tz)
+            hours[day] = hours.get(day, 0.0) + beat.duration.total_seconds() / 3600
+        return hours
 
     async def list_grouped_by_project_ids(
         self, project_ids: builtins.list[str]

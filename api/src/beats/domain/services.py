@@ -808,17 +808,29 @@ class ContractService:
 
     async def week(self, project_id: str, week_of: date | None, tz: ZoneInfo) -> ContractWeek:
         """The week starting `week_of` (a Monday; None for the current week in
-        `tz`) against the contract, with the balance as of today in `tz`."""
+        `tz`) against the contract, with the balance as of today in `tz`.
+
+        The worked map is the storage's day aggregation (`worked_by_day`),
+        not a read of every beat: the balance needs every day since the
+        contract started, and fetching the whole history per request is what
+        ran the API out of instances."""
         project = await self._day_job(project_id)
-        beats = await self.beat_repo.list_by_project(project_id)
-        return await self.week_for(project, beats, week_of, tz)
+        worked = await self.beat_repo.worked_by_day(project_id, tz)
+        return await self._week_for_worked(project, worked, week_of, tz)
 
     async def week_for(
         self, project: Project, beats: list[Beat], week_of: date | None, tz: ZoneInfo
     ) -> ContractWeek:
         """`week` for a project whose beats the caller already holds — the
         project index loads every listed project's beats in one query and
-        must not load them again per day job.
+        must not load them again per day job."""
+        return await self._week_for_worked(project, worked_by_local_day(beats, tz), week_of, tz)
+
+    async def _week_for_worked(
+        self, project: Project, worked: dict[date, float], week_of: date | None, tz: ZoneInfo
+    ) -> ContractWeek:
+        """The week against an already-built worked map — `week_for`'s body,
+        shared with the route path, whose map the storage aggregates.
 
         One absence read, one adjustment read and one calendar build per
         call, over the union of the week and the contract's life so far: the
@@ -843,7 +855,6 @@ class ContractService:
             project.id, contract.starts_on, end
         )
         holidays = contract_holidays(contract, start, end)
-        worked = worked_by_local_day(beats, tz)
         return self._assemble(contract, absences, holidays, worked, adjustments, week_of, today)
 
     async def ledger(self, project_id: str, weeks: int, tz: ZoneInfo) -> Ledger:
@@ -852,16 +863,18 @@ class ContractService:
         terms that make it — the project page's one read for every week
         figure (`domain/ledger.py`).
 
-        One beats read, and on a day job with a contract one absence read,
-        one adjustment read and one calendar build, over the union of the
-        weeks shown and the contract's life so far: each week's closing
-        balance needs every day since the contract started. A project of another kind, or a day job
-        without a contract, gets its goal and its hours and nothing is read
-        for a contract. A region the calendar library has stopped knowing is
-        this project's own error (400), as it is on the week route.
+        One worked-map read — the storage's day aggregation, never the raw
+        beats, whose fetch grew with the project's whole history — and on a
+        day job with a contract one absence read, one adjustment read and one
+        calendar build, over the union of the weeks shown and the contract's
+        life so far: each week's closing balance needs every day since the
+        contract started. A project of another kind, or a day job without a
+        contract, gets its goal and its hours and nothing is read for a
+        contract. A region the calendar library has stopped knowing is this
+        project's own error (400), as it is on the week route.
         """
         project = await self.project_repo.get_by_id(project_id)
-        beats = await self.beat_repo.list_by_project(project_id)
+        worked = await self.beat_repo.worked_by_day(project_id, tz)
         today = self._now(tz).date()
         monday = today - timedelta(days=today.weekday())
         contract = project.contract if project.kind is ProjectKind.DAY_JOB else None
@@ -876,7 +889,6 @@ class ContractService:
                 project.id, contract.starts_on, end
             )
             holidays = contract_holidays(contract, start, end)
-        worked = worked_by_local_day(beats, tz)
         return assemble_ledger(
             project, contract, absences, holidays, worked, adjustments, today, weeks
         )
@@ -888,13 +900,14 @@ class ContractService:
         runs through yesterday, and a running timer counts up to now on the
         day it started, as on the ledger.
 
-        One beats read, one absence read, one adjustment read and one
-        calendar build, over the contract's life through the sheet's last
-        day: every close needs every day since the contract started, not
-        only the month's. A company holiday goes by `COMPANY_HOLIDAY`, not
-        the name typed for it. 409 on a project that is not a day job
-        (NOT_A_DAY_JOB), without a contract (NO_CONTRACT), or for a month
-        with no finished day inside the contract (OUTSIDE_CONTRACT).
+        One worked-map read (the storage's day aggregation), one absence
+        read, one adjustment read and one calendar build, over the contract's
+        life through the sheet's last day: every close needs every day since
+        the contract started, not only the month's. A company holiday goes by
+        `COMPANY_HOLIDAY`, not the name typed for it. 409 on a project that
+        is not a day job (NOT_A_DAY_JOB), without a contract (NO_CONTRACT),
+        or for a month with no finished day inside the contract
+        (OUTSIDE_CONTRACT).
         """
         project = await self._day_job(project_id)
         contract = project.contract
@@ -904,7 +917,7 @@ class ContractService:
         if span is None:
             raise MonthOutsideContract()
         first, last = span
-        beats = await self.beat_repo.list_by_project(project_id)
+        worked = await self.beat_repo.worked_by_day(project_id, tz)
         absences = await self.absence_repo.list_by_project(project_id, contract.starts_on, last)
         adjustments = await self.adjustment_repo.list_by_project(
             project_id, contract.starts_on, last
@@ -912,7 +925,6 @@ class ContractService:
         holidays = contract_holidays(
             contract, contract.starts_on, last, company_name=COMPANY_HOLIDAY
         )
-        worked = worked_by_local_day(beats, tz)
         return assemble_timesheet(contract, absences, holidays, worked, adjustments, first, last)
 
     async def weeks_for(
