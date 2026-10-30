@@ -2008,7 +2008,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/organisations/join/{token}": {
+    "/api/organisations/join": {
         parameters: {
             query?: never;
             header?: never;
@@ -2018,21 +2018,25 @@ export interface paths {
         /**
          * Preview Invite
          * @description What an invite token opens: the organisation's name and the role it
-         *     gives. 404 for a token that is unknown or addressed to another address
+         *     gives. The token rides the X-Invite-Token header, not the path, so an
+         *     unused invitation never lands in request logs (the `/join/<token>` link
+         *     people share is the SPA's route; only this call carries it). 404 for a
+         *     token that is missing, unknown or addressed to another address
          *     (INVITE_NOT_FOUND), 410 for one that was real and is closed
          *     (INVITE_EXPIRED).
          */
-        get: operations["preview_invite_api_organisations_join__token__get"];
+        get: operations["preview_invite_api_organisations_join_get"];
         put?: never;
         /**
          * Join
-         * @description Take an invite. Joining makes one membership document and nothing
+         * @description Take an invite — the token in the body, never the path (see
+         *     `preview_invite`). Joining makes one membership document and nothing
          *     else: no second account, no moved data (rule 1). A link with an approval
          *     step answers `pending` and leaves a request for an admin. 409 when
          *     already a member (ALREADY_A_MEMBER) or already waiting
          *     (JOIN_REQUEST_PENDING).
          */
-        post: operations["join_api_organisations_join__token__post"];
+        post: operations["join_api_organisations_join_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3413,7 +3417,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/reports/{token}": {
+    "/api/reports": {
         parameters: {
             query?: never;
             header?: never;
@@ -3428,8 +3432,13 @@ export interface paths {
          *     runs (`device_may_reach` in `server.py`). Rate-limited less against
          *     guessing — 32 bytes are not guessed — than against a leaked link being
          *     hammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.
+         *
+         *     The token rides the X-Report-Token header, not the path: Cloud Run's
+         *     request log keeps every requestUrl for 30 days, and a URL that *is* the
+         *     authorisation must not be readable there (the `/r/<token>` link people
+         *     share is the SPA's route; only this call changes).
          */
-        get: operations["read_report_api_reports__token__get"];
+        get: operations["read_report_api_reports_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5386,6 +5395,16 @@ export interface components {
          * @enum {string}
          */
         JoinDecision: "approved" | "declined";
+        /**
+         * JoinRequest
+         * @description The invite token, in the body rather than the path: request logs keep
+         *     every URL for 30 days, and an unused invitation must not be readable
+         *     there. The `/join/<token>` link people share is the SPA's own route.
+         */
+        JoinRequest: {
+            /** Token */
+            token: string;
+        };
         /**
          * JoinRequestResponse
          * @description A join request with the role approving it grants — the invite's, so
@@ -10288,13 +10307,13 @@ export interface operations {
             };
         };
     };
-    preview_invite_api_organisations_join__token__get: {
+    preview_invite_api_organisations_join_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                token: string;
+            header?: {
+                "X-Invite-Token"?: string | null;
             };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -10326,16 +10345,18 @@ export interface operations {
             };
         };
     };
-    join_api_organisations_join__token__post: {
+    join_api_organisations_join_post: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                token: string;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -13333,13 +13354,13 @@ export interface operations {
             };
         };
     };
-    read_report_api_reports__token__get: {
+    read_report_api_reports_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                token: string;
+            header?: {
+                "X-Report-Token"?: string | null;
             };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

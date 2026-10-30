@@ -3893,6 +3893,20 @@
         "title": "JoinDecision",
         "type": "string"
       },
+      "JoinRequest": {
+        "description": "The invite token, in the body rather than the path: request logs keep\nevery URL for 30 days, and an unused invitation must not be readable\nthere. The `/join/<token>` link people share is the SPA's own route.",
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "JoinRequest",
+        "type": "object"
+      },
       "JoinRequestResponse": {
         "description": "A join request with the role approving it grants \u2014 the invite's, so\nthe admin decides knowing what they are handing over.",
         "properties": {
@@ -12365,18 +12379,25 @@
         ]
       }
     },
-    "/api/organisations/join/{token}": {
+    "/api/organisations/join": {
       "get": {
-        "description": "What an invite token opens: the organisation's name and the role it\ngives. 404 for a token that is unknown or addressed to another address\n(INVITE_NOT_FOUND), 410 for one that was real and is closed\n(INVITE_EXPIRED).",
-        "operationId": "preview_invite_api_organisations_join__token__get",
+        "description": "What an invite token opens: the organisation's name and the role it\ngives. The token rides the X-Invite-Token header, not the path, so an\nunused invitation never lands in request logs (the `/join/<token>` link\npeople share is the SPA's route; only this call carries it). 404 for a\ntoken that is missing, unknown or addressed to another address\n(INVITE_NOT_FOUND), 410 for one that was real and is closed\n(INVITE_EXPIRED).",
+        "operationId": "preview_invite_api_organisations_join_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "token",
-            "required": true,
+            "in": "header",
+            "name": "X-Invite-Token",
+            "required": false,
             "schema": {
-              "title": "Token",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Invite-Token"
             }
           }
         ],
@@ -12411,19 +12432,18 @@
         ]
       },
       "post": {
-        "description": "Take an invite. Joining makes one membership document and nothing\nelse: no second account, no moved data (rule 1). A link with an approval\nstep answers `pending` and leaves a request for an admin. 409 when\nalready a member (ALREADY_A_MEMBER) or already waiting\n(JOIN_REQUEST_PENDING).",
-        "operationId": "join_api_organisations_join__token__post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "token",
-            "required": true,
-            "schema": {
-              "title": "Token",
-              "type": "string"
+        "description": "Take an invite \u2014 the token in the body, never the path (see\n`preview_invite`). Joining makes one membership document and nothing\nelse: no second account, no moved data (rule 1). A link with an approval\nstep answers `pending` and leaves a request for an admin. 409 when\nalready a member (ALREADY_A_MEMBER) or already waiting\n(JOIN_REQUEST_PENDING).",
+        "operationId": "join_api_organisations_join_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRequest"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -16824,18 +16844,25 @@
         ]
       }
     },
-    "/api/reports/{token}": {
+    "/api/reports": {
       "get": {
-        "description": "One client's billable work over a report link's frozen range.\n\nPublic: no bearer token, and a device token is still refused before this\nruns (`device_may_reach` in `server.py`). Rate-limited less against\nguessing \u2014 32 bytes are not guessed \u2014 than against a leaked link being\nhammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.",
-        "operationId": "read_report_api_reports__token__get",
+        "description": "One client's billable work over a report link's frozen range.\n\nPublic: no bearer token, and a device token is still refused before this\nruns (`device_may_reach` in `server.py`). Rate-limited less against\nguessing \u2014 32 bytes are not guessed \u2014 than against a leaked link being\nhammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.\n\nThe token rides the X-Report-Token header, not the path: Cloud Run's\nrequest log keeps every requestUrl for 30 days, and a URL that *is* the\nauthorisation must not be readable there (the `/r/<token>` link people\nshare is the SPA's route; only this call changes).",
+        "operationId": "read_report_api_reports_get",
         "parameters": [
           {
-            "in": "path",
-            "name": "token",
-            "required": true,
+            "in": "header",
+            "name": "X-Report-Token",
+            "required": false,
             "schema": {
-              "title": "Token",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Report-Token"
             }
           }
         ],
