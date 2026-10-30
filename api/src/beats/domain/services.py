@@ -374,6 +374,17 @@ class BeatService:
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        elif beat.id is not None:
+            # Writing end: null reopens the beat, so it must refuse while
+            # another runs, exactly as a start does: two running timers is
+            # the state nothing downstream is written for. Editing the
+            # running beat itself stays allowed.
+            active = await self.beat_repo.get_active()
+            if active is not None and active.id != beat.id:
+                name: str | None = None
+                if self.projects is not None:
+                    name = (await self.projects.get_by_id(active.project_id)).name
+                raise TimerAlreadyRunning(project_name=name, beat=active.model_dump(mode="json"))
         stored: Beat | None = None
         if expected is not None and beat.id is not None:
             stored = await self.beat_repo.get_by_id(beat.id)
