@@ -150,8 +150,49 @@ extension SkyContext on BuildContext {
   SkyPalette get sky => Theme.of(this).extension<SkyPalette>()!;
 }
 
+/// The family that holds the em dash and nothing else: M PLUS Rounded 1c's,
+/// cut out by `scripts/gen_latin_dash.py` and declared in pubspec.yaml.
+///
+/// Zen Maru Gothic draws the em dash as the full-width Japanese bar, a
+/// hairline a whole character wide that sits above the hyphen and touches the
+/// words either side; its en dash is already a Latin one. Flutter has no
+/// `unicode-range`, but it falls back per character, so this family goes first
+/// and Zen Maru behind it: every em dash comes from here, whether it is in a
+/// string in this app or in a brief, a note or a name from the API, and every
+/// other character stays Zen Maru's. The web's "Latin Dash" face does the same
+/// in `ui/client/global.css`. M PLUS Rounded 1c's own dashes are Latin, so the
+/// display and figure styles need nothing.
+const _latinDash = 'LatinDash';
+
+TextStyle _withLatinDash(TextStyle style) => style.copyWith(
+      fontFamily: _latinDash,
+      fontFamilyFallback: [style.fontFamily!, ...?style.fontFamilyFallback],
+    );
+
+TextTheme _withLatinDashes(TextTheme t) {
+  TextStyle? d(TextStyle? s) => s == null ? null : _withLatinDash(s);
+  return t.copyWith(
+    displayLarge: d(t.displayLarge),
+    displayMedium: d(t.displayMedium),
+    displaySmall: d(t.displaySmall),
+    headlineLarge: d(t.headlineLarge),
+    headlineMedium: d(t.headlineMedium),
+    headlineSmall: d(t.headlineSmall),
+    titleLarge: d(t.titleLarge),
+    titleMedium: d(t.titleMedium),
+    titleSmall: d(t.titleSmall),
+    bodyLarge: d(t.bodyLarge),
+    bodyMedium: d(t.bodyMedium),
+    bodySmall: d(t.bodySmall),
+    labelLarge: d(t.labelLarge),
+    labelMedium: d(t.labelMedium),
+    labelSmall: d(t.labelSmall),
+  );
+}
+
 /// The two rounded faces the web app uses: M PLUS Rounded 1c for display
-/// figures and every column of digits, Zen Maru Gothic for everything read.
+/// figures and every column of digits, Zen Maru Gothic for everything read,
+/// its em dash taken from the LatinDash family above.
 /// Styles carry no colour, so text takes the ink of the hour it is drawn in.
 class SkyType {
   static TextStyle display(double size, {FontWeight weight = FontWeight.w800}) =>
@@ -167,12 +208,12 @@ class SkyType {
       );
 
   static TextStyle body(double size, {FontWeight weight = FontWeight.w400, double height = 1.5}) =>
-      GoogleFonts.zenMaruGothic(fontSize: size, fontWeight: weight, height: height);
+      _withLatinDash(GoogleFonts.zenMaruGothic(fontSize: size, fontWeight: weight, height: height));
 }
 
 ThemeData buildSkyTheme(SkyPalette p, Brightness brightness) {
   final base = ThemeData(brightness: brightness, useMaterial3: true);
-  final textTheme = GoogleFonts.zenMaruGothicTextTheme(base.textTheme).apply(
+  final textTheme = _withLatinDashes(GoogleFonts.zenMaruGothicTextTheme(base.textTheme)).apply(
     bodyColor: p.ink,
     displayColor: p.ink,
   );
