@@ -7,6 +7,7 @@
 import { endSession, sessionToken } from "@/shared/session";
 import { config } from "../config";
 import {
+	countPending,
 	enqueueMutation,
 	type HttpMethod,
 	newClientId,
@@ -312,6 +313,13 @@ export interface MutateResult<T> {
  * Perform a mutation with offline queueing + idempotency.
  *
  * - Attaches `X-Client-Id` so the server can de-dupe replays.
+ * - **Goes straight out only when nothing is waiting ahead of it.** With a
+ *   queue behind it, a write sent now lands before writes made earlier — a
+ *   new start before a queued stop, an edit before the create it edits — and
+ *   the API sees the day in an order nobody made it in. So it joins the back
+ *   of the queue instead and the sync engine, which replays in order one at a
+ *   time, sends it in its turn. This is the companion's rule 6
+ *   (docs/companion-offline.md), which the web was missing (#376).
  * - On a TypeError (network failure) or navigator.onLine === false, writes the
  *   mutation to IndexedDB and returns `{status: "queued"}`. The sync engine
  *   drains the queue on reconnect.
@@ -328,6 +336,19 @@ export async function apiMutate<T>(
 
 	const headers: Record<string, string> = {};
 	if (idempotent) headers["X-Client-Id"] = clientId;
+
+	// Queued behind earlier writes, not raced past them. Only for a caller
+	// that would have queued on failure anyway: `queueOnFailure: false` asks
+	// for the answer now and gets to keep asking.
+	if (queueOnFailure && (await countPending()) > 0) {
+		try {
+			await enqueueMutation({ method, path, body, clientId });
+			return { status: "queued", clientId };
+		} catch {
+			// The queue could not take it. Sending is then better than
+			// losing it, even out of order.
+		}
+	}
 
 	try {
 		const data = await apiClient<T>(path, {

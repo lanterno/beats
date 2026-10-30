@@ -125,11 +125,37 @@ class SyncController {
 const controller = new SyncController();
 
 /**
+ * The 4xx answers that mean "ask again", not "never again".
+ *
+ * Everything else in the 4xx range is the server saying this write will
+ * never be applied, however many times it is sent. These four are not:
+ *
+ * - **401, 403** — the session expired or was refused while the write
+ *   waited. The write is still wanted; what needs mending is the sign-in.
+ * - **408, 429** — the server's own pace: too slow, or too fast.
+ *
+ * And one by code rather than status: a 409 `IDEMPOTENT_IN_PROGRESS` is the
+ * idempotency middleware saying the first copy of this very write is still
+ * being handled (api/src/beats/api/middleware/idempotency.py). Dropping it
+ * threw away the one answer that means "the write is landing, ask again in a
+ * moment" — and with it, silently, the write (#376). The companion's queue
+ * has made the same distinction since #372 (docs/companion-offline.md,
+ * rule 7).
+ */
+const RETRYABLE_STATUSES = new Set([401, 403, 408, 429]);
+
+function isRetryable(err: ApiError): boolean {
+	if (RETRYABLE_STATUSES.has(err.statusCode)) return true;
+	return err.statusCode === 409 && err.code === "IDEMPOTENT_IN_PROGRESS";
+}
+
+/**
  * Replay a queued mutation with "poison-aware" handling: if the
- * server returns a 4xx, the mutation is permanently dropped from
- * the queue (resolves successfully so drainPending removes it).
- * Network errors and 5xx still bubble up so the queue keeps the
- * mutation for the next reconnect.
+ * server returns a 4xx that will never succeed, the mutation is
+ * permanently dropped from the queue (resolves successfully so
+ * drainPending removes it). Network errors, 5xx and the retryable
+ * 4xx above still bubble up so the queue keeps the mutation for
+ * the next reconnect.
  *
  * Without this, a single poisoned mutation (validation against a
  * since-changed schema, a 404 for a deleted project, an
@@ -145,6 +171,7 @@ export async function replayPoisonAware(mutation: PendingMutation): Promise<void
 		await replayMutation(mutation);
 	} catch (err) {
 		if (err instanceof ApiError && err.statusCode >= 400 && err.statusCode < 500) {
+			if (isRetryable(err)) throw err;
 			// Server-confirmed permanent failure — log and drop. The
 			// alternative (keep retrying) would never succeed and
 			// would block the rest of the queue.
