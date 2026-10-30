@@ -853,15 +853,22 @@ class MongoPairingCodeRepository(PairingCodeRepository):
         self.collection = collection
 
     async def create(self, code: PairingCode) -> PairingCode:
-        data = serialize_to_document(code.model_dump(mode="json", exclude_none=True))
+        # The dates stay BSON dates (not the ISO strings `model_dump(mode=
+        # "json")` would make them): the TTL index only expires dates, and a
+        # string `expires_at` kept every code ever issued. Codes stored as
+        # strings before this are converted at startup
+        # (`migrations.date_pairing_codes`).
+        data = serialize_to_document(code.model_dump(exclude_none=True))
         result = await self.collection.insert_one(data)
         return PairingCode(**serialize_from_document({**data, "_id": result.inserted_id}))
 
     async def find_by_hash(self, code_hash: str) -> PairingCode | None:
+        # The TTL monitor runs about once a minute, hence the explicit expiry
+        # check. A date, since `$gt` matches only values of its own BSON type.
         doc = await self.collection.find_one(
             {
                 "code_hash": code_hash,
-                "expires_at": {"$gt": datetime.now(UTC).isoformat()},
+                "expires_at": {"$gt": datetime.now(UTC)},
             }
         )
         if not doc:
