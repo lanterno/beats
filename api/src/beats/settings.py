@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from beats.brand import APP_NAME
@@ -36,6 +36,10 @@ def _require_https(url: str, what: str) -> None:
 
 class OIDCProviderSettings(BaseModel):
     """One OpenID Connect provider people can sign in with."""
+
+    # Same reason as Settings below: a bad provider entry must not print the
+    # client secret it was read from.
+    model_config = ConfigDict(hide_input_in_errors=True)
 
     # Names the provider in URLs and on a linked identity. Changing it later
     # leaves existing links working (they are keyed on issuer and subject)
@@ -71,7 +75,20 @@ class OIDCProviderSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_env_file, env_file_encoding="utf-8", extra="ignore")
+    # `hide_input_in_errors` is why a failed start is safe to read. Settings()
+    # is built at import, so a missing or malformed setting raises before the
+    # app exists and the traceback is all a Cloud Run revision leaves behind.
+    # Without it pydantic appends `input_value=` to every error — for a missing
+    # field that is a shortened copy of the whole env mapping it read (the
+    # start of DB_DSN, the tail of JWT_SECRET), and for a JWT_SECRET under 32
+    # bytes it is the secret itself. The field name and the reason are enough
+    # to fix a deployment; the value never needs printing.
+    model_config = SettingsConfigDict(
+        env_file=_env_file,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        hide_input_in_errors=True,
+    )
 
     # Database settings
     db_dsn: str = Field(default="mongodb://localhost:27017", validation_alias="DB_DSN")
