@@ -20,6 +20,19 @@
 
 name: beats
 
+# The stack's internal network is pinned so the API can name the one proxy it
+# believes: nginx (`web`), at a fixed address, appends the address it saw to
+# X-Forwarded-For, and the rate limits key on that entry. Only nginx's address
+# is trusted, never the whole network: the network's gateway is the docker
+# host, and a request nginx receives through it (from the host, or a proxy on
+# it) must count as the gateway's, not as whatever the client wrote. Other
+# containers draw from the upper half, so none can take nginx's address. If
+# the subnet overlaps a network already on the host, `docker compose up` says
+# so; change all three together.
+x-network-subnet: &network-subnet 172.30.208.0/24
+x-network-dynamic-range: &network-dynamic-range 172.30.208.128/25
+x-web-address: &web-address 172.30.208.10
+
 services:
   db:
     image: mongo:9
@@ -68,6 +81,11 @@ services:
       # passkey, quietly.
       WEBAUTHN_RP_ID: ${BEATS_RP_ID:?set BEATS_RP_ID to the host name the browser sees}
       WEBAUTHN_ORIGIN: ${BEATS_ORIGIN:?set BEATS_ORIGIN to the origin the browser sees}
+
+      # The proxy whose X-Forwarded-For is believed: nginx, at its fixed
+      # address (top of this file). Set here, not in api/.env, because it is
+      # a fact of this topology, and it overrides the env file's value.
+      FORWARDED_ALLOW_IPS: *web-address
     networks: [beats]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
@@ -94,11 +112,18 @@ services:
       # The stack's one port. Same number inside and out, so
       # `http://localhost:6008` is the same URL in both worlds.
       - "6008:6008"
-    networks: [beats]
+    networks:
+      beats:
+        # The address the API believes X-Forwarded-For from (top of this file).
+        ipv4_address: *web-address
 
 networks:
   beats:
     name: beats
+    ipam:
+      config:
+        - subnet: *network-subnet
+          ip_range: *network-dynamic-range
 
 volumes:
   beats_mongo:
