@@ -71,7 +71,17 @@ class OIDCProviderSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_env_file, env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_env_file,
+        env_file_encoding="utf-8",
+        extra="ignore",
+        # A validation error here is printed by whatever failed to start —
+        # locally in a terminal, on Cloud Run into the revision's logs. With
+        # inputs shown, a missing field lists every other setting's value
+        # (`input_value={'DB_DSN': 'mongodb://…'}`), and a too-short
+        # JWT_SECRET is echoed whole.
+        hide_input_in_errors=True,
+    )
 
     # Database settings
     db_dsn: str = Field(default="mongodb://localhost:27017", validation_alias="DB_DSN")
