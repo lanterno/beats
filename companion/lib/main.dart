@@ -9,6 +9,7 @@ import 'popover/popover_app.dart';
 import 'services/api_client.dart';
 import 'services/notification_poller.dart';
 import 'services/notifications.dart';
+import 'services/offline_api.dart';
 import 'services/sample_api.dart';
 import 'services/status_menu.dart';
 import 'services/token_storage.dart';
@@ -152,7 +153,7 @@ class _AppShellState extends State<AppShell> {
       // A token without a server can't be used: pair again.
       if (token != null && apiUrl == null) token = null;
       if (token != null) {
-        _connect(ApiClient(baseUrl: apiUrl!, deviceToken: token));
+        _connect(OfflineApi(ApiClient(baseUrl: apiUrl!, deviceToken: token)));
         await _initNotifications();
       }
     } catch (_) {
@@ -268,9 +269,13 @@ class _AppShellState extends State<AppShell> {
     final token = await _storage.loadToken();
     // Pairing saved the server it paired with, so there is one.
     final apiUrl = (await _storage.loadApiUrl())!;
+    // What the device kept may be another pairing's, another account's even
+    // (a keychain wiped without unpairing): it starts empty.
+    final api = OfflineApi(ApiClient(baseUrl: apiUrl, deviceToken: token));
+    await api.forget();
     setState(() {
       _paired = true;
-      _connect(ApiClient(baseUrl: apiUrl, deviceToken: token));
+      _connect(api);
     });
     await _initNotifications();
   }
@@ -284,6 +289,8 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _onUnpaired() {
+    // The cache and the queue belong to the pairing that just ended.
+    if (_client case OfflineApi api) unawaited(api.forget());
     _sample = false;
     _poller?.stop();
     _poller = null;

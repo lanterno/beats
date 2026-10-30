@@ -8,6 +8,7 @@ import '../brand.dart';
 import '../screens/palette.dart';
 import '../screens/timer_actions.dart';
 import '../services/api_client.dart';
+import '../services/offline_api.dart';
 import '../services/time_format.dart';
 import '../services/token_storage.dart';
 import '../state/hour.dart';
@@ -57,7 +58,9 @@ class _PopoverAppState extends State<PopoverApp> {
     final token = await storage.loadToken();
     final apiUrl = await storage.loadApiUrl();
     if (token != null && apiUrl != null) {
-      final client = ApiClient(baseUrl: apiUrl, deviceToken: token);
+      // The window's store, the window's queue: a start or stop made here
+      // offline waits there, and the window replays it.
+      final client = OfflineApi(ApiClient(baseUrl: apiUrl, deviceToken: token), drains: false);
       final timer = TimerController(client)..start();
       timer.addListener(_onTimer);
       _timer = timer;
