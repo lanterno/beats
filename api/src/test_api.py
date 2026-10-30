@@ -7990,6 +7990,53 @@ class TestRateLimiting:
         )
         assert response.status_code == 429
 
+    # -------- whose address a limit counts --------
+
+    @staticmethod
+    def _through_cloud_run():
+        """Requests whose peer is Cloud Run's front end, as the uvicorn access log
+        shows it, a proxy .env.test trusts (as terraform does). Not entered as a
+        context manager: that would run the lifespan again, and its shutdown
+        would disconnect the session's database."""
+        from starlette.testclient import TestClient
+
+        from server import app
+
+        return TestClient(app, client=("169.254.169.126", 443))
+
+    def test_visitors_behind_the_proxy_get_a_bucket_each(self, client):
+        """Behind Cloud Run every request came from the front end's address, so
+        every visitor shared one bucket: one script could lock everyone out of
+        signing in. The limit counts per address the proxy appended."""
+        proxy = self._through_cloud_run()
+        first = {"X-Forwarded-For": "203.0.113.1"}
+        for _ in range(10):
+            assert proxy.get("/api/auth/login/options", headers=first).status_code == 200
+        assert proxy.get("/api/auth/login/options", headers=first).status_code == 429
+
+        second = {"X-Forwarded-For": "203.0.113.2"}
+        assert proxy.get("/api/auth/login/options", headers=second).status_code == 200
+
+    def test_a_visitor_cannot_write_itself_a_fresh_bucket(self, client):
+        """Entries left of the one the proxy appended are the client's own
+        words; a new one on every request must not reset its count."""
+        proxy = self._through_cloud_run()
+        for i in range(10):
+            spoofed = {"X-Forwarded-For": f"198.51.100.{i}, 203.0.113.1"}
+            proxy.get("/api/auth/login/options", headers=spoofed)
+
+        again = {"X-Forwarded-For": "198.51.100.99, 203.0.113.1"}
+        assert proxy.get("/api/auth/login/options", headers=again).status_code == 429
+
+    def test_a_peer_that_is_no_trusted_proxy_is_not_believed(self, client):
+        """Straight from a peer that is not a trusted proxy, X-Forwarded-For is
+        only the caller's claim: the limit counts the peer."""
+        for i in range(10):
+            client.get("/api/auth/login/options", headers={"X-Forwarded-For": f"198.51.100.{i}"})
+
+        claimed = {"X-Forwarded-For": "198.51.100.99"}
+        assert client.get("/api/auth/login/options", headers=claimed).status_code == 429
+
 
 class TestMultiUserIsolation:
     """Test that data is isolated between users."""
