@@ -321,16 +321,18 @@ npx firebase-tools deploy --only hosting
 
 ### DNS Configuration
 
-- **UI Domain**: `lifepete.com` → Automatically configured via Cloudflare DNS
-- **API Domain**: `api.lifepete.com` → Automatically configured via Cloudflare DNS
+- **API Domain**: `api.lifepete.com` → the CNAME Terraform manages in Cloudflare.
+- **UI Domain**: `lifepete.com` → Firebase Hosting's, not Terraform's. Set up
+  with the site, in the Firebase console.
 
-DNS records are automatically managed by Terraform using Cloudflare. See the Cloudflare DNS Management section below for setup instructions.
+See the Cloudflare DNS Management section below for the one record this
+configuration owns.
 
 See `../ui/README.md` for more detailed deployment instructions.
 
 ## Cloudflare DNS Management
 
-Terraform automatically manages Cloudflare DNS records for your custom domains. This eliminates the need to manually create CNAME and A records.
+Terraform manages the API subdomain's record in Cloudflare, so it is not created by hand. The apex belongs to Firebase Hosting.
 
 ### Setup
 
@@ -347,7 +349,6 @@ Terraform automatically manages Cloudflare DNS records for your custom domains. 
    ```hcl
    cloudflare_api_token  = "your-cloudflare-api-token"
    cloudflare_zone_name  = "elghareeb.space"  # Optional: auto-detected from api_domain
-   dns_proxied           = true  # Enable Cloudflare CDN/DDoS protection
    dns_ttl               = 1     # Use 1 for automatic TTL
    ```
 
@@ -357,9 +358,13 @@ Terraform automatically manages Cloudflare DNS records for your custom domains. 
    terraform apply
    ```
 
-Terraform will automatically:
-- Create a CNAME record for `api.lifepete.com` → `ghs.googlehosted.com` (Cloud Run)
-- Create an A record for `lifepete.com` → Load Balancer IP address
+Terraform creates one record, and only one:
+- a CNAME for `api.lifepete.com` → `ghs.googlehosted.com` (Cloud Run's domain
+  mapping), `cloudflare.tf:14`.
+
+**The apex is not Terraform's.** `lifepete.com` serves the SPA from Firebase
+Hosting, which owns that DNS; no `.tf` file declares an A record, and there is
+no load balancer in this configuration. A README bullet said otherwise (#387).
 
 ### Moving to provider 5
 
@@ -381,12 +386,17 @@ The zone id is the `cloudflare_zone_id` output and the record id is
 
 - `cloudflare_api_token`: Your Cloudflare API token (required, sensitive)
 - `cloudflare_zone_name`: Your Cloudflare zone name (optional, auto-detected from `api_domain`)
-- `dns_proxied`: Enable Cloudflare proxy/CDN (default: `true`)
 - `dns_ttl`: DNS record TTL in seconds (default: `1` for automatic)
 
 ### Notes
 
 - Cloudflare DNS management is required and enabled by default
-- Cloudflare proxying (`dns_proxied = true`) enables CDN, DDoS protection, and SSL
-- Setting `dns_proxied = false` will expose the origin IP and may affect SSL certificate provisioning
+- **The `api` record is DNS-only, and not by choice of a variable.** `proxied`
+  is `false` in `cloudflare.tf`, because Cloud Run's domain mapping terminates
+  SSL itself and because `FORWARDED_ALLOW_IPS` in `cloudrun.tf` names Cloud
+  Run's front end as the one proxy whose `X-Forwarded-For` the API believes.
+  Proxied, the right-most entry would be a Cloudflare edge and every visitor
+  behind one edge would share a rate-limit bucket. A `dns_proxied` variable
+  was documented here and read by no `.tf` file (#376); turning proxying on is
+  a change to `cloudflare.tf` and to what the API trusts, not a flag.
 

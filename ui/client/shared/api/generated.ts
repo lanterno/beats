@@ -24,6 +24,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/account/credentials/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Credential Start
+         * @description Start adding a passkey to the signed-in account.
+         */
+        post: operations["add_credential_start_api_account_credentials_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/account/credentials/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Credential Verify
+         * @description Store the passkey the signed-in account just created.
+         *
+         *     The account is the session's, never the ceremony's: a verified credential
+         *     is saved against `user_id` from the token and nowhere else.
+         */
+        post: operations["add_credential_verify_api_account_credentials_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/account/credentials/{credential_id}": {
         parameters: {
             query?: never;
@@ -2008,7 +2051,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/organisations/join/{token}": {
+    "/api/organisations/join": {
         parameters: {
             query?: never;
             header?: never;
@@ -2022,7 +2065,7 @@ export interface paths {
          *     (INVITE_NOT_FOUND), 410 for one that was real and is closed
          *     (INVITE_EXPIRED).
          */
-        get: operations["preview_invite_api_organisations_join__token__get"];
+        get: operations["preview_invite_api_organisations_join_get"];
         put?: never;
         /**
          * Join
@@ -2032,7 +2075,7 @@ export interface paths {
          *     already a member (ALREADY_A_MEMBER) or already waiting
          *     (JOIN_REQUEST_PENDING).
          */
-        post: operations["join_api_organisations_join__token__post"];
+        post: operations["join_api_organisations_join_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3413,7 +3456,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/reports/{token}": {
+    "/api/reports": {
         parameters: {
             query?: never;
             header?: never;
@@ -3429,7 +3472,7 @@ export interface paths {
          *     guessing — 32 bytes are not guessed — than against a leaked link being
          *     hammered. 404 REPORT_NOT_FOUND for every way the token fails to resolve.
          */
-        get: operations["read_report_api_reports__token__get"];
+        get: operations["read_report_api_reports_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3913,6 +3956,27 @@ export interface components {
          * @enum {string}
          */
         AbsenceType: "vacation" | "sick" | "other";
+        /** AddCredentialStartResponse */
+        AddCredentialStartResponse: {
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /** AddCredentialVerifyRequest */
+        AddCredentialVerifyRequest: {
+            /** Credential */
+            credential: {
+                [key: string]: unknown;
+            };
+            /** Device Name */
+            device_name?: string | null;
+        };
+        /** AddCredentialVerifyResponse */
+        AddCredentialVerifyResponse: {
+            /** Verified */
+            verified: boolean;
+        };
         /**
          * AdjustmentKind
          * @description How a balance adjustment moves the balance at the start of its day.
@@ -7142,6 +7206,59 @@ export interface operations {
             };
         };
     };
+    add_credential_start_api_account_credentials_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddCredentialStartResponse"];
+                };
+            };
+        };
+    };
+    add_credential_verify_api_account_credentials_verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddCredentialVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddCredentialVerifyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_credential_api_account_credentials__credential_id__delete: {
         parameters: {
             query?: never;
@@ -10288,13 +10405,13 @@ export interface operations {
             };
         };
     };
-    preview_invite_api_organisations_join__token__get: {
+    preview_invite_api_organisations_join_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                token: string;
+            header: {
+                "X-Invite-Token": string;
             };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -10326,13 +10443,13 @@ export interface operations {
             };
         };
     };
-    join_api_organisations_join__token__post: {
+    join_api_organisations_join_post: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                token: string;
+            header: {
+                "X-Invite-Token": string;
             };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -13333,13 +13450,13 @@ export interface operations {
             };
         };
     };
-    read_report_api_reports__token__get: {
+    read_report_api_reports_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path: {
-                token: string;
+            header: {
+                "X-Report-Token": string;
             };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

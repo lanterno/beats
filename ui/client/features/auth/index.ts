@@ -17,6 +17,7 @@ export type {
 	UserInfo,
 } from "./api/authApi";
 export {
+	addPasskey,
 	completeSso,
 	deleteCredential,
 	getCurrentUser,

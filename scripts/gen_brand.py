@@ -15,6 +15,11 @@ changes the installed app's identity.
 Run with --check to fail when a target is stale, which is what CI and the
 pre-push hook do. A target whose pattern no longer matches exactly once is an
 error either way: it means the file moved on and the stamp would silently miss.
+
+--check also reads the three code trees for the name written out by hand,
+which the stamp cannot catch and so used to accumulate (#376 found five in
+one companion screen). A literal is not stale, it is simply not the constant,
+and a rename would leave it saying the old name in the middle of the new one.
 """
 
 from __future__ import annotations
@@ -61,6 +66,39 @@ TARGETS: list[tuple[str, str, str]] = [
     ("companion/linux/runner/my_application.cc", r'gtk_header_bar_set_title\(header_bar, "', r'"'),
     ("companion/linux/runner/my_application.cc", r'gtk_window_set_title\(window, "', r'"'),
 ]
+
+
+# The code that may name the product: the constants the stamp writes, which
+# every other file reads through. A name in any other file under these trees
+# is a literal, whatever it is spelled in.
+CODE_TREES = ("ui/client", "api/src", "companion/lib")
+CODE_SUFFIXES = (".ts", ".tsx", ".py", ".dart")
+NAMING_FILES = {
+    "ui/client/shared/config/brand.ts",
+    "api/src/beats/brand.py",
+    "companion/lib/brand.dart",
+}
+# A comment may say the name — it is prose about the product, not text anyone
+# reads in the app. Crude but on the right side of the mistake: a false
+# negative here is a literal that stays, a false positive is a failing check
+# nobody can satisfy.
+COMMENT = re.compile(r"\s*(//|///|#|\*|/\*)")
+
+
+def literals(name: str) -> list[str]:
+    """Where the name is written out instead of read from the constant."""
+    found = []
+    for tree in CODE_TREES:
+        for path in sorted((ROOT / tree).rglob("*")):
+            if path.suffix not in CODE_SUFFIXES or not path.is_file():
+                continue
+            rel = path.relative_to(ROOT).as_posix()
+            if rel in NAMING_FILES:
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if name in line and not COMMENT.match(line):
+                    found.append(f"{rel}:{number}: {line.strip()}")
+    return found
 
 
 def load_name() -> str:
@@ -113,7 +151,16 @@ def main() -> int:
         )
         return 1
     if args.check:
-        print(f"product name {name!r} is current in {len(files)} files")
+        written_out = literals(name)
+        if written_out:
+            print(
+                f"the product name is written out rather than read from the constant:\n  "
+                + "\n  ".join(written_out)
+                + "\nRead it from brand.ts / brand.py / brand.dart instead.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"product name {name!r} is current in {len(files)} files, and written out nowhere")
     return 0
 
 

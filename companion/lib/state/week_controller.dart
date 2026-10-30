@@ -52,6 +52,12 @@ class ProjectWeek {
   }
 }
 
+/// How many ledgers this asks for at a time. One per project at once was a
+/// burst the API answered with "no available instance" — it runs on every
+/// timer change, and a ledger is its slowest read (#376). Three keeps the
+/// screens filling in one project at a time without standing on the service.
+const int _ledgersAtOnce = 3;
+
 /// The week across projects, for the sidebar's hours, Today's week card and
 /// ring, and the Coach's "where your week stands". Reloads every five
 /// minutes and whenever the timer starts, stops or switches.
@@ -100,26 +106,41 @@ class WeekController extends ChangeNotifier {
     final liveIds = {for (final p in live) p.id};
     // Each project's week shows as soon as its ledger answers: one slow
     // ledger (seconds, on a long history) shouldn't hold back the rest.
-    await Future.wait(live.map((p) async {
-      ProjectWeek? w;
-      try {
-        w = ProjectWeek.fromLedger(p, await client.getLedger(p.id, timezone: _tz));
-      } catch (_) {
-        // A failed reload (offline, rate-limited) keeps the last good week
-        // rather than blanking the project out of every screen.
-        return;
+    // A few at a time, not all of them: this runs on every timer change,
+    // and one ledger per project at once is a burst the API answered with
+    // "no available instance" (#376). Progressive filling is kept; only the
+    // thundering herd goes.
+    final queue = List.of(live);
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        final p = queue.removeAt(0);
+        ProjectWeek? w;
+        try {
+          w = ProjectWeek.fromLedger(p, await client.getLedger(p.id, timezone: _tz));
+        } catch (_) {
+          // A failed reload (offline, rate-limited) keeps the last good week
+          // rather than blanking the project out of every screen.
+          continue;
+        }
+        // Returning rather than continuing is what stops a superseded
+        // reload asking for the rest of the queue: the newer one is already
+        // asking for the same ledgers.
+        if (generation != _generation) return;
+        weeks = [
+          ?w,
+          for (final old in weeks)
+            if (old.project.id != p.id && liveIds.contains(old.project.id)) old,
+        ]..sort((a, b) => b.worked.compareTo(a.worked));
+        // todayMinutes adds the running timer from here on; only the running
+        // project's ledger says how far it had counted.
+        if (p.id == timer.current?.id || loadedAt == null) loadedAt = DateTime.now();
+        notifyListeners();
       }
-      if (generation != _generation) return;
-      weeks = [
-        ?w,
-        for (final old in weeks)
-          if (old.project.id != p.id && liveIds.contains(old.project.id)) old,
-      ]..sort((a, b) => b.worked.compareTo(a.worked));
-      // todayMinutes adds the running timer from here on; only the running
-      // project's ledger says how far it had counted.
-      if (p.id == timer.current?.id || loadedAt == null) loadedAt = DateTime.now();
-      notifyListeners();
-    }));
+    }
+
+    await Future.wait([
+      for (var i = 0; i < _ledgersAtOnce && i < live.length; i++) worker(),
+    ]);
     if (generation == _generation && live.isNotEmpty && !complete) {
       complete = true;
       notifyListeners();

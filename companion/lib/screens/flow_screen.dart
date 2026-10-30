@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 
+import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/bundle_label.dart';
 import '../services/date_keys.dart';
@@ -220,7 +221,7 @@ class _FlowScreenState extends State<FlowScreen> {
         icon: Icons.air_rounded,
         title: today ? 'No flow yet today' : 'No flow yesterday',
         body: [
-          'Flow comes from beatsd, the LifePete daemon on ${Platform.isMacOS ? 'this Mac' : 'your computer'}: '
+          'Flow comes from beatsd, the $appName daemon on ${Platform.isMacOS ? 'this Mac' : 'your computer'}: '
               'it notices which app is in '
               'front and how steadily you work, minute by minute. Pair it and run it, and the day fills in here.',
           if (today && y != null) 'Yesterday averaged ${y.avg}, peaking at ${y.peak}.',

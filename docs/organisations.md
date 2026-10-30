@@ -261,7 +261,7 @@ device token. "Admins" means owner or admin.
 | `GET /` | anyone | My memberships, ended ones included |
 | `POST /` | anyone | Create; I am its owner |
 | `GET /invitations` | anyone | Who has invited my account's email, and as what — no token |
-| `GET /join/{token}`, `POST /join/{token}` | anyone | Preview, then join (`joined`) or request (`pending`) |
+| `GET /join`, `POST /join` (`X-Invite-Token`) | anyone | Preview, then join (`joined`) or request (`pending`). The token is in a header, not the path Cloud Run logs for 30 days |
 | `GET /{id}`, `PUT /{id}` | members / admins | The organisation and my standing; its settings |
 | `GET /{id}/members` | members | Active members, by the name and address they joined under |
 | `PATCH /{id}/members/{uid}`, `DELETE …` | admins | Role; removal |

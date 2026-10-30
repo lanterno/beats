@@ -3,7 +3,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from beats.domain.contracts import (
@@ -25,6 +25,7 @@ from beats.domain.exceptions import (
     BeatChanged,
     BeatNotFound,
     ContractManaged,
+    DomainException,
     InvalidEndTime,
     MonthOutsideContract,
     NoActiveTimer,
@@ -337,8 +338,39 @@ class BeatService:
         await refuse_locked(self.locks, project, beat.start)
         return beat
 
+    async def _refuse_second_timer(self, beat: Beat) -> None:
+        """One session open at a time, on the CRUD routes as on the timer.
+
+        `start_timer` has always checked (TimerAlreadyRunning), but a beat
+        written with no `end` is a running session too, whichever door it came
+        through: a create that omits `end`, or an edit that reopens a finished
+        session by clearing it. Without this check two timers run at once, and
+        `get_active` then answers with whichever of them storage returns
+        first.
+
+        The open session the edit is itself editing is not a second one.
+        """
+        if beat.end is not None:
+            return
+        active = await self.beat_repo.get_active()
+        if active is None or active.id == beat.id:
+            return
+        name: str | None = None
+        if self.projects is not None:
+            try:
+                name = (await self.projects.get_by_id(active.project_id)).name
+            except DomainException:
+                # The open session is on a project this caller can no longer
+                # read (an assignment that ended). It still blocks the write;
+                # it just cannot be named.
+                name = None
+        raise TimerAlreadyRunning(project_name=name, beat=active.model_dump(mode="json"))
+
     async def create_beat(self, beat: Beat) -> Beat:
-        """Create a new beat, auto-tagging it from daemon flow signals."""
+        """Create a new beat, auto-tagging it from daemon flow signals. A
+        create that leaves `end` unset opens a session, and is refused while
+        another is open."""
+        await self._refuse_second_timer(beat)
         beat = await self._stamped(beat)
         if self.flow_repo is not None and beat.end is not None:
             beat.tags = await derive_flow_tags(self.flow_repo, beat.start, beat.end)
@@ -366,7 +398,9 @@ class BeatService:
         If the daemon has no windows for the (possibly edited) range we keep the
         beat's existing tags rather than wiping them — non-destructive for any
         tags captured before this range was last touched. A beat reopened
-        (`end` None) keeps its tags too; the stop that closes it derives them.
+        (`end` None) keeps its tags too; the stop that closes it derives them,
+        and the reopen is refused (TimerAlreadyRunning) while another session
+        is open — reopening is a start by another name.
         """
         # Validate the beat can be stopped if end is being set
         if beat.end:
@@ -374,6 +408,10 @@ class BeatService:
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        else:
+            # Clearing `end` reopens the session, which is a start by another
+            # name; it is refused while another session is open.
+            await self._refuse_second_timer(beat)
         stored: Beat | None = None
         if expected is not None and beat.id is not None:
             stored = await self.beat_repo.get_by_id(beat.id)
@@ -861,10 +899,21 @@ class ContractService:
         this project's own error (400), as it is on the week route.
         """
         project = await self.project_repo.get_by_id(project_id)
-        beats = await self.beat_repo.list_by_project(project_id)
         today = self._now(tz).date()
         monday = today - timedelta(days=today.weekday())
         contract = project.contract if project.kind is ProjectKind.DAY_JOB else None
+        # Only the sessions that can reach a day the ledger shows: from the
+        # contract's first day, since every close needs every day since then,
+        # or from the oldest week shown when nothing governs. A day before
+        # that is in no figure, and reading every session a project ever had
+        # was the API's slowest read (#376). The extra day is for the
+        # timezone: a session is bucketed by its local start day, and a tz
+        # behind UTC can pull a UTC instant back onto the day before.
+        first_day = monday - timedelta(weeks=weeks - 1)
+        if contract is not None:
+            first_day = min(contract.starts_on, first_day)
+        since = datetime.combine(first_day - timedelta(days=1), time.min, tzinfo=UTC)
+        beats = await self.beat_repo.list_by_project(project_id, since)
         absences: list[Absence] = []
         adjustments: list[BalanceAdjustment] = []
         holidays: dict[date, str] = {}

@@ -584,6 +584,95 @@ class TestWebAuthnRegistrationVerificationGuards:
             await wam.verify_registration(credential={"id": "fake"}, user=_user())
 
 
+class TestAddingASecondPasskey:
+    """The ceremony behind a session (#376). Two things separate it from
+    signing up: the challenge is in its own slot, so one ceremony cannot be
+    finished with the other's challenge, and no second session token is
+    issued — the caller already holds one."""
+
+    @staticmethod
+    def _fake_verification(monkeypatch, credential_id=b"\x01\x02\x03\x04"):
+        from beats.auth import webauthn as webauthn_module
+
+        class _FakeVerification:
+            credential_public_key = b"\x05\x06\x07\x08"
+            sign_count = 0
+
+            def __init__(self) -> None:
+                self.credential_id = credential_id
+
+        monkeypatch.setattr(
+            webauthn_module, "verify_registration_response", lambda **_kw: _FakeVerification()
+        )
+
+    async def test_the_two_ceremonies_do_not_share_a_challenge(self):
+        """A sign-up challenge must not finish an add, nor the reverse —
+        otherwise the challenge slot is a single global one and whichever
+        ceremony ran last decides what the other verifies against."""
+        sm = _sm()
+        wam = _wam(session=sm)
+        await wam.get_registration_options(_user(), challenge_type="add-credential")
+
+        assert sm.get_stored_challenge("registration") is None
+        assert sm.get_stored_challenge("add-credential") is not None
+
+        with pytest.raises(ValueError, match="No pending registration"):
+            await wam.verify_registration(credential={}, user=_user())
+
+    async def test_adding_stores_the_passkey_and_issues_no_token(self, monkeypatch):
+        self._fake_verification(monkeypatch)
+        storage = _FakeCredentialStorage()
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, "add-credential")
+        wam = _wam(storage=storage, session=sm)
+
+        result = await wam.verify_registration(
+            credential={"id": "fake"},
+            user=_user(),
+            device_name="Work laptop",
+            challenge_type="add-credential",
+            issue_token=False,
+        )
+
+        assert result == {"verified": True}
+        creds = await storage.get_credentials("user-1")
+        assert [c.device_name for c in creds] == ["Work laptop"]
+
+    async def test_an_account_can_hold_two(self, monkeypatch):
+        """The whole point: before this, an account held exactly one, so a
+        second device was impossible and losing the one locked it out."""
+        storage = _FakeCredentialStorage()
+        sm = _sm()
+        wam = _wam(storage=storage, session=sm)
+
+        for name, cred_id in (("Phone", b"\x01"), ("Laptop", b"\x02")):
+            self._fake_verification(monkeypatch, credential_id=cred_id)
+            sm.store_challenge(cred_id * 32, "add-credential")
+            await wam.verify_registration(
+                credential={"id": name},
+                user=_user(),
+                device_name=name,
+                challenge_type="add-credential",
+                issue_token=False,
+            )
+
+        creds = await storage.get_credentials("user-1")
+        assert sorted(c.device_name for c in creds) == ["Laptop", "Phone"]
+
+    async def test_the_second_ceremony_excludes_the_first_passkey(self):
+        """excludeCredentials is what stops the same authenticator being
+        enrolled twice — the browser refuses rather than making a duplicate."""
+        storage = _FakeCredentialStorage()
+        await storage.save_credential(
+            user_id="user-1", credential_id="AQIDBA", public_key="pk", sign_count=0
+        )
+        wam = _wam(storage=storage)
+
+        options = await wam.get_registration_options(_user(), challenge_type="add-credential")
+
+        assert [c["id"] for c in options["excludeCredentials"]] == ["AQIDBA"]
+
+
 class TestWebAuthnAuthenticationOptions:
     """get_authentication_options uses an empty allowCredentials list
     so the browser triggers its native picker for discoverable
@@ -879,6 +968,34 @@ class TestJwtSecretValidator:
         msg = str(exc.value)
         assert "32 bytes" in msg
         assert "openssl rand" in msg
+        # …and not what the key was. Settings() is built at import, so this
+        # text is the whole of what a Cloud Run revision that fails to start
+        # leaves in the logs, where it is kept 30 days (#376).
+        assert "test-secret" not in msg
+        assert "input_value" not in msg
+
+    def test_a_missing_setting_does_not_print_the_ones_that_were_read(self, monkeypatch):
+        """pydantic's `input_value=` for a missing field is a shortened copy
+        of the whole mapping it read — the start of DB_DSN, the tail of
+        JWT_SECRET. The field's name is what an operator needs; the values
+        are secrets."""
+        from pydantic import ValidationError
+
+        from beats.settings import Settings
+
+        monkeypatch.setenv("DB_DSN", "mongodb://dummyuser:dummypassword@localhost:27017")
+        monkeypatch.setenv("JWT_SECRET", "s" * 40)
+        monkeypatch.delenv("FORWARDED_ALLOW_IPS", raising=False)
+
+        # _env_file=None so .env.test's value for it doesn't fill the gap.
+        with pytest.raises(ValidationError) as exc:
+            Settings(_env_file=None)
+
+        msg = str(exc.value)
+        assert "FORWARDED_ALLOW_IPS" in msg
+        assert "dummypassword" not in msg
+        assert "s" * 40 not in msg
+        assert "input_value" not in msg
 
     def test_exact_32_byte_secret_accepted(self, monkeypatch):
         """The 32-byte boundary case is accepted (>=, not >).

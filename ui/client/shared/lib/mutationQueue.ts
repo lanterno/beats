@@ -74,6 +74,29 @@ export async function listPending(): Promise<PendingMutation[]> {
 	});
 }
 
+/**
+ * How many writes are waiting, without reading their bodies.
+ *
+ * `apiMutate` asks this before every write, so it is on the hot path: a
+ * `count()` over the store beats `getAll()` once the queue holds anything at
+ * all. Zero when IndexedDB cannot be opened (private mode, SSR, a test with
+ * no fake) — the queue cannot hold anything there either, so there is
+ * nothing a write could overtake.
+ */
+export async function countPending(): Promise<number> {
+	try {
+		const db = await openDb();
+		return await new Promise<number>((resolve, reject) => {
+			const tx = db.transaction(STORE_NAME, "readonly");
+			const request = tx.objectStore(STORE_NAME).count();
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+	} catch {
+		return 0;
+	}
+}
+
 async function removeMutation(id: number): Promise<void> {
 	const db = await openDb();
 	return new Promise((resolve, reject) => {

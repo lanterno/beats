@@ -4,19 +4,29 @@
  *
  * Removing a passkey once took one click on the row's button, with no question asked.
  * It cannot be undone, and report links survive it, so it now asks first.
+ *
+ * Adding one was impossible until #376: the only registration call was the sign-up,
+ * which 409s for an email that already has a passkey. So the section's Remove button
+ * never appeared on an ordinary account, and losing the one passkey locked it out.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listCredentials, deleteCredential, get } = vi.hoisted(() => ({
+const { listCredentials, deleteCredential, addPasskey, get } = vi.hoisted(() => ({
 	listCredentials: vi.fn(),
 	deleteCredential: vi.fn(),
+	addPasskey: vi.fn(),
 	get: vi.fn(),
 }));
 
-vi.mock("@/features/auth", () => ({ listCredentials, deleteCredential }));
+vi.mock("@/features/auth", () => ({ listCredentials, deleteCredential, addPasskey }));
+const { toastError, toastSuccess } = vi.hoisted(() => ({
+	toastError: vi.fn(),
+	toastSuccess: vi.fn(),
+}));
+vi.mock("sonner", () => ({ toast: { error: toastError, success: toastSuccess } }));
 vi.mock("@/shared/api", async () => {
 	const actual = await vi.importActual<typeof import("@/shared/api")>("@/shared/api");
 	return { ...actual, get };
@@ -94,6 +104,7 @@ beforeEach(() => {
 	});
 	get.mockResolvedValue([]);
 	deleteCredential.mockResolvedValue(undefined);
+	addPasskey.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -173,6 +184,50 @@ describe("PasskeysSection", () => {
 		const dialog = await openRemoval("Mac");
 
 		expect(dialog).toHaveTextContent("Your 3 report links keep working");
+	});
+
+	it("offers to add one, and re-reads the list once it is added", async () => {
+		listCredentials.mockResolvedValue([MAC]);
+
+		render(<PasskeysSection />, { wrapper });
+		fireEvent.click(await screen.findByRole("button", { name: /Add a passkey/ }));
+
+		await waitFor(() => expect(addPasskey).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(listCredentials).toHaveBeenCalledTimes(2));
+		expect(toastSuccess).toHaveBeenCalledWith("Passkey added");
+	});
+
+	it("urges a second one while there is only one", async () => {
+		listCredentials.mockResolvedValue([MAC]);
+
+		render(<PasskeysSection />, { wrapper });
+
+		expect(await screen.findByText(/losing this one doesn't lock you out/)).toBeTruthy();
+	});
+
+	it("says nothing of a second one once there are two", async () => {
+		listCredentials.mockResolvedValue([MAC, IPHONE]);
+
+		render(<PasskeysSection />, { wrapper });
+
+		await screen.findByText("Mac");
+		expect(screen.queryByText(/losing this one doesn't lock you out/)).toBeNull();
+	});
+
+	it("says a device that already has one already has one", async () => {
+		listCredentials.mockResolvedValue([MAC]);
+		const already = new Error("already registered");
+		already.name = "InvalidStateError";
+		addPasskey.mockRejectedValue(already);
+
+		render(<PasskeysSection />, { wrapper });
+		fireEvent.click(await screen.findByRole("button", { name: /Add a passkey/ }));
+
+		await waitFor(() =>
+			expect(toastError).toHaveBeenCalledWith(
+				"This device already has a passkey for your account.",
+			),
+		);
 	});
 
 	it("still asks when the report links cannot be counted", async () => {

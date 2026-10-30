@@ -19,15 +19,23 @@
 /*
   Zen Maru Gothic (and Hiragino, behind it) draws the en and em dash as the
   full-width Japanese bar: a hairline the width of a character, touching the
-  words either side. This face covers those two characters alone, from a
-  system Latin face, and sits first in the body stack, so every dash in copy
-  reads as a dash while every other character stays Zen Maru's.
+  words either side. The minus sign and the ellipsis are full-width too —
+  U+2212 at 922 units against a digit's 504, U+2026 the same — so "−25m" and
+  "Saving…" open a gap in the middle of a sentence (#376). This face covers
+  those four characters alone, from a system Latin face, and sits first in
+  the body stack, so each reads as a Latin one while every other character
+  stays Zen Maru's.
+
+  The companion needs the same and cannot have it the same way: Flutter has
+  no unicode-range and no local(), so `scripts/gen_latin_dash.py` cuts a real
+  face out of M PLUS Rounded 1c. It carries the dash and the minus; M PLUS's
+  ellipsis is wider than Zen Maru's, so there is nothing for it to cut.
 */
 @font-face {
   font-family: "Latin Dash";
   src: local("Helvetica Neue"), local("HelveticaNeue"), local("Segoe UI"), local("Roboto"),
     local("Arial"), local("DejaVu Sans");
-  unicode-range: U+2013-2014;
+  unicode-range: U+2013-2014, U+2026, U+2212;
 }
 
 /*

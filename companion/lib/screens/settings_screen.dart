@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../brand.dart';
 import '../services/api_client.dart';
 import '../services/mac_ambient.dart';
 import '../services/notifications.dart';
@@ -281,7 +282,7 @@ class _GeneralTabState extends State<_GeneralTab> {
         if (mac)
           _Row(
             title: 'Show in the Dock',
-            subtitle: 'Off keeps LifePete in the menu bar only',
+            subtitle: 'Off keeps $appName in the menu bar only',
             trailing: Switch.adaptive(value: prefs.dockVisible, onChanged: _setDock),
           ),
         if (mac)
@@ -389,7 +390,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
           child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: [
-            Text('macOS decides whether LifePete may notify you.',
+            Text('macOS decides whether $appName may notify you.',
                 style: SkyType.body(13).copyWith(color: p.inkOnSky)),
             LinkButton(
               label: 'Open System Settings',
@@ -681,7 +682,7 @@ class _ConnectionsTabState extends State<_ConnectionsTab> {
       if (!_fitbit.connected && !_fitbit.loading && _fitbit.error == null)
         Padding(
           padding: const EdgeInsets.fromLTRB(8, 10, 8, 0),
-          child: Text('Fitbit opens in your browser; LifePete notices when you\'re done.',
+          child: Text('Fitbit opens in your browser; $appName notices when you\'re done.',
               style: SkyType.body(13).copyWith(color: p.inkOnSky)),
         ),
     ]);
@@ -833,7 +834,7 @@ class _AccountTabState extends State<_AccountTab> {
           constraints: const BoxConstraints(maxWidth: 380),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-              'Your tracked time stays on the server. You\'ll need a new pairing code to use LifePete here again.',
+              'Your tracked time stays on the server. You\'ll need a new pairing code to use $appName here again.',
               style: SkyType.body(14, height: 1.6).copyWith(color: p.inkMuted),
             ),
             if (waiting != null) ...[
@@ -899,7 +900,7 @@ class _AccountTabState extends State<_AccountTab> {
                     style: SkyType.body(15, weight: FontWeight.w700).copyWith(color: p.persimmonInk)),
                 const SizedBox(height: 4),
                 Text(
-                  'Your tracked time stays on the server. To use LifePete here again you\'ll need a new pairing code.',
+                  'Your tracked time stays on the server. To use $appName here again you\'ll need a new pairing code.',
                   style: SkyType.body(13).copyWith(color: p.inkMuted),
                 ),
               ]),

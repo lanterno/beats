@@ -1,4 +1,4 @@
-import { Fingerprint, Trash2 } from "lucide-react";
+import { Fingerprint, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useCountReportLinks } from "@/entities/billing";
@@ -6,7 +6,7 @@ import { useClients } from "@/entities/client";
 import type { CredentialInfo } from "@/features/auth";
 import { describeError } from "@/shared/api";
 import { type ConfirmRequest, Panel, useConfirm } from "@/shared/ui";
-import { HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
+import { CHIP_BUTTON, HEADING, HEADING_ICON, LEAD, LINKISH, LIST, REMOVE, ROW } from "./styles";
 
 function formatDate(iso: string) {
 	try {
@@ -69,6 +69,7 @@ export function PasskeysSection() {
 	const [credentials, setCredentials] = useState<CredentialInfo[] | null>(null);
 	const [loadError, setLoadError] = useState(false);
 	const [deleting, setDeleting] = useState<string | null>(null);
+	const [adding, setAdding] = useState(false);
 	const { confirm, confirmDialog } = useConfirm();
 	// Both lists, since an archived client's links still serve. The sidebar reads them
 	// as well, so they are usually in the cache already.
@@ -99,6 +100,33 @@ export function PasskeysSection() {
 		}
 	};
 
+	/**
+	 * Enrol this device. The one thing that makes an account recoverable:
+	 * with a second passkey, losing a device is not losing the account
+	 * (#376). The browser refuses an authenticator the account already
+	 * holds, which is InvalidStateError and not an error worth alarming
+	 * anyone with.
+	 */
+	const handleAdd = async () => {
+		setAdding(true);
+		try {
+			const { addPasskey } = await import("@/features/auth");
+			await addPasskey();
+			await loadCredentials();
+			toast.success("Passkey added");
+		} catch (err) {
+			if (err instanceof Error && err.name === "NotAllowedError") {
+				toast.error("Adding the passkey was cancelled or timed out.");
+			} else if (err instanceof Error && err.name === "InvalidStateError") {
+				toast.error("This device already has a passkey for your account.");
+			} else {
+				toast.error(describeError(err, "Failed to add a passkey"));
+			}
+		} finally {
+			setAdding(false);
+		}
+	};
+
 	const handleDelete = async (passkey: CredentialInfo, all: CredentialInfo[]) => {
 		setDeleting(passkey.id);
 		try {
@@ -126,6 +154,9 @@ export function PasskeysSection() {
 				<p className={LEAD}>
 					Passkeys let you sign in securely without a password.
 					{credentials?.length ? " You must keep at least one registered." : null}
+					{credentials?.length === 1
+						? " Add one on a second device, so losing this one doesn't lock you out."
+						: null}
 				</p>
 
 				{credentials === null && !loadError && <p className={LEAD}>Loading...</p>}
@@ -168,6 +199,13 @@ export function PasskeysSection() {
 							</div>
 						))}
 					</div>
+				)}
+
+				{credentials !== null && (
+					<button type="button" onClick={handleAdd} disabled={adding} className={CHIP_BUTTON}>
+						<Plus className="w-3 h-3 mr-1.5" />
+						{adding ? "Waiting for your device…" : "Add a passkey"}
+					</button>
 				)}
 			</Panel>
 			{confirmDialog}

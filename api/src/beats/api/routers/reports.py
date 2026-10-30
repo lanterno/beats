@@ -20,9 +20,17 @@ no session, so the rules it follows are worth stating in one place
 - **Every failure is one 404.** No such token, a mistyped one, a revoked one,
   a deleted client: `REPORT_NOT_FOUND` for all of them, so a reader with no
   session learns nothing from the difference.
+- **The token is sent in a header, never in the path.** Cloud Run's request
+  log records every request's full URL and the project's `_Default` bucket
+  keeps it 30 days, so a token in the path is a live report link sitting in
+  the logs for anyone who can read them (#376). Headers are not logged. The
+  link people share is unchanged — it is `/r/<token>` on the web app, which
+  reads the token out of its own URL and puts it here.
 """
 
-from fastapi import APIRouter, Request, Response
+from typing import Annotated
+
+from fastapi import APIRouter, Header, Request, Response
 
 from beats.api.dependencies import ReportLinkLookupDep, billing_service_for
 from beats.api.routers.auth import limiter
@@ -36,6 +44,12 @@ router = APIRouter(
     tags=["Reports"],
     responses={404: {"description": "Not found"}},
 )
+
+# The report link's token, out of the URL and into a header it is not logged
+# from. A missing one is a 422 rather than the route's one 404: the request
+# is malformed, not a token that failed to resolve, and it tells a reader
+# nothing they could not learn by sending no token at all.
+REPORT_TOKEN_HEADER = "X-Report-Token"
 
 
 def _report(link: ReportLink, billing: ClientBilling) -> ReportResponse:
@@ -84,13 +98,13 @@ def _report(link: ReportLink, billing: ClientBilling) -> ReportResponse:
     )
 
 
-@router.get("/{token}", response_model=ReportResponse)
+@router.get("", response_model=ReportResponse)
 @limiter.limit("30/minute")
 async def read_report(
     request: Request,
-    token: str,
     response: Response,
     lookup: ReportLinkLookupDep,
+    token: Annotated[str, Header(alias=REPORT_TOKEN_HEADER)],
 ) -> ReportResponse:
     """One client's billable work over a report link's frozen range.
 

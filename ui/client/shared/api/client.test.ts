@@ -288,6 +288,67 @@ describe("apiMutate — queue vs throw", () => {
 		expect(await listPending()).toHaveLength(0);
 	});
 
+	it("joins the back of the queue rather than overtaking what waits", async () => {
+		// A write sent now while earlier writes wait lands before them:
+		// a new start before a queued stop, an edit before the create it
+		// edits, and the API sees a day in an order nobody made it in
+		// (#376). The companion has queued behind its queue since #372;
+		// the web did not.
+		globalThis.fetch = vi.fn(() =>
+			Promise.reject(new TypeError("Failed to fetch")),
+		) as unknown as typeof fetch;
+		await apiMutate("POST", "/api/projects/p1/stop", { time: "2026-10-30T09:00:00Z" });
+
+		// Back online, but the stop is still waiting its turn.
+		const fetchSpy = vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			statusText: "",
+			json: () => Promise.resolve({}),
+		}));
+		globalThis.fetch = fetchSpy as unknown as typeof fetch;
+		const result = await apiMutate("POST", "/api/projects/p2/start", {
+			time: "2026-10-30T09:05:00Z",
+		});
+
+		expect(result.status).toBe("queued");
+		expect(fetchSpy).not.toHaveBeenCalled();
+		expect((await listPending()).map((m) => m.path)).toEqual([
+			"/api/projects/p1/stop",
+			"/api/projects/p2/start",
+		]);
+	});
+
+	it("sends straight out when nothing is waiting", async () => {
+		const fetchSpy = vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			statusText: "",
+			json: () => Promise.resolve({}),
+		}));
+		globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+		const result = await apiMutate("POST", "/api/projects/p1/start", {});
+
+		expect(result.status).toBe("sent");
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("still sends when the caller opted out of queueing", async () => {
+		// queueOnFailure:false asks for the answer now and gets to keep
+		// asking; it is not made to wait behind a queue it never joins.
+		globalThis.fetch = vi.fn(() =>
+			Promise.reject(new TypeError("Failed to fetch")),
+		) as unknown as typeof fetch;
+		await apiMutate("POST", "/api/projects/p1/stop", {});
+
+		mockFetchOnce(200, { ok: true });
+		const result = await apiMutate("POST", "/api/anything", {}, { queueOnFailure: false });
+
+		expect(result.status).toBe("sent");
+		expect(await listPending()).toHaveLength(1);
+	});
+
 	it("uses caller-supplied clientId verbatim (so retries dedupe)", async () => {
 		// The sync engine reuses the original clientId when replaying
 		// — letting the caller pin the id is the contract that

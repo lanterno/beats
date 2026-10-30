@@ -157,15 +157,24 @@ export async function fetchInvitations(): Promise<Invitation[]> {
 	return parseApiResponse(ApiInvitationListSchema, data).map(toInvitation);
 }
 
-/** 404 INVITE_NOT_FOUND for an unknown token or another's; 410 INVITE_EXPIRED for a closed one. */
+/**
+ * The token goes in `X-Invite-Token`, not the path: Cloud Run records every
+ * request's full URL and the logs are kept 30 days, so a token in the path
+ * is an unused invitation anyone who can read them can take (#376). The
+ * link people share is unchanged — it is `/organisations/join/<token>` on
+ * this app, and this is what JoinPage does with the token in its own URL.
+ *
+ * 404 INVITE_NOT_FOUND for an unknown token or another's; 410
+ * INVITE_EXPIRED for a closed one.
+ */
 export async function fetchInvitePreview(token: string): Promise<InvitePreview> {
-	const data = await get<unknown>(`${BASE}/join/${encodeURIComponent(token)}`);
+	const data = await get<unknown>(`${BASE}/join`, { "X-Invite-Token": token });
 	return toInvitePreview(parseApiResponse(ApiInvitePreviewSchema, data));
 }
 
 /** 409 ALREADY_A_MEMBER, or JOIN_REQUEST_PENDING while a request waits. */
 export async function joinOrganisation(token: string): Promise<JoinResult> {
-	const data = await post<unknown>(`${BASE}/join/${encodeURIComponent(token)}`);
+	const data = await post<unknown>(`${BASE}/join`, undefined, { "X-Invite-Token": token });
 	return toJoinResult(parseApiResponse(ApiJoinSchema, data));
 }
 

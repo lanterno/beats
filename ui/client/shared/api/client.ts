@@ -7,6 +7,7 @@
 import { endSession, sessionToken } from "@/shared/session";
 import { config } from "../config";
 import {
+	countPending,
 	enqueueMutation,
 	type HttpMethod,
 	newClientId,
@@ -206,14 +207,25 @@ export async function apiClient<T>(endpoint: string, options?: RequestInit): Pro
 	return response.json();
 }
 
-export function get<T>(endpoint: string): Promise<T> {
-	return apiClient<T>(endpoint, { method: "GET" });
+/**
+ * `headers` is for a route whose secret goes in one rather than in the URL,
+ * which Cloud Run's request log keeps for 30 days (#376) — the invite token
+ * the join routes take. It merges after the session's, so it can add to
+ * them but a caller passing `Authorization` replaces it on purpose.
+ */
+export function get<T>(endpoint: string, headers?: Record<string, string>): Promise<T> {
+	return apiClient<T>(endpoint, { method: "GET", headers });
 }
 
-export function post<T>(endpoint: string, body?: unknown): Promise<T> {
+export function post<T>(
+	endpoint: string,
+	body?: unknown,
+	headers?: Record<string, string>,
+): Promise<T> {
 	return apiClient<T>(endpoint, {
 		method: "POST",
 		body: body ? JSON.stringify(body) : undefined,
+		headers,
 	});
 }
 
@@ -238,21 +250,27 @@ export function del<T>(endpoint: string): Promise<T> {
 /**
  * A GET that never carries the session.
  *
- * The one public route the SPA reads is a report link
- * (`/api/reports/{token}`, docs/billing.md phase 1c). The token in the URL
- * is the whole of its authorisation, and the page has to work for a client
- * who has no account at all. Attaching the owner's bearer token when they
- * happen to be signed in would make the page behave differently for them
- * than for the person they sent it to, which is the one thing a "see what
- * your client sees" page must not do.
+ * The one public route the SPA reads is a report link (`/api/reports`,
+ * docs/billing.md phase 1c). Its token is the whole of the authorisation,
+ * and the page has to work for a client who has no account at all.
+ * Attaching the owner's bearer token when they happen to be signed in would
+ * make the page behave differently for them than for the person they sent
+ * it to, which is the one thing a "see what your client sees" page must not
+ * do.
  *
  * Not `get` with headers overridden: `apiClient` spreads its own headers
  * first, so an override can replace `Authorization` but never remove it.
+ *
+ * `headers` is for a route whose secret goes in one rather than in the URL,
+ * which Cloud Run's request log keeps for 30 days (#376).
  */
-export async function getPublic<T>(endpoint: string): Promise<T> {
+export async function getPublic<T>(
+	endpoint: string,
+	headers: Record<string, string> = {},
+): Promise<T> {
 	const response = await fetch(`${config.apiBaseUrl}${endpoint}`, {
 		method: "GET",
-		headers: { Accept: "application/json" },
+		headers: { Accept: "application/json", ...headers },
 	});
 
 	if (!response.ok) {
@@ -295,6 +313,13 @@ export interface MutateResult<T> {
  * Perform a mutation with offline queueing + idempotency.
  *
  * - Attaches `X-Client-Id` so the server can de-dupe replays.
+ * - **Goes straight out only when nothing is waiting ahead of it.** With a
+ *   queue behind it, a write sent now lands before writes made earlier — a
+ *   new start before a queued stop, an edit before the create it edits — and
+ *   the API sees the day in an order nobody made it in. So it joins the back
+ *   of the queue instead and the sync engine, which replays in order one at a
+ *   time, sends it in its turn. This is the companion's rule 6
+ *   (docs/companion-offline.md), which the web was missing (#376).
  * - On a TypeError (network failure) or navigator.onLine === false, writes the
  *   mutation to IndexedDB and returns `{status: "queued"}`. The sync engine
  *   drains the queue on reconnect.
@@ -311,6 +336,19 @@ export async function apiMutate<T>(
 
 	const headers: Record<string, string> = {};
 	if (idempotent) headers["X-Client-Id"] = clientId;
+
+	// Queued behind earlier writes, not raced past them. Only for a caller
+	// that would have queued on failure anyway: `queueOnFailure: false` asks
+	// for the answer now and gets to keep asking.
+	if (queueOnFailure && (await countPending()) > 0) {
+		try {
+			await enqueueMutation({ method, path, body, clientId });
+			return { status: "queued", clientId };
+		} catch {
+			// The queue could not take it. Sending is then better than
+			// losing it, even out of order.
+		}
+	}
 
 	try {
 		const data = await apiClient<T>(path, {
