@@ -17,12 +17,19 @@ are worth stating where they apply:
 - **No device reaches this prefix.** It is not in `DEVICE_ALLOWED_PREFIXES`,
   and connecting a project lives here rather than under `/api/projects` for
   that reason: a paired device must not be able to hand a project over.
+- **An invite token is sent in a header, never in the path.** Cloud Run's
+  request log records every request's full URL and the project's `_Default`
+  bucket keeps it 30 days, so a token in the path is an unused invitation
+  sitting in the logs for anyone who can read them (#376). Headers are not
+  logged. The link people share is unchanged — it is
+  `/organisations/join/<token>` on the web app, which reads the token out of
+  its own URL and puts it here.
 """
 
 import http
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Header, Query, Response
 
 from beats.api.dependencies import (
     AbsenceRepoDep,
@@ -76,6 +83,11 @@ router = APIRouter(
     tags=["Organisations"],
     responses={404: {"description": "Not found"}},
 )
+
+# The invite token, out of the URL and into a header it is not logged from.
+# A missing one is a 422: the request is malformed, which is not the same
+# answer as a token that failed to resolve.
+INVITE_TOKEN_HEADER = "X-Invite-Token"
 
 
 def _organisation(organisation: Organisation) -> OrganisationResponse:
@@ -222,8 +234,12 @@ async def list_invitations(user_id: CurrentUserId, service: OrganisationServiceD
     ]
 
 
-@router.get("/join/{token}", response_model=InvitePreviewResponse)
-async def preview_invite(token: str, user_id: CurrentUserId, service: OrganisationServiceDep):
+@router.get("/join", response_model=InvitePreviewResponse)
+async def preview_invite(
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+    token: Annotated[str, Header(alias=INVITE_TOKEN_HEADER)],
+):
     """What an invite token opens: the organisation's name and the role it
     gives. 404 for a token that is unknown or addressed to another address
     (INVITE_NOT_FOUND), 410 for one that was real and is closed
@@ -238,8 +254,12 @@ async def preview_invite(token: str, user_id: CurrentUserId, service: Organisati
     )
 
 
-@router.post("/join/{token}", response_model=JoinResponse)
-async def join(token: str, user_id: CurrentUserId, service: OrganisationServiceDep):
+@router.post("/join", response_model=JoinResponse)
+async def join(
+    user_id: CurrentUserId,
+    service: OrganisationServiceDep,
+    token: Annotated[str, Header(alias=INVITE_TOKEN_HEADER)],
+):
     """Take an invite. Joining makes one membership document and nothing
     else: no second account, no moved data (rule 1). A link with an approval
     step answers `pending` and leaves a request for an admin. 409 when
