@@ -178,6 +178,73 @@ async def list_credentials(
     return await webauthn.get_credentials_info(user_id)
 
 
+class AddCredentialStartResponse(BaseModel):
+    options: dict[str, Any]
+
+
+class AddCredentialVerifyRequest(BaseModel):
+    credential: dict[str, Any]
+    device_name: str | None = None
+
+
+class AddCredentialVerifyResponse(BaseModel):
+    verified: bool
+
+
+@router.post("/credentials/add/start", response_model=AddCredentialStartResponse)
+@limiter.limit("5/minute")
+async def add_credential_start(
+    request: Request,
+    user_id: CurrentUserId,
+    user_repo: UserRepoDep,
+    webauthn: WebAuthnDep,
+) -> AddCredentialStartResponse:
+    """WebAuthn options for one more passkey on the signed-in account.
+
+    This is how an account puts a passkey on a second device — and how one
+    provisioned through single sign-on gets its first. Sign-up stays
+    /api/auth/register, which rightly refuses an email that already has a
+    passkey; before this route existed that refusal meant no account could
+    ever add one, and losing the only passkey locked the account out.
+    """
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    options = await webauthn.get_registration_options(user)
+    return AddCredentialStartResponse(options=options)
+
+
+@router.post("/credentials/add/verify", response_model=AddCredentialVerifyResponse)
+@limiter.limit("5/minute")
+async def add_credential_verify(
+    request: Request,
+    body: AddCredentialVerifyRequest,
+    user_id: CurrentUserId,
+    user_repo: UserRepoDep,
+    webauthn: WebAuthnDep,
+) -> AddCredentialVerifyResponse:
+    """Verify the ceremony and store the new credential.
+
+    The session names the account; the pending-registration slot sign-up
+    uses is never consulted, so a sign-up started elsewhere cannot hand
+    this session its user. The manager still enforces the per-account
+    passkey cap. No token in the answer: the caller is already signed in,
+    and the session it holds stays the session.
+    """
+    user = await user_repo.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    try:
+        result = await webauthn.verify_registration(
+            credential=body.credential,
+            user=user,
+            device_name=body.device_name,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return AddCredentialVerifyResponse(verified=result["verified"])
+
+
 @router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_credential(
     user_id: CurrentUserId,
