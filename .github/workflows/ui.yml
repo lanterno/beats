@@ -73,6 +73,18 @@ jobs:
           node-version: 26
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
+      # The landing page's Cloudflare Web Analytics site token (AHM-110). It is
+      # public, since the page carries it. The self-hosted build goes without;
+      # this deployment requires it, so a missing variable fails here and does
+      # not ship a site that silently counts no one.
+      - name: Require the Web Analytics token
+        run: |
+          if [ -z "$CF_WEB_ANALYTICS_TOKEN" ]; then
+            echo "::error::Set the CF_WEB_ANALYTICS_TOKEN repository variable to the Cloudflare Web Analytics site token for lifepete.com"
+            exit 1
+          fi
+        env:
+          CF_WEB_ANALYTICS_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN }}
       - run: pnpm install --frozen-lockfile
       # Unlike the self-hosted stack (ui/Dockerfile builds with VITE_API_URL=""
       # because it is same-origin), this deployment is cross-origin and has to
@@ -81,6 +93,7 @@ jobs:
         env:
           VITE_API_URL: https://api.lifepete.com
           VITE_GIT_SHA: ${{ github.sha }}
+          VITE_CF_WEB_ANALYTICS_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

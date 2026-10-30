@@ -14,6 +14,7 @@ import { AuthModal } from "@/features/auth";
 import { BrandMark, Button, SkyBackdrop } from "@/shared/ui";
 import "./HomePage.css";
 import { APP_NAME } from "@/shared/config";
+import { loadLandingAnalytics } from "@/shared/lib";
 
 // lucide-react removed brand-mark icons (trademark policy), so we ship our own
 // small GitHub mark. Matches the simple-icons / GitHub-octocat path.
@@ -1005,6 +1006,9 @@ function FooterCol({ title, links }: { title: string; links: { label: string; hr
 export default function HomePage() {
 	const [authOpen, setAuthOpen] = useState(false);
 	const [authMode, setAuthMode] = useState<"login" | "register-email">("register-email");
+	useEffect(() => {
+		loadLandingAnalytics();
+	}, []);
 
 	const open: AuthHandler = (mode) => {
 		setAuthMode(mode);

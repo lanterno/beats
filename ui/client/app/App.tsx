@@ -4,8 +4,8 @@
  */
 import "../global.css";
 
-import { useEffect } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
+import { useEffect, useRef } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { initializeAuth, useAuth } from "@/features/auth";
 import Clients from "@/pages/clients";
 import Coach from "@/pages/coach/Coach";
@@ -28,7 +28,7 @@ import ProjectsIndex from "@/pages/projects-index";
 import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
-import { rememberReturnTo, takeReturnTo } from "@/shared/lib";
+import { leaveLanding, rememberReturnTo, takeReturnTo } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
@@ -64,8 +64,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  */
 function HomeOrDashboard() {
 	const { isAuthenticated, isLoading } = useAuth();
+	const navigate = useNavigate();
+	const left = useRef(false);
 
-	if (isLoading) {
+	// Signed in, on arrival or from the landing page: on to where the visitor
+	// was going, else the dashboard, leaving the landing page's analytics behind
+	// (leaveLanding says why it matters how). Once only: the return path is
+	// taken as it is read, and a second pass would land on /app instead.
+	useEffect(() => {
+		if (isLoading || !isAuthenticated || left.current) return;
+		left.current = true;
+		leaveLanding(takeReturnTo() ?? "/app", navigate);
+	}, [isLoading, isAuthenticated, navigate]);
+
+	if (isLoading || isAuthenticated) {
 		return (
 			<div className="min-h-screen bg-background flex items-center justify-center">
 				<div className="text-muted-foreground">Loading...</div>
@@ -73,11 +85,7 @@ function HomeOrDashboard() {
 		);
 	}
 
-	if (!isAuthenticated) {
-		return <HomePage />;
-	}
-
-	return <Navigate to={takeReturnTo() ?? "/app"} replace />;
+	return <HomePage />;
 }
 
 function AuthInitializer({ children }: { children: React.ReactNode }) {

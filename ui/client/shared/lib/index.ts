@@ -54,6 +54,8 @@ export {
 } from "./format";
 // Fuzzy matching (command palette)
 export { fuzzyRank } from "./fuzzyMatch";
+// Landing-page analytics (AHM-110)
+export { leaveLanding, loadLandingAnalytics } from "./landingAnalytics";
 // Money: integer minor units shown, and a typed rate, budget or hours read
 export {
 	BILLING_BUDGET_MINOR_MAX,
