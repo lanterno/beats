@@ -2977,6 +2977,38 @@
         "title": "EnterTimeRequest",
         "type": "object"
       },
+      "ExpectedBeat": {
+        "description": "A session as a client last saw it, sent with a write made against it.\n\nA client that queues writes while offline replays them later, when another\ndevice may have changed the same session in between. A write carrying this\napplies only while the stored session still matches, and is refused with a\n409 otherwise, so a replay never stops or rewrites what someone else\nchanged meanwhile. `end` None is a running session.",
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "start"
+        ],
+        "title": "ExpectedBeat",
+        "type": "object"
+      },
       "FlowWindowResponse": {
         "properties": {
           "active_project_id": {
@@ -6870,6 +6902,28 @@
         "title": "SignalSummaryResponse",
         "type": "object"
       },
+      "StopTimerRequest": {
+        "description": "Request body for stopping the timer. `expected` names the running\nsession the stop was made against; when another one is running, the stop\nis refused (409 TIMER_CHANGED) rather than stopping it. A client replaying\na stop it queued offline sends it; one that leaves it out stops whatever\nruns, as ever.",
+        "properties": {
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpectedBeat"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "time": {
+            "format": "date-time",
+            "title": "Time",
+            "type": "string"
+          }
+        },
+        "title": "StopTimerRequest",
+        "type": "object"
+      },
       "Subdivision": {
         "properties": {
           "code": {
@@ -7259,6 +7313,16 @@
               }
             ],
             "title": "End"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpectedBeat"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "title": "Id",
@@ -8718,7 +8782,7 @@
         ]
       },
       "put": {
-        "description": "Edit a beat's project, start, end and \u2014 when one is sent \u2014 its note:\na string sets it, an empty string clears it, omitted keeps it as stored\n(#348). Every other stored field stays; the tags are re-derived from the\nnew times when the daemon has flow windows for them, and kept when it\nhas none. A beat the caller does not hold is a 404.",
+        "description": "Edit a beat's project, start, end and \u2014 when one is sent \u2014 its note:\na string sets it, an empty string clears it, omitted keeps it as stored\n(#348). Every other stored field stays; the tags are re-derived from the\nnew times when the daemon has flow windows for them, and kept when it\nhas none. A beat the caller does not hold is a 404; with `expected`, one\nchanged since the edit was made is a 409 BEAT_CHANGED.",
         "operationId": "update_beat_api_beats__put",
         "requestBody": {
           "content": {
@@ -15451,13 +15515,13 @@
     },
     "/api/projects/stop": {
       "post": {
-        "description": "Stop the currently running timer.",
+        "description": "Stop the currently running timer \u2014 or, with `expected`, only the one\nthe caller saw running (409 TIMER_CHANGED when another runs).",
         "operationId": "end_project_timer_api_projects_stop_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RecordTimeRequest"
+                "$ref": "#/components/schemas/StopTimerRequest"
               }
             }
           },
