@@ -7970,6 +7970,21 @@ class TestRateLimiting:
         response = client.get("/api/auth/login/options")
         assert response.status_code == 429
 
+    def test_an_exhausted_auth_route_answers_in_the_envelope(self, client):
+        """slowapi's own handler answered `{"error": ...}`, which none of the
+        clients parse. A 429 is an error like any other: `{detail, code}`, and
+        a `Retry-After` within the minute the limit counts over."""
+        for _ in range(10):
+            client.get("/api/auth/login/options")
+
+        response = client.get("/api/auth/login/options")
+        assert response.status_code == 429
+        body = response.json()
+        assert set(body) == {"detail", "code"}
+        assert body["code"] == "RATE_LIMITED"
+        assert "10 per 1 minute" in body["detail"]
+        assert 1 <= int(response.headers["Retry-After"]) <= 60
+
     def test_pair_exchange_rate_limited(self, client):
         """POST /api/device/pair/exchange is rate-limited.
 

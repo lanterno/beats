@@ -10,12 +10,15 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from beats.api.errors import envelope as error_envelope
-from beats.api.errors import http_exception_handler, validation_exception_handler
+from beats.api.errors import (
+    http_exception_handler,
+    rate_limit_exceeded_handler,
+    validation_exception_handler,
+)
 from beats.api.middleware import IdempotencyMiddleware, ensure_mutation_log_indexes
 from beats.api.routers.absences import router as absences_router
 from beats.api.routers.account import router as account_router
@@ -290,14 +293,14 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
 # Rate limiting
 app.state.limiter = limiter
-# Registered through the decorator rather than add_exception_handler: Starlette
-# types a handler as taking any Exception, and these take the one they are for.
-app.exception_handler(RateLimitExceeded)(_rate_limit_exceeded_handler)
 
 
-# Unified error envelope: every HTTP error and validation failure flows
-# through the handlers in beats.api.errors so clients see a consistent
-# {detail, code, fields?} shape.
+# Unified error envelope: every HTTP error, validation failure and exhausted
+# rate limit flows through the handlers in beats.api.errors so clients see a
+# consistent {detail, code, fields?} shape. Registered through the decorator
+# rather than add_exception_handler: Starlette types a handler as taking any
+# Exception, and these take the one they are for.
+app.exception_handler(RateLimitExceeded)(rate_limit_exceeded_handler)
 app.exception_handler(HTTPException)(http_exception_handler)
 app.exception_handler(RequestValidationError)(validation_exception_handler)
 

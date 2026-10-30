@@ -14,11 +14,14 @@ intended to be the canonical way new clients route errors. ``fields``,
 when present, lists per-field validation problems with normalized paths.
 """
 
+import math
+import time
 from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
 # Default machine-readable code for each common status. Routers may override
 # by raising ``HTTPException(detail={"code": "PROJECT_NOT_ARCHIVED", "message": ...})``
@@ -86,6 +89,28 @@ async def http_exception_handler(_request: Request, exc: HTTPException) -> JSONR
         code=code,
         fields=fields,
     )
+
+
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """A request over one of slowapi's limits: 429 `RATE_LIMITED`, in the envelope.
+
+    slowapi's own handler answers `{"error": "Rate limit exceeded: …"}`, which
+    none of the clients parse. `Retry-After` is the whole seconds until the
+    window of the limit that was hit resets, read from the limiter itself:
+    slowapi records which limit that was, and under which key, on
+    `request.state.view_rate_limit` before it raises.
+    """
+    item, identifiers = request.state.view_rate_limit
+    reset_at, _remaining = request.app.state.limiter.limiter.get_window_stats(item, *identifiers)
+    retry_after = max(1, math.ceil(reset_at - time.time()))
+    response = envelope(
+        status_code=429,
+        detail=f"Too many requests (the limit is {exc.detail}). "
+        f"Try again in {retry_after} second{'' if retry_after == 1 else 's'}.",
+        code="RATE_LIMITED",
+    )
+    response.headers["Retry-After"] = str(retry_after)
+    return response
 
 
 _PYDANTIC_MESSAGE_PREFIXES = ("Value error, ", "Assertion failed, ")
