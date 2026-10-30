@@ -151,6 +151,11 @@ class UpdateBeatRequest(BaseModel):
     start: datetime
     end: datetime | None = None
     note: str | None = Field(default=None, max_length=2000)
+    # The session as the edit was made against it. Sent, the edit applies
+    # only while the stored session still matches (409 BEAT_CHANGED
+    # otherwise): the companion replays edits it queued offline, and another
+    # device may have changed the session in between.
+    expected: ExpectedBeat | None = None
 
 
 class GoalOverrideResponse(BaseModel):

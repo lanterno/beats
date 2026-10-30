@@ -461,6 +461,16 @@ class BeatNotFound(DomainException):
             super().__init__()
 
 
+class BeatChanged(DomainException):
+    """Raised when an edit names the session as it was when the edit was made
+    and the stored one no longer matches: another device changed it since.
+    An edit replayed from an offline queue must not overwrite that change."""
+
+    status_code = 409
+    message = "This session was changed after the edit was made"
+    code = "BEAT_CHANGED"
+
+
 # General data exceptions
 class NoObjectMatched(DomainException):
     """Raised when a query returns no results."""

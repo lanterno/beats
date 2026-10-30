@@ -22,6 +22,7 @@ from beats.domain.exceptions import (
     AdjustmentBeforeStart,
     AdjustmentNotFound,
     AdjustmentOutsideBalance,
+    BeatChanged,
     BeatNotFound,
     ContractManaged,
     InvalidEndTime,
@@ -347,7 +348,9 @@ class BeatService:
         """Get a beat by ID."""
         return await self.beat_repo.get_by_id(beat_id)
 
-    async def update_beat(self, beat: Beat, *, note: str | None = None) -> Beat:
+    async def update_beat(
+        self, beat: Beat, *, note: str | None = None, expected: ExpectedBeat | None = None
+    ) -> Beat:
         """Write an edit's project, start and end onto the stored beat,
         re-deriving tags from daemon flow signals, and return the beat as
         stored. `note` is the one other field that writes, and only when
@@ -355,6 +358,10 @@ class BeatService:
         leaves it as stored — so a client without a note input changes
         nothing by not having one. Every other stored field stays as it is,
         whatever `beat` carries for it.
+
+        `expected`, when sent, is the session as the edit was made against
+        it; a stored session that no longer matches is refused (BeatChanged)
+        rather than overwritten.
 
         If the daemon has no windows for the (possibly edited) range we keep the
         beat's existing tags rather than wiping them — non-destructive for any
@@ -367,6 +374,11 @@ class BeatService:
             end = normalize_tz(beat.end)
             if end < start:
                 raise InvalidEndTime()
+        stored: Beat | None = None
+        if expected is not None and beat.id is not None:
+            stored = await self.beat_repo.get_by_id(beat.id)
+            if not expected.matches(stored):
+                raise BeatChanged()
         written = {"project_id", "start", "end"}
         if note is not None:
             beat.note = note.strip() or None
@@ -376,7 +388,7 @@ class BeatService:
             # out of an approved month changes the frozen figure as surely as
             # moving one in.
             if self.locks is not None and beat.id is not None:
-                stored = await self.beat_repo.get_by_id(beat.id)
+                stored = stored or await self.beat_repo.get_by_id(beat.id)
                 if stored.organisation_id is not None:
                     stored_project = await self.projects.get_by_id(stored.project_id)
                     await refuse_locked(self.locks, stored_project, stored.start)

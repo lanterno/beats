@@ -52,14 +52,15 @@ async def update_beat(request: UpdateBeatRequest, service: BeatServiceDep):
     a string sets it, an empty string clears it, omitted keeps it as stored
     (#348). Every other stored field stays; the tags are re-derived from the
     new times when the daemon has flow windows for them, and kept when it
-    has none. A beat the caller does not hold is a 404."""
+    has none. A beat the caller does not hold is a 404; with `expected`, one
+    changed since the edit was made is a 409 BEAT_CHANGED."""
     beat = Beat(
         id=request.id,
         project_id=request.project_id,
         start=request.start,
         end=request.end,
     )
-    updated = await service.update_beat(beat, note=request.note)
+    updated = await service.update_beat(beat, note=request.note, expected=request.expected)
     return updated.model_dump()
 
 
