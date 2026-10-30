@@ -70,7 +70,13 @@ def _invite(client, headers, org_id: str, **fields) -> dict:
 
 
 def _join(client, headers, token: str):
-    return client.post(f"/api/organisations/join/{token}", headers=headers)
+    """The token goes in the body, never the path (request logs keep URLs)."""
+    return client.post("/api/organisations/join", json={"token": token}, headers=headers)
+
+
+def _preview(client, headers, token: str):
+    """The preview reads the token off X-Invite-Token, for the same reason."""
+    return client.get("/api/organisations/join", headers={**headers, "X-Invite-Token": token})
 
 
 def _member_of(client, admin, org_id: str, headers, role: str = "member") -> str:
@@ -229,12 +235,12 @@ class TestOrganisationLifecycle:
 
         # Someone else holding the token learns nothing from it.
         passerby = _new_user()
-        preview = client.get(f"/api/organisations/join/{invite['token']}", headers=passerby)
+        preview = _preview(client, passerby, invite["token"])
         assert preview.status_code == 404
         assert preview.json()["code"] == "INVITE_NOT_FOUND"
         assert _join(client, passerby, invite["token"]).status_code == 404
 
-        preview = client.get(f"/api/organisations/join/{invite['token']}", headers=invitee)
+        preview = _preview(client, invitee, invite["token"])
         assert preview.status_code == 200
         assert preview.json()["addressed"] is True
         assert preview.json()["already_member"] is False
@@ -248,6 +254,19 @@ class TestOrganisationLifecycle:
         assert again.status_code == 410
         assert again.json()["code"] == "INVITE_EXPIRED"
         assert client.get("/api/organisations/invitations", headers=invitee).json() == []
+
+    def test_a_missing_invite_token_reads_like_an_unknown_one(self, client, auth_headers):
+        """No X-Invite-Token at all is the same 404 as a wrong token, and a
+        token appended to the path (the old shape) resolves nothing — the
+        invite link people share is the SPA's route, and the API never sees
+        a token in a URL its request logs would keep."""
+        org = _create_org(client, auth_headers)
+        invite = _invite(client, auth_headers, org["id"], role="member")
+        no_header = client.get("/api/organisations/join", headers=auth_headers)
+        assert no_header.status_code == 404
+        assert no_header.json()["code"] == "INVITE_NOT_FOUND"
+        in_path = client.get(f"/api/organisations/join/{invite['token']}", headers=auth_headers)
+        assert in_path.status_code == 404
 
     def test_a_link_with_an_approval_step_leaves_a_request(self, client, auth_headers):
         org = _create_org(client, auth_headers)

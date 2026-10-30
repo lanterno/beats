@@ -3690,8 +3690,9 @@ def _mint_link(client, headers, client_id: str, **fields) -> dict:
 
 def _read_report(client, token: str):
     """The public read, deliberately with no Authorization header: that it
-    works without one is half of what these tests are for."""
-    return client.get(f"/api/reports/{token}")
+    works without one is half of what these tests are for. The token rides
+    X-Report-Token, never the URL, so request logs keep no copy of it."""
+    return client.get("/api/reports", headers={"X-Report-Token": token})
 
 
 def _billed_march(client, headers, *, name: str = "Studio Kite", project: str = "Website") -> dict:
@@ -3863,6 +3864,21 @@ class TestReportLinksAPI:
         resp = _read_report(client, "nosuchtoken")
         assert resp.status_code == 404, resp.text
         assert resp.json()["code"] == "REPORT_NOT_FOUND"
+
+    def test_a_missing_header_is_the_same_404(self, client):
+        """No X-Report-Token at all reads exactly like a wrong one — one 404
+        for every way a token fails, so a prober learns nothing."""
+        resp = client.get("/api/reports")
+        assert resp.status_code == 404, resp.text
+        assert resp.json()["code"] == "REPORT_NOT_FOUND"
+
+    def test_a_token_in_the_path_resolves_nothing(self, client, auth_headers):
+        """The old path shape is gone: a live token appended to the URL is a
+        plain 404, so a shared link can never end up in request logs."""
+        billed = _billed_march(client, auth_headers)
+        link = _mint_link(client, auth_headers, billed["client"]["id"])
+        resp = client.get(f"/api/reports/{link['token']}")
+        assert resp.status_code == 404, resp.text
 
     def test_a_revoked_link_is_dead(self, client, auth_headers):
         billed = _billed_march(client, auth_headers)
@@ -8605,7 +8621,7 @@ class TestDevicePairingAPI:
             # device could reach by the prefix rules alone. It cannot: the
             # middleware resolves the bearer token and checks the device
             # allowlist before a path's publicness is ever considered.
-            client.get("/api/reports/sometoken", headers=device_headers),
+            client.get("/api/reports", headers={**device_headers, "X-Report-Token": "sometoken"}),
         ):
             assert resp.status_code == 403, resp.text
             assert resp.json()["code"] == "DEVICE_PATH_FORBIDDEN"
