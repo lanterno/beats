@@ -56,14 +56,37 @@ describe("replayPoisonAware", () => {
 		expect(consoleWarnSpy).toHaveBeenCalled();
 	});
 
-	it("drops on every 4xx code, not just 422", async () => {
-		// 400 / 401 / 403 / 404 / 409 — all permanent from a sync
-		// engine's perspective. The server's saying "this won't
+	it("drops on a 4xx that will never succeed", async () => {
+		// 400 / 404 / a plain 409 — the server saying "this won't
 		// succeed, stop retrying", so we drop and continue.
-		for (const status of [400, 401, 403, 404, 409]) {
-			mockFetch(status, { detail: "no" });
+		for (const status of [400, 404, 409]) {
+			mockFetch(status, { detail: "no", code: "CONFLICT" });
 			await expect(replayPoisonAware(mutation)).resolves.toBeUndefined();
 		}
+	});
+
+	it("keeps a write the server refused for a reason that passes", async () => {
+		// 401 and 403 are a sign-in to mend, not a write to abandon; 408
+		// and 429 are the server's own pace. Dropping these threw the
+		// write away because the session had lapsed, or because the user
+		// was writing quickly (#376).
+		for (const status of [401, 403, 408, 429]) {
+			mockFetch(status, { detail: "later" });
+			await expect(replayPoisonAware(mutation)).rejects.toBeInstanceOf(ApiError);
+		}
+	});
+
+	it("keeps a write whose first copy is still being handled", async () => {
+		// 409 IDEMPOTENT_IN_PROGRESS is the idempotency middleware saying
+		// the first copy of this very write is in flight: ask again. It
+		// was dropped as a 4xx like any other, which threw the write away
+		// at the one moment it was certainly landing (#376).
+		mockFetch(409, {
+			detail: "A request with this X-Client-Id is in progress",
+			code: "IDEMPOTENT_IN_PROGRESS",
+		});
+		await expect(replayPoisonAware(mutation)).rejects.toBeInstanceOf(ApiError);
+		expect(consoleWarnSpy).not.toHaveBeenCalled();
 	});
 
 	it("throws on 5xx so the queue keeps the mutation for retry", async () => {
