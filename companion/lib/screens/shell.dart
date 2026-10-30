@@ -14,6 +14,7 @@ import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
 import '../ui/kit.dart';
+import '../ui/sync_note.dart';
 import 'coach_screen.dart';
 import 'flow_screen.dart';
 import 'body_screen.dart';
@@ -427,7 +428,7 @@ class _Sidebar extends StatelessWidget {
             child: ListenableBuilder(
               listenable: timer,
               builder: (context, _) {
-                final ok = timer.error == null;
+                final line = timer.syncLine;
                 return Container(
                   padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
                   decoration: BoxDecoration(
@@ -435,13 +436,12 @@ class _Sidebar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: Row(children: [
-                    ProjectDot(color: ok ? p.leaf : p.persimmon, size: 8),
+                    SyncDot(line.tone),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(ok ? 'Synced' : 'Can\'t reach the server',
-                            style: SkyType.body(13, weight: FontWeight.w700)),
-                        Text(host,
+                        Text(line.title, style: SkyType.body(13, weight: FontWeight.w700)),
+                        Text(line.detail ?? host,
                             overflow: TextOverflow.ellipsis,
                             style: SkyType.body(12).copyWith(color: p.inkMuted)),
                       ]),

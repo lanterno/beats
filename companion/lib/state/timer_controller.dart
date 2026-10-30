@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart';
 import '../services/api_client.dart';
 import '../services/offline_api.dart';
 import '../services/recent_projects.dart';
+import '../services/sync_story.dart';
 import '../ui/kit.dart';
 
 /// One project, as every screen needs it.
@@ -91,6 +92,14 @@ class TimerController extends ChangeNotifier {
         OfflineApi api => api.status,
         _ => null,
       };
+
+  /// The connection as the status card and the sync lines say it.
+  SyncLine get syncLine => describeSync(
+        online: sync?.online ?? true,
+        syncing: sync?.syncing ?? false,
+        pending: sync?.pending ?? 0,
+        failing: error != null,
+      );
 
   /// A replay changed what the API holds: read the timer afresh. Anything
   /// else (offline, a count) only redraws.

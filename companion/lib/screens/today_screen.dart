@@ -8,12 +8,14 @@ import '../services/body_story.dart';
 import '../services/date_keys.dart';
 import '../services/day_ribbon.dart';
 import '../services/local_timezone.dart';
+import '../services/sync_story.dart';
 import '../services/time_format.dart';
 import '../state/idle_watcher.dart';
 import '../state/timer_controller.dart';
 import '../state/week_controller.dart';
 import '../theme/sky.dart';
 import '../ui/kit.dart';
+import '../ui/sync_note.dart';
 import 'log_session_dialog.dart';
 import 'timer_actions.dart';
 
@@ -219,6 +221,19 @@ class _TodayScreenState extends State<TodayScreen> {
               else if (!compact && widget.onFind != null)
                 _FindButton(onPressed: widget.onFind!),
             ]),
+            // A phone has no sidebar with the status card: the line is here.
+            if (compact && widget.timer.syncLine.tone != SyncTone.synced) ...[
+              const SizedBox(height: 10),
+              SyncNote(widget.timer.syncLine, color: p.inkOnSky),
+            ],
+            if (widget.timer.sync?.refused case final refused? when refused.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              RefusedNote(
+                refused: refused,
+                nameOf: (id) => widget.timer.projectById(id)?.name ?? 'a project',
+                onDismiss: widget.timer.dismissRefused,
+              ),
+            ],
             if (_suggestion != null && _suggestion!['project_id'] != widget.timer.current?.id) ...[
               const SizedBox(height: 18),
               _SuggestionBanner(
