@@ -44,7 +44,7 @@ from beats.domain.models import (
     ScheduleType,
 )
 from beats.domain.services import worked_by_local_day
-from beats.infrastructure.repositories import MongoAbsenceRepository
+from beats.infrastructure.repositories import MongoAbsenceRepository, MongoBeatRepository
 
 # A week with nothing special about it. Monday 2 March 2026 through Friday 6 March.
 MON = date(2026, 3, 2)
@@ -525,5 +525,77 @@ class TestMongoAbsenceRepository:
             assert await repo.delete("p2", first.id) is False
             assert await repo.delete("p1", first.id) is True
             assert await repo.list_by_project("p1", MON, SUN) == []
+        finally:
+            await client.close()
+
+
+class TestMongoWorkedByDay:
+    """The Mongo day aggregation against the Python fold, for what the pure
+    tests cannot see: that `$dateToString`'s timezone buckets exactly as
+    `worked_by_local_day` does. The two read the same IANA database, but a
+    drift would surface precisely here — around a DST change or a local
+    midnight — as a day-boundary disagreement the ledger would then carry."""
+
+    async def test_worked_by_day_matches_the_python_fold(self):
+        client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+        try:
+            collection = client[os.environ.get("DB_NAME", "beats_test")].beats
+            repo = MongoBeatRepository(collection, user_id="user-worked-by-day")
+            tz = ZoneInfo("Europe/Berlin")
+            for beat in (
+                # Late evening UTC is already the next local day in Berlin.
+                Beat(
+                    project_id="p1",
+                    start=datetime(2026, 3, 27, 23, 30, tzinfo=UTC),
+                    end=datetime(2026, 3, 28, 1, 0, tzinfo=UTC),
+                ),
+                # Crosses local midnight: belongs whole to the day it started.
+                Beat(
+                    project_id="p1",
+                    start=datetime(2026, 3, 28, 21, 0, tzinfo=UTC),
+                    end=datetime(2026, 3, 29, 0, 30, tzinfo=UTC),
+                ),
+                # The night Berlin springs forward (02:00 CET → 03:00 CEST).
+                Beat(
+                    project_id="p1",
+                    start=datetime(2026, 3, 29, 0, 30, tzinfo=UTC),
+                    end=datetime(2026, 3, 29, 3, 0, tzinfo=UTC),
+                ),
+                # Two sessions on one plain day: summed, not replaced.
+                Beat(
+                    project_id="p1",
+                    start=datetime(2026, 3, 30, 8, 0, tzinfo=UTC),
+                    end=datetime(2026, 3, 30, 12, 15, tzinfo=UTC),
+                ),
+                Beat(
+                    project_id="p1",
+                    start=datetime(2026, 3, 30, 13, 0, tzinfo=UTC),
+                    end=datetime(2026, 3, 30, 14, 0, tzinfo=UTC),
+                ),
+                # Another project's beat: not counted.
+                Beat(
+                    project_id="p2",
+                    start=datetime(2026, 3, 30, 8, 0, tzinfo=UTC),
+                    end=datetime(2026, 3, 30, 9, 0, tzinfo=UTC),
+                ),
+                # A running beat: counted up to now on the day it started.
+                Beat(
+                    project_id="p1",
+                    start=datetime.now(UTC) - timedelta(minutes=90),
+                    end=None,
+                ),
+            ):
+                await repo.create(beat)
+
+            expected = worked_by_local_day(await repo.list_by_project("p1"), tz)
+            got = await repo.worked_by_day("p1", tz)
+
+            assert set(got) == set(expected)
+            running_day = max(expected)  # today somewhere; every fixed day is 2026-03
+            for day in expected:
+                # The running beat's duration is measured at two different
+                # nows, one per read; every finished day must agree exactly.
+                tolerance = 0.01 if day == running_day else 1e-9
+                assert got[day] == pytest.approx(expected[day], abs=tolerance), day
         finally:
             await client.close()

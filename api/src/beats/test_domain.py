@@ -3064,6 +3064,13 @@ class _FakeBeatRepoForServices:
     async def list_by_project(self, project_id: str) -> builtins.list[Beat]:
         return [b for b in self._beats if b.project_id == project_id]
 
+    async def worked_by_day(self, project_id: str, tz: ZoneInfo) -> dict[date, float]:
+        # The real repo aggregates in Mongo; the fake folds the same beats
+        # through the one Python definition of the bucketing.
+        from beats.domain.services import worked_by_local_day
+
+        return worked_by_local_day(await self.list_by_project(project_id), tz)
+
     async def list_grouped_by_project_ids(
         self, project_ids: builtins.list[str]
     ) -> dict[str, builtins.list[Beat]]:

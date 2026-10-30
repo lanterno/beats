@@ -1665,6 +1665,11 @@ class _FakeBeatRepoForTools:
     async def list_by_project(self, project_id):
         return [b for b in self._beats if b.project_id == project_id]
 
+    async def worked_by_day(self, project_id, tz):
+        from beats.domain.services import worked_by_local_day
+
+        return worked_by_local_day(await self.list_by_project(project_id), tz)
+
 
 class _FakeAbsenceStoreForCoach:
     """In-memory AbsenceStore. The coach only reads; the writes are here
