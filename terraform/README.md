@@ -3,8 +3,8 @@
 This Terraform configuration deploys:
 - **Backend API**: FastAPI application on Cloud Run (accessible at `api.lifepete.com`)
 - **DNS**: the Cloudflare records for both hostnames
-- **Monitoring**: uptime checks on both hostnames, log-based metrics and a
-  dashboard — see [Monitoring](#monitoring)
+- **Monitoring**: uptime checks on both hostnames, log-based metrics, a
+  dashboard and email alerts — see [Monitoring](#monitoring)
 
 It does **not** deploy the frontend. The SPA at `lifepete.com` is served by
 Firebase Hosting and shipped by `.github/workflows/ui.yml` — see
@@ -27,6 +27,7 @@ The Terraform configuration is organized into logical modules for better maintai
 - **`cloudrun.tf`** - Cloud Run service, domain mapping, and IAM policies
 - **`cloudflare.tf`** - Cloudflare DNS record management (optional)
 - **`monitoring.tf`** - Uptime checks, log-based metrics and the dashboard
+- **`alerts.tf`** - Alert policies and the email channel they are sent to
 - **`outputs.tf`** - Output values for accessing created resources
 
 This modular structure makes it easier to:
@@ -238,8 +239,9 @@ gcloud builds log $BUILD_ID --project=beats-476914 --stream
 ## Monitoring
 
 [`monitoring.tf`](monitoring.tf) watches the live deployment from Cloud
-Monitoring. Nothing in it pages anyone: it is read in the Cloud console of
-project `beats-476914`.
+Monitoring, read in the Cloud console of project `beats-476914`, and
+[`alerts.tf`](alerts.tf) emails `alert_email` when something it watches goes
+wrong.
 
 - **Uptime checks** (Monitoring → Uptime checks). `https://api.lifepete.com/health`
   must answer `"status": "healthy"`, and `https://lifepete.com/` must hold the
@@ -271,6 +273,30 @@ resource.labels.service_name="beats-api"
 log_id("run.googleapis.com/requests")
 httpRequest.status=401
 ```
+
+### Alerts
+
+Every alert is emailed to `alert_email`, a required variable with no default:
+the tfvars secret must name it, or every apply, and so every API deploy, fails.
+The thresholds were set against the traffic of late October 2026 so that none
+fires on an ordinary day; the comment on each in `alerts.tf` says what it
+would have done then.
+
+| Alert | Fires when |
+|-------|------------|
+| Uptime check failing | either check fails from more than one probe location |
+| 5xx | over 2% of requests in five minutes answer 5xx, and at least three do |
+| Latency | p95 over ten minutes is above 5 s |
+| Instances at the maximum | a revision's active instances sit at `max_instances` for ten minutes |
+| Public-route failures | more than 20 401s, 403s, 404s or 429s on one public route in ten minutes |
+| Rejections | more than 200 401s, 403s and 429s under `/api/` in ten minutes |
+
+The latency target is 2 s, but the API is over that in about 13% of ten-minute
+windows today, so the alert sits at 5 s until the slow routes are fixed.
+
+An alert on a log-based metric can only be created once Cloud Monitoring sees
+the metric, up to ten minutes after the metric is made. A new log-based metric
+and an alert on it therefore go out in separate deploys.
 
 ---
 
