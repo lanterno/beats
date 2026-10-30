@@ -150,18 +150,20 @@ extension SkyContext on BuildContext {
   SkyPalette get sky => Theme.of(this).extension<SkyPalette>()!;
 }
 
-/// The family that holds the em dash and nothing else: M PLUS Rounded 1c's,
-/// cut out by `scripts/gen_latin_dash.py` and declared in pubspec.yaml.
+/// The family that holds the em dash, the ellipsis and the minus sign and
+/// nothing else: M PLUS Rounded 1c's, cut out by `scripts/gen_latin_dash.py`
+/// and declared in pubspec.yaml.
 ///
 /// Zen Maru Gothic draws the em dash as the full-width Japanese bar, a
 /// hairline a whole character wide that sits above the hyphen and touches the
-/// words either side; its en dash is already a Latin one. Flutter has no
-/// `unicode-range`, but it falls back per character, so this family goes first
-/// and Zen Maru behind it: every em dash comes from here, whether it is in a
+/// words either side, and its minus sign and ellipsis about twice a digit's
+/// width; its en dash is already a Latin one. Flutter has no `unicode-range`,
+/// but it falls back per character, so this family goes first and Zen Maru
+/// behind it: each of those characters comes from here, whether it is in a
 /// string in this app or in a brief, a note or a name from the API, and every
 /// other character stays Zen Maru's. The web's "Latin Dash" face does the same
-/// in `ui/client/global.css`. M PLUS Rounded 1c's own dashes are Latin, so the
-/// display and figure styles need nothing.
+/// in `ui/client/global.css`. M PLUS Rounded 1c's own glyphs are the ones the
+/// display and figure styles already draw, so those need nothing.
 const _latinDash = 'LatinDash';
 
 TextStyle _withLatinDash(TextStyle style) => style.copyWith(

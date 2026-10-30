@@ -8,17 +8,19 @@
 Zen Maru Gothic, the companion's body face, draws the em dash as the
 full-width Japanese bar: a hairline a whole character wide, set above the
 hyphen and running past its own advance, so it touches the words either side.
-Its en dash is already a Latin one. Flutter has no `unicode-range`, but it
-does fall back per character: a face that holds the em dash and nothing else,
-first in the body stack with Zen Maru behind it, draws every dash and leaves
-every other character to Zen Maru. That is the web's "Latin Dash" face
-(`ui/client/global.css`) by the only route Flutter has; `SkyType` in
+The minus sign and the ellipsis are full-width the same way, about twice a
+digit, so "−25m behind overall" reads with a hole in it. Its en dash is
+already a Latin one. Flutter has no `unicode-range`, but it does fall back
+per character: a face that holds those three characters and nothing else,
+first in the body stack with Zen Maru behind it, draws each of them and
+leaves every other character to Zen Maru. That is the web's "Latin Dash"
+face (`ui/client/global.css`) by the only route Flutter has; `SkyType` in
 `companion/lib/theme/sky.dart` puts it in front.
 
-The dash is M PLUS Rounded 1c's, the companion's other rounded face, at the
-two weights body text is set in. The face takes Zen Maru's line metrics, so a
-line with a dash in it is as tall as a line without, and an underline runs
-straight through it.
+The glyphs are M PLUS Rounded 1c's, the companion's other rounded face, at
+the two weights body text is set in. The face takes Zen Maru's line metrics,
+so a line with a dash in it is as tall as a line without, and an underline
+runs straight through it.
 
 Run it with `uv run scripts/gen_latin_dash.py`, which brings fontTools, and
 commit what it wrote. The source is pinned to a google/fonts commit and each
@@ -47,7 +49,9 @@ SHA256 = {
     "Regular": "b75708b53e45b06d17d470aeeca5b766e3d1b3999f03f13ec4eb863ca846c14c",
     "Bold": "c358630584e8e2d8fbd6121d0f4693255ffef6d1e6d4f3441fd6e5a963a11f9e",
 }
-EM_DASH = 0x2014
+# The em dash, the ellipsis and the minus sign: the characters Zen Maru sets
+# full width that body text actually shows.
+CHARACTERS = {0x2014, 0x2026, 0x2212}
 
 # Zen Maru Gothic's own line metrics, at the weight each face stands in for.
 # Flutter lays a line out to the tallest ascent and the deepest descent among
@@ -91,9 +95,9 @@ def cut(data: bytes, style: str) -> TTFont:
     font = TTFont(BytesIO(data), recalcTimestamp=False)
     options = subset.Options()
     options.name_IDs = NAME_IDS
-    options.layout_features = []  # one glyph: nothing to substitute or kern
+    options.layout_features = []  # three lone glyphs: nothing to substitute or kern
     subsetter = subset.Subsetter(options)
-    subsetter.populate(unicodes=[EM_DASH])
+    subsetter.populate(unicodes=sorted(CHARACTERS))
     subsetter.subset(font)
 
     for table, values in ZEN_MARU[style].items():
@@ -109,11 +113,11 @@ def cut(data: bytes, style: str) -> TTFont:
         elif record.nameID == 4:
             record.string = f"{FAMILY} {style}"
 
-    # Anything more than the dash would take that character from Zen Maru
+    # Anything more than those three would take that character from Zen Maru
     # in every line of body text.
     held = set(font.getBestCmap())
-    if held != {EM_DASH}:
-        sys.exit(f"{style}: the face holds {sorted(hex(c) for c in held)}, not the em dash alone")
+    if held != CHARACTERS:
+        sys.exit(f"{style}: the face holds {sorted(hex(c) for c in held)}, not the three alone")
     return font
 
 
