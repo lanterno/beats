@@ -6,6 +6,7 @@ Tests all endpoints: Projects, Beats, and Timer APIs
 import contextlib
 import copy
 import csv
+import hashlib
 import io
 import json
 import time
@@ -8217,6 +8218,31 @@ class TestDevicePairingAPI:
         # Second exchange fails
         resp = client.post("/api/device/pair/exchange", json={"code": code})
         assert resp.status_code == 404
+
+    def test_a_code_is_stored_with_dates_its_ttl_index_expires(self, client, auth_headers, mongo):
+        """The TTL index on `expires_at` acts only on BSON dates. Codes were
+        stored with ISO strings, so none was ever removed: every code issued
+        stayed in the collection with its hash and owner."""
+        resp = client.post("/api/device/pair/code", headers=auth_headers)
+        code_hash = hashlib.sha256(resp.json()["code"].encode()).hexdigest()
+        doc = mongo.pairing_codes.find_one({"code_hash": code_hash})
+        assert isinstance(doc["expires_at"], datetime)
+        assert isinstance(doc["created_at"], datetime)
+
+    def test_an_expired_code_is_refused_before_the_ttl_monitor_removes_it(
+        self, client, auth_headers, mongo
+    ):
+        """The TTL monitor runs about once a minute, so redemption checks the
+        expiry itself, against a date."""
+        code = client.post("/api/device/pair/code", headers=auth_headers).json()["code"]
+        code_hash = hashlib.sha256(code.encode()).hexdigest()
+        mongo.pairing_codes.update_one(
+            {"code_hash": code_hash},
+            {"$set": {"expires_at": datetime.now(UTC) - timedelta(seconds=1)}},
+        )
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Invalid or expired pairing code"
 
     def test_device_token_allows_heartbeat(self, client, auth_headers):
         """Device token can POST to /api/device/heartbeat."""

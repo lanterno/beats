@@ -17,9 +17,10 @@ from bson import ObjectId
 from pymongo import AsyncMongoClient
 
 from beats.domain.contracts import term_on
-from beats.domain.models import ProjectKind
+from beats.domain.models import PairingCode, ProjectKind
 from beats.infrastructure.migrations import (
     clear_personal_goal_on_day_jobs,
+    date_pairing_codes,
     migrate_project_kinds,
 )
 from beats.infrastructure.repositories import MongoProjectRepository
@@ -449,3 +450,71 @@ class TestMoveSundayPlans:
         await move_sunday_plans_to_monday(db)
         await move_sunday_plans_to_monday(db)
         assert mongo.weekly_plans.find_one({"_id": pid})["week_of"] == "2026-10-12"
+
+
+class TestDatePairingCodes:
+    """Pairing codes were stored with ISO-string dates, which their TTL index never expires."""
+
+    NOW = datetime(2026, 10, 30, 12, 0, tzinfo=UTC)
+
+    @pytest.fixture(autouse=True)
+    def _no_codes(self, mongo):
+        mongo.pairing_codes.delete_many({})
+
+    @staticmethod
+    def _stored_as_strings(mongo, code_hash: str, expires_at: datetime) -> ObjectId:
+        """A code as the repository wrote it before: through `model_dump(mode="json")`."""
+        code = PairingCode(
+            user_id=USER,
+            code_hash=code_hash,
+            created_at=expires_at - timedelta(minutes=5),
+            expires_at=expires_at,
+        )
+        doc = code.model_dump(mode="json", exclude_none=True)
+        assert isinstance(doc["expires_at"], str)
+        return mongo.pairing_codes.insert_one(doc).inserted_id
+
+    async def test_an_expired_code_is_deleted(self, db, mongo):
+        pid = self._stored_as_strings(mongo, "old", self.NOW - timedelta(days=90))
+        report = await date_pairing_codes(db, now=self.NOW)
+        assert (report.converted, report.deleted) == (0, 1)
+        assert mongo.pairing_codes.find_one({"_id": pid}) is None
+
+    async def test_a_live_code_is_given_dates_and_kept(self, db, mongo):
+        """Issued by the revision being replaced, minutes before the boot: a
+        daemon being paired across the deploy can still redeem it."""
+        expires_at = self.NOW + timedelta(minutes=3)
+        pid = self._stored_as_strings(mongo, "live", expires_at)
+        report = await date_pairing_codes(db, now=self.NOW)
+        assert (report.converted, report.deleted) == (1, 0)
+        doc = mongo.pairing_codes.find_one({"_id": pid})
+        # BSON dates come back naive, in UTC.
+        assert doc["expires_at"] == expires_at.replace(tzinfo=None)
+        assert doc["created_at"] == (expires_at - timedelta(minutes=5)).replace(tzinfo=None)
+        assert (doc["user_id"], doc["code_hash"]) == (USER, "live")
+
+    async def test_a_code_whose_date_cannot_be_read_is_deleted(self, db, mongo):
+        pid = mongo.pairing_codes.insert_one(
+            {"user_id": USER, "code_hash": "garbled", "expires_at": "soon"}
+        ).inserted_id
+        report = await date_pairing_codes(db, now=self.NOW)
+        assert report.deleted == 1
+        assert mongo.pairing_codes.find_one({"_id": pid}) is None
+
+    async def test_a_code_already_stored_with_dates_is_left_alone(self, db, mongo):
+        """Expired or not, a dated code is the TTL index's to remove."""
+        expired = self.NOW.replace(tzinfo=None) - timedelta(minutes=1)
+        pid = mongo.pairing_codes.insert_one(
+            {"user_id": USER, "code_hash": "dated", "expires_at": expired}
+        ).inserted_id
+        report = await date_pairing_codes(db, now=self.NOW)
+        assert (report.converted, report.deleted) == (0, 0)
+        assert mongo.pairing_codes.find_one({"_id": pid})["expires_at"] == expired
+
+    async def test_a_second_boot_has_nothing_to_do(self, db, mongo):
+        self._stored_as_strings(mongo, "old", self.NOW - timedelta(days=1))
+        self._stored_as_strings(mongo, "live", self.NOW + timedelta(minutes=1))
+        await date_pairing_codes(db, now=self.NOW)
+        report = await date_pairing_codes(db, now=self.NOW)
+        assert (report.converted, report.deleted) == (0, 0)
+        assert mongo.pairing_codes.count_documents({"expires_at": {"$type": "string"}}) == 0
