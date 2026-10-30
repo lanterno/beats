@@ -27,6 +27,18 @@ resource "google_cloud_run_service" "beats_api" {
           value = var.jwt_secret
         }
 
+        # The proxy whose X-Forwarded-For the API believes (settings.py). Cloud
+        # Run's front end reaches the container from a link-local address —
+        # 169.254.169.126 on every request in the uvicorn access log — and
+        # appends the visitor's address as the right-most entry, so that entry
+        # is what the rate limits key on. Link-local cannot come from the
+        # internet, and the whole range survives a change of address inside it.
+        # Without this every visitor shares one rate-limit bucket.
+        env {
+          name  = "FORWARDED_ALLOW_IPS"
+          value = "169.254.0.0/16"
+        }
+
         env {
           name  = "WEBAUTHN_RP_ID"
           value = var.webauthn_rp_id
