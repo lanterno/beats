@@ -14,3 +14,204 @@ resource "google_monitoring_notification_channel" "email" {
 
   depends_on = [google_project_service.monitoring]
 }
+
+locals {
+  alert_channels = [google_monitoring_notification_channel.email.id]
+}
+
+# An alert compares with > or <, never >= (only COMPARISON_GT and
+# COMPARISON_LT are supported), so "at least n" is written "more than n - 1".
+#
+# A condition on something that can fall silent (a 5xx count, a log-based
+# metric) reads missing data as false, so its incident closes when the trouble
+# stops rather than staying open until auto-close.
+
+# Either host fails from more than one of the six probe locations. One
+# location failing alone is usually the probe's network, not the site.
+resource "google_monitoring_alert_policy" "uptime" {
+  display_name          = "Uptime check failing"
+  project               = var.project_id
+  combiner              = "OR"
+  severity              = "CRITICAL"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "More than one probe location fails"
+
+    condition_threshold {
+      filter = join(" AND ", [
+        "resource.type=\"uptime_url\"",
+        "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\"",
+        "metric.label.check_id=one_of(\"${google_monitoring_uptime_check_config.api_health.uptime_check_id}\", \"${google_monitoring_uptime_check_config.web.uptime_check_id}\")",
+      ])
+
+      # Each location's latest result in the last 20 minutes (the checks run
+      # every five), then the number of locations whose latest result failed.
+      aggregations {
+        alignment_period     = "1200s"
+        per_series_aligner   = "ALIGN_NEXT_OLDER"
+        cross_series_reducer = "REDUCE_COUNT_FALSE"
+        group_by_fields      = ["resource.label.host"]
+      }
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = 1
+      duration        = "60s"
+    }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      An uptime check on ${var.api_domain}/health or ${local.web_host}/ is failing from more than one probe location. The failed checks are in Logging with their reason (DNS, TLS, timeout, status or content). /health does not touch MongoDB: if it passes while the app fails, look at the database.
+    EOT
+  }
+}
+
+# More than 2% of the API's requests over five minutes answered 5xx, and at
+# least three of them. At night five minutes can hold under 40 requests, when
+# one error alone is over 2%; the count keeps a single error from paging. In
+# the week to 2026-10-30 this would have fired twice: twelve companion
+# requests failing within a minute on 10-27, and four on 10-26.
+resource "google_monitoring_alert_policy" "api_5xx" {
+  display_name          = "${var.api_service_name}: more than 2% of requests answered 5xx"
+  project               = var.project_id
+  combiner              = "AND"
+  severity              = "ERROR"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "5xx share of requests over 5 minutes above 2%"
+
+    condition_threshold {
+      filter             = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_count\" AND metric.label.response_code_class=\"5xx\""
+      denominator_filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_count\""
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      denominator_aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      comparison              = "COMPARISON_GT"
+      threshold_value         = 0.02
+      duration                = "0s"
+      evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
+    }
+  }
+
+  conditions {
+    display_name = "At least three 5xx in those 5 minutes"
+
+    condition_threshold {
+      filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_count\" AND metric.label.response_code_class=\"5xx\""
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      comparison              = "COMPARISON_GT"
+      threshold_value         = 2
+      duration                = "0s"
+      evaluation_missing_data = "EVALUATION_MISSING_DATA_INACTIVE"
+    }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      ${var.api_service_name} is failing requests. The request log has each one (httpRequest.status>=500), and the API's own log lines beside it carry the traceback.
+    EOT
+  }
+}
+
+# p95 latency over ten minutes above 5 s. The target is 2 s, but today the
+# API is over 2 s in about 13% of ten-minute windows, every day: most slow
+# requests are the companion's polls of /api/projects/{id}/ledger. At 2 s this
+# would page daily for a cause already known; at 5 s it would have fired in 3
+# windows in the week to 2026-10-30. Bring it down once the ledger is fast.
+resource "google_monitoring_alert_policy" "api_latency" {
+  display_name          = "${var.api_service_name}: p95 latency above 5 s"
+  project               = var.project_id
+  combiner              = "OR"
+  severity              = "WARNING"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "p95 over 10 minutes above 5 s"
+
+    condition_threshold {
+      filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/request_latencies\""
+
+      # Each series' requests over the window, merged, then the 95th
+      # percentile of them all.
+      aggregations {
+        alignment_period     = "600s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_PERCENTILE_95"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = 5000
+      duration        = "0s"
+    }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      ${var.api_service_name} has been slow for ten minutes. The dashboard shows whether instances are at their maximum or starting cold (a cold start takes about 30 s); the request log, filtered on httpRequest.latency>"5s", shows which routes.
+    EOT
+  }
+}
+
+# A revision's active instances at max_instances (the variable behind
+# maxScale in cloudrun.tf) for ten minutes: new requests wait for a free
+# instance, and Cloud Run turns away (429) those that wait too long. At the
+# current maximum of 2 this held for five minutes three times in the week to
+# 2026-10-30, and for ten minutes twice.
+resource "google_monitoring_alert_policy" "api_instances_at_max" {
+  display_name          = "${var.api_service_name}: instances at the maximum"
+  project               = var.project_id
+  combiner              = "OR"
+  severity              = "WARNING"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "Active instances at max_instances for 10 minutes"
+
+    condition_threshold {
+      filter = "${local.api_metrics} AND metric.type=\"run.googleapis.com/container/instance_count\" AND metric.label.state=\"active\""
+
+      aggregations {
+        alignment_period     = "60s"
+        per_series_aligner   = "ALIGN_MAX"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.revision_name"]
+      }
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = var.max_instances - 1
+      duration        = "600s"
+    }
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      Every instance ${var.api_service_name} may run has been busy for ten minutes. Slow requests hold instances (see the latency chart); if traffic has simply grown, raise max_instances in the tfvars.
+    EOT
+  }
+}
