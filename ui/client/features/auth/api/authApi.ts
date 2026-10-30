@@ -7,6 +7,7 @@ import type {
 	PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import { config } from "@/shared/config";
+import { deviceName } from "../lib/deviceName";
 import { getSessionToken } from "../stores/authStore";
 
 export interface RegisterStartResponse {
@@ -191,6 +192,37 @@ export interface CredentialInfo {
 export async function listCredentials(): Promise<CredentialInfo[]> {
 	const { get } = await import("@/shared/api");
 	return get<CredentialInfo[]>("/api/account/credentials");
+}
+
+/**
+ * Put another passkey on this account, for this device.
+ *
+ * Not `/api/auth/register/*`: that is the sign-up door, and it answers 409
+ * for an email that already has a passkey. So until #376 an account could
+ * hold exactly one — no second device, and losing it locked the account out
+ * unless single sign-on was linked. These two calls run the same ceremony
+ * behind the session, so the account is the token's and no new token comes
+ * back; the one in hand keeps working.
+ *
+ * The browser refuses to enrol an authenticator this account already holds
+ * (the options' `excludeCredentials`), which surfaces as `InvalidStateError`
+ * — a passkey already on this device, not a failure.
+ */
+export async function addPasskey(): Promise<void> {
+	const [{ startRegistration }, { post }] = await Promise.all([
+		import("@simplewebauthn/browser"),
+		import("@/shared/api"),
+	]);
+	const { options } = await post<{ options: PublicKeyCredentialCreationOptionsJSON }>(
+		"/api/account/credentials/start",
+	);
+	const credential = await startRegistration({ optionsJSON: options });
+	// Nothing else on the account changes, so there is nothing to return;
+	// the caller re-reads the list.
+	await post("/api/account/credentials/verify", {
+		credential,
+		device_name: deviceName(),
+	});
 }
 
 export async function deleteCredential(credentialId: string): Promise<void> {
