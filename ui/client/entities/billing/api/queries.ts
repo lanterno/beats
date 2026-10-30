@@ -2,6 +2,7 @@
  * Billing TanStack Query Hooks
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { billingRootKey, clientsRootKey } from "@/shared/api";
 import type {
 	BillingBudgetInput,
@@ -241,6 +242,32 @@ export function useReportLinks(clientId: string, { enabled = true }: { enabled?:
 		queryFn: (): Promise<ReportLink[]> => fetchReportLinks(clientId),
 		enabled,
 	});
+}
+
+/**
+ * How many report links work right now across the given clients. Every link
+ * listed works: revoking deletes one, and an archived client's links still
+ * serve (docs/billing.md, 1c). Read fresh each time, never from the cache,
+ * since a link minted a moment ago on another device counts. It reads through
+ * the keys `useReportLinks` fills, so the Clients page gets the lists too.
+ */
+export function useCountReportLinks(): (clientIds: readonly string[]) => Promise<number> {
+	const queryClient = useQueryClient();
+	return useCallback(
+		async (clientIds) => {
+			const lists = await Promise.all(
+				clientIds.map((clientId) =>
+					queryClient.fetchQuery({
+						queryKey: billingKeys.links(clientId),
+						queryFn: (): Promise<ReportLink[]> => fetchReportLinks(clientId),
+						staleTime: 0,
+					}),
+				),
+			);
+			return lists.reduce((total, links) => total + links.length, 0);
+		},
+		[queryClient],
+	);
 }
 
 /** Mint a link over a fixed range. */
