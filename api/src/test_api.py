@@ -5551,6 +5551,121 @@ class TestErrorEnvelope:
         assert "No timer" in body["detail"]
 
 
+class TestStopNamesItsTimer:
+    """POST /api/projects/stop with `expected`: the companion replays a stop
+    it queued offline, and by then another device may have changed the
+    timer. The stop applies only to the session it names; any other running
+    session is left alone with a 409 TIMER_CHANGED."""
+
+    @pytest.fixture(autouse=True)
+    def _nothing_running(self, client, auth_headers):
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+        yield
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
+
+    @staticmethod
+    def _project(client, headers, name: str) -> str:
+        resp = client.post("/api/projects/", json={"name": name}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    @staticmethod
+    def _start(client, headers, project_id: str, at: str) -> None:
+        resp = client.post(f"/api/projects/{project_id}/start", json={"time": at}, headers=headers)
+        assert resp.status_code == 200, resp.text
+
+    @staticmethod
+    def _stop(client, headers, at: str) -> None:
+        resp = client.post("/api/projects/stop", json={"time": at}, headers=headers)
+        assert resp.status_code == 200, resp.text
+
+    @staticmethod
+    def _running(client, headers) -> dict:
+        return client.get("/api/timer/status", headers=headers).json()
+
+    def test_the_named_timer_stops(self, client, auth_headers):
+        # The start the client sent carried microseconds; Mongo keeps
+        # milliseconds, and the client names the timer by what it sent.
+        project = self._project(client, auth_headers, "Northwind")
+        self._start(client, auth_headers, project, "2026-04-16T09:00:00.123456Z")
+
+        resp = client.post(
+            "/api/projects/stop",
+            json={
+                "time": "2026-04-16T10:30:00Z",
+                "expected": {"project_id": project, "start": "2026-04-16T09:00:00.123456Z"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["end"].startswith("2026-04-16T10:30:00")
+        assert self._running(client, auth_headers)["isBeating"] is False
+
+    def test_a_timer_switched_elsewhere_keeps_running(self, client, auth_headers):
+        northwind = self._project(client, auth_headers, "Northwind")
+        kite = self._project(client, auth_headers, "Studio Kite")
+        self._start(client, auth_headers, northwind, "2026-04-16T09:00:00Z")
+        # Another device switches while this one is offline.
+        self._stop(client, auth_headers, "2026-04-16T10:00:00Z")
+        self._start(client, auth_headers, kite, "2026-04-16T10:00:00Z")
+
+        resp = client.post(
+            "/api/projects/stop",
+            json={
+                "time": "2026-04-16T10:30:00Z",
+                "expected": {"project_id": northwind, "start": "2026-04-16T09:00:00Z"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "TIMER_CHANGED"
+        status = self._running(client, auth_headers)
+        assert status["isBeating"] is True
+        assert status["project"]["id"] == kite
+
+    def test_the_same_project_restarted_elsewhere_keeps_running(self, client, auth_headers):
+        project = self._project(client, auth_headers, "Northwind")
+        self._start(client, auth_headers, project, "2026-04-16T09:00:00Z")
+        self._stop(client, auth_headers, "2026-04-16T09:45:00Z")
+        self._start(client, auth_headers, project, "2026-04-16T10:00:00Z")
+
+        resp = client.post(
+            "/api/projects/stop",
+            json={
+                "time": "2026-04-16T10:30:00Z",
+                "expected": {"project_id": project, "start": "2026-04-16T09:00:00Z"},
+            },
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 409, resp.text
+        assert self._running(client, auth_headers)["since"].startswith("2026-04-16T10:00:00")
+
+    def test_a_replayed_stop_answers_as_it_did_rather_than_refusing(self, client, auth_headers):
+        """The stop landed but its response was lost; meanwhile another
+        timer started. The replay carries the same X-Client-Id, so it is
+        answered from the record, not judged again against the new timer."""
+        northwind = self._project(client, auth_headers, "Northwind")
+        kite = self._project(client, auth_headers, "Studio Kite")
+        self._start(client, auth_headers, northwind, "2026-04-16T09:00:00Z")
+        stop = {
+            "time": "2026-04-16T10:30:00Z",
+            "expected": {"project_id": northwind, "start": "2026-04-16T09:00:00Z"},
+        }
+        headers = {**auth_headers, "X-Client-Id": "offline-stop-1"}
+        first = client.post("/api/projects/stop", json=stop, headers=headers)
+        assert first.status_code == 200, first.text
+        self._start(client, auth_headers, kite, "2026-04-16T10:30:00Z")
+
+        replay = client.post("/api/projects/stop", json=stop, headers=headers)
+
+        assert replay.status_code == 200
+        assert replay.headers.get("X-Idempotent-Replay") == "true"
+        assert self._running(client, auth_headers)["project"]["id"] == kite
+
+
 class TestIdempotentReplay:
     """Timer start/stop must be idempotent under retries keyed by X-Client-Id."""
 
