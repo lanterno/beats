@@ -2613,6 +2613,20 @@ class TestTimesheets:
         again = _submit(client, member, org["id"], project["id"], "2026-03")
         assert again.status_code == 201
         assert again.json()["status"] == "submitted"
+        # And the answered complaint goes with the answer (#413): `_dump`
+        # excludes None, so the sheet used to read as submitted and still
+        # carry the decider, the instant and the comment it was answering.
+        assert again.json()["comment"] is None
+        assert again.json()["decided_by"] is None
+        assert again.json()["decided_at"] is None
+        [listed] = client.get(f"/api/organisations/{org['id']}/timesheets", headers=member).json()
+        assert (listed["comment"], listed["decided_by"]) == (None, None)
+        # The history is the record of what happened and keeps both steps.
+        assert [h["action"] for h in listed["history"]] == [
+            "submitted",
+            "changes_requested",
+            "submitted",
+        ]
 
     def test_approval_waits_for_a_running_timer_in_the_month(self, client, auth_headers):
         member = _new_user()
