@@ -1224,6 +1224,63 @@ class TestMergingAProject:
         assert row["shared_from"] == "2026-03-04T00:00:00Z"
         assert row["has_contract"] is True
 
+    def test_a_former_member_stays_in_the_merged_projects_record(self, client, auth_headers):
+        """A bug that happened (#406): the fold took the active assignments
+        and the delete took them all, so a member who had left kept their
+        rows under the target with nothing to list them by — and dropped out
+        of a record an employer may be bound to keep."""
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        gone = _new_user()
+        gone_id = _member_of(client, auth_headers, org["id"], gone)
+        source = _org_project(client, auth_headers, org["id"], name="Duplicate")
+        _assign(client, auth_headers, org["id"], source["id"], gone_id)
+        _beat(client, gone, source["id"], "2026-03-04T09:00:00", 60)
+        assert (
+            client.delete(
+                f"/api/organisations/{org['id']}/projects/{source['id']}/members/{gone_id}",
+                headers=auth_headers,
+            ).status_code
+            == 204
+        )
+
+        merged = self._merge(client, auth_headers, org["id"], source["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), platform["id"])
+        assert row["user_id"] == gone_id
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04"]
+        # And they are still off the project: folding moves their half, it
+        # does not put them back on it.
+        assert row["active"] is False
+
+    def test_a_members_plan_and_flow_windows_follow_the_merge(self, client, auth_headers):
+        """The two places a member names a project that is not a row of
+        theirs. Left behind they point at the document the merge deletes."""
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+        mine = self._tracked(client, member)
+        planned = client.put(
+            "/api/plans/weekly",
+            json={
+                "week_of": "2026-03-02",
+                "budgets": [{"project_id": mine["id"], "planned_hours": 8}],
+            },
+            headers=member,
+        )
+        assert planned.status_code == 200, planned.text
+        self._connect(client, member, org["id"], mine["id"], "2026-03-04")
+
+        merged = self._merge(client, auth_headers, org["id"], mine["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+
+        plan = client.get(
+            "/api/plans/weekly", params={"week_of": "2026-03-02"}, headers=member
+        ).json()
+        assert [b["project_id"] for b in plan["budgets"]] == [platform["id"]]
+
     def test_a_frozen_month_refuses_the_merge(self, client, auth_headers):
         member = _new_user()
         org, employed, _member_id = _employed(client, auth_headers, member)
