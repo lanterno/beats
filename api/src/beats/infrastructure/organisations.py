@@ -800,10 +800,24 @@ class MongoOrganisationStore:
     async def upsert_timesheet(self, sheet: OrgTimesheet) -> OrgTimesheet:
         """Submit, or resubmit: one document per (project, member, month),
         its history appended to. Never touches an approved sheet — the
-        filter excludes it, so a resubmission racing an approval loses."""
+        filter excludes it, so a resubmission racing an approval loses.
+
+        A field the sheet clears is `$unset`, not left out. `_dump` excludes
+        None, so resubmitting a sheet that was sent back used to keep the
+        decider, the instant and the "changes requested" comment of the
+        decision it was answering: the sheet read as submitted and still
+        carried the complaint (#413)."""
         data = _dump(sheet)
         data.pop("_id", None)
         history = data.pop("history", [])
+        cleared = {
+            field: ""
+            for field in ("decided_at", "decided_by", "comment", "frozen")
+            if getattr(sheet, field) is None
+        }
+        changes: dict[str, Any] = {"$set": data, "$push": {"history": {"$each": history}}}
+        if cleared:
+            changes["$unset"] = cleared
         doc = await self.timesheets.find_one_and_update(
             {
                 "project_id": sheet.project_id,
@@ -811,7 +825,7 @@ class MongoOrganisationStore:
                 "month": data["month"],
                 "status": {"$ne": TimesheetStatus.APPROVED.value},
             },
-            {"$set": data, "$push": {"history": {"$each": history}}},
+            changes,
             upsert=True,
             return_document=ReturnDocument.AFTER,
         )

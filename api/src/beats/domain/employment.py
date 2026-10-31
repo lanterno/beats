@@ -461,9 +461,13 @@ class EmploymentService(OrganisationService):
         return decided
 
     async def withdraw_absence(self, organisation_id: str, user_id: str, request_id: str) -> None:
+        """Take back a request nobody has decided. Audited like every other
+        step of a request: a decider who saw it waiting and then does not
+        should be able to find out where it went."""
         await self._member(organisation_id, user_id)
         if not await self.store.withdraw_absence_request(organisation_id, request_id, user_id):
             raise AbsenceRequestNotFound()
+        await self._audit(organisation_id, user_id, "absence.withdrawn", subject_user_id=user_id)
 
     # --- timesheets (stage 3) ---------------------------------------------------------
 
