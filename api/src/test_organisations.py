@@ -1824,6 +1824,57 @@ class TestManagedContracts:
         )
         assert own.status_code == 201, own.text
 
+    def test_the_employers_write_keeps_the_members_own_checks(self, client, auth_headers):
+        # A bug that happened (#412): the employer's contract write validated
+        # through a shell day job and never reconciled the member's
+        # adjustments, so it could put a contract on a freelance project
+        # and move a first day past an adjustment.
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        gig = _org_project(client, auth_headers, org["id"], name="Gig", kind="freelance")
+        _assign(client, auth_headers, org["id"], gig["id"], member_id)
+        refused = client.put(
+            f"/api/organisations/{org['id']}/projects/{gig['id']}/members/{member_id}/contract",
+            json={"contract": {"terms": FULL_TIME}, "managed": True},
+            headers=auth_headers,
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "NOT_A_DAY_JOB"
+
+        job = _org_project(client, auth_headers, org["id"], name="Job", kind="day_job")
+        _assign(client, auth_headers, org["id"], job["id"], member_id)
+        url = f"/api/organisations/{org['id']}/projects/{job['id']}/members/{member_id}"
+        taken = client.put(
+            f"{url}/contract",
+            json={"contract": {"terms": FULL_TIME}, "managed": True},
+            headers=auth_headers,
+        )
+        assert taken.status_code == 200, taken.text
+        paid = client.post(
+            f"{url}/adjustments",
+            json={"date": "2026-03-02", "kind": "delta", "hours": -8},
+            headers=auth_headers,
+        )
+        assert paid.status_code == 201, paid.text
+        later = [{**FULL_TIME[0], "effective_from": "2026-04-01"}]
+        moved = client.put(
+            f"{url}/contract",
+            json={"contract": {"terms": later}, "managed": True},
+            headers=auth_headers,
+        )
+        assert moved.status_code == 409, moved.text
+        assert moved.json()["code"] == "ADJUSTMENT_BEFORE_START"
+        earlier = [{**FULL_TIME[0], "effective_from": "2025-12-01"}]
+        assert (
+            client.put(
+                f"{url}/contract",
+                json={"contract": {"terms": earlier}, "managed": True},
+                headers=auth_headers,
+            ).status_code
+            == 200
+        )
+
     def test_an_unmanaged_assignment_takes_no_employer_adjustment(self, client, auth_headers):
         member = _new_user()
         org, project, member_id = _employed(client, auth_headers, member, managed=False)
