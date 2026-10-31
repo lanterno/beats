@@ -26,7 +26,11 @@ What survives, and in what shape:
   `erased`.
 - **The audit log**, and every other column in the organisation that names
   the person — who created it, who made an invite, who assigned, who decided
-  a request: the organisation's, so they stay; the id becomes the tombstone.
+  a request, who entered time for a member (`entered_by`), who took each
+  step of a timesheet (`history[].by`): the organisation's, so they stay;
+  the id becomes the tombstone. A beat the member has since moved to a
+  personal project carries no stamp, so no tombstone fits it; its
+  `entered_by` becomes the bare word `erased` (#410).
 
 Everything else keyed to the user — personal projects and their beats, flow
 windows, biometrics, the coach and its memory, clients and billing, devices,
@@ -124,6 +128,14 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
         await db.org_absence_requests.update_many(
             {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
         )
+        await db.org_timesheets.update_many(
+            {"organisation_id": org_id, "history.by": user_id},
+            {"$set": {"history.$[step].by": stone}},
+            array_filters=[{"step.by": user_id}],
+        )
+        await db.timeLogs.update_many(
+            {"organisation_id": org_id, "entered_by": user_id}, {"$set": {"entered_by": stone}}
+        )
         await db.org_teams.update_many(
             {"organisation_id": org_id}, {"$pull": {"member_ids": user_id}}
         )
@@ -188,6 +200,10 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
                 "details": {},
             }
         )
+
+    # A beat this person entered that the member has since moved to a
+    # personal project: no stamp, so no organisation's tombstone fits it.
+    await db.timeLogs.update_many({"entered_by": user_id}, {"$set": {"entered_by": "erased"}})
 
     # Now everything else keyed to the user, in every collection there is.
     deleted: dict[str, int] = {}
