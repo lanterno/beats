@@ -388,7 +388,8 @@ project that does not exist.
   from a day.
 - Wherever a note is shown on an organisation's project, and on the session
   editor's note input: "Acme can read this note". A session a decider
-  logged is marked "entered for you" in the web app's timeline.
+  logged is marked "entered for you" in the web app's timeline and on the
+  companion's Today strip.
 - `/organisations` lists the invitations waiting for me (who, and as what;
   joining takes the link I was sent, decision 11), my organisations with my
   role, and the ones I left ("Acme (left)" → the archive), and creates one.
@@ -469,7 +470,8 @@ what only matters past a handful of people. Decisions 21–30:
     timeline marked "entered for you", is stamped as the organisation's,
     and is in the audit log — the notification the epic asked for is the
     member's own timeline showing it. Every surface shows the session; the
-    web app's timeline (`TodayFeed`, `WeekDays`) is the one that marks it.
+    web app's timeline (`TodayFeed`, `WeekDays`) marks it, and so does the
+    companion's Today strip ("Acme · entered for you", `sessionLabel`).
 25. **Teams are a manager's scope.** A team (`org_teams`) is a name and its
     members. The **manager** role decides requests and timesheets, writes
     managed contracts and enters time for the members of the teams the manager
