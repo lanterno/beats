@@ -127,10 +127,22 @@ Then the model's own:
    it is never made (`TestOrganisationWall`), not because a filter removed it.
    A beat on the organisation's project *without* the stamp — moved there by
    hand in the database, or before a connected project's `shared_from` — is
-   not read.
+   not read. And no write puts the stamp before that boundary (#404): the
+   four services stamp through `stamp_for` and `stamp_for_day`
+   (`domain/services.py`), which compare a beat's start with the connected
+   project's `shared_from` and an absence's date with the day the member
+   chose (`shared_from_day`), so a note edited on a pre-share entry, a
+   back-dated entry or absence, and an entry moved before the day stay the
+   member's own, and a stamped entry moved before it loses the stamp. A
+   project the organisation assigned has no boundary: nothing of the
+   member's on it predates the organisation, and a back-dated entry there
+   is work for it.
 8. **Connecting hands the document over and stamps the chosen history.** The
    personal fields move to a new assignment with `shared_from` = local
-   midnight of the chosen day (or now, to start fresh); the document loses
+   midnight of the chosen day (or now, to start fresh) and `shared_from_day`
+   = that day itself (or today) — kept because an absence is dated, not
+   timed, and the instant alone cannot name its day once timezones differ;
+   the document loses
    `user_id` and its personal fields and gains `organisation_id`, keeping its
    id, so every beat, absence and adjustment stays where it is (rule 1);
    then the member's own beats from that instant and absences from that day
@@ -207,9 +219,11 @@ Then the model's own:
     organisation already read.
 18. **The stamp on a restored beat is never the file's.** A beat the account
     already holds keeps the stamp it has; one new to the account takes the
-    one the project as it stands gives — an organisation's, and started on
+    one the project as it stands gives, by the same `stamp_for` every live
+    write uses — an organisation's, and on a connected project started on
     or after the member's `shared_from`. A backup from before a connect
-    cannot strip the record, and an edited one cannot plant it.
+    cannot strip the record, and an edited one cannot plant it before the
+    day the member chose.
 19. **The rows stay the person's to edit, until a month is approved.** A
     member can still delete or move an entry that is an organisation's
     record, before and after leaving: rule 1 says the data is theirs. Stage
@@ -247,7 +261,10 @@ New collections, none scoped by `user_id`:
   `name`, `email`, `requested_at`, `decided_at`, `decision`, `decided_by`.
 - **`org_assignments`**: one per member per project, reopened on
   reassigning — `organisation_id`, `project_id`, `user_id`, `shared_from`
-  (an instant), `assigned_at`, `assigned_by`, `ended_at`, and the personal
+  (an instant), `shared_from_day` (the day a connect was shared from; None
+  on an assignment the organisation made, and given to older documents by
+  the startup pass `mark_connected_assignments` from the audit log),
+  `assigned_at`, `assigned_by`, `ended_at`, and the personal
   half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
   `autostart_repos`, `contract`, and `contract_managed` (decision 21).
   Unique on `(project_id, user_id)`.
@@ -355,7 +372,8 @@ contract's own 409s (`ADJUSTMENT_OUTSIDE_BALANCE`,
 `VACATION_OPENING_OUTSIDE_CONTRACT`) on the employer's writes.
 
 On the member's own routes, a `Project` gains `organisation` (`id`, `name`,
-`logo_url`, `shared_from`, `contract_managed`), a beat and an absence
+`logo_url`, `shared_from`, `shared_from_day`, `contract_managed`), a beat and
+an absence
 `organisation_id`, a beat a decider logged `entered_by`, and
 `PUT /api/projects/` answers 409 `ORGANISATION_PROJECT` for a change to an
 organisation field, as do `/archive` and `/unarchive`. Starting a timer or
@@ -511,7 +529,8 @@ what only matters past a handful of people. Decisions 21–30:
     stays shared from that instant, and what was private stays private,
     under the surviving project on their own timeline. Each active
     assignment folds into the target's, which survives as it stands
-    (decision 17's spirit): the earlier `shared_from`, and the source's
+    (decision 17's spirit): the earlier `shared_from_day` where either side
+    has one, with its instant, and the source's
     contract only where the target's assignment has none. Refused while
     an approved timesheet exists on either side (409 `PERIOD_APPROVED`
     naming the earliest frozen month): a stored close must not gain or
