@@ -1505,6 +1505,90 @@ class TestErasure:
         assert "note" not in db.absences.find_one({"organisation_id": org["id"]})
         assert db.org_audit.find_one({"event": "account.erased", "subject_user_id": row["user_id"]})
 
+    def test_a_deciders_erasure_leaves_no_raw_id_anywhere(self, client, auth_headers):
+        """The module promises every column in the organisation naming the
+        person gets the tombstone. Two were missed (#410): `entered_by` on
+        a session a decider logged for a member, and the `by` of each step
+        of a timesheet's history."""
+        from beats.infrastructure.erasure import erase_account
+
+        decider = _new_user()
+        decider_id = _seeded_id(decider)
+        member = _new_user()
+        org, project, member_id = _employed(client, auth_headers, member, managed=False)
+        _member_of(client, auth_headers, org["id"], decider, role="admin")
+        entered = client.post(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}/entries",
+            json={"start": "2026-03-04T09:00:00Z", "end": "2026-03-04T10:00:00Z"},
+            headers=decider,
+        )
+        assert entered.status_code == 201, entered.text
+        sheet = _submit(client, member, org["id"], project["id"], MONTH).json()
+        assert (
+            _decide_sheet(client, decider, org["id"], sheet["id"], approve=False).status_code == 200
+        )
+        # A session they entered that the member has since moved to a
+        # personal project of their own: no stamp, so no tombstone fits it.
+        mine = client.post("/api/projects/", json={"name": "Garden"}, headers=member).json()
+        moved = client.post(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}/entries",
+            json={"start": "2026-03-05T09:00:00Z", "end": "2026-03-05T10:00:00Z"},
+            headers=decider,
+        ).json()
+        assert (
+            client.put(
+                "/api/beats/",
+                json={
+                    "id": moved["id"],
+                    "project_id": mine["id"],
+                    "start": moved["start"],
+                    "end": moved["end"],
+                },
+                headers=member,
+            ).status_code
+            == 200
+        )
+
+        async def run():
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await erase_account(
+                    client_[os.environ.get("DB_NAME", "beats_test")], decider_id
+                )
+            finally:
+                await client_.close()
+
+        asyncio.run(run())
+
+        db = _db()
+        # Every column in the organisation that names a person. (The
+        # membership's name and email are kept by decision 3, and the test
+        # fixture happens to build an address out of the id, so this names
+        # the id-bearing fields rather than sweeping the raw documents.)
+        for name in db.list_collection_names():
+            for field in (
+                "user_id",
+                "entered_by",
+                "decided_by",
+                "assigned_by",
+                "created_by",
+                "accepted_by",
+                "actor_user_id",
+                "subject_user_id",
+                "history.by",
+                "member_ids",
+            ):
+                assert db[name].count_documents({field: decider_id}) == 0, f"{name}.{field}"
+        stamped = db.timeLogs.find_one({"_id": ObjectId(entered.json()["id"])})
+        assert stamped["entered_by"].startswith("erased:")
+        assert db.timeLogs.find_one({"_id": ObjectId(moved["id"])})["entered_by"] == "erased"
+        # The submit is the member's and the decision was the decider's;
+        # only the latter is tombstoned.
+        history = db.org_timesheets.find_one({})["history"]
+        assert any(h.get("by", "").startswith("erased:") for h in history)
+
 
 class TestBackupsAndOrganisations:
     """What a personal backup does with an organisation's project."""
