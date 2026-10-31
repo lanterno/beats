@@ -1,9 +1,9 @@
 # Organisations — what is left to build
 
 The epic is GitHub issue #353. Four stages of it shipped, and so have
-fourteen of the sixteen bugs the 2026-10-31 audit found. What is left is
-**two questions for the owner and five items that wait on something outside
-the code**, each written out in full below.
+fourteen of the sixteen bugs the 2026-10-31 audit found. What is left here
+is **one design to build, one page for the owner to read, and five items
+that wait on something outside the code** — each written out in full below.
 
 Two things that used to live here now have roadmaps of their own, because
 neither is an organisations feature: SSO per organisation and SCIM
@@ -33,10 +33,12 @@ here repeats it; items below cite its decisions by number.
 2. **Pick** from [Order of work](#order-of-work). Items marked **Ask the
    owner first** contain a choice that is the owner's to make. Ask in the
    session, then write the answer into `docs/organisations.md` as a decision
-   before building.
-3. **Branch** from an up-to-date `main`, named `<type>/<n>-<slug>`, for
-   example `fix/404-share-day-stamp`. The checkout is shared with other
-   sessions: work in a `git worktree` or restore whatever branch you found.
+   before building. An item that records a decision already taken says so
+   and dates it — build to it rather than reopening it.
+3. **Work on one branch in the worktree**, and **do not push and do not
+   open a pull request**: the owner merges and syncs GitHub themselves
+   (2026-10-31). Several items in one session share that branch; the
+   commits are what keep them apart, so split them as rule 4 says.
 4. **Commit** by the owner's rules:
    - the code commit first, then its test commit, separately;
    - frontend and backend never share a commit;
@@ -124,22 +126,25 @@ Most important first.
 
 | # | What | Surface | Why at this place |
 |---|------|---------|-------------------|
-| 405 | The two contract writes skip the approved-month lock | api | **Ask the owner first**; the rest of #405 shipped |
-| 422 | PRIVACY.md disagrees with the code | docs | Drafted; **the owner reviews it**, and one point in it is theirs to decide |
-| 340–352 | The seven waiting items | — | Each when its blocker clears; see the section |
+| 405 | A contract write marks the approvals it moves | api, ui | Designed below and decided; the only thing here that is built rather than waited on |
+| 422 | The owner reads the PRIVACY.md draft | docs | Written and committed; one reading away from done |
+| 340–352 | The five waiting items | — | Each when its blocker clears; see the section |
 
-Fourteen bugs found in the 2026-10-31 audit have shipped and their sections
-are deleted: #404, #406, #407, #408, #409, #410, #411, #412, #413, #414,
-#415, #419, #420, #421, with the three parts of #405 that needed no
-decision. What they changed is in `docs/organisations.md`; what is left of
-#405 and #422 is below.
+Fourteen of the sixteen bugs the 2026-10-31 audit found have shipped and
+their sections are deleted: #404, #406, #407, #408, #409, #410, #411, #412,
+#413, #414, #415, #419, #420, #421 — and of #405, the three writes that
+needed no decision. What they changed is in
+[docs/organisations.md](../docs/organisations.md); what is left of #405 and
+#422 is below.
 
 ---
 
 ## Bugs in what shipped
 
 Found on 2026-10-31 by checking `docs/organisations.md` against the code.
-Each is a fix to something already decided, not new scope.
+Of the sixteen, these two are open: #405, whose fix needed a decision the
+owner has since taken, and #422, which needs the owner's eyes rather than
+anybody's hands.
 
 ### #405 — A contract write marks the approvals it moves
 
@@ -279,31 +284,33 @@ shows a recomputed figure next to the frozen one without the decider asking
 for it — two numbers side by side is the confusion decision 23 exists to
 avoid.
 
-### #422 — PRIVACY.md disagrees with the code on organisations and single sign-on
+### #422 — PRIVACY.md, drafted and waiting for the owner to read it
 
 `PRIVACY.md` is the owner's promise to users, so **the owner reads every
-sentence before it ships.**
+sentence before it ships.** That reading is the only thing left here; the
+work is done.
 
-**Drafted, awaiting that reading.** The change is written: single sign-on's
-stored name, email and `linked_at` (and `identities[]` in `DATA.md`, which
-listed none of it); the contract's terms beside its balance, and that
-sharing hands over no power to delete; a connected project keeping its
-history back through every later edit; timesheets, approval, the lock and
-entered time working on any assignment rather than only a managed one, with
-owners and managers entering time; closing and deletion (decision 29); and
-retention named as the country's floor, reaching what #408 made it reach.
+**Drafted.** Single sign-on's stored name, email and `linked_at` (and
+`identities[]` in `DATA.md`, which listed none of it); the contract's terms
+beside its balance, and that sharing hands over no power to delete; a
+connected project keeping its history back through every later edit;
+timesheets, approval, the lock and entered time working on any assignment
+rather than only a managed one, with owners and managers entering time;
+closing and deletion (decision 29); and retention named as the country's
+floor, reaching what #408 made it reach.
 
-**One point is left, and it is the owner's to decide.** "Nothing downstream
-records which door was used" holds for sessions, but `api/routers/sso.py`
-~260 logs `SSO sign-in: provider=%s user=%s` at INFO into Cloud Logging,
-which the sentence does not allow. Either:
+**Settled 2026-10-31, and done.** The sentence "nothing downstream records
+which door was used" held for sessions but not for the log:
+`POST /api/auth/sso/complete` wrote `provider=… user=…` on every single
+sign-in into 30 days of Cloud Logging. The owner took the recommendation —
+the code changed, not the page. Dropping the provider alone would not have
+been enough, since a line firing only on the SSO path and naming the
+account still records that this person came through SSO; what is left names
+neither.
 
-1. drop the provider from that log line — recommended, since #342's design
-   rests on the promise and the line is as useful without it; or
-2. disclose it, and accept that an organisation requiring SSO (#342) then
-   has a weaker promise to make.
-
-Settle it, then make the code or the page match and delete this section.
+**When the owner has read it**, delete this section. If a sentence needs
+changing, that is a `docs(legal):` commit of its own, not a reopening of
+the epic.
 
 ---
 
@@ -320,37 +327,65 @@ one view.
 
 | # | What | Blocked by | Start when |
 |---|------|-----------|------------|
-| 340 | Money as a permission of its own | Nothing external — there is no organisation money to guard yet | Organisation-side money is designed |
-| 341 | Verified email domains for joining | The API sends no email | Email infrastructure exists |
-| 345 | Per-seat billing | No payment machinery anywhere in the codebase | The end of the beta is decided; then as its own project |
-| 351 | A digest or push for what is missing or waiting | No channel: no email, no server push (#298) | Either channel exists |
-| 352 | DPA, works-council sheet, DPIA template | Counsel review | A customer asks, or counsel is engaged |
+| 340 | Money behind the organisation's own roles | No organisation-side money exists to guard | Organisation-side money is designed |
+| 341 | Verified email domains for joining | An account has one email address, not many | Accounts carry verified secondary addresses |
+| 345 | Per-seat billing | No payment machinery anywhere; the beta runs for months yet | The end of the beta is decided; then as its own project |
+| 351 | Telling people what is missing or waiting | No channel: server push is #298 | #298 ships |
+| 352 | DPA, works-council sheet, DPIA template | Counsel review | The owner takes it up — **they have said it matters** |
 
-### #340 — Money as a permission
+### #340 — Money behind the organisation's own roles
 
 There is no organisation-side money at all: billing stayed personal, and an
-organisation's project is billed by nobody (`ORGANISATION_PROJECT`, raised in
-`domain/billing_service.py`). So there is nothing for a permission to guard,
-and this is blocked on a design that does not exist yet, not on a
-dependency. When it arrives, the epic's rule is that **seeing money is its
-own permission**, independent of role.
+organisation's project is billed by nobody (`ORGANISATION_PROJECT`, raised
+in `domain/billing_service.py`). So there is nothing to guard yet, and this
+waits on a design that does not exist rather than on a dependency.
 
-When it comes, **it must not be bolted on.** Every other item here is
-additive; this one is a cross-cutting read rule, and the cheapest version —
-a flag checked in each billing route — is the version that leaks the first
-time someone adds a route and forgets. The seam already exists: clients,
-project billing, billable overrides and billing budgets are their own
-collections, outside every device prefix, with no coach port. Attach to that
-boundary rather than carving a new one.
+**Decided 2026-10-31 by the owner: money is read by owners and admins.**
+The epic had carried "seeing money is its own permission, independent of
+role" since stage 4; it is not that. It is the organisation's existing role
+ladder, which means it fits the shape decision 25 already set — rights are
+read off **capabilities on the role** (`administers`, `decides`,
+`reads_record`), not off rungs. So this is one more capability, true for
+owner and admin and false below:
+
+```
+reads_money: owner yes, admin yes, manager no, viewer no, member no
+```
+
+A manager decides timesheets and reads their teams' hours and still sees no
+money; a viewer — an accountant, a works-council seat — reads the whole
+working-time record and still sees no money, which is the case that proves
+the capability is not the record's.
+
+**It must not be bolted on.** Every other item here is additive; this one is
+a cross-cutting read rule, and the cheapest version — a flag checked in each
+billing route — is the version that leaks the first time somebody adds a
+route and forgets. The seam already exists: clients, project billing,
+billable overrides and billing budgets are their own collections, outside
+every device prefix, with no coach port. Attach to that boundary, the way
+#342 attaches its check to the organisation router in one place.
 
 ### #341 — Verified email domains
 
 People with an `@acme.com` address ask to join, or join automatically.
 
-Blocked on email infrastructure the API deliberately does not have. Without
-verification a domain rule hands memberships to whoever registers an address
-— the exact hole decision 11 closed for invitations. Email first, then this;
-building it the other way round reopens the hole on purpose.
+**Decided 2026-10-31 by the owner: this waits on an account being able to
+hold more than one address**, and the rule is then to match the domain
+against one of the account's **verified** addresses — never against a
+string somebody typed. An account keeps one **main** address, the one it is
+known and written to by, and any number of verified secondaries beside it.
+
+That ordering is the whole point. Decision 11 closed exactly this hole for
+invitations: an address is not verified at sign-up, so whoever registers one
+first must not be handed the way in. A domain rule over unverified
+addresses reopens it deliberately, and at organisation scale rather than one
+invite at a time.
+
+So the prerequisite is its own piece of work, not a detail of this one:
+multiple addresses per account, each verified or not, one of them main,
+with the verification flow that makes "verified" mean anything — which is
+the email infrastructure the API deliberately does not have yet. Build that
+first; then this is a small rule on top of it.
 
 ### #345 — Per-seat billing
 
@@ -369,17 +404,32 @@ building it the other way round reopens the hole on purpose.
 
 What remains is collecting it, and that is the first time money flows *to
 us*. Nothing in the codebase handles payment: a provider, tax, invoices and
-dunning are a dependency well outside the shape of this epic. Treat it as
-its own project, started when the end of the beta is decided.
+dunning are a dependency well outside the shape of this epic.
 
-### #351 — A digest or push for what is missing or waiting
+**On hold, deliberately: the owner expects the beta to run for some months
+yet (2026-10-31).** Treat it as its own project when the end of the beta is
+decided, not as the tail of this one.
+
+### #351 — Telling people what is missing or waiting
 
 Today this shows where people already look: a member's timesheet list offers
-the ended months still to submit and marks the ones sent back, and a decider's
-Approvals tab counts and groups what waits (decision 27). A digest or a push
-needs a channel first: email infrastructure, or server push (#298, "Server
-push: APNs / FCM notifications", outside this epic; today the companion's
-notifications are local only).
+the ended months still to submit and marks the ones sent back, and a
+decider's Approvals tab counts and groups what waits (decision 27).
+
+**Decided 2026-10-31 by the owner: the channel is server push, not email**,
+and **the person controls what they get.** So this waits on #298 ("Server
+push: APNs / FCM notifications", outside this epic; the companion's
+notifications are local only today), and when it comes it ships with its
+own settings rather than a switch somebody has to ask for:
+
+- per category at least — a timesheet still to submit, a request waiting on
+  my decision, a request of mine decided — and off entirely as one choice;
+- the preference is the person's, not the organisation's. An employer must
+  not be able to turn on a notification its members cannot turn off; that is
+  the line the whole product sits on the right side of.
+
+Decision 11's no-email rule is untouched by this: push is not email, and the
+API still sends none.
 
 ### #352 — Sales and legal material
 
@@ -392,14 +442,15 @@ Three drafts in [legal/](legal/), unreviewed by counsel:
 [legal/README.md](legal/README.md) says whose document each is, the two
 facts to re-check before relying on them (Spain's fine amounts, Germany's
 reform status, both last checked October 2026), and that **counsel review
-is the whole blocker**. Nothing there reaches a customer first. When counsel
-signs them off, they move to `docs/`.
+is the whole blocker**. Nothing there reaches a customer first.
 
-Re-read them against `docs/organisations.md` whenever a decision changes
-what an organisation sees (they were last aligned for decision 32). The
-works-council sheet's whole point is that every sentence can be checked.
-
----
+**The owner has said this one matters (2026-10-31)** and will take it up
+themselves; it is not waiting on a customer to ask. Re-read the three
+against `docs/organisations.md` whenever a decision changes what an
+organisation sees — they were last aligned for decision 32, and the fixes
+of 2026-10-31 moved what a connect keeps back (#404) and what retention
+reaches (#408), both of which the works-council sheet speaks to. Its whole
+point is that every sentence in it can be checked.
 
 ## Related, outside the epic
 
@@ -408,7 +459,9 @@ works-council sheet's whole point is that every sentence can be checked.
   ships with the marker the web's input carries ("Acme can read this note"
   on an organisation's project, following the project picked), because the
   organisation reads an entry's note (decision 1).
-- **Server push** (#298): the channel #351 waits on.
+- **Server push** (#298): the channel #351 waits on, and now the only one
+  it will use — email is not coming (decision 11, and the owner again on
+  2026-10-31).
 
 ---
 
@@ -433,6 +486,10 @@ a fix.
   (decision 33).
 - The price (`docs/pricing.md`), and the SSO shape
   ([organisation_sso.md](organisation_sso.md)).
+- A contract write is never refused for an approved month; it marks the
+  approval instead (#405 above, decided 2026-10-31).
+- Money in an organisation is read by owners and admins, as a capability on
+  the role — not a permission of its own (#340 below, decided 2026-10-31).
 
 ---
 

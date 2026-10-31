@@ -631,11 +631,13 @@ The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 ### Stage 4 items that wait
 
 Five, each an issue under
-[#353](https://github.com/lanterno/beats/issues/353): money as a permission
-of its own (#340), verified email domains (#341), SSO per organisation
-(#342), SCIM (#343) and per-seat billing (#345). They are decisions rather
-than omissions, and what each waits for — including the attestation shape
-settled for #342 on 2026-10-28, and the pricing already decided for #345 — is
+[#353](https://github.com/lanterno/beats/issues/353): money behind the
+organisation's own roles (#340 — read by owners and admins, a capability on
+the role rather than a permission of its own, decided 2026-10-31), verified
+email domains (#341, which waits on an account holding more than one
+verified address), SSO per organisation (#342), SCIM (#343) and per-seat
+billing (#345, priced and on hold for the beta). They are decisions rather
+than omissions, and what each waits for is
 in [roadmaps/organisations.md](../roadmaps/organisations.md), with the rest of
 what is not built — except #342 and #343, which have a roadmap of their own
 in [roadmaps/organisation_sso.md](../roadmaps/organisation_sso.md), the
