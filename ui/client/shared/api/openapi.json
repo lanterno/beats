@@ -14191,7 +14191,7 @@
         ]
       },
       "put": {
-        "description": "Write the employer's contract on an assignment, or hand it back\n(docs/organisations.md, stage 3). Taking a contract under management\nstarts from the terms the member recorded \u2014 nothing is rewritten\nsilently \u2014 and from then on the member's own contract, absence and\nadjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for\ntheir teams.",
+        "description": "Write the employer's contract on an assignment, or hand it back\n(docs/organisations.md, stage 3). Taking a contract under management\nstarts from the terms the member recorded \u2014 nothing is rewritten\nsilently \u2014 and from then on the member's own contract, absence and\nadjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for\ntheir teams.\n\nOnly a day job carries a contract (409 NOT_A_DAY_JOB), and a first day\nmoved later past one of the member's balance adjustments is refused\n(409 ADJUSTMENT_BEFORE_START) \u2014 the same rules the member's own route\nkeeps, which is why the member's adjustments are passed in.",
         "operationId": "set_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_put",
         "parameters": [
           {

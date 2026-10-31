@@ -2561,6 +2561,11 @@ export interface paths {
          *     silently — and from then on the member's own contract, absence and
          *     adjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for
          *     their teams.
+         *
+         *     Only a day job carries a contract (409 NOT_A_DAY_JOB), and a first day
+         *     moved later past one of the member's balance adjustments is refused
+         *     (409 ADJUSTMENT_BEFORE_START) — the same rules the member's own route
+         *     keeps, which is why the member's adjustments are passed in.
          */
         put: operations["set_managed_contract_api_organisations__organisation_id__projects__project_id__members__member_user_id__contract_put"];
         post?: never;
