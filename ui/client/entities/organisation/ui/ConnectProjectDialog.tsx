@@ -1,7 +1,6 @@
 /**
  * ConnectProjectDialog — connect a project already tracked personally to an
- * organisation the member belongs to (docs/organisations-roadmap.md, stage
- * 2, rule 4). The member picks the organisation and the day from which the
+ * organisation the member belongs to (docs/organisations.md, rule 4). The member picks the organisation and the day from which the
  * hours and absences on the project are the organisation's record, or
  * starts fresh and shares nothing before now; the project becomes the
  * organisation's — its name, colour and kind theirs to change — while the

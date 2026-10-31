@@ -338,7 +338,7 @@ export function TodayFeed() {
 	const pickerProjects = useMemo(() => visibleProjects(projects), [projects]);
 
 	// The owner scope — Everything · Personal · <each organisation> — over
-	// the one timeline (docs/organisations-roadmap.md, stage 2), kept in the
+	// the one timeline (docs/organisations.md, rule 1), kept in the
 	// URL as `?owner=personal|<organisation id>`; absent is everything. It
 	// composes with the project picker.
 	const [searchParams, setSearchParams] = useSearchParams();

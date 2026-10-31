@@ -52,10 +52,10 @@ showing the actual data held.
 
 | Stage | What | State |
 |---|---|---|
-| **1** | Clients for freelancers | **Done** — [docs/billing.md](billing.md) |
-| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — [docs/organisations.md](organisations.md), decisions 1–20, and 28 for the duplicate a connect can leave |
+| **1** | Clients for freelancers | **Done** — [docs/billing.md](../docs/billing.md) |
+| **2** | Foundations: organisations, membership, org projects, leaving | **Done** — [docs/organisations.md](../docs/organisations.md), decisions 1–20, and 28 for the duplicate a connect can leave |
 | **3** | Employment: employer contracts, leave requests, timesheet approval | **Done** — decisions 21–24 and 26–27 |
-| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **Done, but for what waits on a trigger outside the code** — teams, manager and viewer roles, the audit read and the report CSVs (decision 25), retention with its purge (decision 30), closing and deletion (decision 29). Organisation money, verified domains, SSO per organisation, SCIM and the payment machinery each wait, with their reason, as an issue under [#353](https://github.com/lanterno/beats/issues/353) |
+| **4** | Scale: teams, money permission, SSO, SCIM, audit, per-seat billing | **Done, but for what waits on a trigger outside the code** — teams, manager and viewer roles, the audit read and the report CSVs (decision 25), retention with its purge (decision 30), closing and deletion (decision 29). Organisation money, verified domains, SSO per organisation, SCIM and the payment machinery each wait — see *What remains*, below, and with them the epic's section 7, the legal material |
 
 Stage 2 was the only one that changed the data model. Stages 3 and 4 are
 additive on top of it, which is what made the sequencing simple: get the
@@ -148,20 +148,71 @@ members their projects back (decision 29). What the rest builds on:
   collections, outside every device prefix, with no coach port. The money
   permission has a real seam to attach to rather than needing one carved out.
 
-Worth deciding before building, not during:
+One sequencing lesson, since it shaped what is already built: **the audit
+log is cheap to add late and expensive to backfill.** Every membership
+change, contract edit and approval made before it exists is unrecorded, and
+those are exactly the events a works council asks about. So it was written
+from stage 2 on, and only read from stage 4.
 
-- **The money permission must not be bolted on.** Every other item here is
-  additive; this one is a cross-cutting read rule, and the cheapest version —
-  a flag checked in each billing route — is the version that leaks the first
-  time someone adds a route and forgets. Lean on the collection boundary.
-- **Per-seat billing is the first time money flows *to us*.** Nothing in the
-  codebase handles payment. A provider, tax, invoices and dunning are a
-  dependency well outside the shape of this epic, and probably their own
-  project rather than a bullet here.
-- **The audit log is cheap to add late and expensive to backfill** — every
-  membership change, contract edit and approval before it exists is
-  unrecorded, and those are exactly the events a works council asks about.
-  So it was written from stage 2 on, and only read from stage 4.
+---
+
+## What remains, and what each waits for
+
+Five items from stage 4, each an issue under
+[#353](https://github.com/lanterno/beats/issues/353). They are decisions, not
+omissions: the reason each waits is here, so picking one up starts from it.
+
+- **Money as a permission** ([#340](https://github.com/lanterno/beats/issues/340)).
+  There is no organisation-side money yet — billing stayed personal, and an
+  organisation's project is billed by nobody (`ORGANISATION_PROJECT`) — so
+  there is nothing for the permission to guard. It must not be bolted on when
+  it comes: every other item here is additive, this one is a cross-cutting
+  read rule, and the cheapest version — a flag checked in each billing route
+  — leaks the first time someone adds a route and forgets. Lean on the
+  collection boundary billing already is.
+- **Verified email domains** ([#341](https://github.com/lanterno/beats/issues/341)).
+  Needs the email infrastructure the API deliberately does not have
+  (decision 11). Without verification a domain rule would hand memberships to
+  whoever registers an address — the exact hole decision 11 closed for
+  invitations. Email first, then this.
+- **SSO per organisation, and "required to enter"**
+  ([#342](https://github.com/lanterno/beats/issues/342)) — *shape decided
+  2026-10-28, built when a customer requires it.* Not by stamping the door on
+  the session: sessions stay door-blind, keeping the promise that nothing
+  downstream knows which door was used. Instead a **per-organisation
+  attestation**, as GitHub gates an organisation behind SAML. An organisation
+  that requires SSO configures its own OpenID Connect provider — a scoping
+  layer over `auth/oidc.py`, which is built and tested already (discovery,
+  code exchange with PKCE and a nonce, every ID-token check, identities keyed
+  on issuer + subject, `allow_signup`, and a scripted provider with real
+  RS256 keys) — and entering its slice needs a fresh verification with *that*
+  provider, stored on the membership, verified at T and expiring at T+N,
+  shown on the "What Acme can see" page and audited. The passkey still opens
+  the personal account and every other organisation (rule 1). Enforced as a
+  dependency on the organisation router, one place, like the role checks —
+  never a flag per route, which is the money permission's lesson. PRIVACY.md
+  changes narrowly and first: an organisation that requires SSO sees when you
+  last verified with its provider, which is not "we record how you log in".
+  Open at build time: whether a lapsed attestation blocks the organisation's
+  routes alone or also starting new timers on its projects. Existing data,
+  never.
+- **SCIM provisioning** ([#343](https://github.com/lanterno/beats/issues/343)).
+  Its own protocol surface and credential story, keyed on the same
+  per-organisation provider, so it comes after SSO.
+- **Per-seat billing** ([#345](https://github.com/lanterno/beats/issues/345))
+  — *the numbers are decided* ([docs/pricing.md](../docs/pricing.md): €8 a
+  seat a month annual, free to five seats, a seat is an active member with an
+  assignment, everything free during the beta). What remains is collecting
+  it, the first time money flows *to us*: nothing in the codebase handles
+  payment, and a provider, tax, invoices and dunning are a dependency well
+  outside the shape of this epic — its own project rather than a bullet here.
+
+Two more sit under the epic without being stage 4: a digest or push for what
+is missing or waiting ([#351](https://github.com/lanterno/beats/issues/351)),
+which needs a channel — email, or server push — before it can exist; and the
+sales and legal material of the epic's section 7
+([#352](https://github.com/lanterno/beats/issues/352)), drafted in
+[legal/](legal/) and unreviewed by counsel.
 
 ---
 
@@ -169,8 +220,8 @@ Worth deciding before building, not during:
 
 Six, from the epic, all settled; the rows say how, and the notes under
 them are kept as the reasoning. The first five are recorded in
-[docs/organisations.md](organisations.md); pricing in
-[docs/pricing.md](pricing.md), with the payment machinery it needs as
+[docs/organisations.md](../docs/organisations.md); pricing in
+[docs/pricing.md](../docs/pricing.md), with the payment machinery it needs as
 [#345](https://github.com/lanterno/beats/issues/345).
 
 | Decision | Settled | Gates |
@@ -180,7 +231,7 @@ them are kept as the reasoning. The first five are recorded in
 | What does **account deletion** do to records an employer must legally keep? | **Settled:** the stamped working-time rows, the balance's inputs and the name on the membership stay under a tombstone; everything else is erased (`erasure.py`) | 2 |
 | What does **"day job"** mean once an employer can be an entity? | **Settled:** personal day jobs stay exactly as they are; on an organisation project the contract lives on the assignment, the member's until the employer takes it under management (decision 21) | 3 |
 | Who wins when the **employer's contract terms differ** from the employee's? | **Settled:** management starts from the terms the member recorded; the employer's changes are audited acts, never silent recomputation (decision 21) | 3 |
-| **Pricing**: seat price, free tier, whether contractors count as seats | **Settled** (2026-10-28): €8/seat/mo annual (€10 monthly), free to 5 seats, SSO included; a seat is an active member with an assignment — viewers free, contractors count when assigned; one subscription per organisation; everything free during the beta as a shown 100% discount, and non-payment afterwards degrades to read-only, never deletion. Priced against the vendors' own pages in [docs/pricing.md](pricing.md); the payment machinery stays its own project, [#345](https://github.com/lanterno/beats/issues/345) | 4 |
+| **Pricing**: seat price, free tier, whether contractors count as seats | **Settled** (2026-10-28): €8/seat/mo annual (€10 monthly), free to 5 seats, SSO included; a seat is an active member with an assignment — viewers free, contractors count when assigned; one subscription per organisation; everything free during the beta as a shown 100% discount, and non-payment afterwards degrades to read-only, never deletion. Priced against the vendors' own pages in [docs/pricing.md](../docs/pricing.md); the payment machinery stays its own project, [#345](https://github.com/lanterno/beats/issues/345) | 4 |
 
 ### Notes and tags
 
@@ -230,7 +281,7 @@ only, or absences and approved timesheets too); what identifies the person once
 the account is gone; who can delete them afterwards and when the retention
 clock stops; whether the person gets an export first.
 
-Each was settled in [organisations.md](organisations.md): erasure keeps the
+Each was settled in [docs/organisations.md](../docs/organisations.md): erasure keeps the
 stamped rows — entries, absences, the contract and adjustments behind a balance
 the organisation read — under a tombstone with the name it knew the person by,
 and nothing else (decision 3); retention bounds that exception with a floor by
@@ -274,7 +325,7 @@ contradict the code, as part of the stage that changes it.
 ## What the code says about stage 2
 
 Researched against the tree as it stood after 1c, and kept as the reasoning
-behind [docs/organisations.md](organisations.md)'s decisions 4–15; each
+behind [docs/organisations.md](../docs/organisations.md)'s decisions 4–15; each
 "will bite" below was answered there (the index, the device prefix, the
 backup).
 

@@ -1,7 +1,7 @@
 /**
  * ArchivePage — `/organisations/:id/archive`: the person's own hours that
  * are one organisation's working-time record, by project, kept after
- * leaving (docs/organisations-roadmap.md, stage 2). Read-only, and
+ * leaving (docs/organisations.md, rule 1). Read-only, and
  * exportable as CSV; it reads through the caller's own repository, so it
  * is here whether the membership is still open or ended.
  */

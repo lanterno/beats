@@ -15,8 +15,17 @@ companion/                    Flutter desktop companion (timer, coach, integrati
 integrations/vscode-beats/    VS Code extension (workspace heartbeats + status bar)
 wall-clock/                   ESP32 firmware (Arduino/C++)
 terraform/                    GCP infrastructure
-docs/                         Cross-surface design docs
+docs/                         What is built, and why — one file per area, plus the README's images
+roadmaps/                     What is not built yet: the plan behind an epic, design seeds, drafts
 ```
+
+`docs/` and `roadmaps/` split on whether the thing is done. A decision that
+shipped, and the reasoning behind it, is documentation; a plan, a seed for work
+nobody has started, a mockup of a design still being argued, or a draft awaiting
+somebody's review is a roadmap. Work itself is neither — it is a GitHub issue.
+Code comments cite `docs/`: a comment describes what the code does, and what it
+does is built. A file moves from `roadmaps/` to `docs/` when its subject ships,
+and the part of a roadmap that ships is deleted rather than copied across.
 
 ## Project Management
 
@@ -30,7 +39,7 @@ say the surface and what blocks it, and `decision` marks an open question. Until
 and a few test comments cite those ids.
 
 The organisations epic is #353, with what it still owes as issues linked from it;
-[docs/organisations-roadmap.md](docs/organisations-roadmap.md) keeps its reasoning and
+[roadmaps/organisations.md](roadmaps/organisations.md) keeps its reasoning and
 [docs/organisations.md](docs/organisations.md) its decisions and model.
 
 ## Quick Start

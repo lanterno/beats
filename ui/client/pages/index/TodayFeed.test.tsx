@@ -1,6 +1,5 @@
 /**
- * The owner scope over the one timeline (docs/organisations-roadmap.md,
- * stage 2): the pills appear once an organisation's project is in the list,
+ * The owner scope over the one timeline (docs/organisations.md, rule 1): the pills appear once an organisation's project is in the list,
  * "Personal" leaves only the personal projects' sessions, an organisation's
  * pill only its own, and a note on an organisation's project says the
  * organisation can read it where a personal note says nothing.

@@ -1156,7 +1156,7 @@ and change none of them; "decision N" in this section means one of its own.
 7. **A link says nothing about now.** `running` is not in the response, so a
    client cannot learn from a report that a timer is on at this moment.
    Organisations settled live presence the same way — the record carries no
-   running flag, in any stage ([organisations-roadmap.md](organisations-roadmap.md));
+   running flag, in any stage ([roadmaps/organisations.md](../roadmaps/organisations.md));
    a report link is not the back door to it.
 8. **The public prefix is narrow, slow and uncached.** `/api/reports` is the
    only entry in `PUBLIC_PREFIXES` that serves a user's data, and it serves
@@ -1312,15 +1312,3 @@ Each addable later without migrating data:
   (stage 2, [organisations.md](organisations.md)). Stage 2 settled the notes
   question for both: an organisation reads an entry's note, a report link
   still does not.
-
----
-
-## What would build on it
-
-Everything that already has — billing budgets, report links, organisations —
-is recorded in its own section or in [organisations.md](organisations.md).
-One seed stays, unbuilt:
-
-- **Invoices.** An invoice is a frozen copy of a `period`'s lines, which
-  per-line rounding lets it quote verbatim; an "invoiced through" date can
-  replace the month boundary in `past_change`.

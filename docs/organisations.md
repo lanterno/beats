@@ -8,7 +8,7 @@
 > them and nothing else.
 
 This is stage 2 of the organisations epic (#353): the foundations.
-[organisations-roadmap.md](organisations-roadmap.md) holds the staging and
+[roadmaps/organisations.md](../roadmaps/organisations.md) holds the staging and
 the reasoning that led here; this file records what was built and the
 decisions it rests on, so later stages do not re-litigate them. Stage 1,
 clients and billing, is in [billing.md](billing.md).
@@ -486,47 +486,15 @@ what only matters past a handful of people. Decisions 21–27:
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.
 
-### Stage 4 items that wait, and what each waits for
+### Stage 4 items that wait
 
-Recorded here so they are decisions, not omissions; each is an issue under
-[#353](https://github.com/lanterno/beats/issues/353).
-
-- **Money as a permission** (#340): there is still no organisation-side
-  money — billing stayed personal (decision on `ORGANISATION_PROJECT` in
-  billing) — so there is nothing for the permission to guard yet. When
-  organisation money arrives, lean on the collection boundary as the roadmap
-  says.
-- **Verified email domains** (#341): needs the email infrastructure the API
-  deliberately does not have (decision 11). Without verification, a domain
-  rule would hand memberships to whoever registers an address — the exact
-  hole decision 11 closed for invitations.
-- **SSO per organisation, and "required to enter"** (#342) — *shape decided
-  2026-10-28, built when a customer requires it.* Not by stamping the door
-  on the session: sessions stay door-blind, keeping the promise that nothing
-  downstream knows which door was used. Instead, a **per-organisation
-  attestation**, as GitHub gates an organisation behind SAML: an organisation
-  that requires SSO configures its own OpenID Connect provider (a scoping
-  layer over `auth/oidc.py`), and entering its slice needs a fresh
-  verification with *that* provider, stored on the membership — verified at
-  T, expires T+N — shown on the "What Acme can see" page and audited. The
-  passkey still opens the personal account and every other organisation
-  (rule 1). Enforced as a dependency on the organisation router, one place,
-  like the role checks — never a flag per route (the money permission's
-  lesson). PRIVACY.md then changes narrowly and first: an organisation that
-  requires SSO sees when you last verified with its provider — not "we
-  record how you log in". Open at build time: what a lapsed attestation
-  blocks — the organisation's routes alone, or also starting new timers on
-  its projects; existing data, never.
-- **SCIM** provisioning (#343): its own protocol surface and credential
-  story, keyed on the same per-organisation provider, after SSO.
-- **Per-seat billing** (#345) — *the numbers are decided*
-  ([docs/pricing.md](pricing.md): €8/seat/month annual, free to 5 seats, a
-  seat is an active member with an assignment, everything free during the
-  beta). Collecting it — a payment provider, tax, invoices, dunning — is the
-  first money flowing *to us* and stays its own project, as the roadmap
-  says.
-
-The sales and legal material the epic's section 7 asked for — a
-data-processing agreement, a one-page sheet for works councils and a DPIA
-template — are drafts in [docs/legal/](legal/), unreviewed by counsel (#352);
-nothing there reaches a customer first.
+Five, each an issue under
+[#353](https://github.com/lanterno/beats/issues/353): money as a permission
+of its own (#340), verified email domains (#341), SSO per organisation
+(#342), SCIM (#343) and per-seat billing (#345). They are decisions rather
+than omissions, and what each waits for — including the attestation shape
+settled for #342 on 2026-10-28, and the pricing already decided for #345 — is
+in [roadmaps/organisations.md](../roadmaps/organisations.md), with the rest of
+what is not built. The sales and legal material of the epic's section 7
+(#352) is drafted in [roadmaps/legal/](../roadmaps/legal/) and unreviewed by
+counsel, and nothing there reaches a customer first.

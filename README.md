@@ -187,7 +187,9 @@ before removing anything that looks like dead config.
 ## Design notes
 
 Open work — bugs, follow-ups, open questions — is tracked in
-[GitHub issues](https://github.com/lanterno/beats/issues). These documents hold the decisions and designs.
+[GitHub issues](https://github.com/lanterno/beats/issues). These documents hold the
+decisions and designs behind what is built; what is not built yet — the plan behind
+an epic, and drafts awaiting review — is in [roadmaps/](roadmaps/).
 
 | Document | What it covers |
 |----------|----------------|
@@ -195,7 +197,6 @@ Open work — bugs, follow-ups, open questions — is tracked in
 | [Project Page](docs/project-page.md) | The project page built around where you stand, the week ledger behind it, and the afternoon and dusk theme |
 | [Billing](docs/billing.md) | Clients a freelancer bills: rates and billable marks, the month's figures, billing budgets and the report links a client reads |
 | [Organisations](docs/organisations.md) | One account, one timeline, many employers: the four rules, the decisions, the data model, employment and scale |
-| [Organisations roadmap](docs/organisations-roadmap.md) | Why the organisations epic went the way it did, stage by stage |
 | [Pricing](docs/pricing.md) | What an organisation pays, decided against the vendors' own pages |
 | [Data handling](DATA.md) | Every field stored, where, and how to get it back out |
 | [Privacy](PRIVACY.md) | What LifePete does with your data, in plain English |
