@@ -441,7 +441,8 @@ what only matters past a handful of people. Decisions 21–30:
     the decider*, which the record never shows); an owner, admin or scoped
     manager approves — which books the absence, stamped, through the
     member's own repository — or declines with a comment. A pending request
-    can be withdrawn; a decided one is decided once (409
+    can be withdrawn, and the withdrawal is in the audit log like every
+    other step (`absence.withdrawn`); a decided one is decided once (409
     `REQUEST_DECIDED`), atomically, so two deciders cannot both book it.
     Unmanaged assignments book directly, as before (409 `NOT_MANAGED` on a
     request there).
@@ -461,7 +462,9 @@ what only matters past a handful of people. Decisions 21–30:
     Approval itself refuses while a stamped timer still runs inside the
     month — its hours are in no figure yet. Reopening needs a reason, is
     recorded in the sheet's history and the audit log, lifts the lock and
-    drops the frozen figures; re-approval freezes afresh. Of the three
+    drops the frozen figures; re-approval freezes afresh. A sheet sent back
+    and resubmitted carries no trace of the previous decision — no decider,
+    no instant, no comment — only its history does (#413). Of the three
     options weighed (refused / flagged / amendment), this is "refused with a
     recorded way back", the only one a works council can sign.
 24. **Admin-entered time is marked.** A decider logs a finished session for
