@@ -166,4 +166,33 @@ void main() {
       expect(menuBarTitle(MenuBarShows.timeAndProject), '');
     });
   });
+
+  // The tray's label off macOS. It follows the same Settings preference the
+  // Mac's status item does — which it did not before: _tick formatted the
+  // tray's title one way and decided whether to send it from the Mac's,
+  // so the preference did nothing there and the MM:SS only moved when the
+  // Mac's minute-granularity title changed.
+  group('trayTitle', () {
+    const elapsed = Duration(minutes: 24, seconds: 17);
+
+    test('follows what Settings says the item shows', () {
+      expect(trayTitle(MenuBarShows.timeAndProject, project: 'Northwind', elapsed: elapsed),
+          '24:17  Northwind');
+      expect(trayTitle(MenuBarShows.time, project: 'Northwind', elapsed: elapsed), '24:17');
+      expect(trayTitle(MenuBarShows.icon, project: 'Northwind', elapsed: elapsed), isNull);
+    });
+
+    test('is null while nothing runs, which is what clears the label', () {
+      expect(trayTitle(MenuBarShows.timeAndProject), isNull);
+    });
+
+    test('changes with the second, so the stopwatch ticks', () {
+      // The bug this helper exists to fix: a tray title that only moved
+      // when the Mac's "24m" changed showed the same seconds for a minute.
+      final a = trayTitle(MenuBarShows.time, project: 'N', elapsed: elapsed);
+      final b = trayTitle(MenuBarShows.time,
+          project: 'N', elapsed: elapsed + const Duration(seconds: 1));
+      expect(a, isNot(b));
+    });
+  });
 }
