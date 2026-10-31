@@ -315,8 +315,8 @@ and viewers, and managers narrowed to their teams (decision 25).
 | `POST /{id}/projects/{pid}/merge` | admins | Fold `pid` into another of the organisation's projects (decision 28) |
 | `PUT`, `DELETE /{id}/projects/{pid}/members/{uid}` | admins | Assign; unassign |
 | `POST /{id}/connect` (`tz` required) | members | Connect one of my own projects from `share_from`, or null for now |
-| `GET /{id}/record?month=&tz=` | record readers | What the organisation sees; a manager's narrowed to their teams |
-| `GET /{id}/visible`, `/visible.csv` (`month=&tz=`) | members, former members | What it sees of me — the same read; the month as CSV |
+| `GET /{id}/record?month=` | record readers | What the organisation sees; a manager's narrowed to their teams |
+| `GET /{id}/visible`, `/visible.csv` (`month=`) | members, former members | What it sees of me — the same read; the month as CSV |
 | `GET /{id}/archive`, `/archive.csv` | members, former members | My own entries and absences that are its record |
 | `GET`, `POST /{id}/teams`, `PUT`, `DELETE /{id}/teams/{tid}` | readers / admins | Teams: a manager's scope |
 | `GET`, `PUT /{id}/projects/{pid}/members/{uid}/contract` | deciders | The contract on an assignment, managed or not (decision 32); `managed` takes or returns the pen |
@@ -325,7 +325,7 @@ and viewers, and managers narrowed to their teams (decision 25).
 | `POST`, `GET /{id}/absence-requests` (`?pending=`), `POST …/{rid}/decision`, `DELETE /{rid}` | members / deciders | Ask; list (my own, or a decider's scope); decide (approve books the absence); withdraw |
 | `POST`, `GET /{id}/timesheets` (`?month=`), `POST …/{tid}/decision`, `POST …/{tid}/reopen` | members / deciders | Submit a month; list (my own; a decider's scope; every sheet for a viewer); approve (freeze) or send back; reopen with a reason |
 | `GET /{id}/audit?before=&limit=` | admins | The audit log, newest first (100 a page by default, at most 500) |
-| `GET /{id}/record.csv`, `/compliance.csv` (`month=&tz=`) | record readers | The month flat, and per day with breaks and warnings |
+| `GET /{id}/record.csv`, `/compliance.csv` (`month=`) | record readers | The month flat, and per day with breaks and warnings |
 
 The record's shape is written field by field (`RecordResponse`), as the
 public report's is, so what crosses cannot grow by inheritance: the
@@ -494,7 +494,13 @@ what only matters past a handful of people. Decisions 21–30:
     whole-day figures ride in the warning's text so a per-project row still
     explains itself. Exactly at a threshold is lawful; the first day read
     raises no rest warning, since what came before the rows is not in them.
-    `record.csv` is the same month as flat entry rows.
+    `record.csv` is the same month as flat entry rows. The record, the
+    member's view of it and the three CSVs bucket every day in the
+    organisation's timezone, whatever the caller's (#415): the lock and
+    the freeze already did, and a record two deciders read from two places
+    must be one record and agree with the month they froze. A `tz` an
+    older client still sends is ignored. `/archive` is the member's own
+    view of their own rows and keeps the caller's.
 27. **Reminders are the surfaces, not emails.** The API sends no email
     (decision 11); what is missing or waiting shows where people already
     look — the member's timesheet list offers the ended months still to
