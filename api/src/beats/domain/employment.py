@@ -68,6 +68,7 @@ from beats.domain.models import (
     TimesheetStatus,
 )
 from beats.domain.organisations import Member, OrganisationService
+from beats.domain.retention import effective_retention_years, retention_cutoff
 from beats.domain.services import (
     _check_contract as check_contract_rules,
 )
@@ -622,7 +623,14 @@ class EmploymentService(OrganisationService):
                 day += timedelta(days=1)
             expected = round(total, 2)
             if assignment is not None:
-                balance = await self._balance(organisation_id, assignment, last, tz)
+                expired_before = retention_cutoff(
+                    self._today(member.organisation),
+                    effective_retention_years(
+                        member.organisation.retention_years,
+                        member.organisation.holiday_country,
+                    ),
+                )
+                balance = await self._balance(organisation_id, assignment, last, tz, expired_before)
                 balance_end = balance.balance if balance else None
         return FrozenMonth(
             worked=worked,

@@ -510,7 +510,16 @@ class OrganisationRecords(Protocol):
     async def beats_of_member(
         self, organisation_id: str, project_id: str, user_id: str
     ) -> list[Beat]: ...
-    async def has_unshared(self, organisation_id: str, project_id: str, user_id: str) -> bool: ...
+    async def has_unshared(
+        self,
+        organisation_id: str,
+        project_id: str,
+        user_id: str,
+        *,
+        private_before: datetime | None,
+        private_before_day: date | None,
+        expired_before: date,
+    ) -> bool: ...
     async def running_in(
         self, organisation_id: str, project_id: str, user_id: str, start: datetime, end: datetime
     ) -> bool: ...

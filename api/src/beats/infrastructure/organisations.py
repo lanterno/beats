@@ -15,7 +15,7 @@ call site why the account did not come from a token.
 """
 
 from collections.abc import Iterable
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from bson import ObjectId
@@ -49,6 +49,7 @@ from beats.domain.models import (
     RequestStatus,
     TimesheetStatus,
 )
+from beats.domain.utils import normalize_tz
 from beats.infrastructure.repositories import serialize_from_document, serialize_to_document
 
 
@@ -990,19 +991,58 @@ class MongoOrganisationRecords:
         )
         return doc is not None
 
-    async def has_unshared(self, organisation_id: str, project_id: str, user_id: str) -> bool:
+    async def has_unshared(
+        self,
+        organisation_id: str,
+        project_id: str,
+        user_id: str,
+        *,
+        private_before: datetime | None,
+        private_before_day: date | None,
+        expired_before: date,
+    ) -> bool:
         """Whether the member has an entry or an absence on the project that
         is not this organisation's record — one dated before the day they
         chose to share from. Read to withhold a balance, never to show
-        anything: the answer is a yes or a no."""
-        unstamped = {"organisation_id": {"$ne": organisation_id}}
+        anything: the answer is a yes or a no.
+
+        A row the retention purge unstamped is not one of those. The purge
+        takes the stamp off a living member's rows older than the cutoff
+        (decision 30) and leaves the rows theirs; asking only whether an
+        unstamped row exists then answers yes for every long-standing
+        member, and the organisation loses the balance on its own record
+        for good (#409). So a row dated in the shared window and already
+        past the cutoff is read as expired, not as withheld: it was shared
+        once. Every row a purge unstamped is older than the cutoff it ran
+        with, which is never later than today's.
+
+        The window opens at `private_before` — what a connect kept back —
+        and at the beginning of time where a connect kept back nothing.
+        """
+        unstamped: dict[str, Any] = {"organisation_id": {"$ne": organisation_id}}
+        expired_at = datetime(
+            expired_before.year, expired_before.month, expired_before.day, tzinfo=UTC
+        )
+        kept_back_or_expired: list[dict[str, Any]] = [{"start": {"$gte": expired_at}}]
+        if private_before is not None:
+            kept_back_or_expired.append({"start": {"$lt": normalize_tz(private_before)}})
         beat = await self.beats.find_one(
-            {"project_id": project_id, "user_id": user_id, **unstamped}, {"_id": 1}
+            {
+                "project_id": project_id,
+                "user_id": user_id,
+                **unstamped,
+                "$or": kept_back_or_expired,
+            },
+            {"_id": 1},
         )
         if beat is not None:
             return True
+        by_day: list[dict[str, Any]] = [{"date": {"$gte": expired_before.isoformat()}}]
+        if private_before_day is not None:
+            by_day.append({"date": {"$lt": private_before_day.isoformat()}})
         absence = await self.absences.find_one(
-            {"project_id": project_id, "user_id": user_id, **unstamped}, {"_id": 1}
+            {"project_id": project_id, "user_id": user_id, **unstamped, "$or": by_day},
+            {"_id": 1},
         )
         return absence is not None
 

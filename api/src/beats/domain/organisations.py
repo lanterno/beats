@@ -74,7 +74,11 @@ from beats.domain.ports import (
     OrganisationStore,
     UserDirectory,
 )
-from beats.domain.retention import retention_floor
+from beats.domain.retention import (
+    effective_retention_years,
+    retention_cutoff,
+    retention_floor,
+)
 from beats.domain.services import worked_by_local_day
 from beats.domain.timesheet import month_end
 from beats.domain.utils import local_date, normalize_tz
@@ -400,7 +404,11 @@ class OrganisationService:
 
     @staticmethod
     def _zone(organisation: Organisation) -> ZoneInfo:
-        """The organisation's timezone, UTC when the tz database dropped it."""
+        """The organisation's timezone, UTC when the tz database dropped it.
+
+        Every reading of its record buckets days by this, never by the
+        caller's: the lock and the freeze already do, and a record two
+        deciders read differently is not a record (#415)."""
         try:
             return ZoneInfo(organisation.timezone)
         except ZoneInfoNotFoundError, ValueError:
@@ -977,7 +985,12 @@ class OrganisationService:
     # --- the record --------------------------------------------------------------------
 
     async def _balance(
-        self, organisation_id: str, assignment: OrgAssignment, today: date, tz: ZoneInfo
+        self,
+        organisation_id: str,
+        assignment: OrgAssignment,
+        today: date,
+        tz: ZoneInfo,
+        expired_before: date,
     ) -> MemberBalance | None:
         contract = assignment.contract
         if contract is None or assignment.project_id is None:
@@ -986,9 +999,16 @@ class OrganisationService:
         # project with hours before the day the member chose to share from,
         # that sum would carry what rule 4 keeps back — so it is withheld,
         # and shown only when every entry and absence on the project is the
-        # organisation's, where it equals the member's own figure.
+        # organisation's, where it equals the member's own figure. Rows the
+        # retention purge unstamped are not withheld: they were shared once
+        # and have only expired (#409).
         if await self.records.has_unshared(
-            organisation_id, assignment.project_id, assignment.user_id
+            organisation_id,
+            assignment.project_id,
+            assignment.user_id,
+            private_before=assignment.private_before,
+            private_before_day=assignment.private_before_day,
+            expired_before=expired_before,
         ):
             return None
         start = contract.starts_on
@@ -1020,19 +1040,6 @@ class OrganisationService:
             adjusted=round(terms.adjusted, 2),
         )
 
-    @staticmethod
-    def _zone(organisation: Organisation) -> ZoneInfo:
-        """The organisation's own timezone, which every reading of its
-        record buckets days by — the lock and the freeze already do
-        (`MongoPeriodLocks._zone_of`), and a record two deciders read
-        differently is not a record (#415). A stored timezone is checked at
-        write time, so the fallback is for a document written before that
-        check or edited by hand."""
-        try:
-            return ZoneInfo(organisation.timezone)
-        except ZoneInfoNotFoundError, ValueError:
-            return ZoneInfo("UTC")
-
     async def _record(
         self,
         organisation: Organisation,
@@ -1052,6 +1059,13 @@ class OrganisationService:
         organisation_id = organisation.id
         tz = self._zone(organisation)
         today = local_date(self._now(), tz)
+        # The day the organisation's own retention reaches back to: a row
+        # older than it has expired, which is why an unstamped one there
+        # does not withhold a balance (#409).
+        expired_before = retention_cutoff(
+            today,
+            effective_retention_years(organisation.retention_years, organisation.holiday_country),
+        )
         first, last = month, month_end(month)
         start, end = utc_range(first, last, tz)
         project_ids = [p.id for p in projects]
@@ -1095,7 +1109,7 @@ class OrganisationService:
                         entries=own,
                         absences=offs.get(key, []),
                         has_contract=a.contract is not None,
-                        balance=await self._balance(organisation_id, a, today, tz),
+                        balance=await self._balance(organisation_id, a, today, tz, expired_before),
                         totals=totals.get(key, MemberTotals()),
                     )
                 )
