@@ -68,8 +68,12 @@ product's main privacy property, and it narrows the controller's risk.
   member by, and nothing else of the member's account survives
   (PRIVACY.md § Export and deletion).
 - At the end of the agreement: export in CSV/JSON on request, then
-  deletion when the statutory period allows [cross-reference the
-  organisation-deletion machinery when built — #347].
+  deletion when the statutory period allows. Both exist: closing an
+  organisation runs on notice of at least 30 days, during which the final
+  `record.csv` and `compliance.csv` are taken — that export is the copy
+  which survives — and deletion then hands each member a personal copy of
+  the projects they hold rows on before erasing everything that was the
+  organisation's (docs/organisations.md, decision 29).
 
 ## 4. Still to settle with counsel
 

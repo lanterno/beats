@@ -45,7 +45,7 @@ The roadmap left three open and gated the stage on them. They were settled
 first, then the model was built on them.
 
 1. **The note crosses; tags do not.** Rule 3 names the entry's note, and the
-   organisation reads it. The marker the roadmap asked for goes wherever a
+   organisation reads it. The marker the epic asked for goes wherever a
    note is *shown* on an organisation's project — beside it, "Acme can read
    this note" (`TodayFeed`, `WeekDays`) — and, since #348, on the one input
    that writes one: the web app's session editor, where the marker describes
@@ -238,8 +238,9 @@ Changed:
 
 - **`projects`**: an organisation's document has `organisation_id` and no
   `user_id`, and only the organisation's fields. Indexed `(user_id,
-  archived)` — the roadmap's fourth prerequisite, measured in
-  `TestProjectsIndex` — and `organisation_id`.
+  archived)` — added before any organisation code, since the read was about
+  to become "mine, plus every organisation project I am assigned to" across
+  every tenant, and measured in `TestProjectsIndex` — and `organisation_id`.
 - **`timeLogs`** and **`absences`**: `organisation_id`, sparse, set when
   written against an organisation's project; indexed with `project_id` for
   the organisation's read.
@@ -343,8 +344,8 @@ what only matters past a handful of people. Decisions 21–27:
 21. **The contract stays on the assignment; management is a flag.** The
     employer takes an assignment's contract under its hand
     (`contract_managed`, written through `PUT …/members/{uid}/contract`),
-    **starting from the terms the member recorded** — the roadmap's
-    "contract disagreement" answer: the employer's terms arrive as an
+    **starting from the terms the member recorded** — the answer to the
+    contract-disagreement question the epic gated this stage on: the employer's terms arrive as an
     audited act, never as a silent recomputation of a balance the member
     relied on. While managed, the member's own contract, absence and
     adjustment writes answer 409 `CONTRACT_MANAGED`; their week, ledger,
@@ -386,13 +387,13 @@ what only matters past a handful of people. Decisions 21–27:
     Approval itself refuses while a stamped timer still runs inside the
     month — its hours are in no figure yet. Reopening needs a reason, is
     recorded in the sheet's history and the audit log, lifts the lock and
-    drops the frozen figures; re-approval freezes afresh. Of the roadmap's
-    three options (refused / flagged / amendment), this is "refused with a
+    drops the frozen figures; re-approval freezes afresh. Of the three
+    options weighed (refused / flagged / amendment), this is "refused with a
     recorded way back", the only one a works council can sign.
 24. **Admin-entered time is marked.** A decider logs a finished session for
     a member (`entered_by` on the beat): it lands on the member's own
     timeline marked "entered for you", is stamped as the organisation's,
-    and is in the audit log — the "member notified" of the roadmap is the
+    and is in the audit log — the notification the epic asked for is the
     member's own timeline showing it, since every surface reads it.
 25. **Teams are a manager's scope.** A team (`org_teams`) is a name and its
     members. The **manager** role decides requests and timesheets, writes

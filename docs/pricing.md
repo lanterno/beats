@@ -52,8 +52,8 @@ seen. When the beta ends:
 
 ## The market it was priced against
 
-Checked on the vendors' own pricing pages, October 2026 (the roadmap warned
-the earlier figures came from aggregators):
+Checked on the vendors' own pricing pages, October 2026; the figures quoted
+before that came from aggregators and were not relied on:
 
 | Product | Free tier | Team tier (annual, /seat/mo) | SSO gated at |
 |---|---|---|---|
@@ -76,8 +76,8 @@ the seat definition above is chosen to have none.
 ## What this does not decide
 
 Collecting the money — a payment provider, tax, invoices, dunning — is the
-first money flowing *to* us and is its own project, as the roadmap says
-(#345). Nothing here obliges a provider choice. Organisation-side money
+first money flowing *to* us and is its own project
+([roadmaps/organisations.md](../roadmaps/organisations.md) § #345). Nothing here obliges a provider choice. Organisation-side money
 (rates, costs, budgets inside an organisation) is a separate, undesigned
 space guarded by its own rule — seeing money is a permission, not a role
 (#340) — and this file prices seats, not that.

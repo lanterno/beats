@@ -58,7 +58,7 @@
 | A member's personal life leaks through a note | Possible, self-inflicted | The one input that writes a note carries the marker "[organisation] can read this note", on the input itself |
 | Access beyond need inside the organisation | [org-specific] | Roles: managers scoped to their teams; viewers read-only; money (when it exists) its own permission; [the organisation's own role assignments here] |
 | Record manipulation before an inspection | Low | Frozen months, reasoned reopens, audit log |
-| Unlawful retention beyond the statutory period | [org-specific] | Retention floors by jurisdiction; deletion machinery audited [#344/#347 when built; until then, deletion on instruction] |
+| Unlawful retention beyond the statutory period | [org-specific] | A retention period refused below the floor of the organisation's country (Spain 4 years, Germany 2, France/Austria/Netherlands 1, Poland 10; an unknown country gets 4); expiry removes the organisation's record, not the person — a living member's rows lose the stamp and are theirs alone, and only tombstoned rows are deleted. The purge is an operator-run script, audited with counts and no data; nothing schedules it, so nothing auto-deletes during the beta |
 | Processor compromise | Low / high | [TOMs annex of the DPA; passkey-only auth; per-user query scoping] |
 
 ## 4. Sign-off
