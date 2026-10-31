@@ -438,6 +438,12 @@ function ContractVariant({
 		})
 		.join("; ")}${endedOn ? `; ${ended ? "ended" : "ends"} ${plainDate(endedOn)}` : ""}`;
 
+	// While the organisation holds the pen (decision 21) every write here
+	// answers 409 CONTRACT_MANAGED, so the controls that make one are not
+	// shown at all: the page said "Managed by Acme" and left the per-term
+	// Edit and Remove, Holidays and the constants' Edit live (#419).
+	const managed = project.organisation?.contractManaged ?? false;
+
 	const country = regions?.find((r) => r.code === contract.holidayCountry);
 	const subdivision = country?.subdivisions.find((s) => s.code === contract.holidaySubdivision);
 	// A region day not given that a company day covers is listed beside it, but
@@ -499,31 +505,33 @@ function ContractVariant({
 							</span>
 							<span className="[grid-area:st] inline-flex gap-1.5 items-center justify-self-end">
 								{status && <StatusPill status={status} />}
-								<span className={OPS}>
-									<button
-										type="button"
-										onClick={() => setEditor({ mode: "edit", index })}
-										disabled={anyPending}
-										aria-label={`Edit term from ${when}`}
-										className={OP}
-									>
-										<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
-									</button>
-									<button
-										type="button"
-										onClick={() => handleRemove(index)}
-										disabled={anyPending || terms.length <= 1}
-										aria-label={`Remove term from ${when}`}
-										title={terms.length <= 1 ? "A contract needs at least one term" : undefined}
-										className={cn(OP, "hover:text-destructive")}
-									>
-										{pendingIndex === index ? (
-											<Loader2 className="w-[11px] h-[11px] animate-spin" aria-hidden="true" />
-										) : (
-											<Trash2 className="w-[11px] h-[11px]" aria-hidden="true" />
-										)}
-									</button>
-								</span>
+								{!managed && (
+									<span className={OPS}>
+										<button
+											type="button"
+											onClick={() => setEditor({ mode: "edit", index })}
+											disabled={anyPending}
+											aria-label={`Edit term from ${when}`}
+											className={OP}
+										>
+											<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
+										</button>
+										<button
+											type="button"
+											onClick={() => handleRemove(index)}
+											disabled={anyPending || terms.length <= 1}
+											aria-label={`Remove term from ${when}`}
+											title={terms.length <= 1 ? "A contract needs at least one term" : undefined}
+											className={cn(OP, "hover:text-destructive")}
+										>
+											{pendingIndex === index ? (
+												<Loader2 className="w-[11px] h-[11px] animate-spin" aria-hidden="true" />
+											) : (
+												<Trash2 className="w-[11px] h-[11px]" aria-hidden="true" />
+											)}
+										</button>
+									</span>
+								)}
 							</span>
 							<span className="[grid-area:what] min-w-0 text-foreground font-medium">
 								{describeTerm(term)}
@@ -539,10 +547,11 @@ function ContractVariant({
 			</ul>
 
 			<div className="mt-3.5">
-				{project.organisation?.contractManaged ? (
+				{managed && project.organisation ? (
 					// Stage 3: the contract is the employer's to write (409 CONTRACT_MANAGED).
 					<p className="text-xs text-muted-foreground font-medium leading-[1.6]">
-						Managed by {project.organisation.name}: the terms are the organisation's to change.
+						Managed by {project.organisation.name}: the terms, the holidays, the region, the opening
+						balance and the end are the organisation's to change.
 					</p>
 				) : (
 					<Button
@@ -569,7 +578,7 @@ function ContractVariant({
 			)}
 
 			<div className="mt-2.5 pt-2.5 border-t border-border text-xs text-muted-foreground leading-[1.6] font-medium">
-				{!contract.holidayCountry && (
+				{!contract.holidayCountry && !managed && (
 					<p className="text-destructive-ink">
 						Public holidays are not deducted.
 						<button
@@ -583,22 +592,26 @@ function ContractVariant({
 				)}
 				<p>
 					{constants}
-					<button
-						type="button"
-						onClick={onOpenHolidays}
-						className={CONST_BUTTON}
-						aria-label="Holidays: company days and public holidays not given"
-					>
-						Holidays
-					</button>
-					<button
-						type="button"
-						onClick={() => onOpenSettings("holidayCountry")}
-						className={CONST_BUTTON}
-						aria-label="Edit the region, the opening balance and the end"
-					>
-						Edit
-					</button>
+					{!managed && (
+						<>
+							<button
+								type="button"
+								onClick={onOpenHolidays}
+								className={CONST_BUTTON}
+								aria-label="Holidays: company days and public holidays not given"
+							>
+								Holidays
+							</button>
+							<button
+								type="button"
+								onClick={() => onOpenSettings("holidayCountry")}
+								className={CONST_BUTTON}
+								aria-label="Edit the region, the opening balance and the end"
+							>
+								Edit
+							</button>
+						</>
+					)}
 				</p>
 			</div>
 

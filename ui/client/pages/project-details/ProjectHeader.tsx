@@ -222,19 +222,25 @@ export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHead
 					className="inline-flex items-center gap-2 rounded-full bg-destructive/20 px-[11px] py-[3px] text-xs font-bold text-destructive whitespace-nowrap"
 					title="This project is archived. Hidden from active pickers and lists."
 				>
-					Archived
-					<button
-						type="button"
-						onClick={handleRestore}
-						disabled={unarchive.isPending}
-						className={cn(
-							"inline-flex items-center gap-1 underline underline-offset-[3px] disabled:opacity-50",
-							FOCUS,
-						)}
-					>
-						{unarchive.isPending && <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />}
-						Restore
-					</button>
+					{/* An organisation archives its own projects, and /unarchive
+					    answers 409 ORGANISATION_PROJECT to the member (#419). */}
+					{project.organisation ? `Archived by ${project.organisation.name}` : "Archived"}
+					{!project.organisation && (
+						<button
+							type="button"
+							onClick={handleRestore}
+							disabled={unarchive.isPending}
+							className={cn(
+								"inline-flex items-center gap-1 underline underline-offset-[3px] disabled:opacity-50",
+								FOCUS,
+							)}
+						>
+							{unarchive.isPending && (
+								<Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+							)}
+							Restore
+						</button>
+					)}
 				</span>
 			)}
 

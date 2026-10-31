@@ -163,10 +163,19 @@ export interface ProjectFormProps {
 	 * The organisation that owns the project (docs/organisations.md). Set, the
 	 * name, description, colour, kind, category and GitHub repo are read-only
 	 * and submitted as they came — the API answers 409 ORGANISATION_PROJECT to
-	 * a change — and a line above the form says so. The goal, the autostart
-	 * paths and the contract stay editable: they are the member's.
+	 * a change — and a line above the form says so. The goal and the autostart
+	 * paths stay editable: they are the member's.
 	 */
 	lockedBy?: string;
+	/**
+	 * The organisation managing the contract (decision 21), when one does.
+	 * Set, the contract's frame — region, opening balance, end — is not shown
+	 * and the form submits it as it came, because the member's write to it
+	 * answers 409 CONTRACT_MANAGED. The goal and the repo paths stay theirs
+	 * (#419: the form said the contract was the member's and left it
+	 * editable while the organisation held the pen).
+	 */
+	contractManagedBy?: string;
 }
 
 function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues {
@@ -235,8 +244,10 @@ export function ProjectForm({
 	submitError,
 	kindNotice,
 	lockedBy,
+	contractManagedBy,
 }: ProjectFormProps) {
 	const locked = lockedBy !== undefined;
+	const contractLocked = contractManagedBy !== undefined;
 	const [values, setValues] = useState<ProjectFormValues>(() => defaultValues(initialValues));
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [clientErrors, setClientErrors] = useState<ProjectFormErrors>(emptyProjectFormErrors);
@@ -278,7 +289,10 @@ export function ProjectForm({
 	const currentTerm = existingContract ? displayTermOn(existingContract, today) : undefined;
 	// Whether the form is describing a contract at all: the frame of the one
 	// that exists, or the first term of a new one.
-	const editsContract = isDayJob && (existingContract !== undefined || values.addContract);
+	// Not while the organisation holds the pen: the frame is theirs too, and
+	// a member's write to it is refused (#419).
+	const editsContract =
+		isDayJob && !contractLocked && (existingContract !== undefined || values.addContract);
 	// A region change on a contract that marks dates as not given: the marks
 	// are bare dates, and the new region may have a holiday on one. Save
 	// waits for the notice's check, so no mark comes into force unseen.
@@ -375,7 +389,9 @@ export function ProjectForm({
 			{locked && (
 				<p className="text-xs text-muted-foreground leading-normal">
 					{lockedBy} owns this project's name, colour, kind, description, repository and category.
-					Your goal, local repo paths and contract are yours.
+					{contractLocked
+						? ` ${contractManagedBy} manages the contract. Your goal and local repo paths are yours.`
+						: " Your goal, local repo paths and contract are yours."}
 				</p>
 			)}
 			<div>
@@ -558,7 +574,7 @@ export function ProjectForm({
 									· since {formatDateOnly(currentTerm.effectiveFrom)}
 								</span>
 							</p>
-							{onChangeContract && (
+							{onChangeContract && !contractLocked && (
 								<Button
 									type="button"
 									variant="link"
@@ -570,7 +586,9 @@ export function ProjectForm({
 								</Button>
 							)}
 							<p className="text-[11px] text-muted-foreground mt-1">
-								Terms — a new percentage, a start date — are edited in the Contract panel.
+								{contractLocked
+									? `${contractManagedBy} changes the terms.`
+									: "Terms — a new percentage, a start date — are edited in the Contract panel."}
 							</p>
 						</div>
 					) : (

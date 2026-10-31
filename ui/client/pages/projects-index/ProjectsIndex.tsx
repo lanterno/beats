@@ -575,7 +575,10 @@ function RestoreButton({
 	onRestore?: (projectId: string, projectName: string) => void;
 	restoringId?: string;
 }) {
-	if (!onRestore) return null;
+	// An organisation archives its own projects, and /unarchive answers 409
+	// ORGANISATION_PROJECT to a member (#419): the row says whose it is and
+	// offers nothing.
+	if (!onRestore || project.organisation) return null;
 	const isRestoring = restoringId === project.id;
 	return (
 		<button

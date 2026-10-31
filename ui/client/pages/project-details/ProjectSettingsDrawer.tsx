@@ -210,6 +210,7 @@ export function ProjectSettingsDrawer({
 				submitError={submitError}
 				kindNotice={kindNotice}
 				lockedBy={organisation?.name}
+				contractManagedBy={organisation?.contractManaged ? organisation.name : undefined}
 			/>
 
 			{organisation ? (
