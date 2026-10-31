@@ -1333,6 +1333,76 @@ class TestErasure:
         assert "note" not in db.absences.find_one({"organisation_id": org["id"]})
         assert db.org_audit.find_one({"event": "account.erased", "subject_user_id": row["user_id"]})
 
+    def test_a_decider_leaves_no_raw_id_on_entered_time_or_a_sheets_history(
+        self, client, auth_headers
+    ):
+        # A bug that happened (#410): erasure tombstoned created_by,
+        # assigned_by, decided_by and the audit actor, and missed the beat's
+        # entered_by and the timesheet history's by.
+        from beats.infrastructure.erasure import erase_account
+
+        org = _create_org(client, auth_headers)
+        decider, member = _new_user(), _new_user()
+        decider_id = _member_of(client, auth_headers, org["id"], decider, role="admin")
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        entered = client.post(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}/entries",
+            json={"start": "2026-03-03T09:00:00Z", "end": "2026-03-03T10:00:00Z"},
+            headers=decider,
+        )
+        assert entered.status_code == 201, entered.text
+        moved_away = client.post(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}/entries",
+            json={"start": "2026-03-04T09:00:00Z", "end": "2026-03-04T10:00:00Z"},
+            headers=decider,
+        ).json()
+        garden = client.post("/api/projects/", json={"name": "Garden"}, headers=member).json()
+        # The member moves one entered session to a personal project: the
+        # stamp goes, and with it any tombstone that could name the decider.
+        moved = client.put(
+            "/api/beats/",
+            json={
+                "id": moved_away["id"],
+                "project_id": garden["id"],
+                "start": moved_away["start"],
+                "end": moved_away["end"],
+            },
+            headers=member,
+        )
+        assert moved.status_code == 200, moved.text
+        sheet = _submit(client, member, org["id"], project["id"], "2026-03").json()
+        assert (
+            _decide_sheet(client, decider, org["id"], sheet["id"], approve=True).status_code == 200
+        )
+
+        async def run():
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await erase_account(
+                    client_[os.environ.get("DB_NAME", "beats_test")], decider_id
+                )
+            finally:
+                await client_.close()
+
+        asyncio.run(run())
+        db = _db()
+        for name in db.list_collection_names():
+            assert db[name].count_documents({"user_id": decider_id}) == 0, name
+        assert db.timeLogs.count_documents({"entered_by": decider_id}) == 0
+        assert db.org_timesheets.count_documents({"history.by": decider_id}) == 0
+        assert db.org_timesheets.count_documents({"decided_by": decider_id}) == 0
+        kept = db.timeLogs.find_one({"_id": ObjectId(entered.json()["id"])})
+        assert kept["entered_by"].startswith("erased:")
+        personal = db.timeLogs.find_one({"_id": ObjectId(moved_away["id"])})
+        assert personal["entered_by"] == "erased"
+        # The member still sees the mark.
+        mine = client.get(f"/api/beats/{entered.json()['id']}", headers=member).json()
+        assert mine["entered_by"] is not None
+
 
 class TestBackupsAndOrganisations:
     """What a personal backup does with an organisation's project."""
