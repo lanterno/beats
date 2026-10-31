@@ -1558,6 +1558,39 @@ class TestRetention:
         nowhere = _create_org(client, auth_headers, name="Nowhere")
         assert self._settings(client, auth_headers, nowhere, retention_years=3).status_code == 409
 
+    def test_an_unset_period_is_the_countrys_floor(self, client, auth_headers):
+        # The write-time check sees only an explicit setting. An organisation
+        # that never set one keeps its record for its country's floor, not
+        # for the four-year default: Poland says ten.
+        from beats.infrastructure.retention import purge_expired_records
+
+        warsaw = _create_org(client, auth_headers, name="Warsaw", holiday_country="PL")
+        project = _org_project(client, auth_headers, warsaw["id"])
+        _assign(client, auth_headers, warsaw["id"], project["id"], _seeded_id(auth_headers))
+        row = _beat(client, auth_headers, project["id"], "2020-01-10T09:00:00", 60)
+
+        async def dry_run(today):
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await purge_expired_records(
+                    client_[os.environ.get("DB_NAME", "beats_test")], today=today, apply=False
+                )
+            finally:
+                await client_.close()
+
+        report = asyncio.run(dry_run(date(2025, 6, 1)))
+        [mine] = [o for o in report.organisations if o.organisation_id == warsaw["id"]]
+        assert mine.years == 10
+        assert mine.counts["beats_unstamped"] == 0
+        kept = _db().timeLogs.find_one({"_id": ObjectId(row["id"])})
+        assert kept["organisation_id"] == warsaw["id"]
+        # Ten years on, the same row has expired.
+        report = asyncio.run(dry_run(date(2030, 6, 1)))
+        [mine] = [o for o in report.organisations if o.organisation_id == warsaw["id"]]
+        assert mine.counts["beats_unstamped"] == 1
+
     def test_expiry_unstamps_the_living_and_deletes_the_tombstoned(self, client, auth_headers):
         from beats.infrastructure.retention import purge_expired_records
 
