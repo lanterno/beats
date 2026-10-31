@@ -8,9 +8,9 @@
 > them and nothing else.
 
 This is what the organisations epic (#353) has built: the foundations (stage
-2, decisions 1–20), employment (stage 3) and scale (stage 4, decisions
-21–30). It records the decisions the build rests on, so later work does not
-re-litigate them. Stage 1, clients and billing, is in
+2, decisions 1–20), employment (stage 3) and scale (stage 4, decisions 21–30),
+and three settled after (31–33). It records the decisions the build rests on,
+so later work does not re-litigate them. Stage 1, clients and billing, is in
 [billing.md](billing.md). What is not built yet, and why each piece waits, is
 in [roadmaps/organisations.md](../roadmaps/organisations.md).
 
@@ -27,8 +27,9 @@ the shape it has.
 2. **Every project has exactly one owner** — the person, or an organisation.
    What anyone else sees follows from that.
 3. **Hours, not the person.** On its own projects an organisation sees start,
-   end, duration, the entry's note, absences (date, type, half day), and a
-   contract's balance. Flow scores, apps, repos, idle time, biometrics, the
+   end, duration, the entry's note, absences (date, type, half day), and the
+   contract on the project — its terms and its balance (decision 32). Flow
+   scores, apps, repos, idle time, biometrics, the
    coach and its memory, calendar, insights, tags and personal projects —
    including their existence — never cross. No setting changes this.
 4. **Nothing is retroactive without consent.** Connecting a project the
@@ -318,7 +319,7 @@ and viewers, and managers narrowed to their teams (decision 25).
 | `GET /{id}/visible`, `/visible.csv` (`month=&tz=`) | members, former members | What it sees of me — the same read; the month as CSV |
 | `GET /{id}/archive`, `/archive.csv` | members, former members | My own entries and absences that are its record |
 | `GET`, `POST /{id}/teams`, `PUT`, `DELETE /{id}/teams/{tid}` | readers / admins | Teams: a manager's scope |
-| `GET`, `PUT /{id}/projects/{pid}/members/{uid}/contract` | deciders | The employer's contract on an assignment; `managed` takes or returns the pen |
+| `GET`, `PUT /{id}/projects/{pid}/members/{uid}/contract` | deciders | The contract on an assignment, managed or not (decision 32); `managed` takes or returns the pen |
 | `POST /{id}/projects/{pid}/members/{uid}/adjustments` | deciders | A payout, reset or cap on a managed assignment |
 | `POST /{id}/projects/{pid}/members/{uid}/entries` | deciders | Enter a finished session for a member, marked `entered_by` |
 | `POST`, `GET /{id}/absence-requests` (`?pending=`), `POST …/{rid}/decision`, `DELETE /{rid}` | members / deciders | Ask; list (my own, or a decider's scope); decide (approve books the absence); withdraw |
@@ -564,6 +565,38 @@ what only matters past a handful of people. Decisions 21–30:
     nothing schedules it, so the beta auto-deletes nothing. DATA.md and
     PRIVACY.md changed in the same stage, since the setting is a promise
     they make.
+
+### Settled after stage 4
+
+Three questions the 2026-10-31 audit raised, answered the same day.
+
+31. **An organisation left without an owner stays as it is.** Erasing the
+    last owner's account is neither refused nor followed by a promotion: the
+    membership ends like any other erasure, and the organisation runs on
+    under its admins. Owner-only acts — granting the owner role, closing,
+    deleting — wait until someone acts on it. Noticing an organisation with
+    no owner is the operator's job, in a back office (#424), not something
+    the product decides on the organisation's behalf. (The last-owner check of
+    decisions 10 and 20 still guards leaving, removal and demotion: those
+    are the organisation's own acts, an erasure is the person's.)
+32. **Connecting shares the project, contract included — and sharing is not
+    control.** A member who connects a project chooses to share what is on
+    it with the organisation, the contract with the rest, and a contract on
+    a project the organisation made is the terms its work is done under. So
+    a decider (decision 25) reads the contract on any assignment it decides
+    for, managed or not (`GET …/members/{uid}/contract`): its terms as well
+    as the balance the record shows. Writing them stays the member's until
+    the organisation manages the contract (decision 21). Sharing hands over
+    no power to delete: an organisation removing a project from someone ends
+    the assignment and nothing else, and an entry, absence or adjustment is
+    deleted only by the person whose it is. The one exception is rows kept
+    under a tombstone after an account's erasure (decision 3), which exist
+    only as the organisation's record and go when it is deleted (decision
+    29) or its retention expires (decision 30).
+33. **A decider may approve their own timesheet and absence request, for
+    now.** A manager's scope includes themselves, and owners and admins are
+    unscoped; the approval is in the audit log like any other. Requiring a
+    second person is a later decision, not an omission.
 
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.

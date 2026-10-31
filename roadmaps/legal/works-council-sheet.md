@@ -12,8 +12,9 @@ can check it rather than trust it.
 ## What the employer sees, in full
 
 On **its own projects only**: each entry's start, end, duration and note;
-absences as date, type and whole or half day; the contract balance where it
-manages a contract; timesheet status. That is the entire list.
+absences as date, type and whole or half day; the contract a member holds on
+one of its projects, its terms and its balance; timesheet status. That is the
+entire list.
 
 ## What the employer can never see
 

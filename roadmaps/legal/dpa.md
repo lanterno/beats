@@ -14,7 +14,7 @@ records) and [operator entity] (the **processor**), under art. 28 GDPR.
 The controller's instruction is the product's contract itself
 (docs/organisations.md): on the organisation's own projects, each member's
 entries (start, end, duration, note), absences (date, type, half day),
-contract terms and balances where managed, timesheets and their approval
+contract terms and balances, timesheets and their approval
 history, the audit log, and the membership roster (name, email, role).
 
 **Deliberately outside this DPA's scope** because the processor never
