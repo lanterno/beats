@@ -1078,6 +1078,20 @@ class ProjectOrganisation(BaseModel):
     name: str
     logo_url: str | None = None
     shared_from: datetime
+    # What the member kept back when they handed the project over: on a
+    # project they connected, rows before this instant are theirs alone,
+    # and nothing stamps them (rule 4, `organisation_stamp`). Null on a
+    # project the organisation has owned all along, where the member had no
+    # history to keep back and a back-dated entry is its record like any
+    # other.
+    #
+    # Not `shared_from`, which a reassignment moves forward to the new
+    # assignment's day: what was private at the connect stays private for
+    # good. The day is kept beside the instant because an absence is dated
+    # and not timed, and `private_before` is that day's local midnight in a
+    # timezone nothing stores.
+    private_before: datetime | None = None
+    private_before_day: date_type | None = None
     # The employer writes the contract (docs/organisations.md, stage 3): the
     # member reads their week and balance as ever, but the contract, the
     # absences (which become requests) and the balance adjustments are the
@@ -1684,7 +1698,12 @@ class OrgAssignment(TzNormalizedModel):
     project are the organisation's: the moment of assignment, or on a
     connected project the local midnight of the day the member chose. An
     assignment that ends keeps its document with `ended_at`; assigning
-    again reopens it.
+    again reopens it, from that day.
+
+    `private_before` is the other half of that, and only a connect writes
+    it: the instant before which the member's rows on this project are
+    theirs alone, whatever a later assignment moves `shared_from` to. See
+    `ProjectOrganisation`.
     """
 
     id: str | None = None
@@ -1692,6 +1711,8 @@ class OrgAssignment(TzNormalizedModel):
     project_id: str
     user_id: str
     shared_from: datetime
+    private_before: datetime | None = None
+    private_before_day: date_type | None = None
     assigned_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     assigned_by: str | None = None
     ended_at: datetime | None = None

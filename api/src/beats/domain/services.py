@@ -123,8 +123,53 @@ async def derive_flow_tags(
 
 
 def organisation_of(project: Project) -> str | None:
-    """The organisation whose record a beat on `project` is, or None."""
+    """The organisation that owns `project`, or None."""
     return project.organisation.id if project.organisation is not None else None
+
+
+def organisation_stamp(project: Project, start: datetime) -> str | None:
+    """The organisation whose record a session starting at `start` is.
+
+    Rule 4: connecting a project shares its history only from the day the
+    member chose, so a session before `private_before` stays theirs alone
+    however it is written — a back-dated create, a timer started in the
+    past, or an edit that moves a shared session back out of the range,
+    which clears the stamp it had. Owning the project is not enough on its
+    own: that was #404, where editing a pre-share entry's note handed it
+    over.
+
+    On a project the organisation has owned all along, `private_before` is
+    null and a back-dated entry is its record like any other: the member
+    could not have tracked on it before they were assigned, so a date
+    before the assignment is late work and not history. Decision 7 draws
+    the line in the same place — the stamp is withheld "before a
+    *connected* project's `shared_from`".
+    """
+    owner = project.organisation
+    if owner is None:
+        return None
+    if owner.private_before is not None and normalize_tz(start) < normalize_tz(
+        owner.private_before
+    ):
+        return None
+    return owner.id
+
+
+def organisation_stamp_for_day(project: Project, day: date) -> str | None:
+    """The same rule for an absence, which is a day and not an instant.
+
+    The day the member chose is kept beside the instant, because
+    `private_before` is that day's local midnight and reading the day back
+    off it would need the timezone it was taken in. An assignment carrying
+    the instant and not the day falls back to the instant's own date.
+    """
+    owner = project.organisation
+    if owner is None:
+        return None
+    if owner.private_before is None:
+        return owner.id
+    private = owner.private_before_day or normalize_tz(owner.private_before).date()
+    return None if day < private else owner.id
 
 
 def _refuse_managed(project: Project) -> None:
@@ -222,10 +267,13 @@ class TimerService:
             )
 
         # Create new beat, stamped as the organisation's record when the
-        # project is an organisation's (docs/organisations.md).
+        # project is an organisation's and the start is on or after the day
+        # the member shares from (docs/organisations.md).
         start = start_time or datetime.now(UTC)
         await refuse_locked(self.locks, project, start)
-        beat = Beat(project_id=project_id, start=start, organisation_id=organisation_of(project))
+        beat = Beat(
+            project_id=project_id, start=start, organisation_id=organisation_stamp(project, start)
+        )
         return await self.beat_repo.create(beat)
 
     async def stop_timer(
@@ -334,7 +382,7 @@ class BeatService:
         if self.projects is None:
             return beat
         project = await self.projects.get_by_id(beat.project_id)
-        beat.organisation_id = organisation_of(project)
+        beat.organisation_id = organisation_stamp(project, beat.start)
         await refuse_locked(self.locks, project, beat.start)
         return beat
 
@@ -1165,13 +1213,14 @@ class ContractService:
     async def record_absence(self, absence: Absence) -> Absence:
         """Record an absence; one already on that date is replaced. On an
         organisation's project it is stamped as that organisation's record,
-        as a beat there is. Where the employer manages the contract the
-        member asks instead (409 CONTRACT_MANAGED), and a date inside an
-        approved month is refused."""
+        as a beat there is — and, as a beat is, only from the day the member
+        shares from. Where the employer manages the contract the member asks
+        instead (409 CONTRACT_MANAGED), and a date inside an approved month
+        is refused."""
         project = await self._day_job(absence.project_id)
         _refuse_managed(project)
         await refuse_locked(self.locks, project, None, absence.date)
-        absence.organisation_id = organisation_of(project)
+        absence.organisation_id = organisation_stamp_for_day(project, absence.date)
         return await self.absence_repo.upsert(absence)
 
     async def remove_absence(self, project_id: str, absence_id: str) -> None:

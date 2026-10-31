@@ -479,7 +479,14 @@ async def import_full_json(
     # the stamp it has — so a backup from before a connect does not strip the
     # record, and one edited by hand cannot plant it. One new to the account
     # takes the stamp the project as it stands gives: an organisation's, and
-    # started on or after the day this member shares from.
+    # started on or after the member's `shared_from` (decision 18).
+    #
+    # That is a stricter line than a live write keeps (`organisation_stamp`,
+    # which withholds the stamp only before a *connected* project's
+    # `private_before`), and deliberately so: a back-dated entry typed into
+    # the app is the member's own late work on the organisation's project,
+    # while a back-dated entry in a file is whatever the file says. The two
+    # rules guard different things, so they are written twice on purpose.
     stamps: dict[str, tuple[str, datetime] | None] = {}
     for beat in backup.beats:
         stored = None

@@ -505,6 +505,8 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
             name=org.get("name", "an organisation"),
             logo_url=org.get("logo_url"),
             shared_from=assignment.shared_from,
+            private_before=assignment.private_before,
+            private_before_day=assignment.private_before_day,
             contract_managed=assignment.contract_managed,
         )
         return Project(**data)

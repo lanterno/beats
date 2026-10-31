@@ -8,9 +8,12 @@ idempotent by construction: the first acts on documents without a `kind` field
 and stamps one, the second on day jobs that still carry a `weekly_goal` and
 unsets it, so a second boot finds nothing to do for either.
 
-A third pass, `date_pairing_codes`, has nothing to do with projects: it gives
-the pairing codes stored with string dates BSON dates, so their TTL index can
-remove them. Its reasoning is on the function, at the end of the module.
+Two further passes have nothing to do with projects' kinds.
+`mark_connected_assignments` writes `private_before` onto the assignments a
+connect made before that field existed, so rule 4 holds for them too (#404).
+`date_pairing_codes` gives the pairing codes stored with string dates BSON
+dates, so their TTL index can remove them. The reasoning for each is on its
+function, at the end of the module.
 
 The first pass, `migrate_project_kinds`:
 
@@ -97,6 +100,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
@@ -441,6 +445,80 @@ def _as_date(value: Any) -> date:
         return _as_date(datetime.fromisoformat(value))
     msg = f"not a date: {value!r}"
     raise TypeError(msg)
+
+
+@dataclass
+class ConnectedAssignmentReport:
+    """What the connected-assignment pass did: assignments given back the
+    history their connect kept, and events it could not read."""
+
+    marked: int = 0
+    skipped: int = 0
+
+
+async def mark_connected_assignments(db: AsyncDatabase) -> ConnectedAssignmentReport:
+    """Write `private_before` onto every assignment made by a connect.
+
+    Rule 4 withholds a connected project's history from before the day the
+    member chose, and until #404 the only thing standing for that choice was
+    `shared_from` — which a later reassignment moves forward, and which an
+    ordinary assignment sets to its own instant, so it cannot tell a day
+    somebody kept back from a day the organisation has owned all along.
+    `private_before` says it outright, and every connect writes it now; this
+    gives it to the connects made before it existed.
+
+    The source is the audit log, which has recorded every connect since
+    stage 2 (decision 12) with the project, the member and the instant —
+    this is the pass that log was kept for. The day beside the instant is
+    read in the organisation's timezone, the one the lock and the freeze
+    already bucket by; the member's own was never stored, so a connect from
+    a timezone further east may land a day out, which errs toward keeping
+    a day back rather than sharing one.
+
+    Idempotent: it acts on assignments with no `private_before` and gives
+    them one. An event whose project, member or instant cannot be read is
+    counted and left, so the next boot tries again.
+    """
+    report = ConnectedAssignmentReport()
+    events = await db.org_audit.find({"event": "project.connected"}).to_list(length=None)
+    if not events:
+        return report
+
+    zones: dict[str, str] = {}
+    async for org in db.organisations.find({}, {"timezone": 1}):
+        zones[str(org["_id"])] = org.get("timezone") or "UTC"
+
+    for event in events:
+        project_id = event.get("project_id")
+        user_id = event.get("subject_user_id")
+        shared = (event.get("details") or {}).get("shared_from")
+        if not project_id or not user_id or not isinstance(shared, str):
+            report.skipped += 1
+            continue
+        try:
+            instant = normalize_tz(datetime.fromisoformat(shared))
+            zone = ZoneInfo(zones.get(str(event.get("organisation_id")), "UTC"))
+        except ValueError, ZoneInfoNotFoundError:
+            report.skipped += 1
+            continue
+        result = await db.org_assignments.update_one(
+            {"project_id": project_id, "user_id": user_id, "private_before": {"$exists": False}},
+            {
+                "$set": {
+                    "private_before": instant.isoformat(),
+                    "private_before_day": instant.astimezone(zone).date().isoformat(),
+                }
+            },
+        )
+        report.marked += result.modified_count
+
+    if report.marked or report.skipped:
+        logger.info(
+            "connected assignments: %d given the history their connect kept back, %d unreadable",
+            report.marked,
+            report.skipped,
+        )
+    return report
 
 
 @dataclass

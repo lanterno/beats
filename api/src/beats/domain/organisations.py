@@ -748,6 +748,9 @@ class OrganisationService:
                 project_id=project_id,
                 user_id=user_id,
                 shared_from=now,
+                # `private_before` is left unsent, so a reassignment keeps
+                # whatever a connect wrote: what the member held back when
+                # they handed the project over stays held back.
                 assigned_at=now,
                 assigned_by=actor,
             ),
@@ -832,6 +835,12 @@ class OrganisationService:
                 project_id=project_id,
                 user_id=user_id,
                 shared_from=shared_from,
+                # What this connect keeps back, recorded so no later write
+                # can hand it over (#404) and no later assignment can move
+                # it. The day travels with the instant, because an absence
+                # is dated and `shared_from` is a local midnight.
+                private_before=shared_from,
+                private_before_day=share_from if share_from is not None else today,
                 assigned_at=now,
                 assigned_by=user_id,
                 **personal,

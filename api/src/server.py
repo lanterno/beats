@@ -55,6 +55,7 @@ from beats.infrastructure.database import Database
 from beats.infrastructure.migrations import (
     clear_personal_goal_on_day_jobs,
     date_pairing_codes,
+    mark_connected_assignments,
     migrate_project_kinds,
 )
 from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
@@ -172,6 +173,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # The Plan page stored a week under its Monday's UTC date, a Sunday east of
     # Greenwich; it now uses the local date, so those plans move to the Monday.
     await move_sunday_plans_to_monday(Database.get_db())
+    # An assignment made by a connect before `private_before` existed has
+    # only `shared_from` to say what the member kept back, and that moves;
+    # read the connects out of the audit log and write it down (#404).
+    await mark_connected_assignments(Database.get_db())
     # Pairing codes were stored with string dates, which their TTL index never
     # expires; give the ones still there dates, or delete them if expired.
     await date_pairing_codes(Database.get_db())
