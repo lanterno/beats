@@ -908,7 +908,15 @@ class OrganisationService:
         ]
         if approved:
             raise PeriodApproved(min(approved))
-        for a in await self.store.list_assignments(organisation_id, project_id=source_id):
+        # Ended assignments fold too — a former member's, and an erased
+        # member's tombstone: the record is built from assignments, and
+        # their stamped rows are moving to the target, where an employer may
+        # be bound to keep exactly those (#406). The folded assignment is
+        # ended only if both were, at the later end; otherwise it is active.
+        source_assignments = await self.store.list_assignments(
+            organisation_id, project_id=source_id, active_only=False
+        )
+        for a in source_assignments:
             existing = await self.store.assignment(organisation_id, target_id, a.user_id)
             if existing is None:
                 folded = a.model_copy(update={"project_id": target_id})
@@ -922,12 +930,22 @@ class OrganisationService:
                 update: dict[str, Any] = {
                     "shared_from": min(x.shared_from for x in bounded or (existing, a)),
                     "shared_from_day": min(days) if days else None,
+                    "ended_at": (
+                        max(existing.ended_at, a.ended_at)
+                        if existing.ended_at is not None and a.ended_at is not None
+                        else None
+                    ),
                 }
                 if existing.contract is None and a.contract is not None:
                     update["contract"] = a.contract
                     update["contract_managed"] = a.contract_managed
                 folded = existing.model_copy(update=update)
+            # `open_assignment` opens; an ended fold is ended again after.
             await self.store.open_assignment(folded, keep_personal=False)
+            if folded.ended_at is not None:
+                await self.store.end_assignments(
+                    organisation_id, a.user_id, folded.ended_at, target_id
+                )
         await self.store.delete_assignments(organisation_id, source_id)
         moved = await self.store.repoint_project_rows(source_id, target_id)
         dropped = await self.store.delete_unapproved_timesheets(organisation_id, source_id)

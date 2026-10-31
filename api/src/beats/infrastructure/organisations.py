@@ -482,11 +482,14 @@ class MongoOrganisationStore:
         """Every row keyed by the source project now keys by the target: the
         members' own beats, absences and balance adjustments — stamps
         untouched, so what was the organisation's record stays exactly that
-        and what was private stays private — and the organisation's absence
-        requests. One of the few writes that cross user scopes (with
-        erasure, the deletion's hand-back and wipe, and the retention purge),
-        made only by the merge, after the service has checked both projects
-        are the same organisation's."""
+        and what was private stays private — the organisation's absence
+        requests, and the members' own references to the project, their
+        weekly-plan budgets and flow windows, so nothing on their side
+        points at a project that is about to be deleted. One of the few
+        writes that cross user scopes (with erasure, the deletion's
+        hand-back and wipe, and the retention purge), made only by the
+        merge, after the service has checked both projects are the same
+        organisation's."""
         moved: dict[str, int] = {}
         rows = (*member_row_collections(self._db), ("absence_requests", self.absence_requests))
         for name, collection in rows:
@@ -494,7 +497,40 @@ class MongoOrganisationStore:
                 {"project_id": source_id}, {"$set": {"project_id": target_id}}
             )
             moved[name] = result.modified_count
+        moved.update(await self._repoint_references(source_id, target_id))
         return moved
+
+    async def _repoint_references(
+        self, source_id: str, target_id: str, user_id: str | None = None
+    ) -> dict[str, int]:
+        """A member's own references to a project that is going: the
+        `active_project_id` of their flow windows, and the budget for it in
+        their weekly plans — folded into the target's budget where a week
+        planned both, so a plan never carries two budgets for one project.
+        Scoped to one member for the hand-back; across members for the
+        merge."""
+        scope: dict[str, Any] = {} if user_id is None else {"user_id": user_id}
+        windows = await self._db.flow_windows.update_many(
+            {**scope, "active_project_id": source_id}, {"$set": {"active_project_id": target_id}}
+        )
+        plans = 0
+        async for plan in self._db.weekly_plans.find({**scope, "budgets.project_id": source_id}):
+            budgets = [dict(b) for b in plan.get("budgets", [])]
+            ours = [b for b in budgets if b.get("project_id") == source_id]
+            theirs = [b for b in budgets if b.get("project_id") == target_id]
+            if theirs:
+                theirs[0]["planned_hours"] = float(theirs[0].get("planned_hours") or 0) + sum(
+                    float(b.get("planned_hours") or 0) for b in ours
+                )
+                budgets = [b for b in budgets if b.get("project_id") != source_id]
+            else:
+                for b in ours:
+                    b["project_id"] = target_id
+            result = await self._db.weekly_plans.update_one(
+                {"_id": plan["_id"]}, {"$set": {"budgets": budgets}}
+            )
+            plans += result.modified_count
+        return {"flow_windows": windows.modified_count, "weekly_plans": plans}
 
     async def delete_assignments(self, organisation_id: str, project_id: str) -> int:
         result = await self.assignments.delete_many(
@@ -566,6 +602,7 @@ class MongoOrganisationStore:
                 {"$set": {"project_id": new_project_id}, "$unset": {"organisation_id": ""}},
             )
             moved[name] = result.modified_count
+        moved.update(await self._repoint_references(project_id, new_project_id, user_id))
         return moved
 
     async def delete_organisation_rows(
