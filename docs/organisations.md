@@ -542,7 +542,9 @@ what only matters past a handful of people. Decisions 21–30:
     `compliance.csv` are the notice period's job and the copy that
     survives, said in the owner's UI in those words. Tombstoned rows go
     too — the record's keeper is destroying the record. Hand-backs run
-    before the wipe, so a crash midway strands nothing of a member's.
+    before the wipe, so a crash midway strands nothing of a member's, and
+    each deletes the assignment it drew on, so running the deletion again
+    after such a crash hands nobody a second copy (#414).
 
 30. **Retention has a statutory floor; expiry removes the record, not the
     person.** An organisation keeps its working-time record for
