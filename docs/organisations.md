@@ -472,10 +472,15 @@ what only matters past a handful of people. Decisions 21–30:
     balance, ledger, billing or budget figure is stored) — or asks for
     changes with a comment. From approval on, every write dated inside the
     month answers 409 `PERIOD_APPROVED`: beat create, edit (either end of
-    the move), delete, a back-dated timer start, absences, adjustments, and
-    the employer's own entries alike (`MongoPeriodLocks`, checked in the
-    member-side services, and the employer's own check in
-    `EmploymentService`).
+    the move), delete, a back-dated timer start, absences and adjustments
+    (recording and removing either), and the employer's own entries alike
+    (`MongoPeriodLocks`, checked in the member-side services, and the
+    employer's own check in `EmploymentService`); a backup's beat dated
+    inside the month, or writing over one there, is left out and listed
+    under `skipped` as `PERIOD_APPROVED`, as the import does with every
+    write its own route would refuse. (A timesheet needs no managed
+    contract, so an approved month can exist on an assignment the member
+    still writes; the lock is the member's too.)
     Approval itself refuses while a stamped timer still runs inside the
     month — its hours are in no figure yet. Reopening needs a reason, is
     recorded in the sheet's history and the audit log, lifts the lock and
