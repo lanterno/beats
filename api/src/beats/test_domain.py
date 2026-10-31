@@ -3633,6 +3633,16 @@ class _FakeAdjustmentRepo:
         ]
         return len(self._adjustments) < before
 
+    async def day_of(self, project_id: str, adjustment_id: str) -> date | None:
+        return next(
+            (
+                a.date
+                for a in self._adjustments
+                if a.project_id == project_id and a.id == adjustment_id
+            ),
+            None,
+        )
+
     async def earliest(self, project_id: str, on_or_after: date) -> date | None:
         self.calls.append("earliest")
         days = [
@@ -3795,6 +3805,12 @@ class _FakeAbsenceRepo:
             a for a in self._absences if not (a.project_id == project_id and a.id == absence_id)
         ]
         return len(self._absences) < before
+
+    async def day_of(self, project_id: str, absence_id: str) -> date | None:
+        return next(
+            (a.date for a in self._absences if a.project_id == project_id and a.id == absence_id),
+            None,
+        )
 
 
 class TestWeekExpectation:

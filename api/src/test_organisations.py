@@ -2191,6 +2191,96 @@ class TestTimesheets:
         history = [h["action"] for h in refrozen.json()["history"]]
         assert history == ["submitted", "approved", "reopened", "submitted", "approved"]
 
+    def test_the_lock_holds_against_a_removal_and_a_backup(self, client, auth_headers):
+        """A timesheet needs no managed contract, so an approved month can
+        sit on an assignment the member still writes to. Three writes
+        walked past the lock (#405): removing an absence, removing a
+        balance adjustment, and restoring a backup's session over it."""
+        member = _new_user()
+        org, project, _member_id = _employed(client, auth_headers, member, managed=False)
+        contract = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "opening_balance_hours": 2},
+            headers=member,
+        )
+        assert contract.status_code == 200, contract.text
+        off = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-10", "type": "vacation"},
+            headers=member,
+        )
+        assert off.status_code in (200, 201), off.text
+        payout = client.post(
+            f"/api/projects/{project['id']}/adjustments",
+            params={"tz": "UTC"},
+            json={"date": "2026-03-11", "kind": "delta", "hours": -4},
+            headers=member,
+        )
+        assert payout.status_code in (200, 201), payout.text
+        kept = _beat(client, member, project["id"], "2026-03-04T09:00:00", 60)
+
+        sheet = _submit(client, member, org["id"], project["id"], "2026-03").json()
+        assert (
+            _decide_sheet(client, auth_headers, org["id"], sheet["id"], approve=True).status_code
+            == 200
+        )
+
+        for resp in (
+            client.delete(
+                f"/api/projects/{project['id']}/absences/{off.json()['id']}", headers=member
+            ),
+            client.delete(
+                f"/api/projects/{project['id']}/adjustments/{payout.json()['id']}", headers=member
+            ),
+        ):
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["code"] == "PERIOD_APPROVED"
+
+        # A backup writes beats straight to storage, so it needs the check
+        # of its own: the session inside the month is left out and said so,
+        # and the one outside it lands.
+        backup = {
+            "version": "1.3",
+            "exported_at": "2026-04-01T00:00:00Z",
+            "projects": [],
+            "beats": [
+                {
+                    "id": str(ObjectId()),
+                    "project_id": project["id"],
+                    "start": "2026-03-20T09:00:00Z",
+                    "end": "2026-03-20T10:00:00Z",
+                },
+                {
+                    "id": str(ObjectId()),
+                    "project_id": project["id"],
+                    "start": "2026-04-20T09:00:00Z",
+                    "end": "2026-04-20T10:00:00Z",
+                },
+            ],
+        }
+        restored = client.post(
+            "/api/export/import",
+            files={"file": ("backup.json", json.dumps(backup), "application/json")},
+            headers=member,
+        )
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["imported"]["beats"] == 1
+        [skip] = restored.json()["skipped"]
+        assert (skip["collection"], skip["code"], skip["date"]) == (
+            "beats",
+            "PERIOD_APPROVED",
+            "2026-03-20",
+        )
+        # The approved month is as it was: the absence, the adjustment and
+        # the one session it was frozen with.
+        assert (
+            len(client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()) == 2
+        )
+        assert kept["id"] in [
+            b["id"]
+            for b in client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()
+        ]
+
     def test_changes_requested_and_resubmission(self, client, auth_headers):
         member = _new_user()
         org, project, _member_id = _employed(client, auth_headers, member)

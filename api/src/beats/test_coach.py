@@ -1683,6 +1683,9 @@ class _FakeAbsenceStoreForCoach:
     async def delete(self, project_id, absence_id):
         raise NotImplementedError
 
+    async def day_of(self, project_id, absence_id):
+        raise NotImplementedError
+
 
 class _FakeAdjustmentStoreForCoach:
     """In-memory AdjustmentStore: the balance counts what is here, as the
@@ -1702,6 +1705,9 @@ class _FakeAdjustmentStoreForCoach:
         raise NotImplementedError
 
     async def delete(self, project_id, adjustment_id):
+        raise NotImplementedError
+
+    async def day_of(self, project_id, adjustment_id):
         raise NotImplementedError
 
 
