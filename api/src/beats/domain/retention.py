@@ -5,7 +5,11 @@ a per-organisation period in years over a **statutory floor by
 jurisdiction**, counted from each record's date. A setting below the floor
 of the organisation's country is refused at write time
 (`RETENTION_BELOW_FLOOR`), and an organisation that sets nothing keeps the
-default. Nothing in here deletes: the enforcement is the operator-run purge
+default — or its country's floor, where the law asks for longer than the
+default does. What the record is actually kept for is
+`effective_retention_years`, never the stored field: the write-time refusal
+only ever sees a period somebody typed.
+Nothing in here deletes: the enforcement is the operator-run purge
 (`infrastructure/retention.py`, `scripts/retention_purge.py`), so the
 setting never promises what no machinery honours — and during the beta the
 purge is run by nobody.
@@ -46,6 +50,18 @@ def retention_floor(country: str | None) -> int:
 def retention_years(stored: int | None) -> int:
     """What an organisation's stored setting means: unset is the default."""
     return stored if stored is not None else DEFAULT_RETENTION_YEARS
+
+
+def effective_retention_years(stored: int | None, country: str | None) -> int:
+    """How long the record is actually kept: the setting, never under the floor.
+
+    A stored period is refused below the floor when it is written, so it is
+    the organisation that stored *nothing* this guards: the default is four
+    years, which is under Poland's ten. Reading the stored field instead
+    would purge such an organisation six years early — below a law we had
+    written down.
+    """
+    return max(retention_years(stored), retention_floor(country))
 
 
 def retention_cutoff(today: date, years: int) -> date:
