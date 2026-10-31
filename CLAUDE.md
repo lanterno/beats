@@ -348,9 +348,8 @@ nothing.
   requests a decider approves), a submitted month is approved into a stored
   `FrozenMonth` — the one stored derived working-time figure, by decision — after which
   every write dated inside it answers 409 `PERIOD_APPROVED` until a recorded reopen; teams
-  scope the
-  `manager` role, `viewer` reads the record only, and the audit log is readable by
-  admins. Roles are owner ≥ admin ≥ manager ≥ viewer ≥ member, with the real rules on
+  scope the `manager` role, `viewer` reads the record only, and the audit log is readable
+  by admins. Roles are owner ≥ admin ≥ manager ≥ viewer ≥ member, with the real rules on
   the role's capabilities (`administers`, `decides`, `reads_record`);
   `/api/organisations` is reachable by no device token.
 - Theme: two hours, `afternoon` (light, the default, on `:root`) and `dusk`
