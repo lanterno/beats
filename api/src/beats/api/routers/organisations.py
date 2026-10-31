@@ -600,14 +600,17 @@ async def read_record(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ):
     """What the organisation sees: per project, per member, the finished
-    entries started in `month` in `tz` (start, end, hours, note), the
-    absences (date, type, half day), the all-time totals, and where the
-    member has a contract its balance as of today. Nothing else, and nothing
-    about now. Owners, admins and viewers whole; a manager their teams'."""
-    return _record(await service.scoped_record(organisation_id, user_id, month, tz))
+    entries started in `month` (start, end, hours, note), the absences
+    (date, type, half day), the all-time totals, and where the member has a
+    contract its balance as of today. Nothing else, and nothing about now.
+    Owners, admins and viewers whole; a manager their teams'.
+    The month is bucketed in the organisation's own timezone, not the
+    caller's: a record two deciders read differently is not a record
+    (#415). A `tz` the caller still sends is ignored.
+    """
+    return _record(await service.scoped_record(organisation_id, user_id, month))
 
 
 @router.get("/{organisation_id}/visible", response_model=RecordResponse)
@@ -616,13 +619,16 @@ async def read_visible(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ):
     """What the organisation sees of the caller — the "what Acme can see"
     page: `/record` narrowed to one member by the same read, so it shows
     the data actually held, not a description of it. Members and former
-    members."""
-    return _record(await service.visible(organisation_id, user_id, month, tz))
+    members.
+    The month is bucketed in the organisation's own timezone, not the
+    caller's: a record two deciders read differently is not a record
+    (#415). A `tz` the caller still sends is ignored.
+    """
+    return _record(await service.visible(organisation_id, user_id, month))
 
 
 @router.get("/{organisation_id}/archive", response_model=ArchiveResponse)

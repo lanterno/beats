@@ -1020,23 +1020,37 @@ class OrganisationService:
             adjusted=round(terms.adjusted, 2),
         )
 
+    @staticmethod
+    def _zone(organisation: Organisation) -> ZoneInfo:
+        """The organisation's own timezone, which every reading of its
+        record buckets days by — the lock and the freeze already do
+        (`MongoPeriodLocks._zone_of`), and a record two deciders read
+        differently is not a record (#415). A stored timezone is checked at
+        write time, so the fallback is for a document written before that
+        check or edited by hand."""
+        try:
+            return ZoneInfo(organisation.timezone)
+        except ZoneInfoNotFoundError, ValueError:
+            return ZoneInfo("UTC")
+
     async def _record(
         self,
         organisation: Organisation,
         projects: list[OrgProject],
         month: date,
-        tz: ZoneInfo,
         *,
         user_id: str | None,
     ) -> Record:
         """One month of the organisation's record over `projects`: per
         project, per member assigned (now or before), the finished entries
-        started in the month in `tz`, the absences, the all-time totals and
-        the balance of a contract if there is one. With `user_id`, that
-        member's slice alone — the same queries, narrowed."""
+        started in the month in the organisation's timezone, the absences,
+        the all-time totals and the balance of a contract if there is one.
+        With `user_id`, that member's slice alone — the same queries,
+        narrowed."""
         if organisation.id is None:
             raise ValueError("a stored organisation has an id")
         organisation_id = organisation.id
+        tz = self._zone(organisation)
         today = local_date(self._now(), tz)
         first, last = month, month_end(month)
         start, end = utc_range(first, last, tz)
@@ -1088,15 +1102,13 @@ class OrganisationService:
             out.append(ProjectRecord(project, member_records))
         return Record(organisation, month, first, last, out)
 
-    async def record(self, organisation_id: str, actor: str, month: date, tz: ZoneInfo) -> Record:
+    async def record(self, organisation_id: str, actor: str, month: date) -> Record:
         """What the organisation sees: an admin's read of every project."""
         member = await self._member(organisation_id, actor, OrgRole.ADMIN)
         projects = await self.store.list_projects(organisation_id)
-        return await self._record(member.organisation, projects, month, tz, user_id=None)
+        return await self._record(member.organisation, projects, month, user_id=None)
 
-    async def visible(
-        self, organisation_id: str, user_id: str, month: date, tz: ZoneInfo
-    ) -> Record:
+    async def visible(self, organisation_id: str, user_id: str, month: date) -> Record:
         """What the organisation sees of one member — `record` with the
         member's own id, over the projects they are or were assigned to.
         Members and former members alike may ask."""
@@ -1109,7 +1121,7 @@ class OrganisationService:
         )
         named = await self.store.project_names(organisation_id, (a.project_id for a in assignments))
         projects = sorted(named.values(), key=lambda p: p.name)
-        return await self._record(organisation, projects, month, tz, user_id=user_id)
+        return await self._record(organisation, projects, month, user_id=user_id)
 
     async def archive(
         self,
