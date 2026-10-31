@@ -663,8 +663,10 @@ counsel, and nothing there reaches a customer first.
 The operator's back office of decision 31 is
 [roadmaps/backoffice.md](../roadmaps/backoffice.md): it is not an
 organisations feature, and noticing an organisation with no owner is only
-the first thing it owes. Designed 2026-11-01 as a separate control-plane
-service, where an ownerless organisation is a row with a *grant the owner
-role* beside it rather than a reason to open a shell against production.
+the first thing it owes. Designed 2026-11-01 as a control plane — operator
+routes in the one API, deployed a second time behind IAP — where an
+ownerless organisation is a row with a *grant the owner role* beside it
+rather than a reason to open a shell against production; the operator acts
+there only while the organisation has no owner.
 Decision 31 refuses to auto-promote; it still leaves somebody having to act,
 and that is where they act.

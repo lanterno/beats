@@ -10,7 +10,7 @@ built, and why.
 | [account-emails.md](account-emails.md) | Several verified addresses on one account — what #341 waits on, and the one place decision 11's no-email rule gets revisited |
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
-| [backoffice.md](backoffice.md) | The operator's control plane (#424): operator routes in the one API, deployed a second time behind IAP, with a UI-only service in front — accounts, organisations, abuse and limits, capacity |
+| [backoffice.md](backoffice.md) | The operator's control plane (#424): operator routes in the one API, deployed a second time behind IAP, with a UI of its own in front — accounts, organisations, abuse and limits, capacity |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
 
