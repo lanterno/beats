@@ -46,7 +46,7 @@ from beats.domain.models import (
     Project,
     ProjectBilling,
 )
-from beats.domain.utils import normalize_tz
+from beats.domain.services import stamp_for
 from beats.infrastructure.repositories import (
     BeatRepository,
     ClientRepository,
@@ -479,8 +479,9 @@ async def import_full_json(
     # the stamp it has — so a backup from before a connect does not strip the
     # record, and one edited by hand cannot plant it. One new to the account
     # takes the stamp the project as it stands gives: an organisation's, and
-    # started on or after the day this member shares from.
-    stamps: dict[str, tuple[str, datetime] | None] = {}
+    # on a connected project started on or after the day this member shares
+    # from (`stamp_for`, the rule every live write keeps).
+    stamps: dict[str, Project | None] = {}
     for beat in backup.beats:
         stored = None
         if beat.id is not None:
@@ -493,14 +494,11 @@ async def import_full_json(
         else:
             if beat.project_id not in stamps:
                 try:
-                    owner = (await project_repo.get_by_id(beat.project_id)).organisation
+                    stamps[beat.project_id] = await project_repo.get_by_id(beat.project_id)
                 except ProjectNotFound:
-                    owner = None
-                stamps[beat.project_id] = (owner.id, owner.shared_from) if owner else None
-            stamp = stamps[beat.project_id]
-            beat.organisation_id = (
-                stamp[0] if stamp and normalize_tz(beat.start) >= normalize_tz(stamp[1]) else None
-            )
+                    stamps[beat.project_id] = None
+            owner = stamps[beat.project_id]
+            beat.organisation_id = stamp_for(owner, beat.start) if owner is not None else None
         await beat_repo.restore(beat)
         counts.beats += 1
 

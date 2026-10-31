@@ -741,13 +741,18 @@ class OrganisationService:
         now = self._now()
         # Reopening an ended assignment keeps its personal half — the goal,
         # the repo paths and the contract behind a balance the organisation
-        # read; only a connect replaces them.
+        # read; only a connect replaces them. A reopened connect keeps the
+        # boundary the member chose, too (#404): the rows before it are
+        # still theirs alone, and nothing was written in between, since an
+        # ended assignment makes the project not found.
+        boundary = existing if existing is not None and existing.shared_from_day else None
         assignment = await self.store.open_assignment(
             OrgAssignment(
                 organisation_id=organisation_id,
                 project_id=project_id,
                 user_id=user_id,
-                shared_from=now,
+                shared_from=boundary.shared_from if boundary else now,
+                shared_from_day=boundary.shared_from_day if boundary else None,
                 assigned_at=now,
                 assigned_by=actor,
             ),
@@ -832,6 +837,7 @@ class OrganisationService:
                 project_id=project_id,
                 user_id=user_id,
                 shared_from=shared_from,
+                shared_from_day=share_from if share_from is not None else today,
                 assigned_at=now,
                 assigned_by=user_id,
                 **personal,
@@ -907,7 +913,16 @@ class OrganisationService:
             if existing is None:
                 folded = a.model_copy(update={"project_id": target_id})
             else:
-                update: dict[str, Any] = {"shared_from": min(existing.shared_from, a.shared_from)}
+                # The earlier boundary, where either side has one (a connect):
+                # the folded rows before it are the member's alone. Its
+                # instant goes with it, so a beat and an absence are judged
+                # against the same day.
+                days = [x.shared_from_day for x in (existing, a) if x.shared_from_day is not None]
+                bounded = [x for x in (existing, a) if x.shared_from_day is not None]
+                update: dict[str, Any] = {
+                    "shared_from": min(x.shared_from for x in bounded or (existing, a)),
+                    "shared_from_day": min(days) if days else None,
+                }
                 if existing.contract is None and a.contract is not None:
                     update["contract"] = a.contract
                     update["contract_managed"] = a.contract_managed

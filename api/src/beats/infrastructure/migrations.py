@@ -97,6 +97,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
@@ -109,7 +110,7 @@ from beats.domain.models import (
     ProjectKind,
     ScheduleType,
 )
-from beats.domain.utils import normalize_tz
+from beats.domain.utils import local_date, normalize_tz
 
 logger = logging.getLogger(__name__)
 
@@ -506,5 +507,78 @@ async def date_pairing_codes(db: AsyncDatabase, now: datetime | None = None) -> 
             "pairing codes: %d given BSON dates, %d deleted (expired or unreadable)",
             report.converted,
             report.deleted,
+        )
+    return report
+
+
+@dataclass
+class ConnectedAssignmentReport:
+    """What the assignment pass did: connects given their boundary day, and
+    plain assignments marked as having none."""
+
+    connected: int = 0
+    assigned: int = 0
+
+
+async def mark_connected_assignments(db: AsyncDatabase) -> ConnectedAssignmentReport:
+    """Give every assignment written before `shared_from_day` existed its
+    value (docs/organisations.md, decision 8; #404).
+
+    The day a member chose when connecting a project is the boundary rule 4
+    draws, and from #404 on every write that stamps a beat or an absence
+    compares against it; an assignment the organisation made has no such
+    boundary and stores None. Assignments from before the field knew
+    neither. Which kind each was is in the audit log, written since stage
+    2: a connect left a `project.connected` event on the member and the
+    project. One that did gets the date of its `shared_from` in the
+    organisation's timezone — the member's own timezone at the time is not
+    recorded, so this can be a day out across a date line, erring once and
+    on assignments made in the days the field did not exist. One that did
+    not is marked None.
+
+    Idempotent: it acts on documents without the field and writes it on
+    each, None included. The store drops a None on its next write of the
+    document (`exclude_none`), so a reopened plain assignment is examined
+    again on the next boot and marked the same way.
+    """
+    report = ConnectedAssignmentReport()
+    zones: dict[str, ZoneInfo] = {}
+    docs = await db.org_assignments.find(
+        {"shared_from_day": {"$exists": False}},
+        projection={"organisation_id": 1, "project_id": 1, "user_id": 1, "shared_from": 1},
+    ).to_list(length=None)
+    for doc in docs:
+        connected = await db.org_audit.find_one(
+            {
+                "organisation_id": doc["organisation_id"],
+                "event": "project.connected",
+                "project_id": doc["project_id"],
+                "subject_user_id": doc["user_id"],
+            },
+            {"_id": 1},
+        )
+        day: date | None = None
+        if connected is not None:
+            org_id = doc["organisation_id"]
+            if org_id not in zones:
+                org = await db.organisations.find_one({"_id": ObjectId(org_id)}, {"timezone": 1})
+                zones[org_id] = ZoneInfo((org or {}).get("timezone") or "UTC")
+            shared_from = doc["shared_from"]
+            if isinstance(shared_from, str):
+                shared_from = datetime.fromisoformat(shared_from)
+            day = local_date(normalize_tz(shared_from), zones[org_id])
+        await db.org_assignments.update_one(
+            {"_id": doc["_id"], "shared_from_day": {"$exists": False}},
+            {"$set": {"shared_from_day": day.isoformat() if day else None}},
+        )
+        if day is not None:
+            report.connected += 1
+        else:
+            report.assigned += 1
+    if report.connected or report.assigned:
+        logger.info(
+            "assignments: %d connects given their boundary day, %d marked as assigned",
+            report.connected,
+            report.assigned,
         )
     return report

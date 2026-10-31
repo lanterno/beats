@@ -1072,12 +1072,19 @@ class ProjectOrganisation(BaseModel):
     project: enough to mark it in a list, and the instant from which the
     member's hours on it are the organisation's (docs/organisations.md).
     `shared_from` is the member's own choice when they connected a project of
-    theirs, and the moment of assignment otherwise."""
+    theirs, and the moment of assignment otherwise. `shared_from_day` is set
+    only on a connected project: the day the member chose, as they chose it.
+    It is the boundary rule 4 draws — a row before it is never the
+    organisation's, whoever writes it and whenever (`stamp_for`,
+    `stamp_for_day` in `domain/services.py`) — and on a project the
+    organisation assigned there is no such boundary, since nothing of the
+    member's on it predates the organisation."""
 
     id: str
     name: str
     logo_url: str | None = None
     shared_from: datetime
+    shared_from_day: date_type | None = None
     # The employer writes the contract (docs/organisations.md, stage 3): the
     # member reads their week and balance as ever, but the contract, the
     # absences (which become requests) and the balance adjustments are the
@@ -1682,9 +1689,15 @@ class OrgAssignment(TzNormalizedModel):
 
     `shared_from` is the instant from which the member's hours on the
     project are the organisation's: the moment of assignment, or on a
-    connected project the local midnight of the day the member chose. An
-    assignment that ends keeps its document with `ended_at`; assigning
-    again reopens it.
+    connected project the local midnight of the day the member chose.
+    `shared_from_day` is that chosen day itself, kept on a connected
+    project only — an absence is dated, not timed, and the instant alone
+    cannot name its day once timezones differ — and None on an assignment
+    the organisation made, where there is no history to keep back. The
+    startup pass `mark_connected_assignments` gives assignments from before
+    the field existed theirs, from the audit log. An assignment that ends
+    keeps its document with `ended_at`; assigning again reopens it, and a
+    reopened connect keeps its boundary.
     """
 
     id: str | None = None
@@ -1692,6 +1705,7 @@ class OrgAssignment(TzNormalizedModel):
     project_id: str
     user_id: str
     shared_from: datetime
+    shared_from_day: date_type | None = None
     assigned_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     assigned_by: str | None = None
     ended_at: datetime | None = None

@@ -55,6 +55,7 @@ from beats.infrastructure.database import Database
 from beats.infrastructure.migrations import (
     clear_personal_goal_on_day_jobs,
     date_pairing_codes,
+    mark_connected_assignments,
     migrate_project_kinds,
 )
 from beats.infrastructure.plan_migration import move_sunday_plans_to_monday
@@ -175,6 +176,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Pairing codes were stored with string dates, which their TTL index never
     # expires; give the ones still there dates, or delete them if expired.
     await date_pairing_codes(Database.get_db())
+    # An assignment from before `shared_from_day` existed learns from the
+    # audit log whether it was a connect, and so where rule 4's boundary is.
+    await mark_connected_assignments(Database.get_db())
     await ensure_mutation_log_indexes()
     yield
     # Shutdown: Disconnect from database

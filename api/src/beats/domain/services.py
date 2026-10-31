@@ -122,9 +122,33 @@ async def derive_flow_tags(
     return tags[:_MAX_FLOW_TAGS]
 
 
-def organisation_of(project: Project) -> str | None:
-    """The organisation whose record a beat on `project` is, or None."""
-    return project.organisation.id if project.organisation is not None else None
+def stamp_for(project: Project, start: datetime) -> str | None:
+    """The organisation whose record a beat on `project` started at `start`
+    is, or None. A project the member connected stamps only from the
+    instant they chose to share it (rule 4, docs/organisations.md decision
+    7): a beat before that — created back-dated, edited, or moved there —
+    stays the member's own, and an edit that moves a stamped beat before it
+    clears the stamp. A project the organisation assigned has no such
+    boundary (`shared_from_day` is None): nothing of the member's on it
+    predates the organisation, and a back-dated entry is work for it."""
+    org = project.organisation
+    if org is None:
+        return None
+    if org.shared_from_day is not None and normalize_tz(start) < normalize_tz(org.shared_from):
+        return None
+    return org.id
+
+
+def stamp_for_day(project: Project, day: date) -> str | None:
+    """`stamp_for` for a row that is dated rather than timed: an absence on
+    the day the member chose to share from is the organisation's, one the
+    day before is not."""
+    org = project.organisation
+    if org is None:
+        return None
+    if org.shared_from_day is not None and day < org.shared_from_day:
+        return None
+    return org.id
 
 
 def _refuse_managed(project: Project) -> None:
@@ -225,7 +249,7 @@ class TimerService:
         # project is an organisation's (docs/organisations.md).
         start = start_time or datetime.now(UTC)
         await refuse_locked(self.locks, project, start)
-        beat = Beat(project_id=project_id, start=start, organisation_id=organisation_of(project))
+        beat = Beat(project_id=project_id, start=start, organisation_id=stamp_for(project, start))
         return await self.beat_repo.create(beat)
 
     async def stop_timer(
@@ -334,7 +358,7 @@ class BeatService:
         if self.projects is None:
             return beat
         project = await self.projects.get_by_id(beat.project_id)
-        beat.organisation_id = organisation_of(project)
+        beat.organisation_id = stamp_for(project, beat.start)
         await refuse_locked(self.locks, project, beat.start)
         return beat
 
@@ -1171,7 +1195,7 @@ class ContractService:
         project = await self._day_job(absence.project_id)
         _refuse_managed(project)
         await refuse_locked(self.locks, project, None, absence.date)
-        absence.organisation_id = organisation_of(project)
+        absence.organisation_id = stamp_for_day(project, absence.date)
         return await self.absence_repo.upsert(absence)
 
     async def remove_absence(self, project_id: str, absence_id: str) -> None:
