@@ -1768,6 +1768,33 @@ class TestRetention:
         assert kept.years == 10
         assert not any(kept.counts.values()), "a five-year-old Polish record is still owed"
 
+    def test_a_purge_does_not_take_the_balance_with_the_stamps(self, client, auth_headers):
+        """A bug that happened (#409): the purge unstamps a living member's
+        old rows, and `has_unshared` asked only whether an unstamped row
+        existed — so after the first purge every long-standing member read
+        as having unshared history, and the organisation lost the balance
+        on its own record for good."""
+        member = _new_user()
+        org, project, _member_id = _employed(client, auth_headers, member, managed=False)
+        contract = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "opening_balance_hours": 2},
+            headers=member,
+        )
+        assert contract.status_code == 200, contract.text
+        _beat(client, member, project["id"], "2020-02-10T09:00:00", 60)  # past the cutoff
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+
+        [before] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert before["balance"] is not None
+
+        self._purge(apply=True)
+        db = _db()
+        assert db.timeLogs.count_documents({"organisation_id": org["id"]}) == 1
+
+        [after] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert after["balance"] is not None, "an expired row is not one the member kept back"
+
     def test_expiry_unstamps_the_living_and_deletes_the_tombstoned(self, client, auth_headers):
         org = _create_org(client, auth_headers)
         member = _new_user()
