@@ -40,6 +40,7 @@ from beats.domain.contracts import absences_by_day, expected_on
 from beats.domain.exceptions import (
     AbsenceRequestNotFound,
     MonthNotEnded,
+    NotADayJob,
     NotAssigned,
     NotManaged,
     OrganisationRoleRequired,
@@ -63,17 +64,20 @@ from beats.domain.models import (
     OrgRole,
     OrgTeam,
     OrgTimesheet,
+    ProjectKind,
     RequestStatus,
     TimesheetEvent,
     TimesheetStatus,
 )
 from beats.domain.organisations import Member, OrganisationService
+from beats.domain.ports import ContractAdjustments
 from beats.domain.retention import effective_retention_years, retention_cutoff
 from beats.domain.services import (
     _check_contract as check_contract_rules,
 )
 from beats.domain.services import (
     keep_unsent_contract_fields,
+    reconcile_adjustments,
     worked_by_local_day,
 )
 from beats.domain.timesheet import month_end
@@ -209,6 +213,7 @@ class EmploymentService(OrganisationService):
         user_id: str,
         contract: Contract | None,
         managed: bool,
+        adjustments: ContractAdjustments,
     ) -> OrgAssignment:
         """Write the employer's contract on an assignment, or hand it back.
 
@@ -222,19 +227,35 @@ class EmploymentService(OrganisationService):
         list or vacation entitlement the body leaves out is kept, as on the
         member's own route. With `managed` false the contract stays as sent
         (or as it was, when None) and the member resumes writing it.
+
+        Decision 21: one set of rules validates a contract whoever writes
+        it. Both of the ones this used to skip are here (#412) — only a day
+        job carries a contract, and a first day moved later past a balance
+        adjustment is refused rather than dropping it from the balance.
         """
         await self._decider(organisation_id, actor, user_id)
         assignment = await self._active_assignment(organisation_id, project_id, user_id)
+        project = await self.store.get_project(organisation_id, project_id)
+        if project is None:
+            raise ProjectNotFound(project_id)
+        if project.kind is not ProjectKind.DAY_JOB:
+            # `check_contract_rules_for` validates through a shell day job,
+            # so without this the employer could put a contract on a
+            # freelance or side project the member's own route refuses.
+            raise NotADayJob()
         if contract is not None:
             contract = keep_unsent_contract_fields(contract, assignment.contract)
             check_contract_rules_for(contract)
+        written_contract = contract if contract is not None else assignment.contract
+        purge_after = await reconcile_adjustments(
+            adjustments, project_id, assignment.contract, written_contract
+        )
         updated = assignment.model_copy(
-            update={
-                "contract": contract if contract is not None else assignment.contract,
-                "contract_managed": managed,
-            }
+            update={"contract": written_contract, "contract_managed": managed}
         )
         saved = await self.store.open_assignment(updated, keep_personal=False)
+        if purge_after:
+            await adjustments.delete_by_project(project_id)
         written = contract or assignment.contract
         await self._audit(
             organisation_id,

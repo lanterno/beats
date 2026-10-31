@@ -172,6 +172,45 @@ def organisation_stamp_for_day(project: Project, day: date) -> str | None:
     return None if day < private else owner.id
 
 
+async def reconcile_adjustments(
+    adjustments: ContractAdjustments,
+    project_id: str | None,
+    previous: Contract | None,
+    new: Contract | None,
+) -> bool:
+    """What a contract write does to the balance adjustments, before the
+    write; True when they are to be purged after it.
+
+    - The contract goes (a kind change, `contract: null`): they go with
+      it, after the write, since they only mean something against its
+      balance. Nothing dormant is kept for an undo.
+    - A contract arrives where there was none: anything left over is
+      purged first. No adjustment can be live without a contract, so
+      this clears whatever a failed purge left.
+    - The first day moves later past an adjustment: 409, rather than
+      the adjustment silently dropping out of the balance.
+
+    Anything else (a rename or a colour change resending the contract
+    unchanged, a first day moved earlier) reads nothing.
+
+    A free function, not a method, because the employer writes contracts
+    too (`EmploymentService.set_contract`) and decision 21 says one set of
+    rules validates a contract whoever writes it. It takes the adjustment
+    port, which each side binds to the member whose balance it is.
+    """
+    if project_id is None:
+        return False
+    if previous is not None and new is None:
+        return True
+    if previous is None and new is not None:
+        await adjustments.delete_by_project(project_id)
+    elif previous is not None and new is not None and new.starts_on > previous.starts_on:
+        earliest = await adjustments.earliest(project_id, previous.starts_on)
+        if earliest is not None and earliest < new.starts_on:
+            raise AdjustmentBeforeStart()
+    return False
+
+
 def _refuse_managed(project: Project) -> None:
     """The member's write to a contract the employer manages (stage 3): the
     contract, the absences and the adjustments are the organisation's to
@@ -651,32 +690,7 @@ class ProjectService:
     async def _reconcile_adjustments(
         self, project_id: str | None, previous: Contract | None, new: Contract | None
     ) -> bool:
-        """What a contract write does to the balance adjustments, before the
-        write; True when they are to be purged after it.
-
-        - The contract goes (a kind change, `contract: null`): they go with
-          it, after the write, since they only mean something against its
-          balance. Nothing dormant is kept for an undo.
-        - A contract arrives where there was none: anything left over is
-          purged first. No adjustment can be live without a contract, so
-          this clears whatever a failed purge left.
-        - The first day moves later past an adjustment: 409, rather than
-          the adjustment silently dropping out of the balance.
-
-        Anything else (a rename or a colour change resending the contract
-        unchanged, a first day moved earlier) reads nothing.
-        """
-        if project_id is None:
-            return False
-        if previous is not None and new is None:
-            return True
-        if previous is None and new is not None:
-            await self.adjustments.delete_by_project(project_id)
-        elif previous is not None and new is not None and new.starts_on > previous.starts_on:
-            earliest = await self.adjustments.earliest(project_id, previous.starts_on)
-            if earliest is not None and earliest < new.starts_on:
-                raise AdjustmentBeforeStart()
-        return False
+        return await reconcile_adjustments(self.adjustments, project_id, previous, new)
 
     async def replace_contract(self, project_id: str, contract: Contract) -> Project:
         """Replace a day job's whole contract — terms, region, opening balance, end.

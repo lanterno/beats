@@ -271,9 +271,20 @@ async def set_managed_contract(
     starts from the terms the member recorded — nothing is rewritten
     silently — and from then on the member's own contract, absence and
     adjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for
-    their teams."""
+    their teams.
+
+    Only a day job carries a contract (409 NOT_A_DAY_JOB), and a first day
+    moved later past one of the member's balance adjustments is refused
+    (409 ADJUSTMENT_BEFORE_START) — the same rules the member's own route
+    keeps, which is why the member's adjustments are passed in."""
     assignment = await service.set_contract(
-        organisation_id, user_id, project_id, member_user_id, body.contract, body.managed
+        organisation_id,
+        user_id,
+        project_id,
+        member_user_id,
+        body.contract,
+        body.managed,
+        adjustment_repository_for(member_user_id),
     )
     return ManagedContractResponse(
         project_id=project_id,
