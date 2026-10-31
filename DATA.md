@@ -213,8 +213,10 @@ purge (`api/scripts/retention_purge.py` — dry by default, audited per
 organisation, scheduled by nothing), rows older than the period stop being
 the organisation's record: **your own entries and absences lose the
 organisation's stamp and stay yours**; only a deleted account's tombstoned
-rows, expired timesheets and old audit entries are actually removed. Your
-timeline never shrinks because an employer's retention ended.
+rows — and, once none of them are left, the name, address and contract it
+kept of that account — expired timesheets, decided absence requests and
+old audit entries are actually removed. Your timeline never shrinks
+because an employer's retention ended.
 
 ## Export
 

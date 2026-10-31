@@ -560,7 +560,14 @@ what only matters past a handful of people. Decisions 21–30:
     with the audit log living as long as the records it explains. Expiry
     removes the organisation's record, not the person's data: a living
     member's rows lose the stamp and are purely their own again; only
-    tombstoned rows are deleted. The purge is an idempotent operator-run
+    tombstoned rows are deleted — and once none of a tombstone's entries,
+    absences, adjustments or timesheets are left in the organisation, the
+    tombstoned membership (the name and address it kept) and its
+    assignments (the contract) go with them (#408), since the record they
+    grouped is what justified keeping them. A decided absence request
+    dated before the cutoff goes too, a living member's included: the
+    request was only ever the organisation's, and the absence it booked
+    is handled as a row. The purge is an idempotent operator-run
     script in the shape of `scripts/erase_account.py`
     (`api/scripts/retention_purge.py`, dry by default), audited as
     `retention.purged` with counts, the cutoff and the years, and no data;
