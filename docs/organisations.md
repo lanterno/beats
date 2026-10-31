@@ -527,11 +527,18 @@ what only matters past a handful of people. Decisions 21–30:
     absence requests) now keys by the target with its stamp untouched, so
     rule 4 holds without being re-decided: what the member chose to share
     stays shared from that instant, and what was private stays private,
-    under the surviving project on their own timeline. Each active
-    assignment folds into the target's, which survives as it stands
-    (decision 17's spirit): the earlier `shared_from_day` where either side
-    has one, with its instant, and the source's
-    contract only where the target's assignment has none. Refused while
+    under the surviving project on their own timeline. The member's own
+    references follow the rows — a weekly plan's budget for the source and
+    a flow window's active project now name the target — as they do in
+    the deletion's hand-back. Each assignment folds into the target's,
+    which survives as it stands (decision 17's spirit): the earlier
+    `shared_from_day` where either side has one, with its instant, and the
+    source's contract — with its `contract_managed`, since the contract
+    travels whole — only where the target's assignment has none. Ended
+    assignments fold too, a former member's and an erased member's
+    tombstone among them, since the record is built from assignments and
+    their stamped rows are moving; the fold is ended only where both were,
+    at the later end, else active. Refused while
     an approved timesheet exists on either side (409 `PERIOD_APPROVED`
     naming the earliest frozen month): a stored close must not gain or
     lose rows silently — reopen first. A sheet submitted over the source
