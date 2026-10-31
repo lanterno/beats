@@ -2681,6 +2681,25 @@ class TestTeamsAndRoles:
         assert team.status_code == 201, team.text
         return org, project, (manager, manager_id), (inside, inside_id), (outside, outside_id)
 
+    def test_leaving_takes_the_person_out_of_every_team(self, client, auth_headers):
+        """#411: `remove_from_teams` existed and nothing called it, so a
+        person who rejoined was silently back in their old team — and a
+        former manager re-invited as one got their old scope back with
+        nobody assigning it."""
+        org, _project, _mgr, (inside, inside_id), _out = self._org_with_team(client, auth_headers)
+        teams_url = f"/api/organisations/{org['id']}/teams"
+        [team] = client.get(teams_url, headers=auth_headers).json()
+        assert inside_id in team["member_ids"]
+
+        assert client.post(f"/api/organisations/{org['id']}/leave", headers=inside).status_code
+
+        [team] = client.get(teams_url, headers=auth_headers).json()
+        assert inside_id not in team["member_ids"]
+        # Rejoining is a fresh start: the scope is an admin's to give again.
+        _member_of(client, auth_headers, org["id"], inside)
+        [team] = client.get(teams_url, headers=auth_headers).json()
+        assert inside_id not in team["member_ids"]
+
     def test_a_manager_decides_inside_their_teams_and_nowhere_else(self, client, auth_headers):
         org, project, (manager, _), (inside, inside_id), (outside, outside_id) = (
             self._org_with_team(client, auth_headers)
