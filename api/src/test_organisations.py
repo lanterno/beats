@@ -1918,6 +1918,14 @@ class TestAbsenceRequests:
             headers=member,
         ).json()
         assert client.delete(f"{url}/{second['id']}", headers=member).status_code == 204
+        withdrawn = [
+            e
+            for e in client.get(
+                f"/api/organisations/{org['id']}/audit", headers=auth_headers
+            ).json()
+            if e["event"] == "absence.withdrawn"
+        ]
+        assert [w["details"]["date"] for w in withdrawn] == ["2026-03-09"]
         # A decided one stays.
         assert client.delete(f"{url}/{first['id']}", headers=member).status_code == 404
 
@@ -2046,6 +2054,20 @@ class TestTimesheets:
         again = _submit(client, member, org["id"], project["id"], "2026-03")
         assert again.status_code == 201
         assert again.json()["status"] == "submitted"
+        # A bug that happened (#413): the resubmission carried the previous
+        # decision's decider, instant and comment, since a None never
+        # reached the write. The history keeps them; the sheet does not.
+        [listed] = [
+            t
+            for t in client.get(f"/api/organisations/{org['id']}/timesheets", headers=member).json()
+            if t["id"] == sheet["id"]
+        ]
+        assert (listed["comment"], listed["decided_by"], listed["decided_at"]) == (None, None, None)
+        assert [h["action"] for h in listed["history"]] == [
+            "submitted",
+            "changes_requested",
+            "submitted",
+        ]
 
     def test_approval_waits_for_a_running_timer_in_the_month(self, client, auth_headers):
         member = _new_user()
