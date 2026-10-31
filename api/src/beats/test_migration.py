@@ -1,5 +1,7 @@
-"""The startup migrations: the one that gives every project a `kind`, and the one
-that then clears the personal goal where the contract has replaced it.
+"""The startup migrations: the one that gives every project a `kind`, the one
+that then clears the personal goal where the contract has replaced it, the one
+that moves a Sunday-stored plan to its Monday, the one that gives a connected
+assignment back the history it kept, and the one that dates pairing codes.
 
 Documents are seeded raw through the synchronous test client and read back
 raw, because what is under test is the on-disk shape: which fields each pass
@@ -450,6 +452,90 @@ class TestMoveSundayPlans:
         await move_sunday_plans_to_monday(db)
         await move_sunday_plans_to_monday(db)
         assert mongo.weekly_plans.find_one({"_id": pid})["week_of"] == "2026-10-12"
+
+
+class TestMarkConnectedAssignments:
+    """#404: until `private_before`, an assignment made by a connect had only
+    `shared_from` to say what the member kept back — and a reassignment moves
+    that. The connects made before the field existed are read back out of the
+    audit log, which has recorded every one of them since stage 2."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh_org(self, mongo):
+        for name in ("org_assignments", "org_audit", "organisations"):
+            mongo[name].delete_many({})
+
+    @staticmethod
+    def _organisation(mongo, timezone: str = "Europe/Berlin") -> str:
+        return str(
+            mongo.organisations.insert_one({"name": "Acme", "timezone": timezone}).inserted_id
+        )
+
+    @staticmethod
+    def _assignment(mongo, org_id: str, project_id: str, shared_from: str) -> ObjectId:
+        return mongo.org_assignments.insert_one(
+            {
+                "organisation_id": org_id,
+                "project_id": project_id,
+                "user_id": USER,
+                "shared_from": shared_from,
+            }
+        ).inserted_id
+
+    @staticmethod
+    def _connected(mongo, org_id: str, project_id: str, shared_from: str) -> None:
+        mongo.org_audit.insert_one(
+            {
+                "organisation_id": org_id,
+                "at": "2026-03-04T10:00:00+00:00",
+                "actor_user_id": USER,
+                "event": "project.connected",
+                "subject_user_id": USER,
+                "project_id": project_id,
+                "details": {"shared_from": shared_from},
+            }
+        )
+
+    async def test_a_connect_gets_its_day_back_and_an_assignment_gets_nothing(self, db, mongo):
+        from beats.infrastructure.migrations import mark_connected_assignments
+
+        org = self._organisation(mongo)
+        # Local midnight in Berlin on 4 March, as the connect stored it.
+        connected = self._assignment(mongo, org, "p-connected", "2026-03-03T23:00:00+00:00")
+        assigned = self._assignment(mongo, org, "p-assigned", "2026-03-04T09:00:00+00:00")
+        self._connected(mongo, org, "p-connected", "2026-03-03T23:00:00+00:00")
+
+        report = await mark_connected_assignments(db)
+        assert (report.marked, report.skipped) == (1, 0)
+
+        marked = mongo.org_assignments.find_one({"_id": connected})
+        assert marked["private_before"] == "2026-03-03T23:00:00+00:00"
+        # The day is read in the organisation's timezone, so the member's
+        # choice comes back as the 4th and not as the 3rd.
+        assert marked["private_before_day"] == "2026-03-04"
+        # A project the organisation has owned all along keeps nothing back.
+        assert "private_before" not in mongo.org_assignments.find_one({"_id": assigned})
+
+    async def test_a_second_boot_has_nothing_to_do(self, db, mongo):
+        from beats.infrastructure.migrations import mark_connected_assignments
+
+        org = self._organisation(mongo)
+        self._assignment(mongo, org, "p1", "2026-03-03T23:00:00+00:00")
+        self._connected(mongo, org, "p1", "2026-03-03T23:00:00+00:00")
+
+        assert (await mark_connected_assignments(db)).marked == 1
+        assert (await mark_connected_assignments(db)).marked == 0
+
+    async def test_an_event_it_cannot_read_is_counted_and_the_rest_marked(self, db, mongo):
+        from beats.infrastructure.migrations import mark_connected_assignments
+
+        org = self._organisation(mongo)
+        self._assignment(mongo, org, "p1", "2026-03-03T23:00:00+00:00")
+        self._connected(mongo, org, "p1", "2026-03-03T23:00:00+00:00")
+        self._connected(mongo, org, "p2", "not a date")
+
+        report = await mark_connected_assignments(db)
+        assert (report.marked, report.skipped) == (1, 1)
 
 
 class TestDatePairingCodes:

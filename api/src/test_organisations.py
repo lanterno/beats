@@ -1036,6 +1036,91 @@ class TestConnectingAProject:
         theirs = client.post("/api/projects/", json={"name": "Mine"}, headers=outsider).json()
         assert self._connect(client, outsider, org["id"], theirs["id"], None).status_code == 404
 
+    def test_no_later_write_hands_over_what_the_connect_kept_back(self, client, auth_headers):
+        """A bug that happened (#404): every write stamped a row from the
+        project alone, so touching a pre-share row handed it to the
+        organisation — the plainest possible break of rule 4, since the
+        member changed a note and gave away a day."""
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+        project = self._tracked_day_job(client, member)
+        kept = next(
+            b
+            for b in client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()
+            if b["start"].startswith("2026-03-03")
+        )
+        assert self._connect(client, member, org["id"], project["id"], "2026-03-04").status_code
+
+        # An edit to a pre-share session: the note is the member's, and so
+        # is the session it is on.
+        edited = client.put(
+            "/api/beats/",
+            json={
+                "id": kept["id"],
+                "project_id": project["id"],
+                "start": kept["start"],
+                "end": kept["end"],
+                "note": "the dentist, actually",
+            },
+            headers=member,
+        )
+        assert edited.status_code == 200, edited.text
+        assert edited.json()["organisation_id"] is None
+
+        # A session back-dated into the kept-back week, by either door.
+        assert (
+            _beat(client, member, project["id"], "2026-03-02T14:00:00", 30)["organisation_id"]
+            is None
+        )
+        started = client.post(
+            f"/api/projects/{project['id']}/start",
+            json={"time": "2026-03-02T16:00:00Z"},
+            headers=member,
+        )
+        assert started.status_code == 200, started.text
+        assert started.json()["organisation_id"] is None
+        client.post("/api/projects/stop", json={"time": "2026-03-02T17:00:00Z"}, headers=member)
+
+        # And a day booked off before the share day. An absence is dated,
+        # not timed, so it is the chosen *day* it is judged against.
+        booked = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-02", "type": "vacation"},
+            headers=member,
+        )
+        assert booked.status_code in (200, 201), booked.text
+
+        # The organisation's record is exactly what it was.
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04", "2026-03-05"]
+        assert [a["date"] for a in row["absences"]] == ["2026-03-06"]
+        assert all(e["note"] != "the dentist, actually" for e in row["entries"])
+        # And the member's own view of it agrees, since it is the same read.
+        [seen] = _members_of_record(_visible(client, member, org["id"]), project["id"])
+        assert [e["day"] for e in seen["entries"]] == ["2026-03-04", "2026-03-05"]
+
+    def test_being_reassigned_does_not_reopen_the_history(self, client, auth_headers):
+        """`shared_from` moves to the day of a new assignment, so it cannot
+        be what a stamp is judged against: what the member kept back at the
+        connect stays kept back through an unassign and a reassign."""
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = self._tracked_day_job(client, member)
+        self._connect(client, member, org["id"], project["id"], "2026-03-04")
+
+        path = f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}"
+        assert client.delete(path, headers=auth_headers).status_code == 204
+        assert client.put(path, headers=auth_headers).status_code == 200
+
+        assert (
+            _beat(client, member, project["id"], "2026-03-02T14:00:00", 30)["organisation_id"]
+            is None
+        )
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04", "2026-03-05"]
+
 
 class TestMergingAProject:
     """#346: a connect leaves a duplicate when the organisation already had
