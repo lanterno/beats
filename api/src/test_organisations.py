@@ -1558,6 +1558,75 @@ class TestRetention:
         nowhere = _create_org(client, auth_headers, name="Nowhere")
         assert self._settings(client, auth_headers, nowhere, retention_years=3).status_code == 409
 
+    def test_a_tombstone_goes_with_the_last_of_its_rows(self, client, auth_headers):
+        # A bug that happened (#408): the purge removed a deleted account's
+        # rows and kept its tombstoned membership — the name and address —
+        # and assignment — the contract — forever.
+        from beats.infrastructure.erasure import erase_account
+        from beats.infrastructure.retention import purge_expired_records
+
+        org = _create_org(client, auth_headers)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        gone, lingering = _new_user(), _new_user()
+        gone_id = _member_of(client, auth_headers, org["id"], gone)
+        lingering_id = _member_of(client, auth_headers, org["id"], lingering)
+        for uid in (gone_id, lingering_id):
+            _assign(client, auth_headers, org["id"], project["id"], uid)
+        _beat(client, gone, project["id"], "2020-01-10T09:00:00", 60)
+        _beat(client, lingering, project["id"], "2020-01-10T09:00:00", 60)
+        _beat(client, lingering, project["id"], "2026-03-03T09:00:00", 60)
+        db = _db()
+        # A living member's requests: an erased member's go with the account.
+        request = {
+            "organisation_id": org["id"],
+            "project_id": project["id"],
+            "user_id": _seeded_id(auth_headers),
+            "type": "vacation",
+            "half_day": False,
+            "requested_at": "2020-01-02T09:00:00+00:00",
+        }
+        db.org_absence_requests.insert_many(
+            [
+                {**request, "date": "2020-01-20", "status": "approved"},
+                {**request, "date": "2020-01-21", "status": "pending"},
+                {**request, "date": "2026-03-20", "status": "declined"},
+            ]
+        )
+
+        async def run(coro):
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await coro(client_[os.environ.get("DB_NAME", "beats_test")])
+            finally:
+                await client_.close()
+
+        for uid in (gone_id, lingering_id):
+            asyncio.run(run(lambda d, uid=uid: erase_account(d, uid)))
+        tombstoned = {"organisation_id": org["id"], "user_id": {"$regex": "^erased:"}}
+        assert db.org_members.count_documents(tombstoned) == 2
+
+        dry = asyncio.run(run(lambda d: purge_expired_records(d, apply=False)))
+        [mine] = [o for o in dry.organisations if o.organisation_id == org["id"]]
+        assert (mine.counts["memberships_deleted"], mine.counts["assignments_deleted"]) == (1, 1)
+        assert mine.counts["absence_requests_deleted"] == 1
+        assert db.org_members.count_documents({"organisation_id": org["id"]}) == 3
+
+        asyncio.run(run(lambda d: purge_expired_records(d, apply=True)))
+        [kept] = [m["user_id"] for m in db.org_members.find(tombstoned)]
+        assert db.timeLogs.count_documents({"user_id": kept}) == 1  # the 2026 row
+        assert db.org_assignments.count_documents({"user_id": kept}) == 1
+        assert (
+            db.org_assignments.count_documents(
+                {"organisation_id": org["id"], "user_id": {"$regex": "^erased:"}}
+            )
+            == 1
+        )
+        assert sorted(
+            r["date"] for r in db.org_absence_requests.find({"organisation_id": org["id"]})
+        ) == ["2020-01-21", "2026-03-20"]
+
     def test_an_unset_period_is_the_countrys_floor(self, client, auth_headers):
         # The write-time check sees only an explicit setting. An organisation
         # that never set one keeps its record for its country's floor, not
