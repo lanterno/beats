@@ -5731,6 +5731,30 @@
             "title": "Name",
             "type": "string"
           },
+          "private_before": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Before"
+          },
+          "private_before_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Private Before Day"
+          },
           "shared_from": {
             "format": "date-time",
             "title": "Shared From",

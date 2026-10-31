@@ -6202,6 +6202,10 @@ export interface components {
             logo_url?: string | null;
             /** Name */
             name: string;
+            /** Private Before */
+            private_before?: string | null;
+            /** Private Before Day */
+            private_before_day?: string | null;
             /**
              * Shared From
              * Format: date-time
