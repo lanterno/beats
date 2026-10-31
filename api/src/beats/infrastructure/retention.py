@@ -12,8 +12,15 @@ country's floor, whichever keeps longer — is handled by whose it is:
 - a **tombstoned ex-member's** rows (`erased:` user ids) are deleted —
   they existed only for the record;
 - the organisation's **timesheets** for months wholly before the cutoff
-  go, frozen figures with them, and **audit events** older than the cutoff
-  go too — the log lives as long as the records it explains.
+  go, frozen figures with them, **decided absence requests** dated before
+  it go (the absence is the record; the request was a note to a decider),
+  and **audit events** older than the cutoff go too — the log lives as
+  long as the records it explains;
+- a **tombstone whose last row has expired** goes whole: the membership
+  holding the name and address the organisation knew the person by, and
+  the assignment holding the contract behind a balance it read. Those are
+  the most personal data erasure leaves, and a period that never reached
+  them would not be a period at all (#408).
 
 The purge is run by the operator (`scripts/retention_purge.py`), dry by
 default, and is itself an audit event per organisation — counts and the
@@ -117,6 +124,43 @@ async def purge_expired_records(
             counts["timesheets_deleted"] = await db.org_timesheets.count_documents(sheets)
             counts["audit_deleted"] = await db.org_audit.count_documents(audit)
 
+        # A decided absence request is spent: the absence it asked for is
+        # the record, and the request carries a note addressed to a decider.
+        # Decision 30 does not name them, so they expire on the same cutoff
+        # as everything else they explain.
+        requests = {
+            "organisation_id": org_id,
+            "decided_at": {"$ne": None},
+            "date": {"$lt": day},
+        }
+        if apply:
+            counts["absence_requests_deleted"] = (
+                await db.org_absence_requests.delete_many(requests)
+            ).deleted_count
+        else:
+            counts["absence_requests_deleted"] = await db.org_absence_requests.count_documents(
+                requests
+            )
+
+        # What erasure kept of a deleted account goes once nothing of theirs
+        # is left to explain: the tombstoned membership, which holds the name
+        # and address the organisation knew them by, and their assignments,
+        # which hold the contract behind a balance it read (decision 3).
+        # These are the most personal data in the organisation, and until
+        # #408 the purge kept them for ever.
+        retained: dict[str, dict[str, Any]] = {
+            "beats": {"organisation_id": org_id, "start": {"$gte": instant}},
+            "absences": {"organisation_id": org_id, "date": {"$gte": day}},
+            "adjustments": {"project_id": {"$in": project_ids}, "date": {"$gte": day}},
+            "timesheets": {
+                "organisation_id": org_id,
+                "month": {"$gte": cutoff.replace(day=1).isoformat()},
+            },
+        }
+        counts["tombstones_deleted"] = await _purge_spent_tombstones(
+            db, org_id, project_ids, retained=retained, apply=apply
+        )
+
         if apply and any(counts.values()):
             await db.org_audit.insert_one(
                 {
@@ -132,3 +176,46 @@ async def purge_expired_records(
         report.append(OrganisationPurge(org_id, org.get("name", "?"), years, cutoff, counts))
 
     return PurgeReport(today=today, applied=apply, organisations=report)
+
+
+async def _purge_spent_tombstones(
+    db: AsyncDatabase,
+    org_id: str,
+    project_ids: list[str],
+    *,
+    retained: dict[str, dict[str, Any]],
+    apply: bool,
+) -> int:
+    """Delete the memberships erasure left behind that explain nothing any
+    more, with their assignments. How many went, applied or not.
+
+    A tombstone (`erased:<membership id>`) exists only to group one former
+    member's rows in the organisation's record. Once the last of those rows
+    has expired — beats, absences, adjustments and timesheets alike — the
+    membership is a name and an email address kept for a record that no
+    longer exists, so it goes, and the assignment holding the contract
+    behind a balance nobody can read goes with it. Until #408 the purge
+    kept both for ever, which is the opposite of what the setting promises.
+
+    A tombstone with one row still inside the period keeps everything: the
+    record has to stay readable while any of it is owed. The test is for a
+    *retained* row rather than for no row at all, so a dry run counts what
+    an applied one would take, having deleted nothing yet.
+    """
+    gone = 0
+    async for membership in db.org_members.find(
+        {"organisation_id": org_id, "user_id": _TOMBSTONE}, {"user_id": 1}
+    ):
+        stone = membership["user_id"]
+        owed = False
+        for name, collection in (*member_row_collections(db), ("timesheets", db.org_timesheets)):
+            if await collection.find_one({**retained[name], "user_id": stone}, {"_id": 1}):
+                owed = True
+                break
+        if owed:
+            continue
+        gone += 1
+        if apply:
+            await db.org_assignments.delete_many({"organisation_id": org_id, "user_id": stone})
+            await db.org_members.delete_one({"_id": membership["_id"]})
+    return gone
