@@ -44,8 +44,9 @@ The organisations epic is #353, with what it still owes as issues linked from it
 pieces that grew out of it have roadmaps of their own, because none is an
 organisations feature: SSO per organisation and SCIM
 ([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)), the
-operator's back office ([roadmaps/backoffice.md](roadmaps/backoffice.md) —
-a separate service, statistics and no personal data),
+the operator's control plane ([roadmaps/backoffice.md](roadmaps/backoffice.md)
+— a separate service for running the platform, which sees operational
+metadata and never user content),
 several verified addresses on an account
 ([roadmaps/account-emails.md](roadmaps/account-emails.md)), server push
 ([roadmaps/server-push.md](roadmaps/server-push.md)) and collecting the

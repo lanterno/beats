@@ -1,263 +1,314 @@
-# A back office for the operator
+# The control plane
 
-Somewhere for the operator to stand. Issue **#424**.
+The operator's UI for **running the platform**. Issue **#424**.
 
 LifePete has one operator — PRIVACY.md says so in those words — and no place
-to look at the platform from. Everything an operator does today is a script
-in `api/scripts/` run by hand against production, and everything an operator
-should *notice* is noticed only if they happen to go looking.
+to run it from. Every operator act today is a script in `api/scripts/` fired
+by hand at production, every setting is a constant that needs a redeploy to
+change, and everything an operator should *notice* is noticed only by going
+to look.
 
 Split out of [roadmaps/organisations.md](organisations.md) on 2026-10-31 and
 designed on 2026-11-01. It was filed under that epic because an organisation
 left without an owner (decision 31) was the first thing anyone wanted to see;
-a back office is not an organisations feature, and tying it there would have
-shaped an operator surface around one view of one thing.
+a control plane is not an organisations feature, and tying it there would
+have shaped it around one view of one thing.
 
 ---
 
-## What it is, in one line
+## What it is, and what it is not
 
-**A dashboard of numbers about the platform, which cannot show a person's
-data.** Not a support console, not an admin panel over the database: a place
-that answers "how is it going, and what needs attention?" without ever
-answering "what did Nadia do last Tuesday?"
+**A control plane: pages organised around what the operator is trying to do.**
+Find the account a support mail came from and act on it. Fix an organisation
+whose owner is gone. Find who is burning the coach budget and cap them.
+See whether storage growth is about to cost money.
 
-## Why a surface that refuses data is worth building at all
+**Not a Django admin.** Not one page per collection with a CRUD form on it.
+A table-shaped admin makes the operator translate every real question —
+"who is abusing this?" — into four screens of joins, and it makes the
+dangerous act (edit this document) the easiest one on the page.
 
-The operator can already read any document in Mongo. PRIVACY.md says so
-rather than pretending a single-operator service has a boundary it does not.
-So a back office adds no power — and that is the point. It is **a narrower
-door than the one that already exists**, and it earns its place four ways:
+**Not a dashboard either.** Statistics are in it because they serve two
+operator jobs — predicting what the platform will cost and cost us next
+quarter, and catching use that has turned into abuse — not because a wall of
+charts is the goal.
 
-1. **Every question it answers is a `mongosh` session that does not happen.**
-   Today "how many organisations have no owner?" means opening a shell
-   against production, a tool with no limits and no record. The back office
-   answers that without reaching for it.
-2. **It is auditable.** A page view can be logged; a shell cannot.
-3. **It survives growth.** One operator today. The boundary is what makes a
-   second one — or a contractor, or a bought-in support hand — safe to add
-   without a redesign.
-4. **It lets PRIVACY.md eventually say something stronger.** Not yet, but
-   that sentence can only tighten once routine operation stops needing the
-   wide credential.
+## The line: operational metadata, never user content
+
+The operator's job never requires reading what someone tracked. So:
+
+| Sees | Never sees |
+|---|---|
+| Account id, email, created, last active, state | Sessions, their times, their notes |
+| Counts: projects, sessions, devices, organisations | Project names, tags, absence notes |
+| Which integrations are connected | Any integration's token or fetched content |
+| Coach spend, tokens, model | Any coach conversation or memory |
+| Organisation name, settings, members, roles, seats | Clients, rates, amounts, report contents |
+| Biometric *row counts* | Any biometric value |
+
+The operator can still read any document in Mongo, and PRIVACY.md says so
+rather than pretending otherwise. That is exactly why this line is worth
+drawing: **every question the control plane answers is a `mongosh` session
+against production that does not happen.** The wide credential stops being
+the everyday tool and becomes the exceptional one — which is also what makes
+a second operator, or a contractor, safe to add later.
+
+## The finding that shapes the work
+
+**A control plane can only control what the API enforces, and today the API
+enforces almost none of it.** Checked on 2026-11-01:
+
+| The operator wants to | What exists now | What the API must grow first |
+|---|---|---|
+| Suspend an abusive account | **Nothing.** No flag on `User`, no check anywhere | A suspension field, checked once in the auth middleware (`src/server.py`) |
+| Sign someone out everywhere | `SessionManager._revoked_tokens` is an **in-memory dict per instance**; Cloud Run runs several and scales to zero | Shared revocation — or accept the bound below |
+| Cap one account's coach spend | `settings.coach_monthly_budget_usd`, **one global number** for everybody | A per-account limits document the budget check reads |
+| Rate-limit one abuser | `@limiter.limit` decorator constants keyed on IP, per instance | Per-account limits, from the same document |
+| Disable a webhook | `Webhook.active` **already exists** | Nothing — this one works today |
+
+So most of the value here is unlocked by **small enforcement points in the
+API**, and the back office is the UI over them. Build them in that order; a
+control plane whose controls do nothing is a viewer with buttons.
+
+On revocation, be accurate about severity rather than alarmed: `SESSION_TTL`
+is 3600, so a revoked token dies within the hour anyway. The real gap is
+that `refresh_token` mints a fresh hour on each call, so a session in active
+use renews indefinitely and no instance but one knows it was revoked. "Sign
+out everywhere" cannot be honest until that is shared state.
 
 ## Architecture
 
-### A separate service, at `backoffice/`
+### A separate service at `backoffice/`
 
-A sibling of `api/`, `ui/` and `daemon/` in the repo layout, deployed on its
-own.
+A sibling of `api/`, `ui/` and `daemon/`, deployed on its own.
 
-The reason is the user-facing API's one mechanical guarantee: `MongoStore._q`
-stamps `{"user_id": ...}` onto every query, and the handful of readers that
-cross users are named, narrow classes (`MongoOrganisationRecords`,
-`MongoReportLinkLookup`). A back office route is cross-tenant **by
-definition**. Put it in the same app and that app contains both "everything
-is scoped" and "nothing is scoped", and the next person adding a route has
-to know which half they are standing in. Kept apart, the rule in the API
-stays absolute, which is worth more than the code reuse.
+The user-facing API's one mechanical guarantee is that `MongoStore._q`
+stamps `{"user_id": ...}` onto every query, with the handful of cross-user
+readers named and narrow (`MongoOrganisationRecords`,
+`MongoReportLinkLookup`). A control-plane route is cross-tenant **and
+privileged** by definition. Put it in the same app and that app holds both
+"everything is scoped" and "nothing is", and the next person adding a route
+has to know which half they are in. Apart, the API's rule stays absolute.
 
-### Stack: FastAPI + Jinja2 + htmx, server-rendered
+### FastAPI + Jinja2 + htmx, server-rendered
 
-Python because it is the house language and the Mongo driver, the settings
-pattern, the Dockerfile and the Cloud Build shape are all already here.
-**Server-rendered, not a second SPA**: a dashboard a handful of people open
-does not justify a second React build, a second type-generation pipeline
-(`pnpm gen:types`) and a second in-browser auth story. htmx covers the
-interactive parts — a date-range change, a sortable table — without any of
-that.
+Python because it is the house language and the driver, settings, Dockerfile
+and Cloud Build shapes already exist. **Server-rendered, not a second SPA**:
+a surface a handful of people open does not justify a second React build and
+a second `pnpm gen:types` pipeline, and a privileged page is better off with
+no bearer token living in a browser at all. htmx covers the forms,
+confirmations and sortable tables a control plane is made of.
 
-Charts: a server-rendered SVG or a single small charting library. No
-analytics or telemetry SDK in this page; see *What must not happen*.
+**Considered and rejected: a BI tool** (Metabase, Grafana) over Mongo. It
+cannot act, and it works by handing whoever opens it query access to
+collections — the opposite of the line above.
 
-**Considered and rejected: a BI tool** (Metabase, Grafana) pointed at Mongo.
-It is the cheapest answer by far, and it is the wrong one: it works by giving
-whoever opens it query access to collections, which is exactly the thing this
-design exists to stop. A tool whose core feature is "write your own query"
-cannot also promise "shows no personal data".
+### Google IAP, and two operator roles
 
-### Auth: Google IAP, no login code
+Cloud Run with restricted ingress and Identity-Aware Proxy in front. The
+service implements no login: no session, no passkey, no token. Who may enter
+is an IAM policy. On a surface that can suspend accounts, the best auth code
+is none.
 
-Cloud Run with ingress restricted and **Identity-Aware Proxy** in front. The
-operator signs in with a Google account at the edge; the service implements
-no login, no session, no passkey, no token. Who may enter is an IAM policy,
-not a row in a database. On a privileged surface, the best auth code is none.
+Two roles from the start, because they will be needed before a second person
+is: **viewer** (everything above, read) and **operator** (the actions). A
+contractor or a support hand should be able to look without being able to
+act. Locally a `BACKOFFICE_DEV_OPERATOR` env var stands in for the IAP
+header, as `BEATS_TEST_ENV` already stands in for testcontainers.
 
-Locally, a `BACKOFFICE_DEV_OPERATOR` env var stands in for the IAP header,
-the way `BEATS_TEST_ENV` already stands in for testcontainers.
+### Mongo with a scoped write grant
 
-### Database: the same Mongo, with a read-only credential
+Not read-only — a control plane acts — but **not wide either**. A database
+user that reads what it shows and writes only the collections the controls
+touch: `users` (suspension), `org_members` (an owner grant), `organisations`
+(closing), `webhooks` (disable), and two new ones, `account_limits` and
+`operator_audit`. It must hold **no write grant on `timeLogs`, `absences`,
+`projects` or any content collection** — a boundary outside the code is the
+only kind that survives a bug in it.
 
-Not a replica, not a pipeline — the scale does not call for it. What matters
-is that the credential is a **read-only database user**, so the service
-*cannot* write even if the code tried. That is a boundary enforced outside
-the code, which is the only kind that survives a bug.
+### Wide and destructive work runs as a job, not in the web process
 
-A consequence worth planning for: the audit trail cannot go in Mongo.
-It goes to **Cloud Logging** as structured logs — which is where Cloud Run
-already records every request URL for 30 days anyway. (Neat inversion: that
-same URL logging is why `/api/reports` keeps its token in a header. Here the
-logging *is* the feature.)
+Erasure and the retention purge touch every collection and are irreversible.
+They must not be a button in a request handler holding a wide credential.
+
+The back office **enqueues**; a separate **Cloud Run Job** with the wide
+credential executes, running the same `infrastructure/erasure.py` and
+`infrastructure/retention.py` code the scripts already call. That buys three
+things for free: the narrow grant above stays narrow, the act is auditable
+at both ends, and a queued irreversible act can sit for a cancellation
+window before it runs.
+
+### Audit, in two places
+
+Every operator action writes to an append-only `operator_audit` — who, what,
+when, and the before-and-after of what changed.
+
+**And an action that touches an organisation also writes to that
+organisation's own `org_audit`**, which its admins already read. An operator
+promoting someone to owner is visible to the people it affects. This is the
+product's own value applied to its operator: nothing about you happens
+invisibly.
+
+Page views and reads go to **Cloud Logging** as structured logs, which is
+where Cloud Run already records every request URL anyway. (A neat inversion:
+that same URL logging is why `/api/reports` keeps its token in a header —
+here the logging *is* the point.)
 
 ### It talks to nothing else
 
 It does not call the user-facing API, and the API does not call it. No shared
-process, no shared deploy, no shared service account.
+process, deploy, or service account. **No shared code at first** either: a
+control plane reads aggregates and writes a handful of fields, so importing
+`api/src/beats/domain/models.py` buys little and costs a joint deploy. The
+real coupling is to collection and field names, and the way to catch that is
+to **run every query against the API's own testcontainers fixtures in CI**,
+so a renamed field fails a test instead of silently emptying a page.
 
-**No shared code either, at first.** Tempting to import
-`api/src/beats/domain/models.py`, but a stats service counts documents rather
-than hydrating them, so the models buy little and the coupling costs a joint
-deploy. The real coupling is to collection and field *names*, and it exists
-either way. Mitigate it where it can actually be caught: **run every
-aggregation pipeline against the API's own testcontainers fixtures in CI**,
-so a renamed field fails a test instead of silently zeroing a chart.
+## What it does, by the job it serves
 
-## The rule that makes "no personal data" mechanical
+### 1. Attention — the landing page
 
-The repo already knows that a filter applied after the fact is not a
-boundary. The same shape applies here:
-
-> **No read returns a document. Every read is an aggregation that returns
-> counts, buckets, distributions or time series.**
-
-Not "fetch and strip the fields" — `find()` over user content does not appear
-in this codebase at all. The things it legitimately shows per row are facts
-about an *organisation* or about a *relationship*, never about a person's
-content:
-
-| Shown | Not shown |
-|---|---|
-| An organisation's name, created date, settings | Any project name, session note, tag, absence note |
-| Counts, roles, dates on a membership | A member's name or email address |
-| An account as an opaque id, and its dates | Anything the account wrote |
-| Distributions and percentiles | Any individual's figures |
-
-## What it shows
-
-### 1. Needs attention — the first screen
-
-The reason to open it at all. Each row is a count with a link to the detail.
+The reason to open it. Each row a count, linking to the thing.
 
 - **Organisations with no owner** (decision 31). Owner-only acts — granting
-  the owner role, closing, deleting — wait until someone notices. Today the
-  only trace is an `account.erased` event in that organisation's audit log,
-  which nobody reads unless they already suspect.
-- **What a retention purge would take.** `scripts/retention_purge.py` is
-  operator-run and dry by default, and nothing schedules it (decision 30), so
-  nothing has auto-deleted during the beta. Showing the dry run's counts per
-  organisation is exactly the nudge that is missing.
+  the role, closing, deleting — wait until someone notices, and the only
+  trace today is an `account.erased` line in that organisation's audit log.
+- **Erasure requests waiting**, and any queued erasure inside its
+  cancellation window.
+- **What a retention purge would take**, per organisation. The script is dry
+  by default and nothing schedules it (decision 30), so nothing has
+  auto-deleted during the beta — and nobody is being reminded either.
+- **Accounts over a limit**: coach spend near or past the cap, storage or
+  write-rate outliers.
 - **Approvals superseded and never reopened.** A contract write marks the
-  approved months it moves (`superseded_at`, decision 23). One left standing
-  for months means a decider never saw the mark — a signal the feature is
-  not landing, and the kind of thing only an aggregate reveals.
-- **Absence requests pending beyond a threshold**, as a count per
-  organisation. Someone is waiting on a decider who has stopped looking.
-- **Timers running absurdly long** — over, say, 24 hours. A count, not a
-  list: it is either a forgotten stop or a bug, and both are worth knowing.
+  approved months it moves (`superseded_at`, decision 23); one standing for
+  months means a decider never saw the mark.
+- **Absence requests pending beyond a threshold** — someone waiting on a
+  decider who stopped looking.
 - **Deploy state**: the live commit, and whether `beats/deploy.lock` is held.
-  `terraform/README.md` documents checking this by hand.
 
-### 2. Growth
+### 2. Accounts
 
-- Accounts: total, created per day/week, and the active/dormant split by
-  "tracked anything in the last 7 / 30 / 90 days".
-- Erasures over time.
-- **Sign-in doors, carefully.** How many accounts hold a passkey, an OIDC
-  identity, or both, and the count per configured provider — useful for
-  deciding whether a provider is worth keeping configured. This reads
-  `identities[]`, a fact the account *stores*; it is **not** a record of
-  which door was used for a sign-in, which the code deliberately does not
-  keep (`routers/sso.py` logs neither provider nor account). Do not let this
-  statistic grow into that.
+Find one by **exact email or id** — not a browsable list, not a prefix
+search. The common entry is a support or erasure mail, which carries a full
+address; exact-match is enough for that and useless for fishing.
 
-### 3. Usage and capacity
+One account shows: created, last active, suspension state, how many passkeys
+and which providers are linked, devices paired, organisations and roles,
+counts of projects / sessions / biometric rows, storage estimate, coach spend
+this month against its cap, and which integrations are connected.
 
-- Sessions written per day; flow windows per day — the daemon is the heaviest
-  writer and its volume is what sizes the database.
-- Documents and storage per collection, with growth. There are 28 indexed
-  collections; knowing which is growing is how the next bill is predicted.
-- Distributions rather than lists: projects per account, sessions per
-  account, organisations per account — as percentiles.
+**Actions**: suspend and unsuspend, set or clear a limits override, force
+sign-out, queue an erasure (typed confirmation, cancellation window), and
+generate a data export for a subject-access request.
+
+On **sign-in doors**: the count of linked identities per provider is a fact
+the account *stores* and is fair to show. It is **not** a record of which
+door a sign-in used, which the code deliberately does not keep
+(`routers/sso.py` logs neither provider nor account). Do not let one grow
+into the other.
+
+### 3. Organisations
+
+A list with name, created, members by role, active assignments, **seat
+count** ([docs/pricing.md](../docs/pricing.md) defines it; it is what
+[subscriptions.md](subscriptions.md) will bill on), free-tier position,
+retention years, and closing state.
+
+One organisation adds: its memberships with roles and dates, projects and how
+many were connected rather than created, timesheets by status, and its audit
+log.
+
+**Actions**: grant the owner role to an existing admin — the answer to
+decision 31, which deliberately refuses to auto-promote but leaves somebody
+having to act; start or extend a closing notice; delete after the notice;
+and later, adjust the plan or a seat allowance.
+
+### 4. Abuse and limits
+
+The job the owner named: catching use that has become abuse, and stopping it.
+
+**Detection** — leaderboards and outliers rather than thresholds somebody has
+to guess:
+
+- coach spend per account this month, against the global cap;
+- flow windows written per day per account. The daemon is the heaviest
+  writer, and an account at 100× the median is a broken or hostile one;
+- sessions and projects created per day, and import sizes — the backup import
+  is the one route that writes in bulk;
+- report links created per account: `/api/reports` is the only public path
+  serving a user's data, and minting links is the way to widen it;
+- webhook destinations by domain. Outbound HTTP from our servers to an
+  arbitrary URL is ours to answer for, and `Webhook.active` already exists to
+  switch one off;
+- pairing codes and device registrations per account;
+- signups per day and per provider, which is where an `allow_signup`
+  misconfiguration shows.
+
+**Controls**: per-account limits in `account_limits` — a coach budget
+override, a write-rate ceiling — read by the API at its enforcement points;
+suspension; and disabling a single webhook.
+
+### 5. Capacity and cost
+
+For predicting, not for staring at.
+
+- Documents and storage per collection with growth — 28 indexed collections,
+  and knowing which is growing is how the next bill is foreseen.
+- Write volume per day by kind: sessions, flow windows, signals.
+- Distributions rather than lists — projects per account, sessions per
+  account — as percentiles.
 - **Coach cost.** `llm_usage` already records model, tokens, cache hits and
-  `cost_usd` per call, and `UsageTracker.usage_summary` is already described
-  in its own docstring as being "for the cost dashboard". Its per-user shape
-  becomes a platform total here: spend per day, split by model, and the
-  cache-hit ratio, which is the lever on the bill.
+  `cost_usd` per call, and `UsageTracker.usage_summary` calls itself "for the
+  cost dashboard" in its own docstring. Its per-user shape becomes a platform
+  total: spend per day by model, and the cache-hit ratio, which is the lever.
+- **Latency, error rates and instance counts are Cloud Monitoring's.** Link
+  to it; do not rebuild it. What belongs here is what Cloud Monitoring cannot
+  know — the domain shape of the data.
 
-### 4. Organisations
+### 6. Compliance operations
 
-A table, one row per organisation — organisation facts, no personal data:
-
-- name, created, timezone, holiday country, retention years, closing state;
-- members by role (owner / admin / manager / viewer / member), and how many
-  have an active assignment — which is the **seat count**
-  ([docs/pricing.md](../docs/pricing.md) defines it; it is the number
-  [subscriptions.md](subscriptions.md) will bill on);
-- projects, and how many are connected rather than created;
-- timesheets by status, and whether any month is approved;
-- free-tier position: at, near or over five seats.
-
-Drilling into one organisation shows its memberships as **role + dates +
-account id** — enough to answer "who are the admins of this ownerless
-organisation?", which is decision 31's whole purpose — and never the name or
-address `org_members` happens to store.
-
-## The one deliberate exception: finding an account to erase
-
-PRIVACY.md tells people to email the operator from the address on their
-account, and `scripts/erase_account.py` takes an account id. Something has to
-bridge the two, and it is the only thing here that touches an address.
-
-**An exact-match lookup**: paste a full address, get back whether an account
-exists and its id. Nothing else — no list, no prefix or partial search, no
-"find users like…", no browsing. Exact match only is what makes it
-unusable for fishing, and the lookup is audited by the operator's identity
-with the address hashed, not written, in the log.
-
-It does **not** perform the erasure. See below.
+- The erasure queue: requested, scheduled, cancelled, done.
+- Retention: what is due per organisation, and running the purge as a job.
+- A subject-access export for an account.
+- The operator audit itself, readable and filterable, and not editable from
+  the UI by anyone.
 
 ## What must not happen
 
-- **No route returns a document.** This is the whole design; a single
-  convenience `find()` undoes it.
 - **No "view as this user", ever.** Every admin panel grows one. It would
-  turn a statistics surface into an impersonation surface and make every
-  promise above false at a stroke.
-- **No free-text search** over projects, notes, tags, or anything a person
-  wrote — and no search over addresses beyond the exact-match lookup.
-- **No write path, and no destructive buttons.** Erasure and the retention
-  purge stay operator-run scripts. The back office may *show that they are
-  due*; it must not run them. A read-only credential is a boundary a bug
-  cannot cross, and the moment one button writes, that is gone — a confirm
-  dialog is not the same kind of thing.
-- **No personal data in an export or a chart label.** If a CSV falls out of
-  this, it carries the same aggregates the page does.
-- **No analytics or session-replay SDK on these pages.** Obvious, and worth
-  writing down: the product refuses them on the marketing page under
-  stricter conditions than apply here.
-- **It reads through its own narrow classes**, as
-  `MongoOrganisationRecords` does — never by widening `MongoStore._q`, and
-  never by handing an existing service a wider scope. An operator surface is
-  cross-tenant by nature, which makes it the most likely place for the next
-  careless cross-user read; the rule in
-  [roadmaps/organisations.md](organisations.md) — *widen a collection
-  boundary, never a serialiser* — is not an organisations rule, it is the
+  contradict PRIVACY.md directly — the operator does not log into accounts —
+  and make a product whose pitch is "we cannot watch you" false.
+- **No user content**, per the table above. No page, export or CSV carries a
+  note, a tag, a project name or a figure from someone's record.
+- **No free-text search** over content, and none over addresses beyond the
+  exact-match lookup.
+- **No destructive act in the web process.** Erasure and the purge are jobs,
+  with a typed confirmation and a cancellation window. A confirm dialog in
+  front of an irreversible wide-credential write is not a safety property.
+- **Nothing silent inside an organisation.** An operator act that changes a
+  membership lands in that organisation's own audit log.
+- **No write grant on content collections**, whatever the code claims to do.
+- **It reads through its own narrow classes** — never by widening
+  `MongoStore._q`, never by handing an existing service a wider scope. The
+  rule in [roadmaps/organisations.md](organisations.md), *widen a collection
+  boundary, never a serialiser*, is not an organisations rule; it is the
   rule, and this is the surface most able to break it.
-- **It does not become customer support** with a second tier of access
-  because someone asked a question it cannot answer. That is a new decision,
+- **It does not become customer support** with a deeper tier of access
+  because someone asked a question it cannot answer. That is a new decision
   with a new PRIVACY.md sentence, not a patch.
 
 ## Open, for when it starts
 
-- **Cost.** IAP needs a load balancer, which has a standing monthly cost
-  disproportionate to one dashboard. The alternative — ingress-internal plus
-  a tunnel, or Cloud Run's own IAM invoker check with `gcloud proxy` — is
-  cheaper and clumsier. Worth pricing before committing.
-- **The erasure lookup** above is the one place the "no personal data" line
-  bends. It is proposed, not settled.
-- **Where the aggregates run.** Every pipeline on request is fine at this
-  size and will not stay fine; a nightly roll-up into a small stats
-  collection is the obvious next step, and it needs a write credential,
-  which is a boundary change. Do not design for it now — note that it is the
-  first thing that will ask to break the read-only rule, so it is decided
-  deliberately when it does.
+- **Order.** The API enforcement points come first or alongside; the
+  suspension flag is the smallest and unlocks the most.
+- **Cost.** IAP needs a load balancer with a standing monthly charge out of
+  proportion to one internal page. Ingress-internal plus a tunnel, or Cloud
+  Run's IAM invoker check, are cheaper and clumsier. Price it before
+  committing.
+- **PRIVACY.md.** Suspension and operator actions are new facts about what
+  happens to an account; the page should say so before the first one ships.
+- **Pre-computed aggregates.** Running every query per request is fine at
+  this size and will not stay fine. A nightly roll-up needs a write
+  credential on a stats collection — the first thing that will ask to widen
+  the grant, so it is decided deliberately when it does.
