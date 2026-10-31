@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from beats.domain.contracts import (
     absences_by_day,
     balance_terms,
+    contract_diverges_from,
     counts_worked,
     expected_on,
     owes,
@@ -69,6 +70,7 @@ from beats.domain.models import (
 from beats.domain.ports import (
     AbsenceStore,
     AdjustmentStore,
+    ApprovalMarks,
     BeatStore,
     BillableOverrideRemover,
     BillingPresence,
@@ -621,11 +623,16 @@ class ProjectService:
         beat_repo: ProjectBeatReader,
         adjustments: ContractAdjustments,
         billing: BillingPresence,
+        marks: ApprovalMarks | None = None,
     ):
         self.project_repo = project_repo
         self.beat_repo = beat_repo
         self.adjustments = adjustments
         self.billing = billing
+        # Stage 3: a contract write on an organisation's project marks the
+        # approved months it moves (decision 23). Without one (the tests'
+        # bare service, a one-off script) nothing is marked.
+        self.marks = marks
 
     async def create_project(self, project: Project) -> Project:
         """Create a new project. A new project has no balance adjustments, so
@@ -668,7 +675,20 @@ class ProjectService:
         updated = await self.project_repo.update(project)
         if purge_after and project.id is not None:
             await self.adjustments.delete_by_project(project.id)
+        await self._mark_moved_approvals(updated, previous_contract)
         return updated
+
+    async def _mark_moved_approvals(self, project: Project, previous: Contract | None) -> None:
+        """A contract write is never refused for an approved month; the
+        approvals whose figures it moves are marked instead (decision 23).
+        Only on an organisation's project — a personal day job has no
+        approvals — and only from the day the two contracts diverge, so a
+        term added for next year marks nothing already approved."""
+        if self.marks is None or project.id is None or project.organisation is None:
+            return
+        from_day = contract_diverges_from(previous, project.contract)
+        if from_day is not None:
+            await self.marks.mark_terms_changed(project.id, from_day, datetime.now(UTC))
 
     async def restore_project(self, project: Project) -> Project:
         """Write a project read from a backup, keeping its id: an update when

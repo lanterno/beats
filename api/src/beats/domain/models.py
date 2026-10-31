@@ -1835,13 +1835,29 @@ class FrozenMonth(BaseModel):
     absence_days: float
 
 
+class TimesheetAction(StrEnum):
+    """A step in a timesheet's history. The four states a sheet can be in are
+    steps too, and keep their strings, so stored history keeps reading; the
+    fifth is a thing that happened to an approved sheet without changing its
+    state — the terms behind it moved (docs/organisations.md, decision 23).
+    A state and an event are different sets, which is why this is not
+    `TimesheetStatus`."""
+
+    SUBMITTED = "submitted"
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    REOPENED = "reopened"
+    TERMS_CHANGED = "terms_changed"
+
+
 class TimesheetEvent(BaseModel):
     """One step of a timesheet's history: submitted, approved, changes
-    requested, reopened — each with who and, where one was given, why."""
+    requested, reopened, or the contract's terms changed under an approval
+    — each with who and, where one was given, why."""
 
     at: datetime
     by: str
-    action: TimesheetStatus
+    action: TimesheetAction
     comment: str | None = None
 
 
@@ -1865,4 +1881,12 @@ class OrgTimesheet(TzNormalizedModel):
     decided_by: str | None = None
     comment: str | None = None
     frozen: FrozenMonth | None = None
+    # When the contract behind an approved month last moved, and who moved
+    # it (decision 23). `status` stays `approved` — the month is still
+    # locked and `frozen` is still the record — but a decider would not
+    # necessarily approve the same figures today. A reopen clears both, and
+    # the re-approval freezes against the terms now in force. Null on a
+    # sheet whose terms still stand.
+    superseded_at: datetime | None = None
+    superseded_by: str | None = None
     history: list[TimesheetEvent] = Field(default_factory=list)

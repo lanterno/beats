@@ -301,16 +301,20 @@ def get_project_service(
     beat_repo: Annotated[BeatRepository, Depends(get_beat_repository)],
     adjustment_repo: Annotated[AdjustmentRepository, Depends(get_adjustment_repository)],
     billing_repo: Annotated[ProjectBillingRepository, Depends(get_project_billing_repository)],
+    locks: PeriodLocksDep,
 ) -> ProjectService:
     """Get the project service with injected repositories. The adjustments
     are there for the contract writes: the balance adjustments go with the
     contract, and a first day moved later past one is refused. The billing is
-    there for the kind: a billed project stays freelance."""
+    there for the kind: a billed project stays freelance. The locks are there
+    as the approval marks: a contract write on an organisation's project
+    marks the approved months it moves (decision 23)."""
     return ProjectService(
         project_repo=project_repo,
         beat_repo=beat_repo,
         adjustments=adjustment_repo,
         billing=billing_repo,
+        marks=locks,
     )
 
 

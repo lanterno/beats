@@ -50,7 +50,11 @@ from beats.domain.models import (
     TimesheetStatus,
 )
 from beats.domain.utils import normalize_tz
-from beats.infrastructure.repositories import serialize_from_document, serialize_to_document
+from beats.infrastructure.repositories import (
+    mark_timesheets_superseded,
+    serialize_from_document,
+    serialize_to_document,
+)
 
 
 def oid_or_none(value: str) -> ObjectId | None:
@@ -903,8 +907,13 @@ class MongoOrganisationStore:
                 }
             },
         }
+        # Any move between states settles the terms question: a reopen drops
+        # the frozen figures and the mark with them, and a re-approval
+        # freezes against the terms now in force (decision 23).
+        unset: dict[str, Any] = {"superseded_at": "", "superseded_by": ""}
         if frozen is None and status is not TimesheetStatus.APPROVED:
-            changes["$unset"] = {"frozen": ""}
+            unset["frozen"] = ""
+        changes["$unset"] = unset
         doc = await self.timesheets.find_one_and_update(
             {
                 "_id": oid,
@@ -915,6 +924,29 @@ class MongoOrganisationStore:
             return_document=ReturnDocument.AFTER,
         )
         return _load(OrgTimesheet, doc) if doc else None
+
+    async def mark_timesheets_superseded(
+        self,
+        organisation_id: str,
+        project_id: str,
+        user_id: str,
+        *,
+        from_day: date,
+        by: str,
+        at: datetime,
+    ) -> int:
+        """The employer's contract write marking the approved months it moves
+        — the same write the member's makes (`mark_timesheets_superseded` in
+        `repositories.py`), bound to the organisation."""
+        return await mark_timesheets_superseded(
+            self.timesheets,
+            project_id=project_id,
+            user_id=user_id,
+            from_day=from_day,
+            by=by,
+            at=at,
+            organisation_id=organisation_id,
+        )
 
     # --- audit -------------------------------------------------------------------
 

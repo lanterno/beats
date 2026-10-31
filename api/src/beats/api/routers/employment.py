@@ -145,6 +145,12 @@ class TimesheetResponse(BaseModel):
     decided_by_name: str | None
     comment: str | None
     frozen: FrozenMonth | None
+    # Set while the contract behind an approved month has moved since it
+    # was approved (decision 23): the month is still approved and locked,
+    # `frozen` is still the record, and a decider decides whether to reopen.
+    superseded_at: datetime | None
+    superseded_by: str | None
+    superseded_by_name: str | None
     history: list[TimesheetEvent]
 
 
@@ -180,6 +186,9 @@ def _sheet(sheet: OrgTimesheet, labels: OrgLabels) -> TimesheetResponse:
         project_name=labels.projects.get(sheet.project_id),
         member_name=labels.members.get(sheet.user_id),
         decided_by_name=labels.members.get(sheet.decided_by) if sheet.decided_by else None,
+        superseded_by_name=(
+            labels.members.get(sheet.superseded_by) if sheet.superseded_by else None
+        ),
     )
 
 

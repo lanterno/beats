@@ -661,6 +661,60 @@ class MongoPeriodLocks:
         local = (instant if instant.tzinfo else instant.replace(tzinfo=UTC)).astimezone(zone)
         return await self.locked_day(project_id, local.date())
 
+    async def mark_terms_changed(self, project_id: str, from_day: date, at: datetime) -> int:
+        """The member's own contract write marking the approved months it
+        moves (docs/organisations.md, decision 23). Scoped to the caller, as
+        every read here is: a service that writes projects gets this one
+        write and nothing wider."""
+        return await mark_timesheets_superseded(
+            self.db.org_timesheets,
+            project_id=project_id,
+            user_id=self.user_id,
+            from_day=from_day,
+            by=self.user_id,
+            at=at,
+        )
+
+
+async def mark_timesheets_superseded(
+    timesheets: Any,
+    *,
+    project_id: str,
+    user_id: str,
+    from_day: date,
+    by: str,
+    at: datetime,
+    organisation_id: str | None = None,
+) -> int:
+    """Mark every approved sheet of one member on one project whose month
+    ends on or after `from_day`: the contract behind it changed. How many.
+
+    The one write both contract writes share — the member's through
+    `MongoPeriodLocks`, the employer's through `MongoOrganisationStore` — so
+    the two cannot drift. `status` is left alone on purpose: the month is
+    still approved and still locked, and `MongoPeriodLocks.locked_day` keys
+    on that status, so a `superseded` status would unlock it. The sheet
+    carries the mark (`superseded_at`, `superseded_by`) and its history
+    carries the step, so the sheet reads in order — submitted, approved,
+    terms changed — which is what a works council asks to see.
+    """
+    query: dict[str, Any] = {
+        "project_id": project_id,
+        "user_id": user_id,
+        "status": "approved",
+        "month": {"$gte": from_day.replace(day=1).isoformat()},
+    }
+    if organisation_id is not None:
+        query["organisation_id"] = organisation_id
+    result = await timesheets.update_many(
+        query,
+        {
+            "$set": {"superseded_at": at.isoformat(), "superseded_by": by},
+            "$push": {"history": {"at": at.isoformat(), "by": by, "action": "terms_changed"}},
+        },
+    )
+    return result.modified_count
+
 
 def project_repository_for(db: Any, user_id: str) -> MongoProjectRepository:
     """A person's project repository over `db`: their own projects and the

@@ -36,7 +36,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from beats.domain.billing import utc_range
-from beats.domain.contracts import absences_by_day, expected_on
+from beats.domain.contracts import absences_by_day, contract_diverges_from, expected_on
 from beats.domain.exceptions import (
     AbsenceRequestNotFound,
     MonthNotEnded,
@@ -66,6 +66,7 @@ from beats.domain.models import (
     OrgTimesheet,
     ProjectKind,
     RequestStatus,
+    TimesheetAction,
     TimesheetEvent,
     TimesheetStatus,
 )
@@ -256,6 +257,15 @@ class EmploymentService(OrganisationService):
         saved = await self.store.open_assignment(updated, keep_personal=False)
         if purge_after:
             await adjustments.delete_by_project(project_id)
+        # Never refused for an approved month; the approvals whose figures
+        # the new terms move are marked instead (decision 23), from the day
+        # the two contracts diverge.
+        superseded = 0
+        from_day = contract_diverges_from(assignment.contract, written_contract)
+        if from_day is not None:
+            superseded = await self.store.mark_timesheets_superseded(
+                organisation_id, project_id, user_id, from_day=from_day, by=actor, at=self._now()
+            )
         written = contract or assignment.contract
         await self._audit(
             organisation_id,
@@ -264,6 +274,7 @@ class EmploymentService(OrganisationService):
             project_id=project_id,
             subject_user_id=user_id,
             terms=len(written.terms) if written is not None else 0,
+            superseded_timesheets=superseded,
         )
         return saved
 
@@ -499,7 +510,7 @@ class EmploymentService(OrganisationService):
                 decided_by=None,
                 comment=None,
                 frozen=None,
-                history=[TimesheetEvent(at=now, by=user_id, action=TimesheetStatus.SUBMITTED)],
+                history=[TimesheetEvent(at=now, by=user_id, action=TimesheetAction.SUBMITTED)],
             )
         )
         await self._audit(

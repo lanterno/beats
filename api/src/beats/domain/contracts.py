@@ -326,3 +326,54 @@ def _days(start: date, end: date) -> Iterator[date]:
     while day <= end:
         yield day
         day += timedelta(days=1)
+
+
+def contract_diverges_from(previous: Contract | None, new: Contract | None) -> date | None:
+    """The earliest day on which two contracts can produce a different
+    figure — worked, expected or balance — or None when they cannot.
+
+    What a contract write asks before marking the approved months it moves
+    (docs/organisations.md, decision 23): a term added for next year moves
+    nothing already approved, and marking every approval anyway would train
+    people to ignore the mark. Each field has its own answer:
+
+    - the opening balance: the contract's first day, since every month's
+      closing balance moves even where its expectation does not;
+    - the terms: the earliest `effective_from` in one list and not the
+      other, or whose term differs;
+    - `ended_on`: the earlier of the two, or the one that is set;
+    - the holiday region: the first day — which holidays moved cannot be
+      known without walking the calendar, and erring early marks more
+      approvals rather than fewer;
+    - the company holidays and the region days not given: the earliest date
+      in the symmetric difference. A company day renamed but not moved
+      changes no figure;
+    - the vacation entitlement: nothing. It is days of leave left, and no
+      month's figures read it;
+    - a contract arriving or going: its first day.
+    """
+    if previous is None:
+        return None if new is None else new.starts_on
+    if new is None:
+        return previous.starts_on
+    candidates: list[date] = []
+    first_day = min(previous.starts_on, new.starts_on)
+    if previous.opening_balance_hours != new.opening_balance_hours:
+        candidates.append(first_day)
+    if (previous.holiday_country, previous.holiday_subdivision) != (
+        new.holiday_country,
+        new.holiday_subdivision,
+    ):
+        candidates.append(first_day)
+    before = {t.effective_from: t for t in previous.terms}
+    after = {t.effective_from: t for t in new.terms}
+    candidates.extend(
+        day for day in before.keys() | after.keys() if before.get(day) != after.get(day)
+    )
+    if previous.ended_on != new.ended_on:
+        candidates.extend(day for day in (previous.ended_on, new.ended_on) if day is not None)
+    company_before = {h.date for h in previous.company_holidays}
+    company_after = {h.date for h in new.company_holidays}
+    candidates.extend(company_before ^ company_after)
+    candidates.extend(set(previous.holidays_not_given) ^ set(new.holidays_not_given))
+    return min(candidates, default=None)

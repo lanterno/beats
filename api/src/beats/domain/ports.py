@@ -481,6 +481,16 @@ class OrganisationStore(Protocol):
         month: date | None = None,
         project_id: str | None = None,
     ) -> list[OrgTimesheet]: ...
+    async def mark_timesheets_superseded(
+        self,
+        organisation_id: str,
+        project_id: str,
+        user_id: str,
+        *,
+        from_day: date,
+        by: str,
+        at: datetime,
+    ) -> int: ...
     async def set_timesheet_state(
         self,
         organisation_id: str,
@@ -551,3 +561,13 @@ class PeriodLocks(Protocol):
 
     async def locked_day(self, project_id: str, day: date) -> date | None: ...
     async def locked_instant(self, project_id: str, instant: datetime) -> date | None: ...
+
+
+class ApprovalMarks(Protocol):
+    """The one write a member's contract write makes against the approvals
+    it moves (docs/organisations.md, decision 23): mark the caller's approved
+    months on a project from a day on. Its own port so that `ProjectService`
+    — which writes projects and holds no organisation store — gains exactly
+    this and cannot read another member."""
+
+    async def mark_terms_changed(self, project_id: str, from_day: date, at: datetime) -> int: ...
