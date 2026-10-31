@@ -1537,6 +1537,29 @@ class TestRetention:
         body = {"name": org["name"], **changes}
         return client.put(f"/api/organisations/{org['id']}", json=body, headers=headers)
 
+    @staticmethod
+    def _purge(*, apply: bool = False, today: date | None = None):
+        """One pass of the operator's purge over the test database."""
+        from beats.infrastructure.retention import purge_expired_records
+
+        async def run():
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await purge_expired_records(
+                    client_[os.environ.get("DB_NAME", "beats_test")], today=today, apply=apply
+                )
+            finally:
+                await client_.close()
+
+        return asyncio.run(run())
+
+    @staticmethod
+    def _counts(report, org_id: str):
+        [mine] = [o for o in report.organisations if o.organisation_id == org_id]
+        return mine
+
     def test_the_floor_is_the_jurisdictions_not_ours(self, client, auth_headers):
         spain = _create_org(client, auth_headers, name="Madrid", holiday_country="ES")
         refused = self._settings(
@@ -1558,9 +1581,22 @@ class TestRetention:
         nowhere = _create_org(client, auth_headers, name="Nowhere")
         assert self._settings(client, auth_headers, nowhere, retention_years=3).status_code == 409
 
-    def test_expiry_unstamps_the_living_and_deletes_the_tombstoned(self, client, auth_headers):
-        from beats.infrastructure.retention import purge_expired_records
+    def test_an_unset_period_is_never_below_the_countrys_floor(self, client, auth_headers):
+        """Poland keeps working-time records ten years. An organisation that
+        never set a period reads as the four-year default, so purging on the
+        stored field would take its record six years early."""
+        org = _create_org(client, auth_headers, name="Kraków", holiday_country="PL")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"])
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
 
+        kept = self._counts(self._purge(today=date(2031, 3, 4)), org["id"])
+        assert kept.years == 10
+        assert not any(kept.counts.values()), "a five-year-old Polish record is still owed"
+
+    def test_expiry_unstamps_the_living_and_deletes_the_tombstoned(self, client, auth_headers):
         org = _create_org(client, auth_headers)
         member = _new_user()
         member_id = _member_of(client, auth_headers, org["id"], member)
@@ -1604,19 +1640,7 @@ class TestRetention:
             }
         )
 
-        async def run(apply: bool):
-            from pymongo import AsyncMongoClient
-
-            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
-            try:
-                return await purge_expired_records(
-                    client_[os.environ.get("DB_NAME", "beats_test")], apply=apply
-                )
-            finally:
-                await client_.close()
-
-        dry = asyncio.run(run(False))
-        [mine] = [o for o in dry.organisations if o.organisation_id == org["id"]]
+        mine = self._counts(self._purge(), org["id"])
         assert mine.counts["beats_unstamped"] == 1
         assert mine.counts["beats_deleted"] == 1
         assert mine.counts["adjustments_deleted"] == 1
@@ -1625,7 +1649,7 @@ class TestRetention:
         # Dry means dry: the stamp is still on the old row.
         assert db.timeLogs.find_one({"_id": ObjectId(old["id"])})["organisation_id"] == org["id"]
 
-        asyncio.run(run(True))
+        self._purge(apply=True)
         survivor = db.timeLogs.find_one({"_id": ObjectId(old["id"])})
         assert survivor is not None, "a living member's row is theirs, not the record's"
         assert "organisation_id" not in survivor
