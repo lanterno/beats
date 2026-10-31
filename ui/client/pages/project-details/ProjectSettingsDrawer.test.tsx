@@ -262,4 +262,26 @@ describe("ProjectSettingsDrawer", () => {
 		const body = hooks.update.mock.calls[0][0];
 		expect(body).toMatchObject({ name: "Employer", color: "#888", kind: "day_job" });
 	});
+
+	it("reads the contract's frame, not edits it, while the organisation manages the contract", () => {
+		const managed: Project = {
+			...DAY_JOB,
+			organisation: {
+				id: "o1",
+				name: "Acme",
+				sharedFrom: "2026-03-04T00:00:00Z",
+				contractManaged: true,
+			},
+		};
+		render(
+			<MemoryRouter>
+				<ProjectSettingsDrawer project={managed} open onClose={vi.fn()} />
+			</MemoryRouter>,
+		);
+
+		expect(screen.getByText(/and manages its contract/)).toBeInTheDocument();
+		expect(screen.queryByLabelText("Holiday region")).not.toBeInTheDocument();
+		expect(screen.queryByLabelText("Opening balance (hours)")).not.toBeInTheDocument();
+		expect(screen.getByText(/Managed by Acme/)).toBeInTheDocument();
+	});
 });

@@ -202,6 +202,29 @@ describe("ContractRegister on a day job", () => {
 		expect(screen.getByRole("button", { name: /Remove term/ })).toBeDisabled();
 	});
 
+	it("offers no edit while the organisation manages the contract, and says whose it is", () => {
+		// docs/organisations.md decision 21: every one of these answers 409 CONTRACT_MANAGED.
+		renderRegister(
+			project({
+				organisation: {
+					id: "o1",
+					name: "Acme",
+					sharedFrom: "2026-01-05T00:00:00Z",
+					contractManaged: true,
+				},
+			}),
+		);
+		const region = screen.getByRole("region", { name: "Contract" });
+
+		expect(within(region).getAllByRole("listitem")).toHaveLength(3);
+		expect(screen.queryByRole("button", { name: /Edit term/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /Remove term/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /Change contract from/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Holidays/ })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /Edit the region/ })).not.toBeInTheDocument();
+		expect(region).toHaveTextContent("Managed by Acme");
+	});
+
 	it("refuses a new term on a day another term starts, before sending anything", async () => {
 		renderRegister(project({}));
 
