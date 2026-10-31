@@ -1262,6 +1262,48 @@ class TestLeavingAndRemoval:
         assert [p["id"] for p in _projects(client, member)] == [project["id"]]
 
 
+class TestLeavingAndTeams:
+    """Decision 9, as amended for #411: leaving takes a person out of every
+    team, so a rejoin carries no old scope."""
+
+    def test_leaving_takes_a_person_out_of_their_teams(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        team = client.post(
+            f"/api/organisations/{org['id']}/teams",
+            json={"name": "Platform crew", "member_ids": [member_id]},
+            headers=auth_headers,
+        )
+        assert team.status_code == 201, team.text
+        assert member_id in team.json()["member_ids"]
+
+        left = client.post(f"/api/organisations/{org['id']}/leave", headers=member)
+        assert left.status_code == 200, left.text
+        [crew] = client.get(f"/api/organisations/{org['id']}/teams", headers=auth_headers).json()
+        assert crew["member_ids"] == []
+
+        # Rejoining puts nobody back in a team.
+        _member_of(client, auth_headers, org["id"], member)
+        [crew] = client.get(f"/api/organisations/{org['id']}/teams", headers=auth_headers).json()
+        assert crew["member_ids"] == []
+
+        # Removal does the same.
+        other = _new_user()
+        other_id = _member_of(client, auth_headers, org["id"], other)
+        client.put(
+            f"/api/organisations/{org['id']}/teams/{crew['id']}",
+            json={"name": "Platform crew", "member_ids": [other_id]},
+            headers=auth_headers,
+        )
+        removed = client.delete(
+            f"/api/organisations/{org['id']}/members/{other_id}", headers=auth_headers
+        )
+        assert removed.status_code in (200, 204), removed.text
+        [crew] = client.get(f"/api/organisations/{org['id']}/teams", headers=auth_headers).json()
+        assert crew["member_ids"] == []
+
+
 class TestErasure:
     """Decision 3: an erased account leaves the organisation its working-time
     rows under a tombstone, with the name it knew the person by, and nothing
