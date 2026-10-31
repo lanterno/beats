@@ -1227,6 +1227,69 @@ class TestMergingAProject:
         assert row["shared_from"] == "2026-03-04T00:00:00Z"
         assert row["has_contract"] is True
 
+    def test_a_former_and_an_erased_member_stay_in_the_merged_record(self, client, auth_headers):
+        # A bug that happened (#406): the merge folded only active assignments
+        # and deleted every source one, so a former member's and an erased
+        # member's rows moved to a project with no assignment for them and
+        # left the record an employer may be bound to keep.
+        from beats.infrastructure.erasure import erase_account
+
+        org = _create_org(client, auth_headers)
+        platform = _org_project(client, auth_headers, org["id"], name="Platform")
+        legacy = _org_project(client, auth_headers, org["id"], name="Legacy")
+        former, gone = _new_user(), _new_user()
+        former_id = _member_of(client, auth_headers, org["id"], former)
+        gone_id = _member_of(client, auth_headers, org["id"], gone)
+        for uid in (former_id, gone_id):
+            _assign(client, auth_headers, org["id"], legacy["id"], uid)
+        _beat(client, former, legacy["id"], "2026-03-03T09:00:00", 60)
+        _beat(client, gone, legacy["id"], "2026-03-04T09:00:00", 120)
+        # The former member's own week plans the project.
+        planned = client.put(
+            "/api/plans/weekly",
+            json={
+                "week_of": "2026-03-02",
+                "budgets": [{"project_id": legacy["id"], "planned_hours": 8}],
+            },
+            headers=former,
+        )
+        assert planned.status_code == 200, planned.text
+        removed = client.delete(
+            f"/api/organisations/{org['id']}/members/{former_id}", headers=auth_headers
+        )
+        assert removed.status_code in (200, 204), removed.text
+
+        async def erase():
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                await erase_account(client_[os.environ.get("DB_NAME", "beats_test")], gone_id)
+            finally:
+                await client_.close()
+
+        asyncio.run(erase())
+        before = {
+            r["user_id"]: r
+            for r in _members_of_record(_record(client, auth_headers, org["id"]), legacy["id"])
+        }
+        assert len(before) == 2
+
+        merged = self._merge(client, auth_headers, org["id"], legacy["id"], platform["id"])
+        assert merged.status_code == 200, merged.text
+        after = {
+            r["user_id"]: r
+            for r in _members_of_record(_record(client, auth_headers, org["id"]), platform["id"])
+        }
+        assert set(after) == set(before)
+        assert [e["day"] for e in after[former_id]["entries"]] == ["2026-03-03"]
+        assert after[former_id]["active"] is False
+        [stone] = [uid for uid in after if uid.startswith("erased:")]
+        assert [e["day"] for e in after[stone]["entries"]] == ["2026-03-04"]
+        # The former member's own plan follows the rows to the surviving project.
+        plan = client.get("/api/plans/weekly?week_of=2026-03-02", headers=former).json()
+        assert [b["project_id"] for b in plan["budgets"]] == [platform["id"]]
+
     def test_a_frozen_month_refuses_the_merge(self, client, auth_headers):
         member = _new_user()
         org, employed, _member_id = _employed(client, auth_headers, member)
