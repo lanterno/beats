@@ -223,7 +223,7 @@ async def list_invitations(user_id: CurrentUserId, service: OrganisationServiceD
     """The open invitations addressed to the caller's own email address —
     who has invited them, and as what. Without the token: an address is
     not verified at sign-up, so the way in stays the link the inviter passed
-    on, and `/join/{token}` checks it against the address as well."""
+    on, and `POST /join` checks it against the address as well."""
     return [
         InvitationResponse(
             role=invite.role,

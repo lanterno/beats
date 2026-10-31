@@ -483,7 +483,8 @@ class MongoOrganisationStore:
         members' own beats, absences and balance adjustments — stamps
         untouched, so what was the organisation's record stays exactly that
         and what was private stays private — and the organisation's absence
-        requests. The one write besides erasure that crosses user scopes,
+        requests. One of the few writes that cross user scopes (with
+        erasure, the deletion's hand-back and wipe, and the retention purge),
         made only by the merge, after the service has checked both projects
         are the same organisation's."""
         moved: dict[str, int] = {}

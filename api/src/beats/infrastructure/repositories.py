@@ -452,7 +452,7 @@ class MongoProjectRepository(MongoStore[Project], ProjectRepository):
     organisation's project document carries the organisation's fields and
     no `user_id`; the member's assignment carries the personal fields
     (`PERSONAL_FIELDS`); a read merges the two into one `Project`, and a
-    write splits them again. The seventeen other repositories are untouched:
+    write splits them again. The other user-scoped repositories are untouched:
     a beat on an organisation's project is still the member's own document.
 
     The assignments are read once per repository, so per request, and the

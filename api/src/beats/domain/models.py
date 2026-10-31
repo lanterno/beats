@@ -1709,10 +1709,12 @@ class OrgAssignment(TzNormalizedModel):
 
 
 class OrgAuditEvent(TzNormalizedModel):
-    """One thing that happened in an organisation, written as it happens and
-    read by nothing yet: membership, roles, projects, assignments, a
-    connected project, an erased account. Kept from the start because it is
-    cheap to write and impossible to backfill (the roadmap's stage 4 note)."""
+    """One thing that happened in an organisation, written as it happens:
+    membership, roles, projects, assignments, a connected project, an erased
+    account, and from stage 3 on contracts, requests, timesheets, entered
+    time, teams, merges, closing and retention. Kept from stage 2, before
+    anything read it, because it is cheap to write and impossible to
+    backfill; owners and admins read it (`GET /{id}/audit`)."""
 
     id: str | None = None
     organisation_id: str
