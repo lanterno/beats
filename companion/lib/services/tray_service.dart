@@ -79,6 +79,24 @@ String menuBarTitle(MenuBarShows shows, {String? project, Duration? elapsed}) {
   };
 }
 
+/// What the tray item reads off macOS: the same preference the Mac's status
+/// item follows, in the tray's own stopwatch format ("24:17  Northwind").
+/// Null when nothing runs, and when the preference asks for the icon alone —
+/// either way there is no label, which is what clears it.
+///
+/// Separate from [menuBarTitle] because the two items are formatted
+/// differently on purpose (see [formatTrayElapsed]), and because what this
+/// returns is what the dedupe in `_tick` compares: a title formatted one way
+/// and gated on another only refreshes when the other changes.
+String? trayTitle(MenuBarShows shows, {String? project, Duration? elapsed}) {
+  if (project == null || elapsed == null) return null;
+  return switch (shows) {
+    MenuBarShows.timeAndProject => '${formatTrayElapsed(elapsed)}  $project',
+    MenuBarShows.time => formatTrayElapsed(elapsed),
+    MenuBarShows.icon => null,
+  };
+}
+
 /// The menu bar item: the running timer's time and project, an icon that
 /// carries the project's colour and the last 90 minutes of flow, and the
 /// Dock badge. It follows the window's [TimerController] rather than
@@ -96,15 +114,11 @@ class TrayService {
   final VoidCallback onShowWindow;
 
   final bool _native = Platform.isMacOS;
+  // Held for as long as the item should be shown: a TrayIcon wrapper that
+  // is garbage-collected releases its native handle, and that takes the
+  // icon out of the tray. The menu below it needs no such field — see
+  // _updateMenu.
   tray.TrayIcon? _tray;
-  // The menu in the tray and its items, held on purpose: a wrapper that is
-  // garbage-collected releases its native handle, which would strip the
-  // click listeners (and the icon, were _tray not a field) mid-session.
-  // Never read — being referenced is their whole job.
-  // ignore: unused_field
-  tray.Menu? _menu;
-  // ignore: unused_field
-  List<tray.MenuItem> _menuItems = const [];
   final TrayIconRenderer _iconRenderer = TrayIconRenderer();
   Prefs? _prefs;
   Timer? _flowTimer;
@@ -216,11 +230,18 @@ class TrayService {
   void _tick() {
     final running = timer.running;
     final elapsed = running ? timer.elapsed : null;
-    final title = menuBarTitle(
-      _prefs?.menuBarShows ?? MenuBarShows.timeAndProject,
-      project: timer.current?.name,
-      elapsed: elapsed,
-    );
+    final shows = _prefs?.menuBarShows ?? MenuBarShows.timeAndProject;
+    final project = timer.current?.name;
+    // The string this platform actually sends, so the dedupe below gates on
+    // what it shows. It used to gate on the Mac's title whichever platform
+    // this was, and off macOS the item was set to a different string: the
+    // tray's MM:SS refreshed only when the Mac's minute-granularity title
+    // changed, so its seconds stood still, and the Settings preference did
+    // nothing there. The MM:SS now ticks, which is a title write a second
+    // while a timer runs (ignored on Windows, a label update on Linux).
+    final title = _native
+        ? menuBarTitle(shows, project: project, elapsed: elapsed)
+        : trayTitle(shows, project: project, elapsed: elapsed) ?? '';
     if (title != _lastTitle) {
       _lastTitle = title;
       if (_native) {
@@ -232,7 +253,8 @@ class TrayService {
           tooltip: running ? '$appName — ${timer.current!.name}' : appName,
         );
       } else {
-        _tray?.setTitle(running ? '${formatTrayElapsed(elapsed!)}  ${timer.current!.name}' : '');
+        // null clears the label; an empty string would set an empty one.
+        _tray?.setTitle(title.isEmpty ? null : title);
       }
     }
 
@@ -263,27 +285,28 @@ class TrayService {
   }
 
   /// The tray menu off macOS: what runs and Stop, or a Start submenu.
+  ///
+  /// Nothing here is held in a field, unlike the tray icon: the native side
+  /// owns the whole chain by `shared_ptr` — the icon holds the menu, the
+  /// menu holds its items, an item holds its submenu — and a listener's
+  /// callable is retained with the item it was registered on. So a Dart
+  /// wrapper collected after this returns takes nothing visible with it,
+  /// and the menu this replaces is released exactly when the icon lets go
+  /// of it.
   Future<void> _updateMenu() async {
     final icon = _tray;
     if (icon == null) return;
     final menu = tray.Menu.create();
     if (menu == null) return;
-    final kept = <tray.MenuItem>[];
-
-    void add(tray.MenuItem? item) {
-      if (item == null) return;
-      menu.addItem(item);
-      kept.add(item);
-    }
 
     final current = timer.current;
     if (current != null) {
-      add(_item('● ${current.name} — ${formatTrayElapsed(timer.elapsed)}'));
+      menu.addItem(_item('● ${current.name} — ${formatTrayElapsed(timer.elapsed)}'));
       menu.addSeparator();
-      add(_item('■  Stop Timer', onClick: () => timer.stop()));
+      menu.addItem(_item('■  Stop Timer', onClick: () => timer.stop()));
       menu.addSeparator();
     } else {
-      add(_item('No timer running'));
+      menu.addItem(_item('No timer running'));
       menu.addSeparator();
       final projects = timer.recentFirst.take(12).toList();
       if (projects.isNotEmpty) {
@@ -294,28 +317,20 @@ class TrayService {
         final submenu = tray.Menu.create();
         if (start != null && submenu != null) {
           for (final p in projects) {
-            final entry = _item(p.name, onClick: () => timer.startProject(p));
-            if (entry != null) {
-              submenu.addItem(entry);
-              kept.add(entry);
-            }
+            submenu.addItem(_item(p.name, onClick: () => timer.startProject(p)));
           }
           start.submenu = submenu;
-          add(start);
+          menu.addItem(start);
           menu.addSeparator();
         }
       }
     }
 
-    add(_item('Open $appName', onClick: () => onShowWindow()));
+    menu.addItem(_item('Open $appName', onClick: () => onShowWindow()));
     menu.addSeparator();
-    add(_item('Quit', onClick: () => exit(0)));
+    menu.addItem(_item('Quit', onClick: () => exit(0)));
 
     icon.setContextMenu(menu);
-    // Swap the kept references only once the new menu is in the tray, so the
-    // old one's listeners outlive it rather than the other way round.
-    _menu = menu;
-    _menuItems = kept;
   }
 
   void dispose() {
@@ -327,8 +342,6 @@ class TrayService {
     } else {
       _tray?.dispose();
       _tray = null;
-      _menu = null;
-      _menuItems = const [];
     }
     MacAmbient.setDockBadge(null);
   }
