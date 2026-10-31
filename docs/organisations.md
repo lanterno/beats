@@ -435,7 +435,11 @@ what only matters past a handful of people. Decisions 21–30:
     employer's side is the silent recomputation this decision refuses. Each
     write sends the whole contract beside `managed`, so
     `keep_unsent_contract_fields` holds the holiday lists and the entitlement
-    that only the member's own form edits.
+    that only the member's own form edits. The employer's write runs the
+    member's own checks too (#412): a contract goes on a day job only (409
+    `NOT_A_DAY_JOB`), and the member's balance adjustments are reconciled
+    against the new terms (`reconcile_adjustments`, one function for both
+    writers) — a first day moved later past one is refused.
 22. **An absence on a managed assignment is a request.** The member asks
     (`org_absence_requests` — date, type, half day, and a note *addressed to
     the decider*, which the record never shows); an owner, admin or scoped
