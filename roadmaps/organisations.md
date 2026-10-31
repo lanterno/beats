@@ -2,9 +2,13 @@
 
 The epic is GitHub issue #353. Four stages of it shipped, and so have
 fourteen of the sixteen bugs the 2026-10-31 audit found. What is left is
-**two questions for the owner, seven items that wait on something outside
-the code, and a back office**, and every one of them is written out in full
-below.
+**two questions for the owner and five items that wait on something outside
+the code**, each written out in full below.
+
+Two things that used to live here now have roadmaps of their own, because
+neither is an organisations feature: SSO per organisation and SCIM
+([organisation_sso.md](organisation_sso.md)), and the operator's back
+office ([backoffice.md](backoffice.md)).
 
 **This file is meant to be enough on its own.** Whoever picks it up may have
 no access to GitHub. So unlike the other roadmaps, which link to issues and
@@ -122,7 +126,6 @@ Most important first.
 |---|------|---------|-------------------|
 | 405 | The two contract writes skip the approved-month lock | api | **Ask the owner first**; the rest of #405 shipped |
 | 422 | PRIVACY.md disagrees with the code | docs | Drafted; **the owner reviews it**, and one point in it is theirs to decide |
-| 424 | A back office for the operator | api, ui | When the owner starts it |
 | 340–352 | The seven waiting items | — | Each when its blocker clears; see the section |
 
 Fourteen bugs found in the 2026-10-31 audit have shipped and their sections
@@ -199,16 +202,19 @@ Settle it, then make the code or the page match and delete this section.
 None of these should be started until its blocker clears. Each section says
 what blocks it, when to start, and what it must not do.
 
+Two items left this file on 2026-10-31 and have roadmaps of their own: SSO
+per organisation and SCIM ([organisation_sso.md](organisation_sso.md)), and
+the operator's back office ([backoffice.md](backoffice.md)) — a back office
+is not an organisations feature, and filing it here was shaping it around
+one view.
+
 | # | What | Blocked by | Start when |
 |---|------|-----------|------------|
 | 340 | Money as a permission of its own | Nothing external — there is no organisation money to guard yet | Organisation-side money is designed |
 | 341 | Verified email domains for joining | The API sends no email | Email infrastructure exists |
-| 342 | SSO per organisation, optionally required | Nothing — the shape is decided | A customer requires it |
-| 343 | SCIM provisioning | #342 | SSO per organisation ships |
 | 345 | Per-seat billing | No payment machinery anywhere in the codebase | The end of the beta is decided; then as its own project |
 | 351 | A digest or push for what is missing or waiting | No channel: no email, no server push (#298) | Either channel exists |
 | 352 | DPA, works-council sheet, DPIA template | Counsel review | A customer asks, or counsel is engaged |
-| 424 | A back office for the operator | Nothing — not started | The owner starts it |
 
 ### #340 — Money as a permission
 
@@ -235,50 +241,6 @@ Blocked on email infrastructure the API deliberately does not have. Without
 verification a domain rule hands memberships to whoever registers an address
 — the exact hole decision 11 closed for invitations. Email first, then this;
 building it the other way round reopens the hole on purpose.
-
-### #342 — SSO per organisation
-
-**The shape was decided 2026-10-28.** It is built when a customer requires
-it, not before — but it is designed, so this is a build task, not a
-decision. SSO is included in the paid seat price, not an add-on
-([docs/pricing.md](../docs/pricing.md)).
-
-Not by stamping the door on the session: sessions stay door-blind, which
-keeps the promise that nothing downstream knows which door was used (see the
-log line in #422). Instead, a **per-organisation attestation**, the way
-GitHub gates an organisation behind SAML:
-
-- An organisation that requires SSO configures its own OpenID Connect
-  provider. This is a scoping layer over `api/src/beats/auth/oidc.py`, which
-  is built and tested already — discovery, code exchange with PKCE and a
-  nonce, every ID-token check — plus `auth/sso_accounts.py` (identities
-  keyed on issuer + subject, `allow_signup`) and `src/fake_idp.py`, a
-  scripted provider with real RS256 keys to test against. Provider
-  configuration is deployment-wide today (`OIDC_PROVIDERS` in
-  `settings.py`), and `OrgMembership` has no attestation fields. **It is not
-  a new protocol.**
-- Entering that organisation's slice needs a fresh verification with *that*
-  provider, stored on the membership: verified at T, expiring at T+N. It
-  shows on the "What Acme can see" page and is audited.
-- The person's passkey still opens their personal account and every other
-  organisation — rule 1.
-- Enforce it as a dependency on the organisation router, in one place, like
-  the role checks. Never a flag per route; that is #340's lesson borrowed
-  early.
-- **Change PRIVACY.md first, and narrowly**: an organisation that requires
-  SSO sees when you last verified with its provider. That is not "we record
-  how you log in", and the wording matters.
-
-Open at build time: whether a lapsed attestation blocks the organisation's
-routes alone, or also starting new timers on its projects. Existing data is
-never blocked. Ask the owner.
-
-### #343 — SCIM provisioning
-
-Provision and deprovision members from an identity provider. Its own protocol
-surface and credential story, keyed on the same per-organisation provider as
-#342, so it comes after it. It belongs to a later, sales-led enterprise tier,
-not the seat price ([docs/pricing.md](../docs/pricing.md)).
 
 ### #345 — Per-seat billing
 
@@ -327,20 +289,6 @@ Re-read them against `docs/organisations.md` whenever a decision changes
 what an organisation sees (they were last aligned for decision 32). The
 works-council sheet's whole point is that every sentence can be checked.
 
-### #424 — A back office for the operator
-
-Decision 31: an organisation whose last owner's account is erased stays as
-it is, run by its admins, and noticing it is the operator's job. That needs
-somewhere to notice it. The first thing a back office shows is
-**organisations with no owner**. Until it exists, the only trace is the
-`account.erased` event in that organisation's audit log.
-
-A cheap interim, if the owner wants one first: `api/scripts/erase_account.py`
-prints which organisations the erasure leaves without an owner (the operator
-is the one running it). What a back office is — pages behind an operator
-role, a CLI, or both — and what else belongs in it are the owner's call.
-Keep it out of `/api/organisations` and away from every device prefix.
-
 ---
 
 ## Related, outside the epic
@@ -373,7 +321,8 @@ a fix.
   control (decision 32).
 - A decider may approve their own timesheet and absence request, for now
   (decision 33).
-- The price (`docs/pricing.md`), and the SSO shape (#342 above).
+- The price (`docs/pricing.md`), and the SSO shape
+  ([organisation_sso.md](organisation_sso.md)).
 
 ---
 

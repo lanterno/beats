@@ -591,7 +591,8 @@ Three questions the 2026-10-31 audit raised, answered the same day.
     membership ends like any other erasure, and the organisation runs on
     under its admins. Owner-only acts — granting the owner role, closing,
     deleting — wait until someone acts on it. Noticing an organisation with
-    no owner is the operator's job, in a back office (#424), not something
+    no owner is the operator's job, in a back office (#424,
+    [roadmaps/backoffice.md](../roadmaps/backoffice.md)), not something
     the product decides on the organisation's behalf. (The last-owner check of
     decisions 10 and 20 still guards leaving, removal and demotion: those
     are the organisation's own acts, an erasure is the person's.)
@@ -626,6 +627,14 @@ of its own (#340), verified email domains (#341), SSO per organisation
 than omissions, and what each waits for — including the attestation shape
 settled for #342 on 2026-10-28, and the pricing already decided for #345 — is
 in [roadmaps/organisations.md](../roadmaps/organisations.md), with the rest of
-what is not built. The sales and legal material of the epic's section 7
+what is not built — except #342 and #343, which have a roadmap of their own
+in [roadmaps/organisation_sso.md](../roadmaps/organisation_sso.md), the
+attestation shape settled for #342 on 2026-10-28 included. The sales and
+legal material of the epic's section 7
 (#352) is drafted in [roadmaps/legal/](../roadmaps/legal/) and unreviewed by
 counsel, and nothing there reaches a customer first.
+
+The operator's back office of decision 31 is
+[roadmaps/backoffice.md](../roadmaps/backoffice.md): it is not an
+organisations feature, and noticing an organisation with no owner is only
+the first thing it owes.
