@@ -26,7 +26,15 @@ What survives, and in what shape:
   `erased`.
 - **The audit log**, and every other column in the organisation that names
   the person — who created it, who made an invite, who assigned, who decided
-  a request: the organisation's, so they stay; the id becomes the tombstone.
+  a request, who entered a session for a member (`entered_by`, decision 24)
+  and who took each step of a timesheet's history: the organisation's, so
+  they stay; the id becomes the tombstone. The last two were missed until
+  #410, and kept the raw id.
+
+A session this person entered for a member who has since moved it to a
+personal project is the exception the tombstone cannot cover: it carries no
+stamp, so no organisation's stone fits it. Its `entered_by` becomes the
+literal `erased`, which is all there is left to say about who typed it.
 
 Everything else keyed to the user — personal projects and their beats, flow
 windows, biometrics, the coach and its memory, clients and billing, devices,
@@ -169,6 +177,19 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
         await db.org_join_requests.update_many(
             {"organisation_id": org_id, "decided_by": user_id}, {"$set": {"decided_by": stone}}
         )
+        # A decider who logged time for others (decision 24) is named on
+        # those members' beats, and every step of a sheet's history names
+        # who took it. Both are columns in the organisation naming this
+        # person, and both kept their raw id until #410.
+        await db.timeLogs.update_many(
+            {"organisation_id": org_id, "entered_by": user_id},
+            {"$set": {"entered_by": stone}},
+        )
+        await db.org_timesheets.update_many(
+            {"organisation_id": org_id, "history.by": user_id},
+            {"$set": {"history.$[e].by": stone}},
+            array_filters=[{"e.by": user_id}],
+        )
         await db.org_audit.update_many(
             {"organisation_id": org_id, "actor_user_id": user_id},
             {"$set": {"actor_user_id": stone}},
@@ -200,6 +221,11 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
     if requests.deleted_count:
         deleted["org_join_requests"] = deleted.get("org_join_requests", 0) + requests.deleted_count
     await db.org_invites.update_many({"accepted_by": user_id}, {"$unset": {"accepted_by": ""}})
+    # A beat this person entered for a member who has since moved it to a
+    # personal project carries no stamp, so no organisation's tombstone
+    # fits it. It is nobody's record now, and the only thing left to say
+    # about who typed it is that they are gone.
+    await db.timeLogs.update_many({"entered_by": user_id}, {"$set": {"entered_by": "erased"}})
     user: dict[str, Any] | None = None
     if ObjectId.is_valid(user_id):
         user = await db.users.find_one_and_delete({"_id": ObjectId(user_id)})
