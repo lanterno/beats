@@ -144,7 +144,10 @@ Then the model's own:
 9. **Leaving and removal end the assignments and move nothing.** The
    membership and every active assignment get an end instant; the project
    is then not found through the member's routes — which is how tracking
-   stops, on every surface, with no new rule — and leaves their list. The
+   stops, on every surface, with no new rule — and leaves their list, and
+   the person comes out of every team (#411), so a rejoin or a
+   re-invitation as a manager carries no old scope with it and a manager's
+   narrowed record no longer lists the former member. The
    stamped rows stay: the organisation keeps its record under `/record`, and
    the person keeps their own rows, read through their own user-scoped
    repository, as the read-only "Acme (left)" archive with a CSV. Rejoining
