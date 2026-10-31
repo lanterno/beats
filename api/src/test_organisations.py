@@ -1768,6 +1768,89 @@ class TestRetention:
         assert kept.years == 10
         assert not any(kept.counts.values()), "a five-year-old Polish record is still owed"
 
+    def test_a_spent_tombstone_goes_and_an_owed_one_stays(self, client, auth_headers):
+        """#408: erasure keeps a former member's name, address and contract
+        under a tombstone so the record still groups their rows. The purge
+        took the rows and left those behind for ever — the most personal
+        data in the organisation, kept for a record that no longer exists.
+        A tombstone with a row still inside the period keeps everything."""
+        org = _create_org(client, auth_headers)
+        project = _org_project(client, auth_headers, org["id"])
+        db = _db()
+
+        def _stone(name: str, day: str) -> str:
+            """One erased member, their membership, assignment and one beat."""
+            stone = f"erased:{name}"
+            db.org_members.insert_one(
+                {
+                    "organisation_id": org["id"],
+                    "user_id": stone,
+                    "role": "member",
+                    "name": "A Person",
+                    "email": "person@example.com",
+                    "left_reason": "erased",
+                }
+            )
+            db.org_assignments.insert_one(
+                {
+                    "organisation_id": org["id"],
+                    "project_id": project["id"],
+                    "user_id": stone,
+                    "shared_from": "2019-01-01T00:00:00+00:00",
+                    "contract": {"terms": FULL_TIME},
+                }
+            )
+            db.timeLogs.insert_one(
+                {
+                    "user_id": stone,
+                    "project_id": project["id"],
+                    "organisation_id": org["id"],
+                    "start": datetime.fromisoformat(f"{day}T09:00:00").replace(tzinfo=UTC),
+                    "end": datetime.fromisoformat(f"{day}T10:00:00").replace(tzinfo=UTC),
+                    "tags": [],
+                }
+            )
+            return stone
+
+        spent = _stone("spent", "2020-01-10")
+        owed = _stone("owed", "2026-03-03")
+
+        counted = self._counts(self._purge(), org["id"])
+        assert counted.counts["tombstones_deleted"] == 1, "a dry run counts what an apply takes"
+
+        self._purge(apply=True)
+        assert db.org_members.count_documents({"user_id": spent}) == 0
+        assert db.org_assignments.count_documents({"user_id": spent}) == 0
+        # The one still owed keeps its name, its address and its contract.
+        assert db.org_members.count_documents({"user_id": owed}) == 1
+        assert db.org_assignments.find_one({"user_id": owed})["contract"] is not None
+
+    def test_a_decided_absence_request_expires_with_the_record(self, client, auth_headers):
+        """Decision 30 does not list them; they expire on the same cutoff as
+        the absence they asked for, which is the record itself."""
+        org = _create_org(client, auth_headers)
+        project = _org_project(client, auth_headers, org["id"])
+        db = _db()
+        for date_, decided in (("2020-01-10", True), ("2026-03-03", True), ("2020-02-10", False)):
+            db.org_absence_requests.insert_one(
+                {
+                    "organisation_id": org["id"],
+                    "project_id": project["id"],
+                    "user_id": "someone",
+                    "date": date_,
+                    "type": "vacation",
+                    "status": "approved" if decided else "pending",
+                    "decided_at": "2020-01-11T00:00:00+00:00" if decided else None,
+                }
+            )
+
+        self._purge(apply=True)
+        left = sorted(
+            r["date"] for r in db.org_absence_requests.find({"organisation_id": org["id"]})
+        )
+        # The old decided one goes; the young one and the one still waiting stay.
+        assert left == ["2020-02-10", "2026-03-03"]
+
     def test_a_purge_does_not_take_the_balance_with_the_stamps(self, client, auth_headers):
         """A bug that happened (#409): the purge unstamps a living member's
         old rows, and `has_unshared` asked only whether an unstamped row
