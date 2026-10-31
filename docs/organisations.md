@@ -471,9 +471,19 @@ what only matters past a handful of people. Decisions 21–30:
     changes with a comment. From approval on, every write dated inside the
     month answers 409 `PERIOD_APPROVED`: beat create, edit (either end of
     the move), delete, a back-dated timer start, absences, adjustments, and
-    the employer's own entries alike (`MongoPeriodLocks`, checked in the
-    member-side services, and the employer's own check in
-    `EmploymentService`).
+    the employer's own entries alike, and the removal of an absence or a
+    balance adjustment, and a session arriving in a backup — which the
+    import reports under `skipped` rather than writing
+    (`MongoPeriodLocks`, checked in the member-side services, and the
+    employer's own check in `EmploymentService`).
+    **A contract write is not dated inside a month** and is not refused: it
+    is a list of terms spanning all of them, so the lock has nothing to
+    catch. The frozen figures still never move — they are stored — but a
+    contract changed after an approval leaves the live ledger computing
+    something else for that month. Marking the approval when that happens is
+    designed in [roadmaps/organisations.md](../roadmaps/organisations.md)
+    (#405, decided 2026-10-31) and is not built yet; until it is, the
+    divergence is silent.
     Approval itself refuses while a stamped timer still runs inside the
     month — its hours are in no figure yet. Reopening needs a reason, is
     recorded in the sheet's history and the audit log, lifts the lock and

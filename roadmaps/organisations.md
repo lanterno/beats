@@ -141,33 +141,143 @@ decision. What they changed is in `docs/organisations.md`; what is left of
 Found on 2026-10-31 by checking `docs/organisations.md` against the code.
 Each is a fix to something already decided, not new scope.
 
-### #405 — A contract write can move an approved month's expectation
+### #405 — A contract write marks the approvals it moves
 
-**What's wrong.** Decision 23: once a month is approved, every write dated
-inside it answers 409 `PERIOD_APPROVED`. Timesheets don't need a managed
-contract (`EmploymentService.submit_timesheet`), so an approved month can
-exist on an assignment the member still writes. Five writes skipped the
-lock; three are fixed (removing an absence, removing a balance adjustment,
-and a backup's beat, which is now reported under `skipped`). Two are left,
-and they need a rule nobody has decided:
+**Decided 2026-10-31 by the owner: a contract write is never refused for
+an approved month. The approval is marked instead.** Refusing would make a
+term the employer got wrong unfixable once any month is approved, without
+first reopening every approved month — the wrong default for what is
+usually an administrative correction. And the frozen figures do not move:
+they are stored. What changes is that the live ledger would now compute
+something else. That is a fact *about the approval*, so the approval is
+where it belongs.
 
-- the member's contract write on an unmanaged assignment
-  (`ProjectService.update_project`, `replace_contract`, and the adjustment
-  purge `reconcile_adjustments` triggers);
+Write it into decision 23 when it is built, not before — nothing here has
+shipped.
+
+**What already holds.** Decision 23's lock refuses every write dated inside
+an approved month. Five writes skipped it; three are fixed (removing an
+absence, removing a balance adjustment, and a backup's beat, which the
+import now reports under `skipped` as `PERIOD_APPROVED`). The two left are
+contract writes, and a contract write is not dated inside a month at all —
+it is a list of terms spanning all of them, which is why the lock never
+caught it and why refusing it is the wrong instrument:
+
+- the member's, on an unmanaged assignment (`ProjectService.update_project`
+  and `replace_contract`, and the adjustment purge `reconcile_adjustments`
+  triggers);
 - the employer's (`EmploymentService.set_contract`).
 
-A contract change moves every month's expectation at once. The frozen
-figure itself never moves — it is stored — but the live ledger would then
-disagree with an approved month.
+#### The model extension
 
-**Ask the owner first.** The candidate rule: refuse a contract write when,
-for any approved month on that assignment, the month's expected hours or
-the adjustments counted in it would differ before and after the write.
-Compute it with the ledger pass the frozen month was taken from. Record the
-answer in decision 23.
+**1. An event is not a status.** `TimesheetEvent.action` is typed
+`TimesheetStatus` today, so the history cannot say anything a state cannot.
+Widen it to a `TimesheetAction` StrEnum carrying the four existing strings
+unchanged (`submitted`, `approved`, `changes_requested`, `reopened`) plus
+`terms_changed`. Stored documents keep reading, and `status` keeps its own
+narrower enum: a state the sheet is in and a thing that happened to it are
+different sets, and collapsing them is what forces the next awkward field.
 
-**Test.** Approve a month, then assert a contract write that moves its
-expectation is refused and one that does not is taken.
+**2. `OrgTimesheet` gains `superseded_at: datetime | None` and
+`superseded_by: str | None`** — when the terms behind an approved month
+last moved, and who moved them. Null on a sheet whose terms still stand.
+
+**`status` stays `approved`.** Making this a status value would be the
+tempting shortcut and is a trap: `MongoPeriodLocks` keys the lock on
+`status == approved`, so a `superseded` status would **silently unlock the
+month** — the exact opposite of what is wanted. The month is still
+approved, still locked, and its frozen figures are still the record; what
+is in doubt is only whether a decider would approve the same figures today.
+
+**3. The sheet's `history` gains a `terms_changed` event** at the same
+moment, with the same `at` and `by`. The sheet then reads in order —
+submitted, approved, terms changed — which is what a works council asks to
+see, and `superseded_at` is the short answer to "is this approval still
+current?" while the history is the long one.
+
+A reopen already drops `frozen`; it drops these too, and the re-approval
+freezes against the terms now in force. So the way back is the one that
+already exists (decision 23), and nothing new has to be explained.
+
+#### Which sheets a write marks
+
+Not every approved sheet on the assignment: a term added for next year
+moves nothing already approved, and marking everything would train people
+to ignore the mark. One pure function decides it:
+
+```
+contract_diverges_from(previous: Contract | None, new: Contract | None) -> date | None
+```
+
+the earliest day on which the two contracts can produce a different figure,
+or None when they cannot. Its cases, each a test:
+
+- **`opening_balance_hours`** changed → the contract's first day. Every
+  month's `balance_end` moves even where its `expected` does not.
+- **`terms`** changed → the earliest `effective_from` that is in one list
+  and not the other, or whose fields differ.
+- **`ended_on`** changed → the earlier of the two, or the one that is set
+  when the other is None.
+- **`holiday_country` / `holiday_subdivision`** changed → the contract's
+  first day. Which holidays actually moved cannot be known without walking
+  the calendar, and erring early marks more approvals rather than fewer.
+- **`company_holidays` / `holidays_not_given`** changed → the earliest date
+  in the symmetric difference. A company day whose *name* changed and whose
+  date did not moves no figure.
+- **`vacation`** changed → **nothing**. The entitlement is days of leave
+  left; no month's `worked`, `expected` or `balance_end` reads it.
+- the contract **arriving or going** → its first day, or the previous one's.
+
+Then every approved sheet whose month *ends* on or after that day is
+marked — the month containing the divergence day is affected too, not only
+the months wholly after it.
+
+#### Where it hooks in
+
+Both writes, through one path, because decision 21 says one set of rules
+validates a contract whoever writes it — and because the member's own write
+marking the employer's approval is the whole point: it turns a silent
+divergence into a visible one.
+
+Both callers already hold the pair the helper needs: the member's path
+takes `previous_contract` as a required keyword, and the employer's reads
+`assignment.contract`.
+
+The member's path writes through `ProjectService`, which holds no
+organisation store and must not gain one. Give it **a narrow port in the
+shape of `PeriodLocks`, which it already holds** — one method, "mark the
+approved sheets on this project for this member from this day" — so a
+service that writes projects still cannot read another member.
+
+#### What it is not
+
+It is **not a second stored derived figure**. The mark says *that* the
+terms moved, never what the month would come to now; recomputing that is
+the ledger's job, done when a decider opens the sheet. The frozen month
+stays the only stored derived working-time figure, which decision 23 calls
+the one thing stage 3 broke on purpose and the hardest to migrate out of.
+
+#### Test
+
+- **`contract_diverges_from` on its interesting inputs**, pure, beside
+  `test_contracts.py`: a term appended after every approved month (None), a
+  term edited in the middle, an opening balance moved, a region swapped, a
+  company holiday renamed but not moved (None), a vacation entitlement
+  changed (None), a contract removed.
+- **The HTTP contract**, in `test_organisations.py`: approve a month,
+  change a term inside it, and assert the sheet is still `approved`, still
+  locked, and carries `superseded_at` with a `terms_changed` history entry;
+  that a term added after the month leaves it untouched; and that a reopen
+  and re-approval clear the mark.
+
+#### The UI, when the API is there
+
+The decider's Timesheets tab marks a superseded approval and says what to
+do about it (reopen, or let it stand on the terms in force at the time);
+the member's own timesheet list says the same of their own months. Neither
+shows a recomputed figure next to the frozen one without the decider asking
+for it — two numbers side by side is the confusion decision 23 exists to
+avoid.
 
 ### #422 — PRIVACY.md disagrees with the code on organisations and single sign-on
 
