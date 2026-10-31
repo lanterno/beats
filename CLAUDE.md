@@ -351,7 +351,9 @@ nothing.
   assignment's contract (member writes answer 409 `CONTRACT_MANAGED`; absences become
   requests a decider approves), a submitted month is approved into a stored
   `FrozenMonth` — the one stored derived working-time figure, by decision — after which
-  every write dated inside it answers 409 `PERIOD_APPROVED` until a recorded reopen; teams
+  every write dated inside it answers 409 `PERIOD_APPROVED` until a recorded reopen, and a
+  contract write, which is dated inside no month, marks the approvals it moves
+  (`superseded_at`, `contract_diverges_from`) rather than being refused; teams
   scope the `manager` role, `viewer` reads the record only, and the audit log is readable
   by admins. Roles are owner ≥ admin ≥ manager ≥ viewer ≥ member, with the real rules on
   the role's capabilities (`administers`, `decides`, `reads_record`);

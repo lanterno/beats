@@ -278,8 +278,10 @@ New collections, none scoped by `user_id`:
   `user_id`, `month` (its 1st, in the organisation's timezone), `status`,
   `submitted_at`, `decided_at`, `decided_by`, `comment`, `frozen` (the
   `FrozenMonth`: `worked`, `expected`, `balance_end`, `entries`,
-  `absence_days`) and `history` (each submit, decision and reopen: when, by
-  whom, the comment). Unique on `(project_id, user_id, month)`.
+  `absence_days`), `superseded_at` and `superseded_by` (set while the
+  contract behind an approved month has moved since, decision 23) and
+  `history` (each submit, decision, reopen and terms change: when, by whom,
+  the comment). Unique on `(project_id, user_id, month)`.
 
 Changed:
 
@@ -476,14 +478,26 @@ what only matters past a handful of people. Decisions 21–30:
     import reports under `skipped` rather than writing
     (`MongoPeriodLocks`, checked in the member-side services, and the
     employer's own check in `EmploymentService`).
-    **A contract write is not dated inside a month** and is not refused: it
-    is a list of terms spanning all of them, so the lock has nothing to
-    catch. The frozen figures still never move — they are stored — but a
-    contract changed after an approval leaves the live ledger computing
-    something else for that month. Marking the approval when that happens is
-    designed in [roadmaps/organisations.md](../roadmaps/organisations.md)
-    (#405, decided 2026-10-31) and is not built yet; until it is, the
-    divergence is silent.
+    **A contract write is not dated inside a month and is never refused**
+    (decided 2026-10-31): it is a list of terms spanning all of them, and a
+    term the employer got wrong has to stay fixable without reopening every
+    approved month first. It **marks the approvals it moves** instead. The
+    sheet gains `superseded_at` and `superseded_by`, its history a
+    `terms_changed` step — so it reads submitted, approved, terms changed —
+    and `status` stays `approved`: the month is still locked, `frozen` is
+    still the record, and the lock keys on that status, so a status value
+    would have unlocked it. Which sheets a write marks is
+    `contract_diverges_from` (`domain/contracts.py`): the earliest day the
+    two contracts can disagree on a figure, with an answer per field, so a
+    term added for next year marks nothing already approved and a company
+    holiday renamed but not moved marks nothing. Both writes go through it —
+    the employer's through the store, the member's on an unmanaged
+    assignment through the one-method `ApprovalMarks` port
+    `MongoPeriodLocks` implements, so `ProjectService` gains that write and
+    nothing wider. No recomputed figure is stored: the mark says *that* the
+    terms moved, and the UI says so under the frozen figures with the way
+    back. Any later move between states clears the mark; a reopen and
+    re-approval is the recorded way back, and it already existed.
     Approval itself refuses while a stamped timer still runs inside the
     month — its hours are in no figure yet. Reopening needs a reason, is
     recorded in the sheet's history and the audit log, lifts the lock and

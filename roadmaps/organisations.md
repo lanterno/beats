@@ -2,8 +2,9 @@
 
 The epic is GitHub issue #353. Four stages of it shipped, and so have
 fourteen of the sixteen bugs the 2026-10-31 audit found. What is left here
-is **one design to build, one page for the owner to read, and five items
-that wait on something outside the code** — each written out in full below.
+is **one page for the owner to read and five items that wait on something
+outside the code** — each written out in full below. Nothing here is built
+by hand any more; everything left is a decision, a reading, or a wait.
 
 Two things that used to live here now have roadmaps of their own, because
 neither is an organisations feature: SSO per organisation and SCIM
@@ -126,163 +127,22 @@ Most important first.
 
 | # | What | Surface | Why at this place |
 |---|------|---------|-------------------|
-| 405 | A contract write marks the approvals it moves | api, ui | Designed below and decided; the only thing here that is built rather than waited on |
 | 422 | The owner reads the PRIVACY.md draft | docs | Written and committed; one reading away from done |
 | 340–352 | The five waiting items | — | Each when its blocker clears; see the section |
 
-Fourteen of the sixteen bugs the 2026-10-31 audit found have shipped and
-their sections are deleted: #404, #406, #407, #408, #409, #410, #411, #412,
-#413, #414, #415, #419, #420, #421 — and of #405, the three writes that
-needed no decision. What they changed is in
-[docs/organisations.md](../docs/organisations.md); what is left of #405 and
-#422 is below.
+Fifteen of the sixteen bugs the 2026-10-31 audit found have shipped and
+their sections are deleted: #404, #405, #406, #407, #408, #409, #410, #411,
+#412, #413, #414, #415, #419, #420, #421. What they changed is in
+[docs/organisations.md](../docs/organisations.md); what is left of #422 is
+below.
 
 ---
 
 ## Bugs in what shipped
 
 Found on 2026-10-31 by checking `docs/organisations.md` against the code.
-Of the sixteen, these two are open: #405, whose fix needed a decision the
-owner has since taken, and #422, which needs the owner's eyes rather than
+Of the sixteen, one is open: #422, which needs the owner's eyes rather than
 anybody's hands.
-
-### #405 — A contract write marks the approvals it moves
-
-**Decided 2026-10-31 by the owner: a contract write is never refused for
-an approved month. The approval is marked instead.** Refusing would make a
-term the employer got wrong unfixable once any month is approved, without
-first reopening every approved month — the wrong default for what is
-usually an administrative correction. And the frozen figures do not move:
-they are stored. What changes is that the live ledger would now compute
-something else. That is a fact *about the approval*, so the approval is
-where it belongs.
-
-Write it into decision 23 when it is built, not before — nothing here has
-shipped.
-
-**What already holds.** Decision 23's lock refuses every write dated inside
-an approved month. Five writes skipped it; three are fixed (removing an
-absence, removing a balance adjustment, and a backup's beat, which the
-import now reports under `skipped` as `PERIOD_APPROVED`). The two left are
-contract writes, and a contract write is not dated inside a month at all —
-it is a list of terms spanning all of them, which is why the lock never
-caught it and why refusing it is the wrong instrument:
-
-- the member's, on an unmanaged assignment (`ProjectService.update_project`
-  and `replace_contract`, and the adjustment purge `reconcile_adjustments`
-  triggers);
-- the employer's (`EmploymentService.set_contract`).
-
-#### The model extension
-
-**1. An event is not a status.** `TimesheetEvent.action` is typed
-`TimesheetStatus` today, so the history cannot say anything a state cannot.
-Widen it to a `TimesheetAction` StrEnum carrying the four existing strings
-unchanged (`submitted`, `approved`, `changes_requested`, `reopened`) plus
-`terms_changed`. Stored documents keep reading, and `status` keeps its own
-narrower enum: a state the sheet is in and a thing that happened to it are
-different sets, and collapsing them is what forces the next awkward field.
-
-**2. `OrgTimesheet` gains `superseded_at: datetime | None` and
-`superseded_by: str | None`** — when the terms behind an approved month
-last moved, and who moved them. Null on a sheet whose terms still stand.
-
-**`status` stays `approved`.** Making this a status value would be the
-tempting shortcut and is a trap: `MongoPeriodLocks` keys the lock on
-`status == approved`, so a `superseded` status would **silently unlock the
-month** — the exact opposite of what is wanted. The month is still
-approved, still locked, and its frozen figures are still the record; what
-is in doubt is only whether a decider would approve the same figures today.
-
-**3. The sheet's `history` gains a `terms_changed` event** at the same
-moment, with the same `at` and `by`. The sheet then reads in order —
-submitted, approved, terms changed — which is what a works council asks to
-see, and `superseded_at` is the short answer to "is this approval still
-current?" while the history is the long one.
-
-A reopen already drops `frozen`; it drops these too, and the re-approval
-freezes against the terms now in force. So the way back is the one that
-already exists (decision 23), and nothing new has to be explained.
-
-#### Which sheets a write marks
-
-Not every approved sheet on the assignment: a term added for next year
-moves nothing already approved, and marking everything would train people
-to ignore the mark. One pure function decides it:
-
-```
-contract_diverges_from(previous: Contract | None, new: Contract | None) -> date | None
-```
-
-the earliest day on which the two contracts can produce a different figure,
-or None when they cannot. Its cases, each a test:
-
-- **`opening_balance_hours`** changed → the contract's first day. Every
-  month's `balance_end` moves even where its `expected` does not.
-- **`terms`** changed → the earliest `effective_from` that is in one list
-  and not the other, or whose fields differ.
-- **`ended_on`** changed → the earlier of the two, or the one that is set
-  when the other is None.
-- **`holiday_country` / `holiday_subdivision`** changed → the contract's
-  first day. Which holidays actually moved cannot be known without walking
-  the calendar, and erring early marks more approvals rather than fewer.
-- **`company_holidays` / `holidays_not_given`** changed → the earliest date
-  in the symmetric difference. A company day whose *name* changed and whose
-  date did not moves no figure.
-- **`vacation`** changed → **nothing**. The entitlement is days of leave
-  left; no month's `worked`, `expected` or `balance_end` reads it.
-- the contract **arriving or going** → its first day, or the previous one's.
-
-Then every approved sheet whose month *ends* on or after that day is
-marked — the month containing the divergence day is affected too, not only
-the months wholly after it.
-
-#### Where it hooks in
-
-Both writes, through one path, because decision 21 says one set of rules
-validates a contract whoever writes it — and because the member's own write
-marking the employer's approval is the whole point: it turns a silent
-divergence into a visible one.
-
-Both callers already hold the pair the helper needs: the member's path
-takes `previous_contract` as a required keyword, and the employer's reads
-`assignment.contract`.
-
-The member's path writes through `ProjectService`, which holds no
-organisation store and must not gain one. Give it **a narrow port in the
-shape of `PeriodLocks`, which it already holds** — one method, "mark the
-approved sheets on this project for this member from this day" — so a
-service that writes projects still cannot read another member.
-
-#### What it is not
-
-It is **not a second stored derived figure**. The mark says *that* the
-terms moved, never what the month would come to now; recomputing that is
-the ledger's job, done when a decider opens the sheet. The frozen month
-stays the only stored derived working-time figure, which decision 23 calls
-the one thing stage 3 broke on purpose and the hardest to migrate out of.
-
-#### Test
-
-- **`contract_diverges_from` on its interesting inputs**, pure, beside
-  `test_contracts.py`: a term appended after every approved month (None), a
-  term edited in the middle, an opening balance moved, a region swapped, a
-  company holiday renamed but not moved (None), a vacation entitlement
-  changed (None), a contract removed.
-- **The HTTP contract**, in `test_organisations.py`: approve a month,
-  change a term inside it, and assert the sheet is still `approved`, still
-  locked, and carries `superseded_at` with a `terms_changed` history entry;
-  that a term added after the month leaves it untouched; and that a reopen
-  and re-approval clear the mark.
-
-#### The UI, when the API is there
-
-The decider's Timesheets tab marks a superseded approval and says what to
-do about it (reopen, or let it stand on the terms in force at the time);
-the member's own timesheet list says the same of their own months. Neither
-shows a recomputed figure next to the frozen one without the decider asking
-for it — two numbers side by side is the confusion decision 23 exists to
-avoid.
 
 ### #422 — PRIVACY.md, drafted and waiting for the owner to read it
 
@@ -487,7 +347,7 @@ a fix.
 - The price (`docs/pricing.md`), and the SSO shape
   ([organisation_sso.md](organisation_sso.md)).
 - A contract write is never refused for an approved month; it marks the
-  approval instead (#405 above, decided 2026-10-31).
+  approval instead (decision 23, built 2026-10-31).
 - Money in an organisation is read by owners and admins, as a capability on
   the role — not a permission of its own (#340 below, decided 2026-10-31).
 
