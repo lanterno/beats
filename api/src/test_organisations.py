@@ -2285,6 +2285,39 @@ class TestTeamsAndRoles:
         )
         assert refused.status_code == 403
 
+    def test_the_record_is_the_organisations_timezones_whoever_reads_it(self, client, auth_headers):
+        # A bug that happened (#415): the five record reads bucketed days in
+        # the caller's tz, so two deciders downloaded two different legal
+        # records for one month, and neither agreed with the month frozen.
+        org = _create_org(client, auth_headers, timezone="Europe/Berlin")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"])
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        # 23:30 UTC on 31 March is 01:30 on 1 April in Berlin.
+        _beat(client, member, project["id"], "2026-03-31T23:30:00", 30)
+        for tz in ("UTC", "America/Los_Angeles", "Asia/Tokyo"):
+            march = _members_of_record(
+                _record(client, auth_headers, org["id"], month="2026-03", tz=tz), project["id"]
+            )
+            assert march == [] or march[0]["entries"] == [], tz
+            [april] = _members_of_record(
+                _record(client, auth_headers, org["id"], month="2026-04", tz=tz), project["id"]
+            )
+            assert [e["day"] for e in april["entries"]] == ["2026-04-01"], tz
+            [seen] = _members_of_record(
+                _visible(client, member, org["id"], month="2026-04", tz=tz), project["id"]
+            )
+            assert [e["day"] for e in seen["entries"]] == ["2026-04-01"], tz
+            for path in ("record.csv", "compliance.csv", "visible.csv"):
+                who = member if path == "visible.csv" else auth_headers
+                csv_text = client.get(
+                    f"/api/organisations/{org['id']}/{path}",
+                    params={"month": "2026-04", "tz": tz},
+                    headers=who,
+                ).text
+                assert "2026-04-01" in csv_text, (path, tz)
+
     def test_compliance_counts_breaks_between_entries(self, client, auth_headers):
         member = _new_user()
         org, project, _member_id = _employed(client, auth_headers, member, managed=False)
