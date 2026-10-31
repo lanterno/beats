@@ -46,7 +46,9 @@ src/beats/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
 │   ├── migrations.py    Startup passes: a project without `kind` gets one (a day job its
 │   │                    contract too); a day job whose term governs loses `weekly_goal`;
-│   │                    a pairing code stored with string dates gets BSON dates, or goes if expired
+│   │                    an assignment made by a connect gets the `private_before` that says
+│   │                    what the member kept back; a pairing code stored with string dates
+│   │                    gets BSON dates, or goes if expired
 │   ├── plan_migration.py Startup pass: weekly plans stored under a Sunday move to their Monday
 │   ├── organisations.py MongoOrganisationStore (the organisation's own collections, scoped by organisation) and MongoOrganisationRecords (its read of beats and absences by its stamp) — the two classes not scoped by user_id
 │   ├── erasure.py       Erase an account, keeping each organisation's working-time record under a tombstone

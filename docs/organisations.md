@@ -128,6 +128,20 @@ Then the model's own:
    A beat on the organisation's project *without* the stamp — moved there by
    hand in the database, or before a connected project's `shared_from` — is
    not read.
+   What a connect kept back is written down, as `private_before` on the
+   assignment (and the day beside it, since an absence is dated and not
+   timed): `shared_from` could not do it, because an ordinary assignment sets
+   it to its own instant and a reassignment moves it forward, so it cannot
+   tell a day somebody held back from a day the organisation has always
+   owned. `organisation_stamp` is the one place the rule lives, and every
+   write goes through it — an edit to a pre-share entry stamps nothing, and
+   one that moves a shared entry back out of the range clears the stamp it
+   had. On a project the organisation has owned all along `private_before` is
+   null and a back-dated entry is its record like any other: the member could
+   not have tracked on it before they were assigned, so a date before the
+   assignment is late work and not history. A startup pass
+   (`mark_connected_assignments`) gives the field to the connects made before
+   it existed, read out of the audit log.
 8. **Connecting hands the document over and stamps the chosen history.** The
    personal fields move to a new assignment with `shared_from` = local
    midnight of the chosen day (or now, to start fresh); the document loses
@@ -247,7 +261,9 @@ New collections, none scoped by `user_id`:
   `name`, `email`, `requested_at`, `decided_at`, `decision`, `decided_by`.
 - **`org_assignments`**: one per member per project, reopened on
   reassigning — `organisation_id`, `project_id`, `user_id`, `shared_from`
-  (an instant), `assigned_at`, `assigned_by`, `ended_at`, and the personal
+  (an instant), `private_before` and `private_before_day` (what a connect
+  kept back, written by a connect alone and never moved after, decision 7),
+  `assigned_at`, `assigned_by`, `ended_at`, and the personal
   half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
   `autostart_repos`, `contract`, and `contract_managed` (decision 21).
   Unique on `(project_id, user_id)`.
@@ -355,7 +371,7 @@ contract's own 409s (`ADJUSTMENT_OUTSIDE_BALANCE`,
 `VACATION_OPENING_OUTSIDE_CONTRACT`) on the employer's writes.
 
 On the member's own routes, a `Project` gains `organisation` (`id`, `name`,
-`logo_url`, `shared_from`, `contract_managed`), a beat and an absence
+`logo_url`, `shared_from`, `private_before`, `contract_managed`), a beat and an absence
 `organisation_id`, a beat a decider logged `entered_by`, and
 `PUT /api/projects/` answers 409 `ORGANISATION_PROJECT` for a change to an
 organisation field, as do `/archive` and `/unarchive`. Starting a timer or
