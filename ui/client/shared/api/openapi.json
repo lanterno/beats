@@ -13268,7 +13268,7 @@
     },
     "/api/organisations/{organisation_id}/compliance.csv": {
       "get": {
-        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total, and the warnings a\nworking-time authority would raise (a day over 10 hours, rest under 11,\ntaken over every project the member is on). Whoever reads the record.",
+        "description": "The compliance record (docs/organisations.md, stage 3): per member,\nper day \u2014 first start, last end, breaks, total, and the warnings a\nworking-time authority would raise (a day over 10 hours, rest under 11,\ntaken over every project the member is on). Whoever reads the record.\n\nThe day a late entry falls on moves the 10-hour and 11-hour-rest\nwarnings, so it is the organisation's timezone that decides it, never\nthe caller's (#415). A `tz` the caller still sends is ignored.",
         "operationId": "read_compliance_csv_api_organisations__organisation_id__compliance_csv_get",
         "parameters": [
           {
@@ -13292,24 +13292,6 @@
               "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
-            }
-          },
-          {
-            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-            "in": "query",
-            "name": "tz",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-              "title": "Tz"
             }
           }
         ],
@@ -14420,7 +14402,7 @@
     },
     "/api/organisations/{organisation_id}/record": {
       "get": {
-        "description": "What the organisation sees: per project, per member, the finished\nentries started in `month` in `tz` (start, end, hours, note), the\nabsences (date, type, half day), the all-time totals, and where the\nmember has a contract its balance as of today. Nothing else, and nothing\nabout now. Owners, admins and viewers whole; a manager their teams'.",
+        "description": "What the organisation sees: per project, per member, the finished\nentries started in `month` (start, end, hours, note), the absences\n(date, type, half day), the all-time totals, and where the member has a\ncontract its balance as of today. Nothing else, and nothing about now.\nOwners, admins and viewers whole; a manager their teams'.\nThe month is bucketed in the organisation's own timezone, not the\ncaller's: a record two deciders read differently is not a record\n(#415). A `tz` the caller still sends is ignored.",
         "operationId": "read_record_api_organisations__organisation_id__record_get",
         "parameters": [
           {
@@ -14444,24 +14426,6 @@
               "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
-            }
-          },
-          {
-            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-            "in": "query",
-            "name": "tz",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-              "title": "Tz"
             }
           }
         ],
@@ -14498,7 +14462,7 @@
     },
     "/api/organisations/{organisation_id}/record.csv": {
       "get": {
-        "description": "The month's record as CSV, a row per entry \u2014 the report an accountant\nfiles. Whoever reads the record; a manager's is their teams'.",
+        "description": "The month's record as CSV, a row per entry \u2014 the report an accountant\nfiles. Whoever reads the record; a manager's is their teams'.\nThe month is bucketed in the organisation's own timezone, not the\ncaller's: a record two deciders read differently is not a record\n(#415). A `tz` the caller still sends is ignored.",
         "operationId": "read_record_csv_api_organisations__organisation_id__record_csv_get",
         "parameters": [
           {
@@ -14522,24 +14486,6 @@
               "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
-            }
-          },
-          {
-            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-            "in": "query",
-            "name": "tz",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-              "title": "Tz"
             }
           }
         ],
@@ -15156,7 +15102,7 @@
     },
     "/api/organisations/{organisation_id}/visible": {
       "get": {
-        "description": "What the organisation sees of the caller \u2014 the \"what Acme can see\"\npage: `/record` narrowed to one member by the same read, so it shows\nthe data actually held, not a description of it. Members and former\nmembers.",
+        "description": "What the organisation sees of the caller \u2014 the \"what Acme can see\"\npage: `/record` narrowed to one member by the same read, so it shows\nthe data actually held, not a description of it. Members and former\nmembers.\nThe month is bucketed in the organisation's own timezone, not the\ncaller's: a record two deciders read differently is not a record\n(#415). A `tz` the caller still sends is ignored.",
         "operationId": "read_visible_api_organisations__organisation_id__visible_get",
         "parameters": [
           {
@@ -15180,24 +15126,6 @@
               "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
-            }
-          },
-          {
-            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-            "in": "query",
-            "name": "tz",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-              "title": "Tz"
             }
           }
         ],
@@ -15234,7 +15162,7 @@
     },
     "/api/organisations/{organisation_id}/visible.csv": {
       "get": {
-        "description": "The month the organisation holds about the caller, as the same CSV its\nrecord exports \u2014 the person can always take away exactly what is seen of\nthem, not just read it. Members and former members, like `/visible`.",
+        "description": "The month the organisation holds about the caller, as the same CSV its\nrecord exports \u2014 the person can always take away exactly what is seen of\nthem, not just read it. Members and former members, like `/visible`.\nThe month is bucketed in the organisation's own timezone, not the\ncaller's: a record two deciders read differently is not a record\n(#415). A `tz` the caller still sends is ignored.",
         "operationId": "read_visible_csv_api_organisations__organisation_id__visible_csv_get",
         "parameters": [
           {
@@ -15258,24 +15186,6 @@
               "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
               "title": "Month",
               "type": "string"
-            }
-          },
-          {
-            "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-            "in": "query",
-            "name": "tz",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "IANA timezone name (e.g. America/New_York). Defaults to UTC.",
-              "title": "Tz"
             }
           }
         ],

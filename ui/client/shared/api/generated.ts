@@ -2287,6 +2287,10 @@ export interface paths {
          *     per day — first start, last end, breaks, total, and the warnings a
          *     working-time authority would raise (a day over 10 hours, rest under 11,
          *     taken over every project the member is on). Whoever reads the record.
+         *
+         *     The day a late entry falls on moves the 10-hour and 11-hour-rest
+         *     warnings, so it is the organisation's timezone that decides it, never
+         *     the caller's (#415). A `tz` the caller still sends is ignored.
          */
         get: operations["read_compliance_csv_api_organisations__organisation_id__compliance_csv_get"];
         put?: never;
@@ -2624,10 +2628,13 @@ export interface paths {
         /**
          * Read Record
          * @description What the organisation sees: per project, per member, the finished
-         *     entries started in `month` in `tz` (start, end, hours, note), the
-         *     absences (date, type, half day), the all-time totals, and where the
-         *     member has a contract its balance as of today. Nothing else, and nothing
-         *     about now. Owners, admins and viewers whole; a manager their teams'.
+         *     entries started in `month` (start, end, hours, note), the absences
+         *     (date, type, half day), the all-time totals, and where the member has a
+         *     contract its balance as of today. Nothing else, and nothing about now.
+         *     Owners, admins and viewers whole; a manager their teams'.
+         *     The month is bucketed in the organisation's own timezone, not the
+         *     caller's: a record two deciders read differently is not a record
+         *     (#415). A `tz` the caller still sends is ignored.
          */
         get: operations["read_record_api_organisations__organisation_id__record_get"];
         put?: never;
@@ -2649,6 +2656,9 @@ export interface paths {
          * Read Record Csv
          * @description The month's record as CSV, a row per entry — the report an accountant
          *     files. Whoever reads the record; a manager's is their teams'.
+         *     The month is bucketed in the organisation's own timezone, not the
+         *     caller's: a record two deciders read differently is not a record
+         *     (#415). A `tz` the caller still sends is ignored.
          */
         get: operations["read_record_csv_api_organisations__organisation_id__record_csv_get"];
         put?: never;
@@ -2835,6 +2845,9 @@ export interface paths {
          *     page: `/record` narrowed to one member by the same read, so it shows
          *     the data actually held, not a description of it. Members and former
          *     members.
+         *     The month is bucketed in the organisation's own timezone, not the
+         *     caller's: a record two deciders read differently is not a record
+         *     (#415). A `tz` the caller still sends is ignored.
          */
         get: operations["read_visible_api_organisations__organisation_id__visible_get"];
         put?: never;
@@ -2857,6 +2870,9 @@ export interface paths {
          * @description The month the organisation holds about the caller, as the same CSV its
          *     record exports — the person can always take away exactly what is seen of
          *     them, not just read it. Members and former members, like `/visible`.
+         *     The month is bucketed in the organisation's own timezone, not the
+         *     caller's: a record two deciders read differently is not a record
+         *     (#415). A `tz` the caller still sends is ignored.
          */
         get: operations["read_visible_csv_api_organisations__organisation_id__visible_csv_get"];
         put?: never;
@@ -10973,8 +10989,6 @@ export interface operations {
             query: {
                 /** @description The month wanted, as YYYY-MM. */
                 month: string;
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
             };
             header?: never;
             path: {
@@ -11752,8 +11766,6 @@ export interface operations {
             query: {
                 /** @description The month wanted, as YYYY-MM. */
                 month: string;
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
             };
             header?: never;
             path: {
@@ -11795,8 +11807,6 @@ export interface operations {
             query: {
                 /** @description The month wanted, as YYYY-MM. */
                 month: string;
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
             };
             header?: never;
             path: {
@@ -12247,8 +12257,6 @@ export interface operations {
             query: {
                 /** @description The month wanted, as YYYY-MM. */
                 month: string;
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
             };
             header?: never;
             path: {
@@ -12290,8 +12298,6 @@ export interface operations {
             query: {
                 /** @description The month wanted, as YYYY-MM. */
                 month: string;
-                /** @description IANA timezone name (e.g. America/New_York). Defaults to UTC. */
-                tz?: string | null;
             };
             header?: never;
             path: {
