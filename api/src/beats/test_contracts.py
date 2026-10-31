@@ -527,3 +527,104 @@ class TestMongoAbsenceRepository:
             assert await repo.list_by_project("p1", MON, SUN) == []
         finally:
             await client.close()
+
+
+class TestContractDivergesFrom:
+    """Which approved months a contract write moves (docs/organisations.md,
+    decision 23): the earliest day the two contracts can disagree on a
+    figure, or None. A term added for next year must mark nothing already
+    approved, or the mark is one people learn to ignore."""
+
+    def test_nothing_changed_or_a_term_appended_in_the_future_moves_nothing(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        base = _contract(_full_time(date(2026, 1, 5)))
+        assert contract_diverges_from(base, base.model_copy(deep=True)) is None
+        later = _contract(_full_time(date(2026, 1, 5)), _full_time(date(2027, 1, 4), 32))
+        assert contract_diverges_from(base, later) == date(2027, 1, 4)
+
+    def test_a_term_edited_in_the_middle_moves_from_its_day(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        before = _contract(_full_time(date(2026, 1, 5)), _full_time(date(2026, 6, 1), 32))
+        after = _contract(_full_time(date(2026, 1, 5)), _full_time(date(2026, 6, 1), 36))
+        assert contract_diverges_from(before, after) == date(2026, 6, 1)
+        removed = _contract(_full_time(date(2026, 1, 5)))
+        assert contract_diverges_from(before, removed) == date(2026, 6, 1)
+
+    def test_the_opening_balance_and_the_region_move_from_the_first_day(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        base = _contract(_full_time(date(2026, 1, 5)), holiday_country="DE")
+        assert contract_diverges_from(
+            base, base.model_copy(update={"opening_balance_hours": 3.0})
+        ) == date(2026, 1, 5)
+        assert contract_diverges_from(
+            base, base.model_copy(update={"holiday_country": "FR"})
+        ) == date(2026, 1, 5)
+        assert contract_diverges_from(
+            base, base.model_copy(update={"holiday_subdivision": "BY"})
+        ) == date(2026, 1, 5)
+
+    def test_an_end_moves_from_the_earlier_of_the_two(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        base = _contract(_full_time(date(2026, 1, 5)))
+        ended = base.model_copy(update={"ended_on": date(2026, 9, 30)})
+        assert contract_diverges_from(base, ended) == date(2026, 9, 30)
+        earlier = base.model_copy(update={"ended_on": date(2026, 7, 31)})
+        assert contract_diverges_from(ended, earlier) == date(2026, 7, 31)
+
+    def test_holiday_lists_move_from_the_date_that_moved_and_a_rename_moves_nothing(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        base = _contract(
+            _full_time(date(2026, 1, 5)), company_holidays=[_company(date(2026, 12, 24))]
+        )
+        renamed = _contract(
+            _full_time(date(2026, 1, 5)),
+            company_holidays=[_company(date(2026, 12, 24), "Heiligabend")],
+        )
+        assert contract_diverges_from(base, renamed) is None
+        moved = _contract(
+            _full_time(date(2026, 1, 5)), company_holidays=[_company(date(2026, 12, 31))]
+        )
+        assert contract_diverges_from(base, moved) == date(2026, 12, 24)
+        not_given = base.model_copy(update={"holidays_not_given": [date(2026, 5, 1)]})
+        assert contract_diverges_from(base, not_given) == date(2026, 5, 1)
+
+    def test_the_vacation_entitlement_moves_nothing(self):
+        from beats.domain.contracts import contract_diverges_from
+        from beats.domain.models import CarryOver, VacationEntitlement
+
+        base = _contract(_full_time(date(2026, 1, 5)))
+        with_leave = base.model_copy(
+            update={
+                "vacation": VacationEntitlement(
+                    days_per_year=25,
+                    carry_over=CarryOver.NONE,
+                    opening_on=date(2026, 1, 5),
+                    opening_days=25,
+                )
+            }
+        )
+        assert contract_diverges_from(base, with_leave) is None
+
+    def test_a_contract_arriving_or_going_moves_from_its_first_day(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        base = _contract(_full_time(date(2026, 1, 5)))
+        assert contract_diverges_from(None, base) == date(2026, 1, 5)
+        assert contract_diverges_from(base, None) == date(2026, 1, 5)
+        assert contract_diverges_from(None, None) is None
+
+    def test_the_earliest_of_several_changes_wins(self):
+        from beats.domain.contracts import contract_diverges_from
+
+        before = _contract(_full_time(date(2026, 1, 5)), _full_time(date(2026, 6, 1), 32))
+        after = _contract(
+            _full_time(date(2026, 1, 5)),
+            _full_time(date(2026, 6, 1), 36),
+            ended_on=date(2026, 3, 31),
+        )
+        assert contract_diverges_from(before, after) == date(2026, 3, 31)

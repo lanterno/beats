@@ -111,6 +111,20 @@ def _beat(client, headers, project_id: str, start: str, minutes: int | None, **e
     return resp.json()
 
 
+def _beat_resp(client, headers, project_id: str, start: str, minutes: int):
+    """As `_beat`, returning the response: for a write expected to be refused."""
+    begun = datetime.fromisoformat(start).replace(tzinfo=UTC)
+    return client.post(
+        "/api/beats/",
+        json={
+            "project_id": project_id,
+            "start": begun.isoformat(),
+            "end": (begun + timedelta(minutes=minutes)).isoformat(),
+        },
+        headers=headers,
+    )
+
+
 def _record(client, headers, org_id: str, month: str = MONTH, tz: str = "UTC") -> dict:
     resp = client.get(
         f"/api/organisations/{org_id}/record", params={"month": month, "tz": tz}, headers=headers
@@ -2591,6 +2605,139 @@ class TestTimesheets:
             b["id"]
             for b in client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()
         ]
+
+    def test_a_contract_write_marks_the_approvals_it_moves_and_never_refuses(
+        self, client, auth_headers
+    ):
+        """Decision 23, the half decided on 2026-10-31: a contract write is
+        not dated inside a month, so the lock has nothing to catch and it is
+        not refused. The approved months whose figures it moves are marked
+        instead — still approved, still locked, `frozen` still the record,
+        and a `terms_changed` step in the history — from the day the two
+        contracts diverge, so a term added for next year marks nothing."""
+        member = _new_user()
+        org, project, member_id = _employed(client, auth_headers, member)
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        sheet = _submit(client, member, org["id"], project["id"], "2026-03").json()
+        approved = _decide_sheet(client, auth_headers, org["id"], sheet["id"], approve=True)
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["superseded_at"] is None
+        frozen = approved.json()["frozen"]
+        url = (
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}/contract"
+        )
+
+        def listed() -> dict:
+            [one] = client.get(
+                f"/api/organisations/{org['id']}/timesheets", headers=auth_headers
+            ).json()
+            return one
+
+        # A term for next year: taken, and March is untouched.
+        future = client.put(
+            url,
+            json={
+                "contract": {
+                    "terms": [
+                        *FULL_TIME,
+                        {**FULL_TIME[0], "effective_from": "2027-01-04", "full_time_hours": 32},
+                    ],
+                    "opening_balance_hours": 2,
+                },
+                "managed": True,
+            },
+            headers=auth_headers,
+        )
+        assert future.status_code == 200, future.text
+        assert listed()["superseded_at"] is None
+
+        # A term changed from February: taken too — never refused — and March
+        # is marked, with the frozen figures exactly as they were.
+        moved = client.put(
+            url,
+            json={
+                "contract": {
+                    "terms": [
+                        {**FULL_TIME[0], "effective_from": "2026-02-02", "full_time_hours": 32}
+                    ],
+                    "opening_balance_hours": 2,
+                },
+                "managed": True,
+            },
+            headers=auth_headers,
+        )
+        assert moved.status_code == 200, moved.text
+        marked = listed()
+        assert marked["status"] == "approved"
+        assert marked["frozen"] == frozen
+        assert marked["superseded_at"] is not None
+        assert marked["superseded_by"] == _seeded_id(auth_headers)
+        assert [h["action"] for h in marked["history"]] == [
+            "submitted",
+            "approved",
+            "terms_changed",
+        ]
+        # Still locked: the mark is not an unlock.
+        refused = _beat_resp(client, member, project["id"], "2026-03-10T09:00:00", 60)
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "PERIOD_APPROVED"
+        # And the act is in the audit log with its count.
+        [event] = [
+            e
+            for e in client.get(
+                f"/api/organisations/{org['id']}/audit", headers=auth_headers
+            ).json()
+            if e["event"] == "contract.managed" and e["details"].get("superseded_timesheets")
+        ]
+        assert event["details"]["superseded_timesheets"] == 1
+
+        # A reopen is the recorded way back: the mark goes with the freeze,
+        # and the re-approval freezes against the terms now in force.
+        reopened = client.post(
+            f"/api/organisations/{org['id']}/timesheets/{sheet['id']}/reopen",
+            json={"reason": "the February term was wrong"},
+            headers=auth_headers,
+        )
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["superseded_at"] is None
+        again = _submit(client, member, org["id"], project["id"], "2026-03").json()
+        refrozen = _decide_sheet(client, auth_headers, org["id"], again["id"], approve=True).json()
+        assert refrozen["superseded_at"] is None
+        assert refrozen["frozen"]["expected"] != frozen["expected"]
+
+    def test_the_members_own_contract_write_marks_the_employers_approval(
+        self, client, auth_headers
+    ):
+        """The member's write on an unmanaged assignment goes through the
+        same rule — that is the point: it turns a silent divergence into a
+        visible one, and the mark names the member."""
+        member = _new_user()
+        org, project, member_id = _employed(client, auth_headers, member, managed=False)
+        assert (
+            client.put(
+                f"/api/projects/{project['id']}/contract",
+                json={"terms": FULL_TIME, "opening_balance_hours": 2},
+                headers=member,
+            ).status_code
+            == 200
+        )
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        sheet = _submit(client, member, org["id"], project["id"], "2026-03").json()
+        assert (
+            _decide_sheet(client, auth_headers, org["id"], sheet["id"], approve=True).status_code
+            == 200
+        )
+
+        changed = client.put(
+            f"/api/projects/{project['id']}/contract",
+            json={"terms": FULL_TIME, "opening_balance_hours": 10},
+            headers=member,
+        )
+        assert changed.status_code == 200, changed.text
+        [one] = client.get(f"/api/organisations/{org['id']}/timesheets", headers=member).json()
+        assert one["status"] == "approved"
+        assert one["superseded_by"] == member_id
+        assert one["history"][-1]["action"] == "terms_changed"
 
     def test_changes_requested_and_resubmission(self, client, auth_headers):
         member = _new_user()
