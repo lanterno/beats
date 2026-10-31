@@ -6839,12 +6839,24 @@ export interface components {
             timer_running: boolean;
         };
         /**
+         * TimesheetAction
+         * @description A step in a timesheet's history. The four states a sheet can be in are
+         *     steps too, and keep their strings, so stored history keeps reading; the
+         *     fifth is a thing that happened to an approved sheet without changing its
+         *     state — the terms behind it moved (docs/organisations.md, decision 23).
+         *     A state and an event are different sets, which is why this is not
+         *     `TimesheetStatus`.
+         * @enum {string}
+         */
+        TimesheetAction: "submitted" | "approved" | "changes_requested" | "reopened" | "terms_changed";
+        /**
          * TimesheetEvent
          * @description One step of a timesheet's history: submitted, approved, changes
-         *     requested, reopened — each with who and, where one was given, why.
+         *     requested, reopened, or the contract's terms changed under an approval
+         *     — each with who and, where one was given, why.
          */
         TimesheetEvent: {
-            action: components["schemas"]["TimesheetStatus"];
+            action: components["schemas"]["TimesheetAction"];
             /**
              * At
              * Format: date-time
@@ -6892,6 +6904,12 @@ export interface components {
              * Format: date-time
              */
             submitted_at: string;
+            /** Superseded At */
+            superseded_at: string | null;
+            /** Superseded By */
+            superseded_by: string | null;
+            /** Superseded By Name */
+            superseded_by_name: string | null;
             /** User Id */
             user_id: string;
         };

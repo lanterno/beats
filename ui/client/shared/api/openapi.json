@@ -7150,11 +7150,23 @@
         "title": "TimerStatusResponse",
         "type": "object"
       },
+      "TimesheetAction": {
+        "description": "A step in a timesheet's history. The four states a sheet can be in are\nsteps too, and keep their strings, so stored history keeps reading; the\nfifth is a thing that happened to an approved sheet without changing its\nstate \u2014 the terms behind it moved (docs/organisations.md, decision 23).\nA state and an event are different sets, which is why this is not\n`TimesheetStatus`.",
+        "enum": [
+          "submitted",
+          "approved",
+          "changes_requested",
+          "reopened",
+          "terms_changed"
+        ],
+        "title": "TimesheetAction",
+        "type": "string"
+      },
       "TimesheetEvent": {
-        "description": "One step of a timesheet's history: submitted, approved, changes\nrequested, reopened \u2014 each with who and, where one was given, why.",
+        "description": "One step of a timesheet's history: submitted, approved, changes\nrequested, reopened, or the contract's terms changed under an approval\n\u2014 each with who and, where one was given, why.",
         "properties": {
           "action": {
-            "$ref": "#/components/schemas/TimesheetStatus"
+            "$ref": "#/components/schemas/TimesheetAction"
           },
           "at": {
             "format": "date-time",
@@ -7293,6 +7305,40 @@
             "title": "Submitted At",
             "type": "string"
           },
+          "superseded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded At"
+          },
+          "superseded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By"
+          },
+          "superseded_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Name"
+          },
           "user_id": {
             "title": "User Id",
             "type": "string"
@@ -7312,6 +7358,9 @@
           "decided_by_name",
           "comment",
           "frozen",
+          "superseded_at",
+          "superseded_by",
+          "superseded_by_name",
           "history"
         ],
         "title": "TimesheetResponse",
