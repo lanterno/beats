@@ -119,3 +119,15 @@ String? briefExcerpt(String? body, {int max = 220}) {
   final space = window.lastIndexOf(' ');
   return '${window.substring(0, space > 0 ? space : max).trimRight()}…';
 }
+
+/// What a session on the strip is called, in its tooltip: the project, and
+/// on one a decider logged for the member, the mark the web's timeline
+/// carries (docs/organisations.md, decision 24).
+///
+/// The mark *is* the notification — nothing else tells the member a session
+/// appeared on their timeline that they did not start — so every surface
+/// that shows the session owes it, and in the same words.
+String sessionLabel(String? projectName, {String? enteredBy}) {
+  final name = (projectName == null || projectName.isEmpty) ? 'Session' : projectName;
+  return enteredBy == null || enteredBy.isEmpty ? name : '$name · entered for you';
+}
