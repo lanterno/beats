@@ -75,8 +75,13 @@ first, then the model was built on them.
    on their membership. Their `user_id` becomes a tombstone no account ever
    has, `erased:<membership id>`, one per organisation, so the record still
    groups one former member's rows and nothing in the system can be scoped to
-   them. Tags, absence notes, the personal goal and local repo paths go with
-   the account (`infrastructure/erasure.py`, `scripts/erase_account.py`).
+   them — and every other column inside the organisation that names them
+   takes the same tombstone, who entered time for a member and who took
+   each step of a timesheet among them (#410); an entered beat the member
+   has since moved to a personal project, which no tombstone fits, keeps
+   the bare word `erased`. Tags, absence notes, the personal goal and local
+   repo paths go with the account (`infrastructure/erasure.py`,
+   `scripts/erase_account.py`).
    This is why "this row is an organisation's record" is a **property of the
    row** (`organisation_id` on the beat and the absence) and not a join
    through a project that is itself being deleted.
