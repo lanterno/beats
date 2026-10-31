@@ -366,7 +366,14 @@ class OrganisationService:
         itself. The hand-backs run first, so a crash midway strands nothing
         of a member's. Owners only, and only from `closes_on` on (409
         ORGANISATION_STILL_CLOSING before, ORGANISATION_NOT_CLOSING with no
-        notice at all)."""
+        notice at all).
+
+        A hand-back takes the assignment with it, which is what makes a
+        re-run after a crash safe. The rows moved in the first run belong
+        to the new personal copies, so `row_owner_ids` no longer finds
+        them; without the assignment going too, every contract holder was
+        then found a second time and given a second copy, holding the
+        contract and no rows (#414)."""
         me = await self._member(organisation_id, actor, OrgRole.OWNER)
         closes_on = me.organisation.closes_on
         if closes_on is None:
@@ -392,6 +399,9 @@ class OrganisationService:
                 archived = assignment is None or assignment.ended_at is not None
                 new_id = await self.store.hand_back_project(project, user_id, assignment, archived)
                 moved = await self.store.repoint_member_rows(project.id, user_id, new_id)
+                # One step, so the re-run after a crash finds neither the
+                # rows (now the copy's) nor the assignment.
+                await self.store.delete_assignment(organisation_id, project.id, user_id)
                 counts["projects_handed_back"] += 1
                 for key, value in moved.items():
                     counts[key] = counts.get(key, 0) + value

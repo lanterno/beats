@@ -525,6 +525,14 @@ class MongoOrganisationStore:
         )
         return {"plan_budgets": plans.modified_count, "flow_windows": windows.modified_count}
 
+    async def delete_assignment(self, organisation_id: str, project_id: str, user_id: str) -> bool:
+        """One assignment, gone — the deletion's hand-back taking the
+        member's half of a project with the project (decision 29)."""
+        result = await self.assignments.delete_one(
+            {"organisation_id": organisation_id, "project_id": project_id, "user_id": user_id}
+        )
+        return result.deleted_count == 1
+
     async def delete_assignments(self, organisation_id: str, project_id: str) -> int:
         result = await self.assignments.delete_many(
             {"organisation_id": organisation_id, "project_id": project_id}
