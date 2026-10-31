@@ -371,7 +371,7 @@ export default function Organisation() {
 							<p className="text-[13px] leading-normal font-medium text-foreground">
 								On its own projects, {org.name} sees your finished entries — start, end, duration
 								and the note — and your absences as a date, a type and whether it was a half day.
-								Where you have a contract on one, it sees the balance.
+								Where you have a contract on one, it sees its terms and its balance.
 							</p>
 							<p className="text-[13px] leading-normal font-medium text-foreground">
 								It never sees your flow scores, apps, repositories or idle time; your biometrics,

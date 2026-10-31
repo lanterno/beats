@@ -118,8 +118,9 @@ export default function JoinPage() {
 							<p className={LEAD}>
 								Joining adds its projects to your own list once you are assigned. On those projects
 								it sees your finished entries — start, end, duration and the note — your absences as
-								a date and a type, and a managed contract's balance. Nothing else crosses: not your
-								own projects, nothing about now, and you can always read exactly what it holds.
+								a date, a type and whether it was a half day, and a contract you hold on one, its
+								terms and its balance. Nothing else crosses: not your own projects, nothing about
+								now, and you can always read exactly what it holds.
 							</p>
 							<Button type="button" size="sm" onClick={accept} disabled={join.isPending}>
 								{join.isPending
