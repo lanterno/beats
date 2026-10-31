@@ -23,6 +23,10 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 
 - User document: id, email, display name, created-at
 - WebAuthn credentials: public key, credential id, sign counter, device label
+- **Single sign-on identities** (`identities[]` on the user): per linked
+  OpenID Connect provider, its configured id, the `issuer` and `subject`
+  the account is keyed on, the `name` and `email` the provider asserts
+  (refreshed on each sign-in, shown and never matched on) and `linked_at`
 - Refresh-token records for JWT rotation
 
 No passwords are stored — Beats does not have a password login path.
