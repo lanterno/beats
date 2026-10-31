@@ -21,6 +21,7 @@ import {
 	decides,
 	frozenText,
 	sheetMonthTitle,
+	supersededText,
 	TIMESHEET_STATUS_LABELS,
 	TIMESHEET_STATUS_TONE,
 	useDecideTimesheet,
@@ -114,6 +115,7 @@ export function TimesheetsSection({
 				<Chip tone={TIMESHEET_STATUS_TONE[sheet.status]}>
 					{TIMESHEET_STATUS_LABELS[sheet.status]}
 				</Chip>
+				{supersededText(sheet) && <Chip tone="warn">Terms changed since</Chip>}
 				{mayDecide && (
 					<span className="ml-auto flex items-center gap-2">
 						{sheet.status === "approved" ? (
@@ -173,6 +175,7 @@ export function TimesheetsSection({
 			{sheet.status === "approved" && sheet.frozen && (
 				<p className="text-foreground font-medium font-mono">{frozenText(sheet.frozen)}</p>
 			)}
+			{supersededText(sheet) && <p className="text-muted-foreground">{supersededText(sheet)}</p>}
 			{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
 		</li>
 	);

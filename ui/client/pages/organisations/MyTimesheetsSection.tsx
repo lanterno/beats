@@ -18,6 +18,7 @@ import {
 	frozenText,
 	organisationToday,
 	sheetMonthTitle,
+	supersededText,
 	TIMESHEET_STATUS_LABELS,
 	TIMESHEET_STATUS_TONE,
 	useSubmitTimesheet,
@@ -159,6 +160,7 @@ export function MyTimesheetsSection({
 								<Chip tone={TIMESHEET_STATUS_TONE[sheet.status]}>
 									{TIMESHEET_STATUS_LABELS[sheet.status]}
 								</Chip>
+								{supersededText(sheet) && <Chip tone="warn">Terms changed since</Chip>}
 								{(sheet.status === "changes_requested" || sheet.status === "reopened") && (
 									<Button
 										type="button"
@@ -175,6 +177,9 @@ export function MyTimesheetsSection({
 							</div>
 							{sheet.status === "approved" && sheet.frozen && (
 								<p className="text-foreground font-medium font-mono">{frozenText(sheet.frozen)}</p>
+							)}
+							{supersededText(sheet) && (
+								<p className="text-muted-foreground">{supersededText(sheet)}</p>
 							)}
 							{sheet.comment && <p className="text-muted-foreground">“{sheet.comment}”</p>}
 						</li>

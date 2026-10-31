@@ -323,6 +323,9 @@ export function toTimesheet(api: ApiTimesheet): Timesheet {
 					absenceDays: api.frozen.absence_days,
 				}
 			: undefined,
+		supersededAt: api.superseded_at ?? undefined,
+		supersededBy: api.superseded_by ?? undefined,
+		supersededByName: api.superseded_by_name ?? undefined,
 		history: api.history.map((h) => ({
 			at: h.at,
 			by: h.by,

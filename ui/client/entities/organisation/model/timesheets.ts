@@ -29,6 +29,24 @@ export const TIMESHEET_STATUS_TONE: Record<TimesheetStatus, ChipTone> = {
 	reopened: "wait",
 };
 
+/**
+ * The one sentence under an approved month whose contract has since changed
+ * (decision 23): the figures above are as approved and the month is still
+ * locked, so the reader is told what moved and what the way back is, and
+ * nothing is recomputed beside the frozen figure — two numbers side by side
+ * is the confusion the frozen month exists to avoid.
+ */
+export function supersededText(sheet: Timesheet): string | null {
+	if (sheet.status !== "approved" || !sheet.supersededAt) return null;
+	const day = new Date(sheet.supersededAt).toLocaleDateString("en-US", {
+		month: "short",
+		day: "numeric",
+		year: "numeric",
+	});
+	const by = sheet.supersededByName ? ` by ${sheet.supersededByName}` : "";
+	return `The contract changed on ${day}${by}, after this month was approved. The figures are as approved and the month stays locked; reopen it to approve against the current terms.`;
+}
+
 /** "September 2026" from a sheet month's "2026-09-01" (or "2026-09"). */
 export function sheetMonthTitle(month: string): string {
 	const date = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1, 12);

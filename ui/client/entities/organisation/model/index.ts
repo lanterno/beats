@@ -36,6 +36,7 @@ export {
 	frozenText,
 	organisationToday,
 	sheetMonthTitle,
+	supersededText,
 	TIMESHEET_STATUS_LABELS,
 	TIMESHEET_STATUS_TONE,
 } from "./timesheets";
@@ -73,6 +74,7 @@ export type {
 	Team,
 	TeamInput,
 	Timesheet,
+	TimesheetAction,
 	TimesheetEvent,
 	TimesheetStatus,
 	WeekStart,

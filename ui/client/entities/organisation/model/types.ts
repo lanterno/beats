@@ -286,10 +286,13 @@ export interface FrozenMonth {
 	absenceDays: number;
 }
 
+/** A step in a sheet's history: a state it entered, or the terms changing under an approval. */
+export type TimesheetAction = TimesheetStatus | "terms_changed";
+
 export interface TimesheetEvent {
 	at: string;
 	by: string;
-	action: TimesheetStatus;
+	action: TimesheetAction;
 	comment?: string;
 }
 
@@ -309,6 +312,14 @@ export interface Timesheet {
 	decidedByName?: string;
 	comment?: string;
 	frozen?: FrozenMonth;
+	/**
+	 * Set while the contract behind an approved month has moved since it was
+	 * approved (decision 23). The month is still approved and locked, and
+	 * `frozen` is still the record; a decider decides whether to reopen.
+	 */
+	supersededAt?: string;
+	supersededBy?: string;
+	supersededByName?: string;
 	history: TimesheetEvent[];
 }
 

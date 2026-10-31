@@ -1052,6 +1052,19 @@ export const TimesheetStatusSchema = z.enum([
 	"reopened",
 ]);
 
+/**
+ * A step in a sheet's history: the four states, and `terms_changed` — the
+ * contract behind an approved month moved, which changes no state
+ * (docs/organisations.md, decision 23).
+ */
+export const TimesheetActionSchema = z.enum([
+	"submitted",
+	"approved",
+	"changes_requested",
+	"reopened",
+	"terms_changed",
+]);
+
 const FrozenMonthSchema = z.object({
 	worked: z.number(),
 	expected: z.number().nullable(),
@@ -1074,11 +1087,14 @@ export const ApiTimesheetSchema = z.object({
 	decided_by_name: z.string().nullable().optional(),
 	comment: z.string().nullable().optional(),
 	frozen: FrozenMonthSchema.nullable().optional(),
+	superseded_at: z.string().nullable().optional(),
+	superseded_by: z.string().nullable().optional(),
+	superseded_by_name: z.string().nullable().optional(),
 	history: z.array(
 		z.object({
 			at: z.string(),
 			by: z.string(),
-			action: TimesheetStatusSchema,
+			action: TimesheetActionSchema,
 			comment: z.string().nullable().optional(),
 		}),
 	),
