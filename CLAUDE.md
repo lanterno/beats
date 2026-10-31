@@ -346,8 +346,9 @@ nothing.
   Employment (stages 3–4, `domain/employment.py`): the employer can manage an
   assignment's contract (member writes answer 409 `CONTRACT_MANAGED`; absences become
   requests a decider approves), a submitted month is approved into a stored
-  `FrozenMonth` — the one stored derived figure, by decision — after which every write
-  dated inside it answers 409 `PERIOD_APPROVED` until a recorded reopen; teams scope the
+  `FrozenMonth` — the one stored derived working-time figure, by decision — after which
+  every write dated inside it answers 409 `PERIOD_APPROVED` until a recorded reopen; teams
+  scope the
   `manager` role, `viewer` reads the record only, and the audit log is readable by
   admins. Roles are owner ≥ admin ≥ manager ≥ viewer ≥ member, with the real rules on
   the role's capabilities (`administers`, `decides`, `reads_record`);
@@ -482,6 +483,6 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials — including `/credentials/start` and `/verify`, the ceremony that puts another passkey on a signed-in account — logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
-| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join` (GET to preview, POST to take, the token in `X-Invite-Token` rather than the path); per organisation its settings, `/close` (notice, then `DELETE /{id}` hands members their projects back), `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments and `/{pid}/merge`, `/connect`, `/record` (readers; a manager their teams), `/visible`, `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
+| `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join` (GET to preview, POST to take, the token in `X-Invite-Token` rather than the path); per organisation its settings, `/close` (notice, then `DELETE /{id}` hands members their projects back), `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments and `/{pid}/merge`, `/connect`, `/record` (readers; a manager their teams), `/visible`(+`.csv`), `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
 | `/api/reports` | **Public.** `GET` with the link's token in `X-Report-Token`, never in the path (Cloud Run logs every URL for 30 days): one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |

@@ -5,8 +5,7 @@
 > so the price is known before it is charged.
 
 Decided 2026-10-28, closing the one pricing decision the organisations epic
-left open ([roadmaps/organisations.md](../roadmaps/organisations.md) § Decisions
-still open). This file records the decision and the market it was priced
+(#353) left open. This file records the decision and the market it was priced
 against; the payment machinery that would collect it is deliberately not
 built — see *What this does not decide*, below.
 

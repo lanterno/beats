@@ -100,9 +100,11 @@ No passwords are stored — Beats does not have a password login path.
   connected, from the day chosen) and cleared when the entry is moved to a personal
   project. The organisation's read asks for the stamp and nothing else.
   The tags are derived from the daemon's flow windows when a session is logged, stopped
-  or its times are edited; an edit over no windows keeps the tags it had. The note comes
-  only from an import. An edit writes the project, start and end it carries and the tags, a
-  stop the end and the tags, and neither touches the note or anything else stored.
+  or its times are edited; an edit over no windows keeps the tags it had. The note is
+  written by an import, by the web app's session editor, and by a decider entering time
+  for the member. An edit writes the project, start and end it carries, the tags, and the
+  note only when it sends one (a string sets it, an empty one clears it); a stop writes the
+  end and the tags; neither touches anything else stored.
   Nothing records where a session came from (the timer, a manual entry, the daemon or the
   editor extension).
 - **Timer state**: the currently-running beat per user
@@ -115,12 +117,13 @@ No passwords are stored — Beats does not have a password login path.
 None of these is scoped by `user_id` (docs/organisations.md):
 
 - **Organisations**: `name`, `logo_url`, `week_start`, `holiday_country`,
-  `holiday_subdivision`, `timezone`, `created_at`, `created_by`.
+  `holiday_subdivision`, `timezone`, `retention_years` (see *Retention*, below),
+  `created_at`, `created_by`, and `closes_on` while an owner is closing it.
 - **Memberships** (`org_members`): one per person per organisation — `organisation_id`,
-  `user_id`, `role` (`owner`, `admin`, `member`), the `name` and `email` the person
-  joined under, `joined_at`, `left_at`, `left_reason` (`left`, `removed`, `erased`). After
-  an account is erased, `user_id` is a tombstone (`erased:<membership id>`) and the name
-  and email stay, as the employer's record.
+  `user_id`, `role` (`owner`, `admin`, `manager`, `viewer`, `member`), the `name` and
+  `email` the person joined under, `joined_at`, `left_at`, `left_reason` (`left`,
+  `removed`, `erased`). After an account is erased, `user_id` is a tombstone
+  (`erased:<membership id>`) and the name and email stay, as the employer's record.
 - **Invites** (`org_invites`): `organisation_id`, `token` (32 random bytes, stored as
   read), `email` or null for a link, `role`, `requires_approval`, `created_by`,
   `created_at`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at`. The API sends
@@ -133,23 +136,25 @@ None of these is scoped by `user_id` (docs/organisations.md):
   `project_id`, `user_id`, `shared_from` (the instant from which the member's hours on the
   project are the organisation's), `assigned_at`, `assigned_by`, `ended_at`, and the
   member's personal half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
-  `autostart_repos`, `contract`.
+  `autostart_repos`, `contract`, and `contract_managed` while the organisation holds the
+  contract's pen.
 - **Teams** (`org_teams`): a name and `member_ids` — the scope a manager decides and
   reads for (docs/organisations.md, decision 25).
 - **Absence requests** (`org_absence_requests`): a day off asked for on a managed
   assignment — project, member, `date`, `type`, `half_day`, a `note` addressed to the
   decider (never in the record), `status` and who decided it with what comment. Deleted
   with the account; the approved absence itself is the record and stays.
-- **Timesheets** (`org_timesheets`): one per project · member · month — the `status`,
-  who decided and when, the comment or reopen reason, a `history` of every step, and
-  while approved the `frozen` figures (worked, expected, entries, absence days, the
-  balance at the close): the one place a derived figure is stored, deliberately, so an
-  approved month cannot drift silently (decision 23). Kept at erasure under the
-  tombstone, as the employer's record of the approval.
+- **Timesheets** (`org_timesheets`): one per project · member · month — the `status`, who
+  decided and when, the comment or reopen reason, a `history` of every step, and while
+  approved the `frozen` figures (worked, expected, entries, absence days, the balance at
+  the close): the one place a derived working-time figure is stored, deliberately, so an
+  approved month cannot drift silently (decision 23). Kept at erasure under the tombstone,
+  as the employer's record of the approval.
 - **Audit log** (`org_audit`): `organisation_id`, `at`, `actor_user_id`, `event`,
   `subject_user_id`, `project_id`, `details` — every membership, role, invite, request,
-  project, assignment and connection event, and an erasure. Written now, read by nothing
-  yet.
+  project, assignment and connection event, every managed contract, absence request,
+  timesheet step, entered time, team, merge, closing and retention purge, and an
+  erasure. Read by the organisation's owners and admins.
 
 ### Intelligence and coach
 

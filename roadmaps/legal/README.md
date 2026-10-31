@@ -18,8 +18,10 @@ expects.
 ## What finishing this needs
 
 1. **Counsel review.** This is the whole blocker; everything else is detail.
-2. **Two facts to re-check** before anyone relies on them: the Spanish fine
-   amounts quoted, and the status of Germany's 2026 Working Time Act reform.
+2. **Two facts to re-check** before anyone relies on them, both last checked
+   in October 2026: the Spanish fine amounts quoted (€751–7,500 a company,
+   LISOS art. 7.5), and the status of Germany's 2026 Working Time Act reform
+   (then still a ministry draft keeping §3, §5 and §16(2) as they are).
 3. **A re-read against the product**, if time has passed. Every claim in the
    works-council sheet is meant to be checkable against the running product
    and the open source — that is the point of it, and it is only true while
