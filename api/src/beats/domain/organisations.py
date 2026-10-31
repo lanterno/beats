@@ -987,7 +987,8 @@ class OrganisationService:
     ) -> Record:
         """One month of the organisation's record over `projects`: per
         project, per member assigned (now or before), the finished entries
-        started in the month in `tz`, the absences, the all-time totals and
+        started in the month in `tz` — the organisation's own, every caller
+        passes `_zone(organisation)` — the absences, the all-time totals and
         the balance of a contract if there is one. With `user_id`, that
         member's slice alone — the same queries, narrowed."""
         if organisation.id is None:
@@ -1044,18 +1045,21 @@ class OrganisationService:
             out.append(ProjectRecord(project, member_records))
         return Record(organisation, month, first, last, out)
 
-    async def record(self, organisation_id: str, actor: str, month: date, tz: ZoneInfo) -> Record:
-        """What the organisation sees: an admin's read of every project."""
+    async def record(self, organisation_id: str, actor: str, month: date) -> Record:
+        """What the organisation sees: an admin's read of every project. The
+        month is the organisation's own timezone's, as the lock and the
+        freeze have it (#415): two readers in two places read one record,
+        and the record agrees with the month they froze."""
         member = await self._member(organisation_id, actor, OrgRole.ADMIN)
         projects = await self.store.list_projects(organisation_id)
+        tz = self._zone(member.organisation)
         return await self._record(member.organisation, projects, month, tz, user_id=None)
 
-    async def visible(
-        self, organisation_id: str, user_id: str, month: date, tz: ZoneInfo
-    ) -> Record:
+    async def visible(self, organisation_id: str, user_id: str, month: date) -> Record:
         """What the organisation sees of one member — `record` with the
-        member's own id, over the projects they are or were assigned to.
-        Members and former members alike may ask."""
+        member's own id, over the projects they are or were assigned to, in
+        the organisation's timezone like the record it narrows. Members and
+        former members alike may ask."""
         membership = await self.store.membership(organisation_id, user_id)
         organisation = await self.store.get_organisation(organisation_id)
         if membership is None or organisation is None:
@@ -1065,6 +1069,7 @@ class OrganisationService:
         )
         named = await self.store.project_names(organisation_id, (a.project_id for a in assignments))
         projects = sorted(named.values(), key=lambda p: p.name)
+        tz = self._zone(organisation)
         return await self._record(organisation, projects, month, tz, user_id=user_id)
 
     async def archive(

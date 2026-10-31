@@ -600,14 +600,15 @@ async def read_record(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ):
     """What the organisation sees: per project, per member, the finished
-    entries started in `month` in `tz` (start, end, hours, note), the
-    absences (date, type, half day), the all-time totals, and where the
-    member has a contract its balance as of today. Nothing else, and nothing
-    about now. Owners, admins and viewers whole; a manager their teams'."""
-    return _record(await service.scoped_record(organisation_id, user_id, month, tz))
+    entries started in `month` in the organisation's timezone (start, end,
+    hours, note), the absences (date, type, half day), the all-time totals,
+    and where the member has a contract its balance as of today. Nothing
+    else, and nothing about now. Owners, admins and viewers whole; a manager
+    their teams'. The month is the organisation's timezone's, never the
+    caller's: a `tz` sent by an older client is ignored."""
+    return _record(await service.scoped_record(organisation_id, user_id, month))
 
 
 @router.get("/{organisation_id}/visible", response_model=RecordResponse)
@@ -616,13 +617,12 @@ async def read_visible(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ):
     """What the organisation sees of the caller — the "what Acme can see"
     page: `/record` narrowed to one member by the same read, so it shows
-    the data actually held, not a description of it. Members and former
-    members."""
-    return _record(await service.visible(organisation_id, user_id, month, tz))
+    the data actually held, not a description of it, in the organisation's
+    timezone as the record is. Members and former members."""
+    return _record(await service.visible(organisation_id, user_id, month))
 
 
 @router.get("/{organisation_id}/archive", response_model=ArchiveResponse)

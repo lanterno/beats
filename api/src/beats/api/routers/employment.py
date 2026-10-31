@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field, StringConstraints
 from beats.api.dependencies import (
     CurrentUserId,
     OrganisationServiceDep,
-    TimezoneDep,
     absence_repository_for,
     adjustment_repository_for,
     beat_repository_for,
@@ -533,11 +532,11 @@ async def read_record_csv(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ) -> Response:
     """The month's record as CSV, a row per entry — the report an accountant
-    files. Whoever reads the record; a manager's is their teams'."""
-    record = await service.scoped_record(organisation_id, user_id, month, tz)
+    files, in the organisation's timezone whoever downloads it. Whoever
+    reads the record; a manager's is their teams'."""
+    record = await service.scoped_record(organisation_id, user_id, month)
     return Response(
         content=record_csv(record),
         media_type="text/csv",
@@ -560,12 +559,11 @@ async def read_visible_csv(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ) -> Response:
     """The month the organisation holds about the caller, as the same CSV its
     record exports — the person can always take away exactly what is seen of
     them, not just read it. Members and former members, like `/visible`."""
-    record = await service.visible(organisation_id, user_id, month, tz)
+    record = await service.visible(organisation_id, user_id, month)
     return Response(
         content=record_csv(record),
         media_type="text/csv",
@@ -585,13 +583,13 @@ async def read_compliance_csv(
     month: MonthQuery,
     user_id: CurrentUserId,
     service: OrganisationServiceDep,
-    tz: TimezoneDep,
 ) -> Response:
     """The compliance record (docs/organisations.md, stage 3): per member,
     per day — first start, last end, breaks, total, and the warnings a
     working-time authority would raise (a day over 10 hours, rest under 11,
-    taken over every project the member is on). Whoever reads the record."""
-    record = await service.scoped_record(organisation_id, user_id, month, tz)
+    taken over every project the member is on), the day being the
+    organisation's timezone's. Whoever reads the record."""
+    record = await service.scoped_record(organisation_id, user_id, month)
     return Response(
         content=compliance_csv(record),
         media_type="text/csv",

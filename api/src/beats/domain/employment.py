@@ -34,7 +34,6 @@ what "September" was.
 
 from datetime import date, datetime, timedelta
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from beats.domain.billing import utc_range
 from beats.domain.contracts import absences_by_day, expected_on
@@ -659,12 +658,15 @@ class EmploymentService(OrganisationService):
 
     # --- the record, scoped (stage 4) -------------------------------------------------
 
-    async def scoped_record(self, organisation_id: str, actor: str, month: date, tz: ZoneInfo):
+    async def scoped_record(self, organisation_id: str, actor: str, month: date):
         """The record for whoever reads it: whole for an owner, admin or
         viewer, a manager's narrowed to the members of their teams. The
         narrowing drops rows after the one read the record already makes —
         the reader is the organisation's own staff, and what is dropped is
-        other members' slices of the same record, not anything outside it."""
+        other members' slices of the same record, not anything outside it.
+        The month is the organisation's timezone's, whoever and wherever
+        the reader is (#415): deciders in Lisbon and Berlin take away the
+        same compliance file, and a late entry lands on one day."""
         scope = await self._reader_scope(organisation_id, actor)
         organisation = await self.store.get_organisation(organisation_id)
         if organisation is None:
@@ -672,6 +674,7 @@ class EmploymentService(OrganisationService):
 
             raise OrganisationNotFound()
         projects = await self.store.list_projects(organisation_id)
+        tz = self._zone(organisation)
         record = await self._record(organisation, projects, month, tz, user_id=None)
         if scope is None:
             return record
