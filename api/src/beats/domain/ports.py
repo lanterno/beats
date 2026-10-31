@@ -407,7 +407,7 @@ class OrganisationStore(Protocol):
         active_only: bool = True,
     ) -> list[OrgAssignment]: ...
     async def open_assignment(
-        self, assignment: OrgAssignment, *, keep_personal: bool
+        self, assignment: OrgAssignment, *, keep_personal: bool, reopen: bool = True
     ) -> OrgAssignment: ...
     async def end_assignments(
         self, organisation_id: str, user_id: str, at: datetime, project_id: str | None = None

@@ -184,6 +184,16 @@ def _entry(beat: Beat, tz: ZoneInfo) -> RecordEntry:
     )
 
 
+def _latest[T: (datetime, date)](left: T | None, right: T | None) -> T | None:
+    """The later of two optional marks, where unset means no mark at all —
+    used where folding two assignments must keep whichever reaches further."""
+    if left is None:
+        return right
+    if right is None:
+        return left
+    return max(left, right)
+
+
 MIN_CLOSE_NOTICE_DAYS = 30  # members export on their own clock, not the owner's
 DEFAULT_CLOSE_NOTICE_DAYS = 60  # one round number with the pricing decision's grace
 
@@ -911,17 +921,42 @@ class OrganisationService:
         ]
         if approved:
             raise PeriodApproved(min(approved))
-        for a in await self.store.list_assignments(organisation_id, project_id=source_id):
+        # Ended assignments fold too. The source's rows move to the target
+        # whoever wrote them, and the record is built from assignments — so
+        # folding only the active ones and deleting the rest takes a former
+        # member, and an erased one, out of a record the employer may be
+        # bound to keep (#406).
+        for a in await self.store.list_assignments(
+            organisation_id, project_id=source_id, active_only=False
+        ):
             existing = await self.store.assignment(organisation_id, target_id, a.user_id)
             if existing is None:
                 folded = a.model_copy(update={"project_id": target_id})
             else:
-                update: dict[str, Any] = {"shared_from": min(existing.shared_from, a.shared_from)}
+                update: dict[str, Any] = {
+                    "shared_from": min(existing.shared_from, a.shared_from),
+                    # Both projects' rows now live under the target, so the
+                    # merged assignment keeps back both windows of history:
+                    # the later instant covers the earlier one.
+                    "private_before": _latest(existing.private_before, a.private_before),
+                    "private_before_day": _latest(
+                        existing.private_before_day, a.private_before_day
+                    ),
+                    # Active on either side is active: the member is still on
+                    # the surviving project. Ended on both ends at the later
+                    # of the two, so the record still knows when they left.
+                    "ended_at": (
+                        None if existing.active or a.active else max(existing.ended_at, a.ended_at)  # ty: ignore[invalid-argument-type]
+                    ),
+                }
                 if existing.contract is None and a.contract is not None:
+                    # The contract travels whole, `contract_managed` with it:
+                    # who holds the pen is a term of the contract, not of the
+                    # assignment it is parked on.
                     update["contract"] = a.contract
                     update["contract_managed"] = a.contract_managed
                 folded = existing.model_copy(update=update)
-            await self.store.open_assignment(folded, keep_personal=False)
+            await self.store.open_assignment(folded, keep_personal=False, reopen=False)
         await self.store.delete_assignments(organisation_id, source_id)
         moved = await self.store.repoint_project_rows(source_id, target_id)
         dropped = await self.store.delete_unapproved_timesheets(organisation_id, source_id)

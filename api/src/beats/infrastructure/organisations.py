@@ -431,16 +431,23 @@ class MongoOrganisationStore:
         return [_load(OrgAssignment, doc) for doc in docs]
 
     async def open_assignment(
-        self, assignment: OrgAssignment, *, keep_personal: bool
+        self, assignment: OrgAssignment, *, keep_personal: bool, reopen: bool = True
     ) -> OrgAssignment:
         """Assign, or reopen an ended assignment: one document per member per
         project. With `keep_personal` the personal fields stored on an ended
         assignment stay — a member taken off and put back keeps their goal,
         repo paths and contract; without it they are replaced by the ones
-        sent, which only a connect does."""
+        sent, which only a connect does.
+
+        `reopen` is what assigning means, and the merge is the one caller
+        that turns it off: folding an assignment must not put a former
+        member back on a project, only move their half of it."""
         data = _dump(assignment)
         data.pop("_id", None)
-        data["ended_at"] = None
+        if reopen:
+            data["ended_at"] = None
+        else:
+            data.setdefault("ended_at", None)
         if keep_personal:
             for field in PERSONAL_FIELDS:
                 data.pop(field, None)
@@ -486,7 +493,13 @@ class MongoOrganisationStore:
         requests. One of the few writes that cross user scopes (with
         erasure, the deletion's hand-back and wipe, and the retention purge),
         made only by the merge, after the service has checked both projects
-        are the same organisation's."""
+        are the same organisation's.
+
+        The member's own references to the project move with their rows:
+        a weekly plan's budget and a flow window's active project. Left
+        behind they point at a document the merge is about to delete, which
+        costs the member a planned week and the daemon's record of what they
+        were working on."""
         moved: dict[str, int] = {}
         rows = (*member_row_collections(self._db), ("absence_requests", self.absence_requests))
         for name, collection in rows:
@@ -494,7 +507,22 @@ class MongoOrganisationStore:
                 {"project_id": source_id}, {"$set": {"project_id": target_id}}
             )
             moved[name] = result.modified_count
+        moved.update(await self._repoint_references(source_id, target_id))
         return moved
+
+    async def _repoint_references(self, source_id: str, target_id: str) -> dict[str, int]:
+        """The two places a member names a project that is not a row of
+        theirs: a weekly plan's per-project budget, and the project a flow
+        window was recorded against."""
+        plans = await self._db.weekly_plans.update_many(
+            {"budgets.project_id": source_id},
+            {"$set": {"budgets.$[b].project_id": target_id}},
+            array_filters=[{"b.project_id": source_id}],
+        )
+        windows = await self._db.flow_windows.update_many(
+            {"active_project_id": source_id}, {"$set": {"active_project_id": target_id}}
+        )
+        return {"plan_budgets": plans.modified_count, "flow_windows": windows.modified_count}
 
     async def delete_assignments(self, organisation_id: str, project_id: str) -> int:
         result = await self.assignments.delete_many(
@@ -558,7 +586,9 @@ class MongoOrganisationStore:
         self, project_id: str, user_id: str, new_project_id: str
     ) -> dict[str, int]:
         """One member's rows move to their handed-back project and stop
-        being anyone's record: the stamp goes with the organisation."""
+        being anyone's record: the stamp goes with the organisation. Their
+        weekly-plan budgets and flow windows on it move too, for the reason
+        they do in a merge — the document they name is about to go."""
         moved: dict[str, int] = {}
         for name, collection in member_row_collections(self._db):
             result = await collection.update_many(
@@ -566,6 +596,17 @@ class MongoOrganisationStore:
                 {"$set": {"project_id": new_project_id}, "$unset": {"organisation_id": ""}},
             )
             moved[name] = result.modified_count
+        plans = await self._db.weekly_plans.update_many(
+            {"user_id": user_id, "budgets.project_id": project_id},
+            {"$set": {"budgets.$[b].project_id": new_project_id}},
+            array_filters=[{"b.project_id": project_id}],
+        )
+        windows = await self._db.flow_windows.update_many(
+            {"user_id": user_id, "active_project_id": project_id},
+            {"$set": {"active_project_id": new_project_id}},
+        )
+        moved["plan_budgets"] = plans.modified_count
+        moved["flow_windows"] = windows.modified_count
         return moved
 
     async def delete_organisation_rows(
