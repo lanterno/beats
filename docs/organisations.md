@@ -7,11 +7,12 @@
 > projects to that timeline, marked, and shows the organisation the hours on
 > them and nothing else.
 
-This is stage 2 of the organisations epic (#353): the foundations.
-[roadmaps/organisations.md](../roadmaps/organisations.md) holds the staging and
-the reasoning that led here; this file records what was built and the
-decisions it rests on, so later stages do not re-litigate them. Stage 1,
-clients and billing, is in [billing.md](billing.md).
+This is what the organisations epic (#353) has built: the foundations (stage
+2, decisions 1–20), employment (stage 3) and scale (stage 4, decisions
+21–30). It records the decisions the build rests on, so later work does not
+re-litigate them. Stage 1, clients and billing, is in
+[billing.md](billing.md). What is not built yet, and why each piece waits, is
+in [roadmaps/organisations.md](../roadmaps/organisations.md).
 
 ---
 
@@ -82,40 +83,48 @@ first, then the model was built on them.
 Then the model's own:
 
 4. **Only `projects` gets a second owner.** `MongoStore._q` stamps `user_id`
-   on every query of eighteen repositories; stage 2 widens exactly one.
-   `MongoProjectRepository` reads a person's own documents plus the
-   organisation projects they hold an active assignment to, and the other
-   seventeen are untouched: a beat on an organisation's project is still the
-   member's own document, user-scoped.
+   on every query of the repositories built on it (twenty-one now); stage 2
+   widened exactly one. `MongoProjectRepository` reads a person's own
+   documents plus the organisation projects they hold an active assignment
+   to, and the others are untouched: a beat on an organisation's project is
+   still the member's own document, user-scoped.
 5. **An organisation's project document carries the organisation's fields and
    nothing personal.** `ORGANISATION_FIELDS` — name, description, colour,
    archived, kind, GitHub repo, category — live on the document, with
    `organisation_id` and no `user_id`. `PERSONAL_FIELDS` — the weekly goal
    and its overrides, the local repo paths that auto-start the timer, and
-   (until stage 3) the contract — live on the member's **assignment**, so two
+   the contract (which stage 3 let the employer write without moving it,
+   decision 21) — live on the member's **assignment**, so two
    members of one project each keep their own, and so a document that
    reaches every paired device of every assigned member carries no one's
    repo paths. The repository merges the two on read into one `Project` and
    splits them on write; a member's write that changes an organisation field
    is a 409 `ORGANISATION_PROJECT` naming the field, and an admin writes
    those fields through the organisation's own routes.
-6. **The contract stays the member's in this stage**, on their assignment.
-   Stage 3 makes the employer its writer; the grain is already per person,
-   which is the grain a contract has, so stage 3 changes who may write and
-   not where it lives. `docs/work-contracts.md` decision 1 — the day-job
-   project *is* the contract — stands for a personal day job and is read
-   through the assignment for an organisation's.
+6. **The contract lives on the member's assignment.** Stage 2 left the member
+   its only writer, and stage 3 let the employer take the pen (decision 21).
+   The grain was already per person, which is the grain a contract has, so
+   stage 3 changed who may write and not where it lives.
+   `docs/work-contracts.md` decision 1 — the day-job project *is* the contract
+   — stands for a personal day job and is read through the assignment for an
+   organisation's.
 7. **The organisation's read is keyed on its own stamp.** A beat or absence
    written against an organisation's project is stamped `organisation_id` by
    the service that writes it (`TimerService.start_timer`,
-   `BeatService.create_beat` / `update_beat`, `ContractService.record_absence`),
-   and moving a beat to a personal project clears the stamp.
-   `MongoOrganisationRecords` reads `{organisation_id, project_id ∈ its
-   projects, end ≠ null}` and nothing else — the one unscoped reader, in the
-   shape of 1c's `MongoReportLinkLookup`. A flow score, a tag, a biometric or
-   another member's personal project is unreachable because the query for it
-   is never made (`TestOrganisationWall`), not because a filter removed it. A
-   beat on the organisation's project *without* the stamp — moved there by
+   `BeatService.create_beat` / `update_beat`,
+   `ContractService.record_absence`, and from stage 3 the employer's
+   `EmploymentService.enter_time` and an approved absence request), and moving
+   a beat to a personal project clears the stamp. `MongoOrganisationRecords`
+   reads `{organisation_id, project_id ∈ its projects, end ≠ null}` — the one
+   unscoped reader, in the shape of 1c's `MongoReportLinkLookup`. Beside the
+   record it answers only two yes-or-no questions over the same stamp (whether
+   a stamped timer still runs inside a month being approved, decision 23;
+   whether a member has unshared rows on the project, decision 16) and reads
+   the balance adjustments on an assigned member's project, which carry no
+   stamp and make up the balance it is shown. A flow score, a tag, a biometric
+   or another member's personal project is unreachable because the query for
+   it is never made (`TestOrganisationWall`), not because a filter removed it.
+   A beat on the organisation's project *without* the stamp — moved there by
    hand in the database, or before a connected project's `shared_from` — is
    not read.
 8. **Connecting hands the document over and stamps the chosen history.** The
@@ -141,8 +150,11 @@ Then the model's own:
    reopens the membership; assignments are made again by an admin.
 10. **Roles are owner, admin, member, each including the ones below.**
     Admins run members, invites, requests, projects, assignments, settings
-    and read the record. The owner role is given and taken by owners only,
-    no invite carries it, and the last owner can neither leave, be removed
+    and read the record. (Stage 4 put manager and viewer between admin and
+    member, with rights read off capabilities rather than the ladder, and
+    shared the record with them: decision 25.) The owner role is given and
+    taken by owners only, no invite carries it, and the last owner can
+    neither leave, be removed
     nor be demoted (409 `LAST_OWNER`). A non-member and an unknown
     organisation read the same, 404 `ORGANISATION_NOT_FOUND`; a member
     without the role is 403 `ORGANISATION_ROLE_REQUIRED`.
@@ -156,10 +168,13 @@ Then the model's own:
     until it expires or is revoked, and with `requires_approval` makes a
     join request for an admin instead of a member. Every token is 32
     URL-safe bytes, stored as read, as 1c's are.
-12. **The audit log is written from the start and read by nothing.**
+12. **The audit log is written from the start, before anything reads it.**
     `org_audit` records every membership, role, invite, request, project,
-    assignment and connection event, and an account's erasure. Stage 4 reads
-    it; it cannot be backfilled, so it is cheaper to have now.
+    assignment and connection event, and an account's erasure; the later
+    stages add their own (contracts, absence requests, timesheets, entered
+    time, teams, merges, closing, retention). Stage 4 reads it
+    (`GET /{id}/audit`); it cannot be backfilled, so it was cheaper to have
+    from stage 2.
 13. **A backup carries the member's view and restores only their half.** The
     full export lists an organisation's project as the member sees it, with
     `organisation` set, and their entries on it with their stamps. On import,
@@ -194,11 +209,12 @@ Then the model's own:
     one the project as it stands gives — an organisation's, and started on
     or after the member's `shared_from`. A backup from before a connect
     cannot strip the record, and an edited one cannot plant it.
-19. **The rows stay the person's to edit, in this stage.** A member can
-    still delete or move an entry that is an organisation's record, before
-    and after leaving: rule 1 says the data is theirs, and nothing here is
-    approved or closed yet. Stage 3's locked periods are where an employer's
-    guarantee begins; the erasure pass keeps the record against the account
+19. **The rows stay the person's to edit, until a month is approved.** A
+    member can still delete or move an entry that is an organisation's
+    record, before and after leaving: rule 1 says the data is theirs. Stage
+    3's approved months are where an employer's guarantee begins: inside one,
+    the write answers 409 `PERIOD_APPROVED` until the month is reopened
+    (decision 23). The erasure pass keeps the record against the account
     going, not against the person's own edits.
 20. **The last-owner check is made twice.** The count before a demotion,
     leave or removal is not atomic with the write, so after the write the
@@ -214,7 +230,9 @@ New collections, none scoped by `user_id`:
 - **`organisations`**: `name`, `logo_url`, `week_start` (`monday`,
   `saturday`, `sunday`), `holiday_country` / `holiday_subdivision` (checked
   against the calendar library at write time, as a contract's are),
-  `timezone` (checked against the tz database), `created_at`, `created_by`.
+  `timezone` (checked against the tz database), `retention_years` (decision
+  30), `created_at`, `created_by`, and `closes_on` while it is closing
+  (decision 29).
 - **`org_members`**: one per person per organisation, reopened on rejoining
   — `organisation_id`, `user_id` (a tombstone after erasure), `role`,
   `name`, `email` (what the organisation knew them by, taken from the
@@ -230,9 +248,21 @@ New collections, none scoped by `user_id`:
   reassigning — `organisation_id`, `project_id`, `user_id`, `shared_from`
   (an instant), `assigned_at`, `assigned_by`, `ended_at`, and the personal
   half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
-  `autostart_repos`, `contract`. Unique on `(project_id, user_id)`.
+  `autostart_repos`, `contract`, and `contract_managed` (decision 21).
+  Unique on `(project_id, user_id)`.
 - **`org_audit`**: `organisation_id`, `at`, `actor_user_id`, `event`,
   `subject_user_id`, `project_id`, `details`.
+- **`org_teams`** (stage 4): `organisation_id`, `name`, `member_ids`,
+  `created_at`.
+- **`org_absence_requests`** (stage 3): `organisation_id`, `project_id`,
+  `user_id`, `date`, `type`, `half_day`, `note` (to the decider), `status`,
+  `requested_at`, `decided_at`, `decided_by`, `comment`.
+- **`org_timesheets`** (stage 3): `organisation_id`, `project_id`,
+  `user_id`, `month` (its 1st, in the organisation's timezone), `status`,
+  `submitted_at`, `decided_at`, `decided_by`, `comment`, `frozen` (the
+  `FrozenMonth`: `worked`, `expected`, `balance_end`, `entries`,
+  `absence_days`) and `history` (each submit, decision and reopen: when, by
+  whom, the comment). Unique on `(project_id, user_id, month)`.
 
 Changed:
 
@@ -243,19 +273,28 @@ Changed:
   every tenant, and measured in `TestProjectsIndex` — and `organisation_id`.
 - **`timeLogs`** and **`absences`**: `organisation_id`, sparse, set when
   written against an organisation's project; indexed with `project_id` for
-  the organisation's read.
+  the organisation's read. A beat a decider logged for the member also
+  carries `entered_by` (decision 24).
 
 The domain models are in `domain/models.py` under *Organisations*; the
-rules in `domain/organisations.py` (`OrganisationService`); the persistence
-in `infrastructure/organisations.py` (`MongoOrganisationStore`,
-`MongoOrganisationRecords`); the ports in `domain/ports.py`.
+rules in `domain/organisations.py` (`OrganisationService`) and, for stages
+3–4, `domain/employment.py` (`EmploymentService`, which extends it and is
+what every route is given); retention in `domain/retention.py` and
+`infrastructure/retention.py`; the persistence in
+`infrastructure/organisations.py` (`MongoOrganisationStore`,
+`MongoOrganisationRecords`) and the approved-month lock in
+`infrastructure/repositories.py` (`MongoPeriodLocks`); the ports in
+`domain/ports.py`; the routes in `api/routers/organisations.py` and
+`api/routers/employment.py`, both under `/api/organisations`.
 
 ---
 
 ## HTTP contract
 
 Every route under `/api/organisations` is behind a session and refused to a
-device token. "Admins" means owner or admin.
+device token. "Admins" means owner or admin; "deciders" owners, admins and
+managers for the members of their teams; "record readers" owners, admins
+and viewers, and managers narrowed to their teams (decision 25).
 
 | Route | Who | What |
 |---|---|---|
@@ -264,32 +303,39 @@ device token. "Admins" means owner or admin.
 | `GET /invitations` | anyone | Who has invited my account's email, and as what — no token |
 | `GET /join`, `POST /join` (`X-Invite-Token`) | anyone | Preview, then join (`joined`) or request (`pending`). The token is in a header, not the path Cloud Run logs for 30 days |
 | `GET /{id}`, `PUT /{id}` | members / admins | The organisation and my standing; its settings |
+| `POST`, `DELETE /{id}/close` | owners | Start the notice period (or move its day); call it off (decision 29) |
+| `DELETE /{id}` | owners | From the closing day on: hand members their projects back, then delete the organisation (decision 29) |
 | `GET /{id}/members` | members | Active members, by the name and address they joined under |
 | `PATCH /{id}/members/{uid}`, `DELETE …` | admins | Role; removal |
 | `POST /{id}/leave` | members | Leave |
-| `GET`, `POST /{id}/invites`, `DELETE /{id}/invites/{iid}` | admins | Open invites; a new one (the token is in the answer, and nowhere else); revoke |
+| `GET`, `POST /{id}/invites`, `DELETE /{id}/invites/{iid}` | admins | Open invites; a new one; revoke. The token is in these admins' answers and nowhere else |
 | `GET /{id}/requests`, `POST /{id}/requests/{rid}` | admins | Waiting requests; approve or decline |
-| `GET`, `POST /{id}/projects`, `PUT /{id}/projects/{pid}` | admins | The organisation's projects with who is on each; create; the organisation's fields |
+| `GET`, `POST /{id}/projects`, `PUT /{id}/projects/{pid}` | admins | The organisation's projects with who is on each (`?archived=`); create; the organisation's fields |
+| `POST /{id}/projects/{pid}/merge` | admins | Fold `pid` into another of the organisation's projects (decision 28) |
 | `PUT`, `DELETE /{id}/projects/{pid}/members/{uid}` | admins | Assign; unassign |
 | `POST /{id}/connect` (`tz` required) | members | Connect one of my own projects from `share_from`, or null for now |
-| `GET /{id}/record?month=&tz=` | admins | What the organisation sees |
-| `GET /{id}/visible?month=&tz=` | members, former members | What it sees of me — the same read |
+| `GET /{id}/record?month=&tz=` | record readers | What the organisation sees; a manager's narrowed to their teams |
+| `GET /{id}/visible`, `/visible.csv` (`month=&tz=`) | members, former members | What it sees of me — the same read; the month as CSV |
 | `GET /{id}/archive`, `/archive.csv` | members, former members | My own entries and absences that are its record |
 | `GET`, `POST /{id}/teams`, `PUT`, `DELETE /{id}/teams/{tid}` | readers / admins | Teams: a manager's scope |
 | `GET`, `PUT /{id}/projects/{pid}/members/{uid}/contract` | deciders | The employer's contract on an assignment; `managed` takes or returns the pen |
 | `POST /{id}/projects/{pid}/members/{uid}/adjustments` | deciders | A payout, reset or cap on a managed assignment |
 | `POST /{id}/projects/{pid}/members/{uid}/entries` | deciders | Enter a finished session for a member, marked `entered_by` |
-| `POST`, `GET /{id}/absence-requests`, `POST …/{rid}/decision`, `DELETE /{rid}` | members / deciders | Ask, list, decide (approve books the absence), withdraw |
-| `POST`, `GET /{id}/timesheets`, `POST …/{tid}/decision`, `POST …/{tid}/reopen` | members / deciders | Submit a month; approve (freeze) or send back; reopen with a reason |
-| `GET /{id}/audit?before=&limit=` | admins | The audit log, newest first |
-| `GET /{id}/record.csv`, `/compliance.csv?month=` | record readers | The month flat, and per day with breaks |
+| `POST`, `GET /{id}/absence-requests` (`?pending=`), `POST …/{rid}/decision`, `DELETE /{rid}` | members / deciders | Ask; list (my own, or a decider's scope); decide (approve books the absence); withdraw |
+| `POST`, `GET /{id}/timesheets` (`?month=`), `POST …/{tid}/decision`, `POST …/{tid}/reopen` | members / deciders | Submit a month; list (my own; a decider's scope; every sheet for a viewer); approve (freeze) or send back; reopen with a reason |
+| `GET /{id}/audit?before=&limit=` | admins | The audit log, newest first (100 a page by default, at most 500) |
+| `GET /{id}/record.csv`, `/compliance.csv` (`month=&tz=`) | record readers | The month flat, and per day with breaks and warnings |
 
 The record's shape is written field by field (`RecordResponse`), as the
-public report's is, so what crosses cannot grow by inheritance: per project,
-per member, `shared_from`, `active`, the month's `hours`, `entries` (`day`,
-`start`, `end`, `hours`, `note`), `absences` (`date`, `type`, `half_day`),
-`totals` (all-time entries and hours, first and last), `has_contract` and
-`balance` (as of today, with its four terms). Codes: `ORGANISATION_NOT_FOUND`
+public report's is, so what crosses cannot grow by inheritance: the
+`organisation` (`id`, `name`, `logo_url`), the `month` with its `first` and
+`last` day, and per project (the organisation's own fields), per member,
+`user_id`, `name`, `shared_from`, `active`, the month's `hours`, `entries`
+(`id`, `day`, `start`, `end`, `hours`, `note`), `absences` (`date`, `type`,
+`half_day`), `totals` (all-time entries and hours, first and last),
+`has_contract` and `balance` (as of today, with its four terms). The
+project and the totals are domain models embedded whole; neither carries
+anything of the member's. Codes: `ORGANISATION_NOT_FOUND`
 404, `ORGANISATION_ROLE_REQUIRED` 403, `ORGANISATION_PROJECT` 409,
 `INVITE_NOT_FOUND` 404, `INVITE_EXPIRED` 410, `ALREADY_A_MEMBER` 409,
 `JOIN_REQUEST_PENDING` 409, `JOIN_REQUEST_NOT_FOUND` 404, `MEMBER_NOT_FOUND`
@@ -298,10 +344,18 @@ per member, `shared_from`, `active`, the month's `hours`, `entries` (`day`,
 `NOT_MANAGED` 409, `PERIOD_APPROVED` 409, `MONTH_NOT_ENDED` 409,
 `TIMESHEET_NOT_FOUND` 404, `TIMESHEET_APPROVED` 409,
 `ABSENCE_REQUEST_NOT_FOUND` 404, `REQUEST_DECIDED` 409, `TEAM_NOT_FOUND`
-404, `OUTSIDE_MANAGER_SCOPE` 403.
+404, `OUTSIDE_MANAGER_SCOPE` 403; the later stage-4 work adds
+`MERGE_INTO_ITSELF` 409, `CLOSE_NOTICE_TOO_SHORT` 409,
+`ORGANISATION_NOT_CLOSING` 409, `ORGANISATION_STILL_CLOSING` 409 and
+`RETENTION_BELOW_FLOOR` 409. Shared codes answer here too:
+`PROJECT_HAS_BILLING` 409 on connect, `UNKNOWN_HOLIDAY_REGION` 400 and
+`INVALID_TIMEZONE` 400 on the settings and the employer's contract, and the
+contract's own 409s (`ADJUSTMENT_OUTSIDE_BALANCE`,
+`VACATION_OPENING_OUTSIDE_CONTRACT`) on the employer's writes.
 
 On the member's own routes, a `Project` gains `organisation` (`id`, `name`,
-`logo_url`, `shared_from`), a beat and an absence `organisation_id`, and
+`logo_url`, `shared_from`, `contract_managed`), a beat and an absence
+`organisation_id`, a beat a decider logged `entered_by`, and
 `PUT /api/projects/` answers 409 `ORGANISATION_PROJECT` for a change to an
 organisation field, as do `/archive` and `/unarchive`. Starting a timer or
 logging an entry on a project whose assignment has ended is a 404, as for a
@@ -311,60 +365,76 @@ project that does not exist.
 
 ## The UI's rules
 
-- An organisation's project is **marked** wherever projects are listed —
-  the index, the picker, the sidebar — with `OrganisationMark`: the logo, or
-  a lettered tile, and the name. The companion puts the name under the kind
+- An organisation's project is **marked** where projects are listed, with
+  `OrganisationMark`: the logo or a lettered tile, with the name on the
+  projects index and the tile alone in the picker. The sidebar names the
+  organisation on hover ("Project · Acme"), since a tile there cost the
+  project's name its width. The companion puts the name under the kind
   ("Day job · Acme").
 - The timeline offers **Everything · Personal · Acme** as pills over one
   feed (`?owner=`), never a workspace to switch into.
-- On the project page the header carries the organisation and "shared
-  since"; the colour dot and the name are not controls; the settings drawer
-  disables the organisation's fields and says whose they are, keeps the
-  goal, repo paths and contract editable, and replaces Archive with a line
-  that leaving the organisation is how the project leaves the list. A
-  personal project of a member offers **Connect to an organisation…**:
-  the organisation, and start fresh or share from a day.
-- Wherever a note is shown on an organisation's project: "Acme can read this
-  note".
-- `/organisations` lists invitations to accept, my organisations and the
-  ones I left ("Acme (left)" → the archive). `/organisations/:id` is the
-  organisation: for everyone, *What Acme can see* in plain sentences with a
-  link to the actual data (`/visible`) and *Leave*; for admins, members,
-  invites (with the URL to copy), requests, projects and assignments,
-  settings, and the month's record (`/record`). `/organisations/join/:token`
-  is where an invite URL lands.
+- On the project page the header carries the organisation (since when is
+  in its tooltip, and in plain words in the rail's Organisation panel, with
+  the timesheets to submit and the links to *What Acme can see* and to the
+  organisation); the colour dot and the name are not controls; the settings
+  drawer disables the organisation's fields and says whose they are, keeps
+  the goal and repo paths editable, and the contract unless the organisation
+  manages it, and replaces Archive with a line that leaving the
+  organisation is how the project leaves the list. On a managed assignment,
+  time off becomes **Ask for time off**, with the requests and Withdraw. A
+  personal project of a member offers **Connect to an organisation…** (not
+  on a billed or archived one): the organisation, and start fresh or share
+  from a day.
+- Wherever a note is shown on an organisation's project, and on the session
+  editor's note input: "Acme can read this note". A session a decider
+  logged is marked "entered for you" in the web app's timeline.
+- `/organisations` lists the invitations waiting for me (who, and as what;
+  joining takes the link I was sent, decision 11), my organisations with my
+  role, and the ones I left ("Acme (left)" → the archive), and creates one.
+  The sidebar's Organisations item counts the invitations waiting.
+- `/organisations/:id` is the organisation, as tabs kept in `?tab=`, each
+  role seeing only its own: admins *People* (members, teams, invites with
+  the URL to copy, requests), *Projects* (assignments, a member's managed
+  contract, entering time, Merge…), *Approvals*, *Timesheets*, *Audit* and
+  *Settings* (with Closing for the owner); managers and viewers *Approvals*
+  and *Timesheets*; members *Timesheets*. Everyone has *What Acme can see*
+  in plain sentences with a link to the actual data (`/visible`), their own
+  timesheets, their hours (the archive) and *Leave* (disabled, and saying
+  why, for the last owner). Record readers have the month's record
+  (`/record`, a manager's narrowed to their teams) with its two CSVs. A
+  closing organisation says so on this page, to everyone.
+- `/organisations/join/:token` is where an invite URL lands.
 
 ---
 
 ## Employment (stage 3) and scale (stage 4)
 
 Stage 3 turns the contract into something two parties agree on; stage 4 adds
-what only matters past a handful of people. Decisions 21–27:
+what only matters past a handful of people. Decisions 21–30:
 
 21. **The contract stays on the assignment; management is a flag.** The
     employer takes an assignment's contract under its hand
     (`contract_managed`, written through `PUT …/members/{uid}/contract`),
     **starting from the terms the member recorded** — the answer to the
-    contract-disagreement question the epic gated this stage on: the employer's terms arrive as an
-    audited act, never as a silent recomputation of a balance the member
-    relied on. While managed, the member's own contract, absence and
-    adjustment writes answer 409 `CONTRACT_MANAGED`; their week, ledger,
-    balance and vacation reads are untouched. Handing back
-    (`managed: false`) returns the pen. Personal day jobs are exactly as
-    they were — nothing forces anyone into an organisation
-    (`docs/work-contracts.md` decision 1 stands, read through the
-    assignment).
-    In the SPA, the managed-contract dialog lists the assignment's terms
-    with the day each takes effect and which is in force, and edits,
-    removes and adds them through the same term dialog the member's
-    register uses, so one set of rules validates a term whoever writes it
-    (#349). Editing is offered only where the organisation manages the
-    contract: the API would take the write either way, but on an unmanaged
+    contract-disagreement question the epic gated this stage on: the
+    employer's terms arrive as an audited act, never as a silent recomputation
+    of a balance the member relied on. While managed, the member's own
+    contract, absence and adjustment writes answer 409 `CONTRACT_MANAGED`;
+    their week, ledger, balance and vacation reads are untouched. Handing back
+    (`managed: false`) returns the pen. Personal day jobs are exactly as they
+    were — nothing forces anyone into an organisation
+    (`docs/work-contracts.md` decision 1 stands, read through the assignment).
+    In the SPA, the managed-contract dialog, while the contract is managed,
+    lists the assignment's terms with the day each takes effect and which is
+    in force, and edits, removes and adds them through the same term dialog
+    the member's register uses, so one set of rules validates a term whoever
+    writes it (#349). Editing is offered only where the organisation manages
+    the contract: the API would take the write either way, but on an unmanaged
     assignment the terms are the member's, and writing them from the
     employer's side is the silent recomputation this decision refuses. Each
     write sends the whole contract beside `managed`, so
-    `keep_unsent_contract_fields` holds the holiday lists and the
-    entitlement that only the member's own form edits.
+    `keep_unsent_contract_fields` holds the holiday lists and the entitlement
+    that only the member's own form edits.
 22. **An absence on a managed assignment is a request.** The member asks
     (`org_absence_requests` — date, type, half day, and a note *addressed to
     the decider*, which the record never shows); an owner, admin or scoped
@@ -379,11 +449,14 @@ what only matters past a handful of people. Decisions 21–27:
     (`org_timesheets`, one per project · member · month, with a history). A
     decider approves — storing `FrozenMonth`: worked, expected, entries,
     absence days and the balance at the close, **the first stored derived
-    figure in the system** — or asks for changes with a comment. From
-    approval on, every write dated inside the month answers 409
-    `PERIOD_APPROVED`: beat create, edit (either end of the move), delete,
-    a back-dated timer start, absences, adjustments, and the employer's own
-    entries alike (`MongoPeriodLocks`, checked in the member-side services).
+    working-time figure** (the weekly digests store their own totals; no
+    balance, ledger, billing or budget figure is stored) — or asks for
+    changes with a comment. From approval on, every write dated inside the
+    month answers 409 `PERIOD_APPROVED`: beat create, edit (either end of
+    the move), delete, a back-dated timer start, absences, adjustments, and
+    the employer's own entries alike (`MongoPeriodLocks`, checked in the
+    member-side services, and the employer's own check in
+    `EmploymentService`).
     Approval itself refuses while a stamped timer still runs inside the
     month — its hours are in no figure yet. Reopening needs a reason, is
     recorded in the sheet's history and the audit log, lifts the lock and
@@ -394,20 +467,24 @@ what only matters past a handful of people. Decisions 21–27:
     a member (`entered_by` on the beat): it lands on the member's own
     timeline marked "entered for you", is stamped as the organisation's,
     and is in the audit log — the notification the epic asked for is the
-    member's own timeline showing it, since every surface reads it.
+    member's own timeline showing it. Every surface shows the session; the
+    web app's timeline (`TodayFeed`, `WeekDays`) is the one that marks it.
 25. **Teams are a manager's scope.** A team (`org_teams`) is a name and its
     members. The **manager** role decides requests and timesheets, writes
-    managed contracts and enters time for the members of the teams the
-    manager is in — and for nobody else (403 `OUTSIDE_MANAGER_SCOPE`) — and
-    reads the record narrowed to them. The **viewer** role (an accountant,
-    a works council seat) reads the whole record, the CSVs and the teams,
-    and changes nothing. The capabilities are properties on the role
-    (`administers`, `decides`, `reads_record`), not the ladder.
+    managed contracts and enters time for the members of the teams the manager
+    is in — and for nobody else (403 `OUTSIDE_MANAGER_SCOPE`) — and reads the
+    record narrowed to them. The **viewer** role (an accountant, a works
+    council seat) reads the whole record, the CSVs and the teams, and changes
+    nothing. Deciding and reading the record are properties on the role
+    (`decides`, `reads_record`), not rungs of the ladder, so a manager does
+    not read the whole record a viewer does; administering is the ladder
+    from admin up.
 26. **The compliance record is a read, not a store.** `GET
-    /{id}/compliance.csv?month=` derives, per member and day: first start,
-    last end, the breaks between entries, the total, and the warnings a
-    working-time authority would raise — a day over 10 hours (§3 ArbZG,
-    still current law; the June 2026 reform draft keeps the ceiling) and
+    /{id}/compliance.csv?month=` derives, per member, project and day:
+    first start, last end, the breaks between entries, the total, and the
+    warnings a working-time authority would raise — a day over 10 hours
+    (§3 ArbZG, still current law; the June 2026 reform draft keeps the
+    ceiling) and
     rest under 11 hours between working days (Directive 2003/88/EC art. 3).
     A warning is derived from the same rows on every read and never stored:
     an edit that repairs the day repairs the record. The law binds the
@@ -419,9 +496,9 @@ what only matters past a handful of people. Decisions 21–27:
     `record.csv` is the same month as flat entry rows.
 27. **Reminders are the surfaces, not emails.** The API sends no email
     (decision 11); what is missing or waiting shows where people already
-    look — the member's timesheet list says which months are unsubmitted or
-    sent back, the decider's sections say what waits. A digest or push is
-    later work.
+    look — the member's timesheet list offers the ended months still to
+    submit and marks the ones sent back, and the decider's Approvals tab
+    counts and groups what waits. A digest or push is later work (#351).
 
 28. **A merge moves rows, never stamps.** `POST /{id}/projects/{pid}/merge`
     (admins) folds one of the organisation's projects into another — the
@@ -440,16 +517,19 @@ what only matters past a handful of people. Decisions 21–27:
     lose rows silently — reopen first. A sheet submitted over the source
     alone is dropped and resubmitted over the merged project; the source
     document is deleted; the audit log holds the whole act, with counts.
-    The repoint is the one write besides erasure that crosses user scopes
-    (`MongoOrganisationStore.repoint_project_rows`), made only after both
-    projects are checked to be the same organisation's.
+    The repoint (`MongoOrganisationStore.repoint_project_rows`) is one of
+    the four writes that cross user scopes, with erasure, an organisation's
+    deletion (decision 29) and the retention purge (decision 30), and is
+    made only after both projects are checked to be the same
+    organisation's.
 
 29. **Closing is notice; deletion is the connect run backwards.** An owner
     starts a clock (`POST /{id}/close`, at least 30 days out, 60 by
-    default, judged in the organisation's timezone) that every member sees
-    in-app through the organisation they already read — the notice
-    decision 11's no-email rule leaves us. Tracking carries on until the
-    day, and the closing can be called off (`DELETE /{id}/close`).
+    default, judged in the organisation's timezone; posting again moves the
+    day) that every member sees in-app, on the organisation's page — the
+    notice decision 11's no-email rule leaves us. Tracking carries on
+    until the day, and the closing can be called off (`DELETE
+    /{id}/close`).
     `DELETE /{id}` works only from the day on (409
     `ORGANISATION_STILL_CLOSING` / `ORGANISATION_NOT_CLOSING`): each
     member is handed a personal copy of every project they hold rows or a
@@ -480,9 +560,10 @@ what only matters past a handful of people. Decisions 21–27:
     tombstoned rows are deleted. The purge is an idempotent operator-run
     script in the shape of `scripts/erase_account.py`
     (`api/scripts/retention_purge.py`, dry by default), audited as
-    `retention.purged` with counts and months and no data; nothing
-    schedules it, so the beta auto-deletes nothing. DATA.md and PRIVACY.md
-    changed in the same stage, since the setting is a promise they make.
+    `retention.purged` with counts, the cutoff and the years, and no data;
+    nothing schedules it, so the beta auto-deletes nothing. DATA.md and
+    PRIVACY.md changed in the same stage, since the setting is a promise
+    they make.
 
 The audit log, written since stage 2, is now readable: `GET /{id}/audit`
 (owners and admins), newest first, paged by instant.
