@@ -502,6 +502,15 @@ class MongoOrganisationStore:
         )
         return result.deleted_count
 
+    async def delete_assignment(self, organisation_id: str, project_id: str, user_id: str) -> int:
+        """One member's assignment to one project, gone — the deletion's
+        hand-back drops the one it drew on, so a re-run finds no holder
+        twice (#414)."""
+        result = await self.assignments.delete_one(
+            {"organisation_id": organisation_id, "project_id": project_id, "user_id": user_id}
+        )
+        return result.deleted_count
+
     async def delete_unapproved_timesheets(self, organisation_id: str, project_id: str) -> int:
         result = await self.timesheets.delete_many(
             {

@@ -350,7 +350,11 @@ class OrganisationService:
         and its final export was the notice period's job — its project
         documents, memberships, timesheets, audit log and the document
         itself. The hand-backs run first, so a crash midway strands nothing
-        of a member's. Owners only, and only from `closes_on` on (409
+        of a member's — and each hand-back deletes the assignment it drew
+        on, so a re-run after such a crash finds no holder twice and hands
+        out no second copy (#414): the rows already repointed belong to the
+        copy, and the contract's holder is no longer on an assignment.
+        Owners only, and only from `closes_on` on (409
         ORGANISATION_STILL_CLOSING before, ORGANISATION_NOT_CLOSING with no
         notice at all)."""
         me = await self._member(organisation_id, actor, OrgRole.OWNER)
@@ -378,6 +382,7 @@ class OrganisationService:
                 archived = assignment is None or assignment.ended_at is not None
                 new_id = await self.store.hand_back_project(project, user_id, assignment, archived)
                 moved = await self.store.repoint_member_rows(project.id, user_id, new_id)
+                await self.store.delete_assignment(organisation_id, project.id, user_id)
                 counts["projects_handed_back"] += 1
                 for key, value in moved.items():
                     counts[key] = counts.get(key, 0) + value
