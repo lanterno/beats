@@ -2,17 +2,22 @@
 
 The operator's UI for **running the platform**. Issue **#424**.
 
-LifePete has one operator — PRIVACY.md says so in those words — and no place
-to run it from. Every operator act today is a script in `api/scripts/` fired
+LifePete has one operator — "I … am the only operator", PRIVACY.md says — and
+no place to run it from. Every operator act today is a script in `api/scripts/` fired
 by hand at production, every limit is a constant that needs a redeploy to
 change, and everything an operator should *notice* is noticed only by going
 to look.
 
 Split out of [roadmaps/organisations.md](organisations.md) on 2026-10-31,
-designed on 2026-11-01, then twice revised the same day: once when the owner
-asked whether one API could serve both (it can, § *Architecture*), and once
+designed on 2026-11-01, then revised three times the same day: once when the
+owner asked whether one API could serve both (it can, § *Architecture*), once
 in a design review that found the first answer to that question broken (the
-`lifespan` paragraph says how). It was filed under that epic because
+`lifespan` paragraph says how), and once when every claim was checked against
+the code, which found the second answer leaning on two things the code does
+not do yet — `Database.connect` builds the index set, and importing the
+settings demands the session secret — and the organisation commands
+delegating to methods that refuse a caller who is not a member. It was filed
+under that epic because
 an organisation left without an owner (decision 31) was the first thing
 anyone wanted to see; a control plane is not an organisations feature.
 
@@ -40,12 +45,18 @@ The operator's job never requires reading what someone tracked. So:
 
 | Sees | Never sees |
 |---|---|
-| Account id, email, created, last active, state | Sessions, their times, their notes |
+| Account id, email, created, the day last seen, state | Sessions, their times, their notes |
 | Counts: projects, sessions, devices, organisations | Project names, tags, absence notes |
 | Which integrations are connected | Any integration's token or fetched content |
+| Webhook destinations, by domain | A webhook's full URL, or what was sent to it |
 | Coach spend, tokens, model | Any coach conversation or memory |
 | Organisation name, settings, members, roles, seats | Clients, rates, amounts, report contents |
+| An organisation's audit events: what, by whom, to whom, when | Their details — a reopen's reason, a project's or a team's name |
 | Biometric *row counts* | Any biometric value |
+
+"The day last seen" is a date the API does not keep yet (below). It is not
+read off the newest session: that is a session's time, on the right of this
+table.
 
 The operator can still read any document in Mongo, and PRIVACY.md says so
 rather than pretending otherwise. That is why the line is worth drawing:
@@ -60,11 +71,13 @@ enforces almost none of it.** Checked 2026-11-01:
 
 | The operator wants to | What exists now | What the API must grow |
 |---|---|---|
-| Suspend an abusive account | **Nothing** — no field on `User`, no check anywhere | `suspended_at` / `suspended_by` / `reason` on `User`; one check in the auth middleware, cached the way `device_access` already caches a device's revocation |
-| Sign someone out everywhere | `SessionManager._revoked_tokens`, an **in-memory dict per instance** | `sessions_valid_after` on `User`: a token whose `iat` is older is refused. One field, one middleware check, no token list to share |
+| Suspend an abusive account | **Nothing** — no field on `User`, no check anywhere | `suspended_at` / `suspended_by` / `reason` on `User`; one check in the auth middleware **on both branches**, session and device, cached the way `device_access` already caches a device's revocation |
+| Sign someone out everywhere | `SessionManager._revoked_tokens`, an **in-memory dict per instance** | `sessions_valid_after` on `User`: a session whose sign-in is older is refused — read off an `auth_time` claim that `refresh_token` copies unchanged, not off `iat`, which every refresh renews (§ *The enforcement points*). One field, one claim, one middleware check, no token list to share. Sessions only — devices are the next row |
+| Stop one device — a broken daemon, a stolen laptop | `DeviceRegistration.revoked` **already exists**, and the middleware refuses a revoked device | Nothing; the operator invokes it |
 | Cap one account's coach spend | `settings.coach_monthly_budget_usd`, **one global number** | An `account_limits` document the budget check reads before the global |
-| Rate-limit one abuser | `@limiter.limit` constants keyed on IP, per instance | Per-account ceilings from the same document, at the write routes that matter (import, signals, beats) |
+| Rate-limit one abuser | `@limiter.limit` constants keyed on IP, per instance | Per-account ceilings from the same document, at the write routes that matter (import, signals, beats). Still counted per instance, like the IP limits and by the same decision: the document sets the ceiling, not a shared counter |
 | Disable a webhook | `Webhook.active` **already exists** | Nothing |
+| See when an account was last used | `DeviceRegistration.last_seen` for devices; **nothing** on `User` | `last_seen_on` on `User`, a date, stamped at most once a day by the same cached lookup (§ *The enforcement points*) |
 
 Most of the value is unlocked by those small enforcement points, and they
 are API work whichever way the back office is built. Build them first: a
@@ -76,6 +89,15 @@ revoked token dies within the hour anyway. The real gap is that
 renews indefinitely while only one instance knows it was revoked. **This is
 worth an issue of its own, control plane or not**: the user's own logout is
 weaker than it looks.
+
+Device tokens are the longer-lived credential, by design:
+`validate_device_token` skips expiry, so a paired daemon's token is good
+until its registration is revoked. That is why suspension is checked on the
+device branch as well as the session branch — a suspended account whose
+daemon still writes flow windows has not been suspended — and why signing
+out everywhere, which ends sessions, leaves devices to their own row. The
+two acts mean one thing each: sign-out ends sessions, revocation ends one
+device, suspension ends both.
 
 ## Architecture
 
@@ -92,7 +114,7 @@ front end over `/api/operator/*`.
 
 | | A — separate service | B — one API, UI service |
 |---|---|---|
-| Domain logic | **Reimplemented.** "Grant the owner role" has a last-owner guard, an audit write and a role rule, all already in `OrganisationService` | **One implementation**, auditing through the existing `_audit` |
+| Domain logic | **Reimplemented.** "Grant the owner role" needs a membership check, a role rule and an audit write, all already in `OrganisationService` | **One implementation**: the operator's act is a method beside the member's, sharing its helpers and auditing through the existing `_audit` |
 | Enforcement points | Live in the API regardless; A writes the flag from one codebase and checks it from another | Written and checked in one place, one model, one test |
 | Tests | A new harness, plus a cross-repo fixture dance to catch schema drift | `test_api.py`'s harness: testcontainers, real Mongo, the HTTP contract |
 | Schema coupling | The weak point: a renamed field silently empties a page | None — same models |
@@ -111,22 +133,44 @@ composition roots, deployed separately.**
 ### Two composition roots, not a mode switch
 
 The obvious way to do B is an env var that decides which routers mount. **It
-does not survive contact with `lifespan`.** Today's lifespan runs five
-startup passes and builds the index set: `migrate_project_kinds`,
-`clear_personal_goal_on_day_jobs`, `move_sunday_plans_to_monday`,
-`mark_connected_assignments`, `date_pairing_codes`, `ensure_mutation_log_indexes`.
-An operator deployment booting that would either fail on its narrow
-credential or — worse — race the API's own startup passes. A switch that
-gates routers but shares a lifespan is broken, and one that gates the
-lifespan too has become an app factory wearing a disguise.
+does not survive contact with `lifespan`.** Today's lifespan connects —
+and `Database.connect()` itself builds the whole index set
+(`ensure_indexes`, `infrastructure/database.py`) — then runs five startup
+passes, `migrate_project_kinds`, `clear_personal_goal_on_day_jobs`,
+`move_sunday_plans_to_monday`, `mark_connected_assignments` and
+`date_pairing_codes`, and builds the idempotency log's indexes
+(`ensure_mutation_log_indexes`). An operator deployment booting that would
+either fail on its narrow credential or — worse — race the API's own startup
+passes. A switch that gates routers but shares a lifespan is broken, and one
+that gates the lifespan too has become an app factory wearing a disguise.
 
 So: **a second composition root in the same package.**
 
 ```
-api/src/server.py            BEATS the API         → uvicorn server:app
+api/src/server.py            the public API        → uvicorn server:app
 api/src/operator_server.py   the operator API      → uvicorn operator_server:app
 api/src/beats/               the library both compose
 ```
+
+Two things in that library assume the public API is the only thing that
+composes it, and both change before the second root can exist:
+
+- **`Database.connect()` stops building indexes.** `server.py`'s lifespan
+  calls `ensure_indexes` after connecting, and is its only caller (beside
+  the test harness, which already calls it directly). The public API is
+  then the one deployment that builds indexes, the operator's collections'
+  included: it holds the grant, and the operator deployment never needs one.
+- **The settings stop being the API's alone.** `beats/settings.py` builds
+  `settings = Settings()` at import, and `Settings` requires `JWT_SECRET`
+  and `FORWARDED_ALLOW_IPS`; `infrastructure/database.py` imports that
+  singleton, so the first import of the database would demand the session
+  secret. `database.py` takes its DSN from its caller instead — `connect()`
+  already accepts one — and the operator root reads an `OperatorSettings`
+  of its own: the DSN, the IAP audience or the local stand-in, the
+  allowlist. The operator deployment then **never holds `JWT_SECRET`**,
+  which it has no use for and which is every user's session in one value.
+  A test pins it: `operator_server` imports with no `JWT_SECRET` in the
+  environment.
 
 Same image, same `pyproject.toml`, same tests; the Cloud Run service's
 command picks the module. What that buys over a flag:
@@ -136,10 +180,11 @@ command picks the module. What that buys over a flag:
   by construction. (A cheap test still pins it, against the day somebody
   adds the import.)
 - **Each lifespan is honest.** `operator_server`'s connects the database and
-  stops: no migrations, no index building, nothing that needs a write grant
-  on collections it must not touch.
-- **No third mode for jobs.** `BEATS_ROLE=job` was the same mistake again;
-  a Cloud Run Job runs `python -m beats.operator.jobs`, an entry point, not
+  stops — which, once `connect()` builds nothing, is true: no migrations, no
+  index building, nothing that needs a write grant on collections it must
+  not touch.
+- **No third mode for jobs.** A role variable for jobs would be the same
+  mistake again; a Cloud Run Job runs `python -m beats.operator.jobs`, an entry point, not
   an app in a costume.
 - **Middleware differs where it must.** Two roots means two middleware
   stacks: the operator app's resolves an IAP assertion and nothing else,
@@ -175,16 +220,44 @@ already owns the rule:
 
 | Command | Owned by |
 |---|---|
-| Grant the owner role | `OrganisationService` — the last-owner guard (decisions 10, 20) and the audit write are already there |
-| Start or extend a closing notice | `OrganisationService.start_closing` |
+| Grant the owner role | `OrganisationService`, in a new method beside `set_role` (below) |
+| Start, move or cancel a closing notice | `OrganisationService`, in a new method beside `begin_closing` and `cancel_closing`; moving the day is calling it again, so "extend" needs nothing of its own |
+| Delete an organisation whose notice has run out | `OrganisationService`, beside `delete_organisation`; wide, so a job |
 | Suspend, unsuspend, sign out everywhere | A new account service — these are account rules, and they belong with the account, not with the operator who happens to invoke them |
 | Set or clear a limit | The same |
+| Revoke a device | The device registration repository; `DeviceRegistration.revoked` exists |
 | Disable a webhook | The webhook repository; `Webhook.active` exists |
 | Queue an erasure or a purge | Enqueued, never executed inline (below) |
 
-`OperatorService` is then **a coordinator, not a domain**: resolve the
-operator, authorise the role, write the audit, delegate. If a rule ever
-starts living in it, that is the signal it was put in the wrong place.
+**The organisation's methods cannot be called as they stand.** `set_role`,
+`begin_closing`, `cancel_closing` and `delete_organisation` each open with
+`_member(organisation_id, actor, …)`: the caller must be an active member,
+and the owner role and closing are an owner's. The operator is no member,
+and in the case this page exists for there is no owner at all. The
+last-owner guard of decisions 10 and 20 does not help either — it guards
+demotion, leaving and removal, not granting.
+
+So each gets an operator twin beside it in `OrganisationService`, taking an
+`Operator` rather than a user id and sharing everything after the
+membership check. Its rule is decision 31's, made explicit: **the operator
+acts only for an organisation with no owner.** While an owner exists the
+organisation can act for itself, and an operator who grants the owner role
+there is taking a side in its dispute — refused, 409, like any other rule.
+The owner is granted to an active member, normally an admin: the person the
+organisation already trusted most, named in its request.
+
+**The organisation's own log needs an actor that is not a user.**
+`OrgAuditEvent.actor_user_id` is a user id, and `None` already means the
+system — `account.erased` is written that way. An operator act carries an
+actor kind of its own, and the organisation's audit page reads it as the
+operator, so a member reading their organisation's history can tell an
+act of ours from an act of theirs.
+
+There is then **no `OperatorService`.** The command runner below resolves
+the operator, authorises the role, writes the operator's audit and
+delegates; a service doing the same in front of it would be a second
+coordinator. If a rule ever starts living in a command or the runner, that
+is the signal it was put in the wrong place.
 
 ### Commands are objects, so the audit cannot be forgotten
 
@@ -202,9 +275,11 @@ class OperatorCommand(Protocol):
 ```
 
 One runner executes them: check the role, check the typed confirmation,
-call `describe()`, run, write `operator_audit` with before and after, and —
-where a subject is an organisation — write that organisation's own
-`org_audit` too. Four properties fall out of one place rather than ten:
+call `describe()`, run, write `operator_audit` with before and after. Where
+the subject is an organisation, its own `org_audit` entry is written by the
+method the command delegates to, as for every other act on it — the runner
+does not write it a second time. Four properties fall out of one place
+rather than ten:
 
 1. **Nothing is unaudited**; the runner is the only path.
 2. **Destructive work routes itself.** `wide = True` enqueues instead of
@@ -223,12 +298,21 @@ Three Cloud Run services from two images:
 
 | Service | Image | Command | Ingress |
 |---|---|---|---|
-| `beats-api` | API | `uvicorn server:app` | public (today, unchanged) |
-| `beats-operator` | API, **same image** | `uvicorn operator_server:app` | internal, IAP |
-| `beats-backoffice` | a static nginx/`distroless` image | serve `backoffice/dist` | internal, IAP |
+| `beats-api` | API | `uvicorn server:app` | all (today, unchanged) |
+| `beats-operator` | API, **same image** | `uvicorn operator_server:app` | internal and Cloud Load Balancing; IAP at the LB |
+| `beats-backoffice` | a static image (nginx serving files, nothing else) | serve `backoffice/dist` | internal and Cloud Load Balancing; IAP at the LB |
 
 plus a `google_cloud_run_v2_job` running `python -m beats.operator.jobs` on
 a Cloud Scheduler trigger, with the wide credential.
+
+Not `internal`: that ingress admits an *internal* load balancer and VPC
+traffic, and refuses the external load balancer a browser comes through.
+`internal-and-cloud-load-balancing` admits that one and keeps the
+`run.app` URL from going around IAP. The fallback below has no load balancer,
+so there the ingress is `all` and the wall is Cloud Run's own IAP on the
+service. Either way the new services are `google_cloud_run_v2_service` —
+Cloud Run's own IAP is a v2 setting, and the API's service is still the v1
+`google_cloud_run_service` — and IAP's service agent is their only invoker.
 
 **One origin for the browser.** This is where the first draft was wrong: it
 proposed Cloud Run's built-in IAP (no load balancer) *and* two services. Two
@@ -251,19 +335,32 @@ Decide on cost. Do not ship two origins.
 
 - **Google IAP** in front, at the load balancer. The operator app verifies
   the signed assertion (`x-goog-iap-jwt-assertion`) — issuer, audience,
-  signature — and matches the asserted email against an allowlist in
-  settings with a role beside each: `viewer` or `operator`. Two roles from
-  day one, so a contractor can look without acting.
-- The operator app **neither issues nor accepts a beats session JWT**. Not a
-  rule to enforce: `SessionManager` is not in that composition root.
-- Locally, `BACKOFFICE_DEV_OPERATOR=<email>` stands in for the assertion, as
-  `BEATS_TEST_ENV` stands in for testcontainers.
+  signature — and matches its **`sub`**, Google's stable id for the
+  account, against an allowlist in `OperatorSettings` with a role beside
+  each: `viewer` or `operator`. Two roles from day one, so a contractor can
+  look without acting. The email is shown, never matched: the API keys a
+  sign-in identity on issuer and subject for the same reason
+  (`auth/sso_accounts.py`), and an address can change hands.
+- IAP's IAM binding says who reaches the app; the allowlist says what they
+  may do. Both name the same people, and the app refuses an identity the
+  allowlist does not name, so an IAM grant made by mistake reaches a 403.
+- The operator app **neither issues nor accepts a beats session JWT**, and
+  does not hold the secret that signs one. Not a rule to enforce:
+  `SessionManager` is not in that composition root, and `OperatorSettings`
+  has no `JWT_SECRET` field.
+- Locally, `BACKOFFICE_DEV_OPERATOR=<sub>` stands in for the assertion, as
+  `BEATS_TEST_ENV` stands in for testcontainers. **Exactly one of it and the
+  IAP audience is set**, or `OperatorSettings` refuses to load: a stand-in
+  left in a deployment's environment stops the deploy instead of replacing
+  the wall, and a deployment with neither has no way in rather than an open
+  one.
 
 ### The enforcement points, and their cost
 
 Suspension and `sessions_valid_after` are checked in the **public** API's
-middleware, on every authenticated request. Done naively that is a Mongo
-round-trip per request.
+middleware, on every authenticated request — suspension on the device branch
+as well as the session branch. Done naively that is a Mongo round-trip per
+request.
 
 The answer is already in the codebase: `auth/device_access.py` caches a
 device's revocation verdict for 30 seconds, process-local, with its reasoning
@@ -272,9 +369,28 @@ only the flag lookup is skipped; revoking through the API drops the entry so
 it takes effect at once, and the TTL only bounds staleness from a change made
 directly in the database.
 
-An account's auth state takes the same shape: **one cached lookup returning
-both** `suspended` and `sessions_valid_after`, invalidated by the operator
-command that changes either. One cache, one round trip, both features.
+An account's auth state takes the same shape: **one cached lookup returning**
+`suspended`, `sessions_valid_after` and `last_seen_on`. One cache, one round
+trip, every feature that needs the account on the request path. When the
+cached `last_seen_on` is not today, the middleware writes today with a
+conditional update (`last_seen_on` not already today), so an account costs
+one write a day, not one a request, however many instances see it.
+
+**It is not invalidated by the operator's command, and cannot be.** The
+cache is per process in the public API; the command runs in another
+service. An operator's suspension or sign-out therefore takes effect within
+the TTL — 30 seconds, on every instance — which is the bound `device_access`
+already accepts for a change made directly in the database, and is short
+enough for both acts. Revoking a device from the control plane is the same:
+`device_access.forget` drops the entry only in the process that calls it.
+
+That window is why sign-out compares against the **sign-in**, not the
+token. `refresh_token` mints a new token with a new `iat`; compared against
+`iat`, a session refreshed on an instance whose cache had not yet seen the
+sign-out would come out newer than `sessions_valid_after` and outlive it for
+good. A session token carries `auth_time` — when the passkey or SSO sign-in
+happened — and every refresh copies it, so a refreshed token is exactly as
+old as the sign-in behind it and is refused the moment the cache catches up.
 
 ### What is deliberately not here
 
@@ -300,18 +416,20 @@ own authentication design.
 | Piece | Where | In the shape of |
 |---|---|---|
 | The second composition root: its own `lifespan` (connect, and nothing else), its own middleware, the operator router | `operator_server.py` | `server.py`, minus everything it must not do |
-| `User.suspended_at/by/reason`, `User.sessions_valid_after`, `AccountLimits`, `OperatorAuditEvent`, `OperatorJob` | `beats/domain/models.py` | `OrgAuditEvent`, `DeviceRegistration` |
+| `connect()` stops building indexes and stops importing the settings singleton; `server.py`'s lifespan calls `ensure_indexes` | `beats/infrastructure/database.py` | the test harness, which already calls `ensure_indexes` directly |
+| `OperatorSettings`: the DSN, the IAP audience or the local stand-in (exactly one), the allowlist by `sub` — and no `JWT_SECRET` | `beats/operator/settings.py` | `beats/settings.py`, without the API's secrets |
+| `User.suspended_at/by/reason`, `User.sessions_valid_after`, `User.last_seen_on`, `AccountLimits`, `OperatorAuditEvent`, `OperatorJob` | `beats/domain/models.py` | `OrgAuditEvent`, `DeviceRegistration` |
+| `auth_time` on a session token, copied by `refresh_token` | `beats/auth/session.py` | the claims `create_session_token` already sets |
 | Account rules: suspend, unsuspend, sign out everywhere, limits | `beats/domain/accounts.py` | `ContractService` — rules with the thing they govern |
+| The operator's organisation acts — grant the owner role, closing, deletion — refused while an owner exists; an actor kind on `OrgAuditEvent` | `beats/domain/organisations.py`, beside `set_role`, `begin_closing`, `delete_organisation` | the member's method beside each, sharing all but `_member` |
 | `OperatorReads` (aggregates only) and `OperatorStore` (the narrow writes) | `beats/domain/ports.py` | `OrganisationRecords`, `PeriodLocks` |
-| The command protocol, the runner, the commands | `beats/operator/` (`commands.py`, `runner.py`, `jobs.py`) | `beats/coach/` — a package for a surface, beside the domain it uses |
-| `OperatorService`, the thin coordinator | `beats/domain/operator.py` | `EmploymentService` composing `OrganisationService` |
+| The command protocol, the runner — the one coordinator — and the commands | `beats/operator/` (`commands.py`, `runner.py`, `jobs.py`) | `beats/coach/` — a package for a surface, beside the domain it uses |
 | `MongoOperatorReads`, `MongoOperatorStore` | `beats/infrastructure/operator_reads.py`, `operator_store.py` | `MongoOrganisationRecords` — the named cross-tenant class, never a widened `_q` |
 | The router | `beats/api/routers/operator.py` | `routers/employment.py`; same error envelope |
 | The IAP assertion → `request.state.operator` | `operator_server.py` middleware | the device branch, minus the user id |
-| Suspension and `sessions_valid_after`, cached | `server.py` middleware + `auth/account_access.py` | `auth/device_access.py`, TTL and all |
-| The operator allowlist, the IAP audience | `beats/settings.py` | pydantic-settings, env-overridable |
+| Suspension (both branches), `sessions_valid_after` against `auth_time`, `last_seen_on`, cached | `server.py` middleware + `auth/account_access.py` | `auth/device_access.py`, TTL and all |
 | The per-account ceiling, read before the global | `beats/coach/usage.py` | its own existing shape |
-| `test_operator.py`: the HTTP contract against `operator_server`, and **the wall** — a sentinel note, tag, project name and biometric value in no byte of any operator response | `api/src/` | `TestOrganisationWall` |
+| `test_operator.py`: the HTTP contract against `operator_server`; **the wall** — a sentinel note, tag, project name and biometric value, and an organisation audit entry's reason, in no byte of any operator response; `operator_server` importing with no `JWT_SECRET` set; `server` not importing the operator router | `api/src/` | `TestOrganisationWall` |
 | `scripts/dump_openapi_operator.py` → `backoffice/`'s types | `api/scripts/` | `dump_openapi.py`, which imports `server:app`; this one imports the other root |
 
 The wall test matters most. It is how "never user content" stops being a
@@ -332,11 +450,26 @@ the API-client pattern is small enough to copy once and let diverge.
 Deliberately **not the sky** — no `SkyBackdrop`, no two hours, a denser and
 plainer look. An operator should never be unsure which surface they are on.
 
-**Infrastructure — `terraform/`**: `beats_operator` and `beats_backoffice`
-Cloud Run services (no `allUsers` invoker), a `google_cloud_run_v2_job` with
-a Cloud Scheduler trigger, the IAP-protected load balancer with path
-routing, a second Mongo user and `DB_DSN` secret, and IAM for the allowlist.
-Same image for the operator service, same Cloud Build, same deploy lock.
+**Infrastructure — `terraform/`**: `beats_operator` and, if the origin
+decision keeps it, `beats_backoffice`, as `google_cloud_run_v2_service`s with
+no `allUsers` invoker; a `google_cloud_run_v2_job` with a Cloud Scheduler
+trigger; and, if the decision lands on it, the IAP-protected load balancer
+with path routing, its hostname and certificate. IAM for the allowlist, and
+read on the API service for the deploy state (§1). Same image for the
+operator service, same Cloud Build, same deploy lock.
+
+**The second database user is not Terraform's.** The API's DSN is a plain
+variable (`var.mongodb_connection_string`) and the cluster is run outside
+this repository, so the user and its role are made at the database's host,
+by hand, and the steps written into `terraform/README.md` beside the
+variable that carries its DSN. Its role reads every collection — the counts
+need them, and the wall is in the code and the wall test, not the grant —
+and **writes only these**: `users` (suspension, `sessions_valid_after`),
+`account_limits`, `device_registrations` (`revoked`), `webhooks` (`active`),
+`organisations` (closing), `org_members` and `org_audit` (the owner role, and
+each act's entry), `operator_audit` and `operator_jobs`. It creates no index.
+That list is the grant: a command that needs a collection not on it changes
+this paragraph first.
 
 **CLAUDE.md** gains `backoffice/` in the layout table, `/api/operator` in
 the routes table, and a line in *Infrastructure* about the second
@@ -351,7 +484,11 @@ The reason to open it. Each row a count, linking to the thing.
 - **Organisations with no owner** (decision 31). Owner-only acts wait until
   someone notices, and the only trace today is an `account.erased` line in
   that organisation's audit log.
-- **Erasure requests waiting**, and queued erasures inside their window.
+- **Queued erasures inside their cancellation window.** Not requests:
+  PRIVACY.md has a person ask by email, so a request lives in the operator's
+  inbox until it is queued from the account page. Counting them here would
+  take an in-app request, which is a product change and a PRIVACY.md change,
+  not a control-plane page.
 - **What a retention purge would take**, per organisation. The script is dry
   by default and nothing schedules it (decision 30); nobody is reminded.
 - **Accounts over a limit**: coach spend near or past the cap; storage or
@@ -359,7 +496,12 @@ The reason to open it. Each row a count, linking to the thing.
 - **Approvals superseded and never reopened** (`superseded_at`, decision 23):
   one standing for months means a decider never saw the mark.
 - **Absence requests pending beyond a threshold.**
-- **Deploy state**: the live commit, and whether `beats/deploy.lock` is held.
+- **Deploy state**: the live commit — the API service's latest ready
+  revision, read the way `deploy_lock.sh` reads it — and whether
+  `beats/deploy.lock` is held. The lock sits in the Terraform state bucket
+  beside the state, and the state holds the database DSN, so the operator's
+  service account reads that one object under an IAM condition naming it,
+  never the bucket.
 
 ### 2. Accounts
 
@@ -367,14 +509,20 @@ Found by **exact email or id** — not a browsable list, not a prefix search.
 The common entry is a support or erasure mail carrying a full address;
 exact-match serves that and is useless for fishing.
 
-One account: created, last active, suspension state, passkeys and linked
-providers, devices, organisations and roles, counts of projects / sessions /
-biometric rows, storage estimate, coach spend against its cap, integrations
-connected.
+One account: created, the day last seen, suspension state, passkeys and
+linked providers, devices with each one's last seen, organisations and
+roles, counts of projects / sessions / biometric rows, storage estimate,
+coach spend against its cap, integrations connected.
 
 **Actions**: suspend and unsuspend; set or clear a limits override; sign out
-everywhere; queue an erasure (typed confirmation, cancellation window);
-generate a subject-access export.
+everywhere (sessions); revoke one device; queue an erasure (typed
+confirmation, cancellation window).
+
+**No subject-access export.** A person exports everything themselves
+(`/api/export/full`), and an export the operator generates would carry all of
+someone's content through the one surface built never to. Someone who
+cannot sign in to export has an account-recovery problem, not an export
+one, and that is a design of its own.
 
 On **sign-in doors**: identities per provider is a fact the account *stores*
 and fair to show. It is **not** a record of which door a sign-in used, which
@@ -385,13 +533,17 @@ the code deliberately does not keep. Do not let one grow into the other.
 A list: name, created, members by role, active assignments, **seat count**
 ([docs/pricing.md](../docs/pricing.md) defines it; [subscriptions.md](subscriptions.md)
 bills on it), free-tier position, retention years, closing state. One
-organisation adds memberships with roles and dates, projects and how many
-were connected, timesheets by status, and its audit log.
+organisation adds memberships with roles and dates, how many projects it
+has and how many came by a connect, timesheets by status, and its audit log
+— each event's kind, actor, subject and time, **without its `details`**,
+which carry what the organisation wrote: a reopened month's `reason`, a
+created project's or team's name.
 
-**Actions**: grant the owner role to an existing admin — decision 31 refuses
-to auto-promote but leaves somebody having to act, and this is where; start or
-extend a closing notice; delete after it; later, adjust a plan or seat
-allowance.
+**Actions**, while the organisation has no owner and only then: grant the
+owner role to an active member — decision 31 refuses to auto-promote but
+leaves somebody having to act, and this is where; start, move or cancel a
+closing notice; delete it once the notice has run out. Later, adjust a plan
+or seat allowance.
 
 ### 4. Abuse and limits
 
@@ -404,7 +556,8 @@ domain** (outbound HTTP from our servers to arbitrary URLs is ours to answer
 for); pairing codes and devices per account; signups per day and provider.
 
 **Controls**: `account_limits` overrides read at the API's enforcement
-points; suspension; disabling one webhook.
+points; suspension; revoking one device — the narrow answer to one broken
+daemon; disabling one webhook.
 
 ### 5. Capacity and cost
 
@@ -417,17 +570,16 @@ do not rebuild.
 
 ### 6. Compliance operations
 
-The erasure queue; retention due per organisation and running it as a job; a
-subject-access export; the operator audit, readable and filterable, editable
-by nobody.
+The erasure queue; retention due per organisation and running it as a job;
+the operator audit, readable and filterable, editable by nobody.
 
 ## What must not happen
 
 - **No "view as this user", ever.** It contradicts PRIVACY.md directly and
   makes a product whose pitch is "we cannot watch you" false.
 - **No user content**, per the table; no page, export or CSV carries a note,
-  a tag, a project name or a figure from someone's record. The wall test
-  enforces it.
+  a tag, a project name, an audit entry's details or a figure from someone's
+  record. The wall test enforces it.
 - **No free-text search** over content, and none over addresses beyond the
   exact-match lookup.
 - **No destructive act in a request handler.** Erasure and the purge are jobs
@@ -435,15 +587,21 @@ by nobody.
 - **`server.py` never imports the operator router.** That import, absent, is
   the isolation — not a flag, not a conditional. A test pins it for the day
   somebody adds one.
-- **No rule lives in `OperatorService`.** It resolves, authorises, audits
-  and delegates. A guard written there is a guard that will disagree with the
-  one the member-facing route enforces.
+- **No rule lives in a command or the runner.** They resolve, authorise,
+  audit and delegate. A guard written there is a guard that will disagree
+  with the one the member-facing route enforces.
 - **No mutation outside the command runner**, or the audit becomes a thing
   people remember to write.
-- **The operator deployment's database user has no write grant on content
-  collections**, whatever the code claims to do.
-- **Nothing silent inside an organisation.** An operator act that changes a
-  membership lands in that organisation's own audit log.
+- **The operator deployment's database user writes only the collections
+  listed under *Infrastructure***, and builds no index, whatever the code
+  claims to do.
+- **The operator deployment never holds `JWT_SECRET`.** Holding it is
+  holding every user's session; a test imports `operator_server` without it.
+- **The operator does not act for an organisation that can act for itself.**
+  Granting the owner role, closing and deletion are refused while the
+  organisation has an owner.
+- **Nothing silent inside an organisation.** An operator act on one lands in
+  its own audit log, under an actor its members can tell is the operator.
 - **Reads go through the named narrow classes** — never by widening
   `MongoStore._q`, never by handing an existing service a wider scope.
 - **It does not become customer support** with a deeper tier of access
@@ -453,20 +611,26 @@ by nobody.
 ## Open, for when it starts
 
 - **Order.** Four steps, each shippable and each useful alone:
-  1. the enforcement points in the public API — suspension first, it is the
-     smallest and unlocks the most, then `sessions_valid_after` and
+  1. the enforcement points in the public API — suspension first, on both
+     branches, it is the smallest and unlocks the most; then
+     `sessions_valid_after` with `auth_time`, `last_seen_on` and
      `account_limits`, with the cached auth-state lookup;
-  2. `operator_server.py` with the queries only — a read-only control plane
-     is already worth having, and it proves the composition root and the
-     wall test before any command exists;
-  3. the command runner and the commands, inline ones first;
+  2. `operator_server.py` with the queries only — after `Database.connect`
+     stops building indexes and `database.py` stops importing the settings
+     singleton, the two changes that let a narrow credential boot it. A
+     read-only control plane is already worth having, and it proves the
+     composition root and the wall test before any command exists;
+  3. the command runner and the commands, inline ones first, with the
+     operator's methods beside the organisation's;
   4. the job runner, and only then the irreversible work.
 - **The origin decision**: an IAP-protected load balancer with path routing
   (one origin, a standing cost) against serving `backoffice/dist` from the
   operator app (one service, built-in IAP, no LB). Price both. Either is
   fine; two origins is not.
-- **PRIVACY.md** should say that an account can be suspended by the operator,
-  and that operator actions are audited, before the first one ships.
+- **PRIVACY.md** should say that an account can be suspended and a device
+  revoked by the operator, that the day an account was last seen is kept,
+  and that operator actions are audited — in the organisation's own log too
+  when they touch one — before the first one ships.
 - **Pre-computed aggregates.** Per-request pipelines are fine at this size
   and will not stay fine; a nightly roll-up is the first thing that will ask
   the operator deployment for a wider write grant, so decide it deliberately
