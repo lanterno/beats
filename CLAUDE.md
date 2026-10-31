@@ -43,7 +43,7 @@ The organisations epic is #353, with what it still owes as issues linked from it
 [docs/organisations.md](docs/organisations.md) its decisions and model. Five
 pieces that grew out of it have roadmaps of their own, because none is an
 organisations feature: SSO per organisation and SCIM
-([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)), the
+([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)),
 the operator's control plane ([roadmaps/backoffice.md](roadmaps/backoffice.md)
 — a separate service for running the platform, which sees operational
 metadata and never user content),
