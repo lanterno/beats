@@ -115,11 +115,17 @@ export default function JoinPage() {
 										: `Anyone with this link may join as ${asA(role)}.`}{" "}
 								<span className="text-muted-foreground">{ROLE_HINTS[invite.role]}</span>
 							</p>
+							{/* This is the sentence somebody reads before agreeing to
+							    join, so it must never understate what crosses (#420):
+							    rule 3 and decision 32 give the organisation the half
+							    day too, and any contract on its projects — its terms
+							    as well as its balance, managed or not. */}
 							<p className={LEAD}>
 								Joining adds its projects to your own list once you are assigned. On those projects
 								it sees your finished entries — start, end, duration and the note — your absences as
-								a date and a type, and a managed contract's balance. Nothing else crosses: not your
-								own projects, nothing about now, and you can always read exactly what it holds.
+								a date, a type and whether it was a half day, and a contract you hold on one, its
+								terms and its balance. Nothing else crosses: not your own projects, nothing about
+								now, and you can always read exactly what it holds.
 							</p>
 							<Button type="button" size="sm" onClick={accept} disabled={join.isPending}>
 								{join.isPending
