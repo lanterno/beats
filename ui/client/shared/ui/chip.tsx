@@ -1,7 +1,6 @@
 /**
- * Chip — the mockup's `.chip ok / warn / bad / wait`
- * (docs/mockups/ux-refresh.html): a state said in a word, on a wash in that
- * word's tone. The word is the state and the tone only agrees with it, so a
+ * Chip — a state said in a word, on a wash in that word's tone. The word
+ * is the state and the tone only agrees with it, so a
  * reader who cannot tell the tones apart loses nothing.
  *
  * The tones are the ink tokens, never the raw accent or the tints: `--*-ink`

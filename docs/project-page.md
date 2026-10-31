@@ -14,15 +14,16 @@
 This is the design record for the project page and the theme. Every part of
 it has shipped; the plan it grew from, phase by phase, is in git history.
 
-The mockup is the artifact
+The design grew from a mockup, the artifact
 <https://claude.ai/code/artifact/46cd0657-df15-434b-8124-15cb3ab43a2f>
 (version 3, "Sky and meadow"). Its structure came from a design panel
 (three concepts, three judges) and its look from a second one, both
 recorded in the session that produced it. The decisions below were then
 confirmed by the owner on 2026-09-12 and are not to be re-litigated.
-
-The copy of record is [docs/project-page-mockup.html](project-page-mockup.html),
-checked in beside this file; the artifact link is a convenience.
+A rendered copy, `project-page-mockup.html`, was checked in beside this
+file until the design had shipped whole; git history keeps it, and the
+shipped page with this record is the design now. "The mockup" below
+names that design, not a file.
 
 ---
 

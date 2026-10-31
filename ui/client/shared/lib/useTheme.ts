@@ -33,7 +33,7 @@ export const DENSITIES: { id: Density; label: string }[] = [
 /**
  * Boxes is a panel per section floating on the sky; the sheet is one card
  * per page whose sections part by hairlines (the `page-sheet` rules in
- * global.css, compared in docs/mockups/surface-calm.html).
+ * global.css).
  */
 export const LAYOUTS: { id: PageLayout; label: string }[] = [
 	{ id: "boxes", label: "Boxes" },

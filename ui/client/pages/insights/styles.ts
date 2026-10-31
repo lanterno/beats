@@ -1,5 +1,5 @@
 /**
- * The house idioms the insights pages share (docs/project-page-mockup.html),
+ * The house idioms the insights pages share (docs/project-page.md),
  * as the project page builds them in `pages/project-details/styles.ts`: the
  * small-caps label, the quiet sub, the link, the round nav button, the
  * segmented control, the chip on the sky. Restated here rather than imported

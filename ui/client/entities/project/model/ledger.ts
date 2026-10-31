@@ -6,7 +6,7 @@
  * which week is current (never in the ledger: the standing carries it) and
  * which term is still planned.
  *
- * The copy is the mockup's (docs/project-page-mockup.html): "From Mon Aug 3,
+ * The copy is the design record's (docs/project-page.md): "From Mon Aug 3,
  * 2026 · Part time 80% of 42 h = 33.6 h/wk" over "was 60% · 25.2 h · “note”",
  * "·· 3 weeks away · Jul 6 – 26 · vacation ··".
  */

@@ -1,6 +1,6 @@
 /**
- * The register's step chart as geometry — the mockup's `stepChart`
- * (docs/project-page-mockup.html), pure so it can be pinned without a DOM:
+ * The register's step chart as geometry (docs/project-page.md), pure so it
+ * can be pinned without a DOM:
  * hours per week as a step function over a contract's life (or a goal's),
  * solid through today and dashed after it, the area under the solid part,
  * each step labelled under its own line, the dates under the axis.

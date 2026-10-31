@@ -155,10 +155,10 @@ export default function Clients() {
 	// `page-sheet`: under the sheet layout the stack is the page's one card (global.css).
 	return (
 		<div className="page-sheet max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-3.5 pb-24">
-			{/* The page bar (docs/mockups/ux-refresh.html, `.pagebar`): the
-			    heading, the month it is reading, and the one primary action, all
-			    on a card. The heading used to sit bare on the sky, and the month
-			    stepper floated below it in a pill strip of its own. */}
+			{/* The page bar: the heading, the month it is reading, and the one
+			    primary action, all on a card. The heading used to sit bare on the
+			    sky, and the month stepper floated below it in a pill strip of its
+			    own. */}
 			<Panel padding="px-5 py-3" className="flex items-center gap-x-3 gap-y-2 flex-wrap">
 				<Briefcase className="w-5 h-5 text-muted-foreground" aria-hidden="true" />
 				<h1 className="font-heading text-[19px] font-extrabold tracking-[-0.02em] text-foreground">
@@ -254,8 +254,8 @@ export default function Clients() {
 				<>
 					<MonthTotals report={report} current={current} monthName={name} />
 
-					{/* The mockup's `.gridmain` 3:2: the index to the panels beside
-					    the sentence that reads the same month. */}
+					{/* The 3:2 main grid: the index to the panels beside the
+					    sentence that reads the same month. */}
 					<div className="grid gap-3.5 items-start [grid-template-columns:minmax(0,1fr)] lg:[grid-template-columns:minmax(0,3fr)_minmax(18rem,2fr)]">
 						{report.clients.length > 0 && (
 							<ClientsOverview

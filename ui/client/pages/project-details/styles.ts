@@ -1,5 +1,5 @@
 /**
- * The mockup's shared idioms (docs/project-page-mockup.html), once: the
+ * The page's shared idioms (docs/project-page.md), once: the
  * small-caps label, a section heading with its sub, the pill, the tints.
  * Every panel on the page reads from here so the type stays one voice.
  */

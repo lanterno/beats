@@ -1,5 +1,5 @@
 /**
- * Tabs — the pill tablist of the UX-refresh mockup (docs/mockups/ux-refresh.html).
+ * Tabs — a pill tablist, as every control here is a pill.
  *
  * WAI-ARIA tabs pattern: roving tabindex, Left/Right (and Home/End) move and
  * select, `aria-controls`/`aria-labelledby` tie each tab to its panel. The
