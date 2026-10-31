@@ -380,8 +380,13 @@ project that does not exist.
   organisation); the colour dot and the name are not controls; the settings
   drawer disables the organisation's fields and says whose they are, keeps
   the goal and repo paths editable, and the contract unless the organisation
-  manages it, and replaces Archive with a line that leaving the
-  organisation is how the project leaves the list. On a managed assignment,
+  manages it — then the Contract panel offers no term Edit or Remove, no
+  Holidays and no edit of the frame either, and says "Managed by Acme",
+  since each would answer 409 `CONTRACT_MANAGED` — and replaces Archive
+  with a line that leaving the organisation is how the project leaves the
+  list. An archived organisation project says "Archived by Acme" where a
+  personal one offers Restore: the organisation archives its own, and
+  `/unarchive` answers 409 `ORGANISATION_PROJECT`. On a managed assignment,
   time off becomes **Ask for time off**, with the requests and Withdraw. A
   personal project of a member offers **Connect to an organisation…** (not
   on a billed or archived one): the organisation, and start fresh or share
