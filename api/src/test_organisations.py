@@ -946,6 +946,94 @@ class TestConnectingAProject:
             "day_job",
         )
 
+    def test_a_write_before_the_chosen_day_is_never_the_organisations(self, client, auth_headers):
+        # A bug that happened (#404): every live write stamped from the
+        # project alone, so editing only the note of an entry from before
+        # the share day handed it to the organisation.
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        _member_of(client, auth_headers, org["id"], member)
+        project = self._tracked_day_job(client, member)
+        connected = self._connect(client, member, org["id"], project["id"], "2026-03-04")
+        assert connected.status_code == 200, connected.text
+
+        def mine():
+            return client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()
+
+        def edit(beat: dict, **changes):
+            body = {k: beat[k] for k in ("id", "project_id", "start", "end")}
+            resp = client.put("/api/beats/", json={**body, **changes}, headers=member)
+            assert resp.status_code == 200, resp.text
+            return resp.json()
+
+        [monday] = [b for b in mine() if b["start"].startswith("2026-03-02")]
+        assert edit(monday, note="only the note").get("organisation_id") is None
+        early = _beat(client, member, project["id"], "2026-03-02T14:00:00", 30)
+        assert early.get("organisation_id") is None
+        sick = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-02", "type": "sick"},
+            headers=member,
+        )
+        assert sick.status_code in (200, 201), sick.text
+        assert sick.json().get("organisation_id") is None
+        # Moving a shared entry before the day takes the stamp off, and
+        # moving it back puts it on.
+        [thursday] = [b for b in mine() if b["start"].startswith("2026-03-05")]
+        moved = edit(thursday, start="2026-03-01T09:00:00Z", end="2026-03-01T10:00:00Z")
+        assert moved.get("organisation_id") is None
+        back = edit(moved, start=thursday["start"], end=thursday["end"])
+        assert back["organisation_id"] == org["id"]
+
+        # The organisation, and the member's view of it, read as before.
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert [e["day"] for e in row["entries"]] == ["2026-03-04", "2026-03-05"]
+        assert [a["date"] for a in row["absences"]] == ["2026-03-06"]
+        assert row["balance"] is None
+        [seen] = _members_of_record(_visible(client, member, org["id"]), project["id"])
+        assert [e["day"] for e in seen["entries"]] == ["2026-03-04", "2026-03-05"]
+
+        # Nor can a backup plant the stamp on an entry before the day (decision 18).
+        backup = client.get("/api/export/full", headers=member).json()
+        planted = {
+            **backup["beats"][0],
+            "id": str(ObjectId()),
+            "project_id": project["id"],
+            "start": "2026-03-01T09:00:00Z",
+            "end": "2026-03-01T10:00:00Z",
+            "organisation_id": org["id"],
+        }
+        backup["beats"].append(planted)
+        imported = client.post(
+            "/api/export/import",
+            params={"tz": "UTC"},
+            files={"file": ("backup.json", json.dumps(backup), "application/json")},
+            headers=member,
+        )
+        assert imported.status_code == 200, imported.text
+        restored = client.get(f"/api/beats/{planted['id']}", headers=member).json()
+        assert restored.get("organisation_id") is None
+
+    def test_a_reassigned_connect_keeps_its_day(self, client, auth_headers):
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = self._tracked_day_job(client, member)
+        assert (
+            self._connect(client, member, org["id"], project["id"], "2026-03-04").status_code == 200
+        )
+        removed = client.delete(
+            f"/api/organisations/{org['id']}/projects/{project['id']}/members/{member_id}",
+            headers=auth_headers,
+        )
+        assert removed.status_code in (200, 204), removed.text
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        [mine] = _projects(client, member)
+        assert mine["organisation"]["shared_from"] == "2026-03-03T23:00:00Z"
+        assert mine["organisation"]["shared_from_day"] == "2026-03-04"
+        early = _beat(client, member, project["id"], "2026-03-02T14:00:00", 30)
+        assert early.get("organisation_id") is None
+
     def test_starting_fresh_shares_nothing_before_now(self, client, auth_headers):
         org = _create_org(client, auth_headers)
         member = _new_user()
@@ -1391,8 +1479,10 @@ class TestBackupsAndOrganisations:
         )
 
         # The stamp is never the file's. One stripped from the file comes
-        # back from the project as it stands; one planted on an entry dated
-        # before the member shares from is not written.
+        # back from the project as it stands; on a project the organisation
+        # assigned, that is its stamp whatever the date, as a back-dated
+        # entry written live gets (the connected case, where the member's
+        # chosen day bounds it, is in TestConnectingAProject).
         tampered = json.loads(json.dumps(backup))
         tampered["beats"][0]["organisation_id"] = None
         early = {
@@ -1409,7 +1499,7 @@ class TestBackupsAndOrganisations:
             for b in client.get(f"/api/beats/?project_id={project['id']}", headers=member).json()
         }
         assert stamps[beat["id"]] == org["id"]
-        assert stamps[early["id"]] is None
+        assert stamps[early["id"]] == org["id"]
 
         # Into an account that is not assigned to it, the project and what is
         # on it are left out and said so, and the rest imports.

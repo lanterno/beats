@@ -21,6 +21,7 @@ from beats.domain.models import PairingCode, ProjectKind
 from beats.infrastructure.migrations import (
     clear_personal_goal_on_day_jobs,
     date_pairing_codes,
+    mark_connected_assignments,
     migrate_project_kinds,
 )
 from beats.infrastructure.repositories import MongoProjectRepository
@@ -518,3 +519,41 @@ class TestDatePairingCodes:
         report = await date_pairing_codes(db, now=self.NOW)
         assert (report.converted, report.deleted) == (0, 0)
         assert mongo.pairing_codes.count_documents({"expires_at": {"$type": "string"}}) == 0
+
+
+class TestMarkConnectedAssignments:
+    """Assignments from before `shared_from_day` existed learn from the audit
+    log whether they were a connect, and so where rule 4's boundary is."""
+
+    @pytest.fixture(autouse=True)
+    def _no_organisations(self, mongo):
+        for name in ("organisations", "org_assignments", "org_audit"):
+            mongo[name].delete_many({})
+
+    async def test_a_connect_gets_its_day_and_an_assignment_none(self, db, mongo):
+        org = str(
+            mongo.organisations.insert_one(
+                {"name": "Acme", "timezone": "Europe/Zurich"}
+            ).inserted_id
+        )
+        # Local midnight in Zurich of 4 March, as a connect stored it.
+        row = {"organisation_id": org, "user_id": USER, "shared_from": "2026-03-03T23:00:00Z"}
+        connected = mongo.org_assignments.insert_one({**row, "project_id": "p1"}).inserted_id
+        assigned = mongo.org_assignments.insert_one({**row, "project_id": "p2"}).inserted_id
+        mongo.org_audit.insert_one(
+            {
+                "organisation_id": org,
+                "at": "2026-03-10T09:00:00+00:00",
+                "actor_user_id": USER,
+                "event": "project.connected",
+                "subject_user_id": USER,
+                "project_id": "p1",
+                "details": {},
+            }
+        )
+        report = await mark_connected_assignments(db)
+        assert (report.connected, report.assigned) == (1, 1)
+        assert mongo.org_assignments.find_one({"_id": connected})["shared_from_day"] == "2026-03-04"
+        assert mongo.org_assignments.find_one({"_id": assigned})["shared_from_day"] is None
+        again = await mark_connected_assignments(db)
+        assert (again.connected, again.assigned) == (0, 0)
