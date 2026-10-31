@@ -2028,6 +2028,90 @@ class TestTimesheets:
     figures — the first stored derived figure anywhere — and from then on a
     write dated inside the month is refused until a decider reopens it."""
 
+    def test_the_lock_holds_on_removes_and_on_a_backup(self, client, auth_headers):
+        # A bug that happened (#405): removing an absence or an adjustment,
+        # and a backup's beats, skipped the approved-month lock. A timesheet
+        # needs no managed contract, so the member still writes here.
+        member = _new_user()
+        org, project, _ = _employed(client, auth_headers, member, managed=False)
+        contract = client.put(
+            f"/api/projects/{project['id']}/contract", json={"terms": FULL_TIME}, headers=member
+        )
+        assert contract.status_code == 200, contract.text
+        inside = _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        sick = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-03-06", "type": "sick"},
+            headers=member,
+        ).json()
+        april = client.post(
+            f"/api/projects/{project['id']}/absences",
+            json={"date": "2026-04-03", "type": "sick"},
+            headers=member,
+        ).json()
+        paid = client.post(
+            f"/api/projects/{project['id']}/adjustments",
+            params={"tz": "UTC"},
+            json={"date": "2026-03-09", "kind": "delta", "hours": 1},
+            headers=member,
+        )
+        assert paid.status_code == 201, paid.text
+        backup = client.get("/api/export/full", headers=member).json()
+
+        sheet = _submit(client, member, org["id"], project["id"], "2026-03").json()
+        approved = _decide_sheet(client, auth_headers, org["id"], sheet["id"], approve=True)
+        assert approved.status_code == 200, approved.text
+
+        for resp in (
+            client.delete(f"/api/projects/{project['id']}/absences/{sick['id']}", headers=member),
+            client.delete(
+                f"/api/projects/{project['id']}/adjustments/{paid.json()['id']}", headers=member
+            ),
+        ):
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["code"] == "PERIOD_APPROVED"
+        # One outside the month still goes.
+        assert (
+            client.delete(
+                f"/api/projects/{project['id']}/absences/{april['id']}", headers=member
+            ).status_code
+            == 204
+        )
+
+        # A backup's beat inside the month — new, or writing over the one
+        # there — is skipped and said so; one outside lands.
+        new_inside = {
+            **backup["beats"][0],
+            "id": str(ObjectId()),
+            "start": "2026-03-10T09:00:00Z",
+            "end": "2026-03-10T10:00:00Z",
+        }
+        overwrite = {**backup["beats"][0], "start": "2026-03-03T08:00:00Z"}
+        outside = {
+            **backup["beats"][0],
+            "id": str(ObjectId()),
+            "start": "2026-04-07T09:00:00Z",
+            "end": "2026-04-07T10:00:00Z",
+        }
+        backup["beats"] = [new_inside, overwrite, outside]
+        backup["absences"] = []
+        backup["balance_adjustments"] = []
+        imported = client.post(
+            "/api/export/import",
+            params={"tz": "UTC"},
+            files={"file": ("backup.json", json.dumps(backup), "application/json")},
+            headers=member,
+        )
+        assert imported.status_code == 200, imported.text
+        assert imported.json()["imported"]["beats"] == 1
+        assert [(s["collection"], s["code"], s["date"]) for s in imported.json()["skipped"]] == [
+            ("beats", "PERIOD_APPROVED", "2026-03-10"),
+            ("beats", "PERIOD_APPROVED", "2026-03-03"),
+        ]
+        assert client.get(f"/api/beats/{new_inside['id']}", headers=member).status_code == 404
+        kept = client.get(f"/api/beats/{inside['id']}", headers=member).json()
+        assert kept["start"].startswith("2026-03-03T09:00")
+
     def test_submit_approve_freeze_and_lock(self, client, auth_headers):
         member = _new_user()
         org, project, member_id = _employed(client, auth_headers, member)
