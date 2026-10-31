@@ -274,7 +274,13 @@ async def set_managed_contract(
     adjustment writes answer 409 CONTRACT_MANAGED. Deciders; a manager for
     their teams."""
     assignment = await service.set_contract(
-        organisation_id, user_id, project_id, member_user_id, body.contract, body.managed
+        organisation_id,
+        user_id,
+        project_id,
+        member_user_id,
+        body.contract,
+        body.managed,
+        adjustment_repository_for(member_user_id),
     )
     return ManagedContractResponse(
         project_id=project_id,
