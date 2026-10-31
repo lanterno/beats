@@ -755,6 +755,36 @@ class TestOrganisationRecord:
             == 403
         )
 
+    def test_the_month_is_the_organisations_timezone_whoever_asks(self, client, auth_headers):
+        """#415: the lock and the freeze bucket by the organisation's
+        timezone, and until this the reads bucket by the caller's — so two
+        deciders downloaded two different legal records of one month, and
+        the record could disagree with the month it was frozen from."""
+        org = _create_org(client, auth_headers, timezone="Europe/Berlin")
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"])
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        # 23:30 UTC on 31 March is 01:30 on 1 April in Berlin, so the entry
+        # is April's — in Lisbon, in Berlin, and for a caller sending UTC.
+        _beat(client, member, project["id"], "2026-03-31T23:30:00", 30)
+
+        for tz in ("UTC", "Europe/Lisbon", "Asia/Tokyo"):
+            [march] = _members_of_record(
+                _record(client, auth_headers, org["id"], month="2026-03", tz=tz), project["id"]
+            )
+            assert march["entries"] == []
+            [april] = _members_of_record(
+                _record(client, auth_headers, org["id"], month="2026-04", tz=tz), project["id"]
+            )
+            assert [e["day"] for e in april["entries"]] == ["2026-04-01"]
+
+        # The member's own view of it is the same read, so it agrees.
+        [seen] = _members_of_record(
+            _visible(client, member, org["id"], month="2026-04", tz="UTC"), project["id"]
+        )
+        assert [e["day"] for e in seen["entries"]] == ["2026-04-01"]
+
 
 class TestOrganisationWall:
     """Rule 3, in the shape of 1c's tests: another member's personal project,
