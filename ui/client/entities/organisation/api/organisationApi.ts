@@ -274,8 +274,12 @@ export async function connectProject(
 	return toAssignment(parseApiResponse(ApiAssignmentSchema, data));
 }
 
+/**
+ * The record's month is the organisation's timezone's, whoever reads it
+ * (docs/organisations.md, decision 26): the browser's is not sent.
+ */
 function monthParams(month: string): string {
-	return new URLSearchParams({ month, tz: browserTimeZone() }).toString();
+	return new URLSearchParams({ month }).toString();
 }
 
 /** What the organisation sees in `month` (YYYY-MM). Admins. */
@@ -504,17 +508,14 @@ export async function fetchAuditLog(
 
 /** Where the month's record and compliance CSVs are, for `downloadFile`. */
 export function recordCsvUrl(organisationId: string, month: string): string {
-	const params = new URLSearchParams({ month, tz: browserTimeZone() });
-	return `${BASE}/${organisationId}/record.csv?${params.toString()}`;
+	return `${BASE}/${organisationId}/record.csv?${monthParams(month)}`;
 }
 
 export function complianceCsvUrl(organisationId: string, month: string): string {
-	const params = new URLSearchParams({ month, tz: browserTimeZone() });
-	return `${BASE}/${organisationId}/compliance.csv?${params.toString()}`;
+	return `${BASE}/${organisationId}/compliance.csv?${monthParams(month)}`;
 }
 
 /** The caller's own visible month as CSV: what is seen of them, to take away. */
 export function visibleCsvUrl(organisationId: string, month: string): string {
-	const params = new URLSearchParams({ month, tz: browserTimeZone() });
-	return `${BASE}/${organisationId}/visible.csv?${params.toString()}`;
+	return `${BASE}/${organisationId}/visible.csv?${monthParams(month)}`;
 }
