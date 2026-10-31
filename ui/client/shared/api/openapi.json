@@ -12454,7 +12454,7 @@
     },
     "/api/organisations/invitations": {
       "get": {
-        "description": "The open invitations addressed to the caller's own email address \u2014\nwho has invited them, and as what. Without the token: an address is\nnot verified at sign-up, so the way in stays the link the inviter passed\non, and `/join/{token}` checks it against the address as well.",
+        "description": "The open invitations addressed to the caller's own email address \u2014\nwho has invited them, and as what. Without the token: an address is\nnot verified at sign-up, so the way in stays the link the inviter passed\non, and `POST /join` checks it against the address as well.",
         "operationId": "list_invitations_api_organisations_invitations_get",
         "responses": {
           "200": {

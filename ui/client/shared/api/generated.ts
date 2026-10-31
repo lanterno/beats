@@ -2040,7 +2040,7 @@ export interface paths {
          * @description The open invitations addressed to the caller's own email address —
          *     who has invited them, and as what. Without the token: an address is
          *     not verified at sign-up, so the way in stays the link the inviter passed
-         *     on, and `/join/{token}` checks it against the address as well.
+         *     on, and `POST /join` checks it against the address as well.
          */
         get: operations["list_invitations_api_organisations_invitations_get"];
         put?: never;
