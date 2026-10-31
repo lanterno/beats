@@ -5705,7 +5705,7 @@
         "type": "string"
       },
       "ProjectOrganisation": {
-        "description": "The organisation that owns a project, as its member sees it on the\nproject: enough to mark it in a list, and the instant from which the\nmember's hours on it are the organisation's (docs/organisations.md).\n`shared_from` is the member's own choice when they connected a project of\ntheirs, and the moment of assignment otherwise.",
+        "description": "The organisation that owns a project, as its member sees it on the\nproject: enough to mark it in a list, and the instant from which the\nmember's hours on it are the organisation's (docs/organisations.md).\n`shared_from` is the member's own choice when they connected a project of\ntheirs, and the moment of assignment otherwise. `shared_from_day` is set\nonly on a connected project: the day the member chose, as they chose it.\nIt is the boundary rule 4 draws \u2014 a row before it is never the\norganisation's, whoever writes it and whenever (`stamp_for`,\n`stamp_for_day` in `domain/services.py`) \u2014 and on a project the\norganisation assigned there is no such boundary, since nothing of the\nmember's on it predates the organisation.",
         "properties": {
           "contract_managed": {
             "default": false,
@@ -5735,6 +5735,18 @@
             "format": "date-time",
             "title": "Shared From",
             "type": "string"
+          },
+          "shared_from_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared From Day"
           }
         },
         "required": [

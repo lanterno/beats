@@ -6188,7 +6188,13 @@ export interface components {
          *     project: enough to mark it in a list, and the instant from which the
          *     member's hours on it are the organisation's (docs/organisations.md).
          *     `shared_from` is the member's own choice when they connected a project of
-         *     theirs, and the moment of assignment otherwise.
+         *     theirs, and the moment of assignment otherwise. `shared_from_day` is set
+         *     only on a connected project: the day the member chose, as they chose it.
+         *     It is the boundary rule 4 draws — a row before it is never the
+         *     organisation's, whoever writes it and whenever (`stamp_for`,
+         *     `stamp_for_day` in `domain/services.py`) — and on a project the
+         *     organisation assigned there is no such boundary, since nothing of the
+         *     member's on it predates the organisation.
          */
         ProjectOrganisation: {
             /**
@@ -6207,6 +6213,8 @@ export interface components {
              * Format: date-time
              */
             shared_from: string;
+            /** Shared From Day */
+            shared_from_day?: string | null;
         };
         /** ProjectRecordResponse */
         ProjectRecordResponse: {
