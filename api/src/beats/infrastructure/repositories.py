@@ -1096,6 +1096,7 @@ class MongoBiometricDayRepository(MongoStore[BiometricDay], BiometricDayReposito
 
 class AbsenceRepository(Protocol):
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
+    async def get(self, project_id: str, absence_id: str) -> Absence | None: ...
     async def list_all(self) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
@@ -1153,6 +1154,13 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
             raise RuntimeError("upsert of Absence returned no document")
         return self._load(result)
 
+    async def get(self, project_id: str, absence_id: str) -> Absence | None:
+        try:
+            oid = ObjectId(absence_id)
+        except InvalidId:
+            return None
+        return await self._find_one({"_id": oid, "project_id": project_id})
+
     async def delete(self, project_id: str, absence_id: str) -> bool:
         # Scoped to the project in the URL as well as the user, so a 404 means
         # "not on this project". A malformed id is "no such absence", the same
@@ -1169,6 +1177,7 @@ class AdjustmentRepository(Protocol):
         self, project_id: str, start: date, end: date
     ) -> list[BalanceAdjustment]: ...
     async def list_all(self) -> list[BalanceAdjustment]: ...
+    async def get(self, project_id: str, adjustment_id: str) -> BalanceAdjustment | None: ...
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
     async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
     async def earliest(self, project_id: str, on_or_after: date) -> date | None: ...
@@ -1209,6 +1218,13 @@ class MongoAdjustmentRepository(MongoStore[BalanceAdjustment], AdjustmentReposit
         if result is None:
             raise RuntimeError("upsert of BalanceAdjustment returned no document")
         return self._load(result)
+
+    async def get(self, project_id: str, adjustment_id: str) -> BalanceAdjustment | None:
+        try:
+            oid = ObjectId(adjustment_id)
+        except InvalidId:
+            return None
+        return await self._find_one({"_id": oid, "project_id": project_id})
 
     async def delete(self, project_id: str, adjustment_id: str) -> bool:
         # Scoped to the project in the URL as well as the user; a malformed

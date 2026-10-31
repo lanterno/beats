@@ -21,6 +21,7 @@ from beats.api.dependencies import (
     BillingServiceDep,
     ClientRepoDep,
     ContractServiceDep,
+    PeriodLocksDep,
     ProjectBillingRepoDep,
     ProjectRepoDep,
     ProjectServiceDep,
@@ -32,6 +33,7 @@ from beats.domain.exceptions import (
     BackupOfAnotherAccount,
     BeatNotFound,
     DomainException,
+    PeriodApproved,
     ProjectNotFound,
 )
 from beats.domain.models import (
@@ -46,7 +48,8 @@ from beats.domain.models import (
     Project,
     ProjectBilling,
 )
-from beats.domain.services import stamp_for
+from beats.domain.services import refuse_locked, stamp_for
+from beats.domain.utils import local_date
 from beats.infrastructure.repositories import (
     BeatRepository,
     ClientRepository,
@@ -351,6 +354,7 @@ async def import_full_json(
     contract_service: ContractServiceDep,
     client_repo: ClientRepoDep,
     billing_service: BillingServiceDep,
+    locks: PeriodLocksDep,
     tz: TimezoneDep,
 ):
     """Import a full JSON backup, version 1.0 to 1.3, into the caller's
@@ -481,7 +485,20 @@ async def import_full_json(
     # takes the stamp the project as it stands gives: an organisation's, and
     # on a connected project started on or after the day this member shares
     # from (`stamp_for`, the rule every live write keeps).
+    # And a beat inside an approved month is refused as its own route would
+    # refuse it (decision 23) — the one it would write over too, since
+    # moving one out of a frozen month changes the figure as surely — and
+    # listed under `skipped` as PERIOD_APPROVED.
     stamps: dict[str, Project | None] = {}
+
+    async def project_of(project_id: str) -> Project | None:
+        if project_id not in stamps:
+            try:
+                stamps[project_id] = await project_repo.get_by_id(project_id)
+            except ProjectNotFound:
+                stamps[project_id] = None
+        return stamps[project_id]
+
     for beat in backup.beats:
         stored = None
         if beat.id is not None:
@@ -489,15 +506,28 @@ async def import_full_json(
                 stored = await beat_repo.get_by_id(beat.id)
             except BeatNotFound:
                 stored = None
+        owner = await project_of(beat.project_id)
+        try:
+            if owner is not None:
+                await refuse_locked(locks, owner, beat.start)
+            if stored is not None and stored.organisation_id is not None:
+                stored_owner = await project_of(stored.project_id)
+                if stored_owner is not None:
+                    await refuse_locked(locks, stored_owner, stored.start)
+        except PeriodApproved as exc:
+            skipped.append(
+                ImportSkip(
+                    collection="beats",
+                    project_id=beat.project_id,
+                    date=local_date(beat.start, tz),
+                    code=error_code(exc.status_code, exc.code),
+                    detail=exc.message,
+                )
+            )
+            continue
         if stored is not None:
             beat.organisation_id = stored.organisation_id
         else:
-            if beat.project_id not in stamps:
-                try:
-                    stamps[beat.project_id] = await project_repo.get_by_id(beat.project_id)
-                except ProjectNotFound:
-                    stamps[beat.project_id] = None
-            owner = stamps[beat.project_id]
             beat.organisation_id = stamp_for(owner, beat.start) if owner is not None else None
         await beat_repo.restore(beat)
         counts.beats += 1

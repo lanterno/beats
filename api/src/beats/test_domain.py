@@ -3618,6 +3618,12 @@ class _FakeAdjustmentRepo:
             key=lambda a: a.date,
         )
 
+    async def get(self, project_id: str, adjustment_id: str) -> BalanceAdjustment | None:
+        return next(
+            (a for a in self._adjustments if a.project_id == project_id and a.id == adjustment_id),
+            None,
+        )
+
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment:
         key = (adjustment.project_id, adjustment.date)
         self._adjustments = [a for a in self._adjustments if (a.project_id, a.date) != key]
@@ -3782,6 +3788,11 @@ class _FakeAbsenceRepo:
         self, project_id: str, start: date, end: date
     ) -> builtins.list[Absence]:
         return [a for a in self._absences if a.project_id == project_id and start <= a.date <= end]
+
+    async def get(self, project_id: str, absence_id: str) -> Absence | None:
+        return next(
+            (a for a in self._absences if a.project_id == project_id and a.id == absence_id), None
+        )
 
     async def upsert(self, absence: Absence) -> Absence:
         key = (absence.project_id, absence.date)

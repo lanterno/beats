@@ -1677,6 +1677,9 @@ class _FakeAbsenceStoreForCoach:
     async def list_by_project(self, project_id, start, end):
         return [a for a in self._absences if a.project_id == project_id and start <= a.date <= end]
 
+    async def get(self, project_id, absence_id):
+        raise NotImplementedError
+
     async def upsert(self, absence):
         raise NotImplementedError
 
@@ -1697,6 +1700,9 @@ class _FakeAdjustmentStoreForCoach:
             (a for a in self._adjustments if a.project_id == project_id and start <= a.date <= end),
             key=lambda a: a.date,
         )
+
+    async def get(self, project_id, adjustment_id):
+        raise NotImplementedError
 
     async def upsert(self, adjustment):
         raise NotImplementedError
