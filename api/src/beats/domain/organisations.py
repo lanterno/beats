@@ -474,9 +474,16 @@ class OrganisationService:
     ) -> OrgMembership:
         """What leaving and removal share: the membership ends, every active
         assignment ends with it, so tracking to the organisation's projects
-        stops and they leave the member's list. The stamped records stay
-        where they are — the organisation keeps its working-time record, the
-        person keeps their archive of it."""
+        stops and they leave the member's list, and they come out of every
+        team. The stamped records stay where they are — the organisation
+        keeps its working-time record, the person keeps their archive of it.
+
+        The teams matter because a team is a manager's scope (decision 25):
+        left in one, a person who rejoins is silently back in their old
+        team, and a former manager re-invited as a manager gets their old
+        scope back without anyone assigning it (#411). Afterwards a
+        manager's narrowed record no longer lists that former member;
+        owners, admins and viewers still do."""
         at = self._now()
         ended = await self.store.end_membership(organisation_id, user_id, reason, at)
         if ended is None:
@@ -487,6 +494,7 @@ class OrganisationService:
             await self.store.open_membership(ended.model_copy(update={"left_at": None}))
             raise LastOwner()
         await self.store.end_assignments(organisation_id, user_id, at)
+        await self.store.remove_from_teams(organisation_id, user_id)
         return ended
 
     async def _an_owner_remains(self, organisation_id: str) -> bool:
