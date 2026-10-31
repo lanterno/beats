@@ -152,11 +152,14 @@ class AbsenceStore(Protocol):
     """Absences on one project: the range read the arithmetic needs, and the
     two writes a calendar makes. Upsert is keyed on (project, date) — a
     second absence on a day replaces the first. Delete is by id within the
-    project, so False means "not on this project"."""
+    project, so False means "not on this project". `day_of` is the one
+    field a delete has to read first: the day, to judge it against an
+    approved month."""
 
     async def list_by_project(self, project_id: str, start: date, end: date) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
+    async def day_of(self, project_id: str, absence_id: str) -> date | None: ...
 
 
 class AdjustmentStore(Protocol):
@@ -164,13 +167,15 @@ class AdjustmentStore(Protocol):
     and the two writes the ledger makes. Upsert is keyed on (project, date),
     as an absence's is — a second adjustment on a day replaces the first.
     Delete is by id within the project, so False means "not on this
-    project"."""
+    project", and `day_of` reads the day it would delete, to judge it
+    against an approved month."""
 
     async def list_by_project(
         self, project_id: str, start: date, end: date
     ) -> list[BalanceAdjustment]: ...
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
     async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
+    async def day_of(self, project_id: str, adjustment_id: str) -> date | None: ...
 
 
 class ContractAdjustments(Protocol):

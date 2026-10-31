@@ -1100,6 +1100,7 @@ class AbsenceRepository(Protocol):
     async def list_all(self) -> list[Absence]: ...
     async def upsert(self, absence: Absence) -> Absence: ...
     async def delete(self, project_id: str, absence_id: str) -> bool: ...
+    async def day_of(self, project_id: str, absence_id: str) -> date | None: ...
     async def list_for_organisation(self, organisation_id: str) -> list[Absence]: ...
     async def stamp_organisation(
         self, project_id: str, organisation_id: str, since: date
@@ -1164,6 +1165,19 @@ class MongoAbsenceRepository(MongoStore[Absence], AbsenceRepository):
             return False
         return await self._delete_one({"_id": oid, "project_id": project_id})
 
+    async def day_of(self, project_id: str, absence_id: str) -> date | None:
+        """The day a stored absence falls on, which a delete reads before it
+        deletes: a day inside an approved month is refused, and the date is
+        all the check needs. None when there is no such absence here."""
+        try:
+            oid = ObjectId(absence_id)
+        except InvalidId:
+            return None
+        doc = await self.collection.find_one(
+            self._q({"_id": oid, "project_id": project_id}), {"date": 1}
+        )
+        return date.fromisoformat(doc["date"]) if doc else None
+
 
 class AdjustmentRepository(Protocol):
     async def list_by_project(
@@ -1172,6 +1186,7 @@ class AdjustmentRepository(Protocol):
     async def list_all(self) -> list[BalanceAdjustment]: ...
     async def upsert(self, adjustment: BalanceAdjustment) -> BalanceAdjustment: ...
     async def delete(self, project_id: str, adjustment_id: str) -> bool: ...
+    async def day_of(self, project_id: str, adjustment_id: str) -> date | None: ...
     async def earliest(self, project_id: str, on_or_after: date) -> date | None: ...
     async def delete_by_project(self, project_id: str) -> int: ...
 
@@ -1219,6 +1234,18 @@ class MongoAdjustmentRepository(MongoStore[BalanceAdjustment], AdjustmentReposit
         except InvalidId:
             return False
         return await self._delete_one({"_id": oid, "project_id": project_id})
+
+    async def day_of(self, project_id: str, adjustment_id: str) -> date | None:
+        """The day a stored adjustment falls on, read before a delete for
+        the approved-month check, as an absence's is."""
+        try:
+            oid = ObjectId(adjustment_id)
+        except InvalidId:
+            return None
+        doc = await self.collection.find_one(
+            self._q({"_id": oid, "project_id": project_id}), {"date": 1}
+        )
+        return date.fromisoformat(doc["date"]) if doc else None
 
     async def earliest(self, project_id: str, on_or_after: date) -> date | None:
         # ISO dates sort as strings, so the first by date is the earliest.

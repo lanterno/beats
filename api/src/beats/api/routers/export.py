@@ -32,6 +32,7 @@ from beats.domain.exceptions import (
     BackupOfAnotherAccount,
     BeatNotFound,
     DomainException,
+    PeriodApproved,
     ProjectNotFound,
 )
 from beats.domain.models import (
@@ -46,6 +47,7 @@ from beats.domain.models import (
     Project,
     ProjectBilling,
 )
+from beats.domain.services import refuse_locked
 from beats.domain.utils import normalize_tz
 from beats.infrastructure.repositories import (
     BeatRepository,
@@ -487,7 +489,22 @@ async def import_full_json(
     # the app is the member's own late work on the organisation's project,
     # while a back-dated entry in a file is whatever the file says. The two
     # rules guard different things, so they are written twice on purpose.
-    stamps: dict[str, tuple[str, datetime] | None] = {}
+    #
+    # An approved month is closed to a file as it is to a route (decision
+    # 23): a session dated inside one is left out and said so, and so is one
+    # that would be moved out of an approved month by overwriting it. The
+    # restore writes beats straight through `beat_repo.restore`, so the
+    # check the member-side services make has to be made here too.
+    owners: dict[str, Project | None] = {}
+
+    async def _owner_of(project_id: str) -> Project | None:
+        if project_id not in owners:
+            try:
+                owners[project_id] = await project_repo.get_by_id(project_id)
+            except ProjectNotFound:
+                owners[project_id] = None
+        return owners[project_id]
+
     for beat in backup.beats:
         stored = None
         if beat.id is not None:
@@ -495,18 +512,33 @@ async def import_full_json(
                 stored = await beat_repo.get_by_id(beat.id)
             except BeatNotFound:
                 stored = None
+        project = await _owner_of(beat.project_id)
+        try:
+            if project is not None:
+                await refuse_locked(contract_service.locks, project, beat.start)
+            if stored is not None and stored.organisation_id is not None:
+                held = await _owner_of(stored.project_id)
+                if held is not None:
+                    await refuse_locked(contract_service.locks, held, stored.start)
+        except PeriodApproved as exc:
+            skipped.append(
+                ImportSkip(
+                    collection="beats",
+                    project_id=beat.project_id,
+                    date=normalize_tz(beat.start).date(),
+                    code=error_code(exc.status_code, exc.code),
+                    detail=exc.message,
+                )
+            )
+            continue
         if stored is not None:
             beat.organisation_id = stored.organisation_id
         else:
-            if beat.project_id not in stamps:
-                try:
-                    owner = (await project_repo.get_by_id(beat.project_id)).organisation
-                except ProjectNotFound:
-                    owner = None
-                stamps[beat.project_id] = (owner.id, owner.shared_from) if owner else None
-            stamp = stamps[beat.project_id]
+            owner = project.organisation if project is not None else None
             beat.organisation_id = (
-                stamp[0] if stamp and normalize_tz(beat.start) >= normalize_tz(stamp[1]) else None
+                owner.id
+                if owner is not None and normalize_tz(beat.start) >= normalize_tz(owner.shared_from)
+                else None
             )
         await beat_repo.restore(beat)
         counts.beats += 1

@@ -1225,9 +1225,14 @@ class ContractService:
 
     async def remove_absence(self, project_id: str, absence_id: str) -> None:
         """Remove an absence; one that is not on this project is not found.
-        On a managed assignment the days off are the employer's to change."""
+        On a managed assignment the days off are the employer's to change,
+        and one dated inside an approved month is refused — removing a day
+        off moves the month's expectation exactly as booking one does."""
         project = await self._day_job(project_id)
         _refuse_managed(project)
+        day = await self.absence_repo.day_of(project_id, absence_id)
+        if day is not None:
+            await refuse_locked(self.locks, project, None, day)
         if not await self.absence_repo.delete(project_id, absence_id):
             raise AbsenceNotFound(absence_id)
 
@@ -1253,9 +1258,14 @@ class ContractService:
 
     async def remove_adjustment(self, project_id: str, adjustment_id: str) -> None:
         """Remove a balance adjustment; one that is not on this project is
-        not found. On a managed assignment they are the employer's."""
+        not found. On a managed assignment they are the employer's, and one
+        dated inside an approved month is refused: the frozen balance was
+        taken with it counted."""
         project = await self._day_job(project_id)
         _refuse_managed(project)
+        day = await self.adjustment_repo.day_of(project_id, adjustment_id)
+        if day is not None:
+            await refuse_locked(self.locks, project, None, day)
         if not await self.adjustment_repo.delete(project_id, adjustment_id):
             raise AdjustmentNotFound(adjustment_id)
 
