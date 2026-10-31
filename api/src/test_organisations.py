@@ -2151,6 +2151,48 @@ class TestManagedContracts:
     the member recorded; from then on the member reads their week and balance
     as ever and writes none of the contract's inputs."""
 
+    def test_the_employers_write_keeps_the_members_own_rules(self, client, auth_headers):
+        """Decision 21: one set of rules validates a contract whoever
+        writes it. The employer's write skipped two of them (#412) — the
+        day-job check, so it could put a contract on a freelance project,
+        and the adjustment reconcile, so it could move the first day past
+        one of the member's balance adjustments."""
+        member = _new_user()
+        org, project, member_id = _employed(client, auth_headers, member)
+        url = f"/api/organisations/{org['id']}/projects/{{pid}}/members/{member_id}/contract"
+
+        freelance = _org_project(client, auth_headers, org["id"], name="Gig", kind="freelance")
+        _assign(client, auth_headers, org["id"], freelance["id"], member_id)
+        refused = client.put(
+            url.format(pid=freelance["id"]),
+            json={"contract": {"terms": FULL_TIME}, "managed": True},
+            headers=auth_headers,
+        )
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "NOT_A_DAY_JOB"
+
+        # A payout the employer entered, and then a first day moved past it.
+        paid = client.post(
+            f"/api/organisations/{org['id']}/projects/{project['id']}"
+            f"/members/{member_id}/adjustments",
+            json={"date": "2026-01-20", "kind": "delta", "hours": -4},
+            headers=auth_headers,
+        )
+        assert paid.status_code == 201, paid.text
+        later = client.put(
+            url.format(pid=project["id"]),
+            json={
+                "contract": {
+                    "terms": [{**FULL_TIME[0], "effective_from": "2026-02-02"}],
+                    "opening_balance_hours": 2,
+                },
+                "managed": True,
+            },
+            headers=auth_headers,
+        )
+        assert later.status_code == 409, later.text
+        assert later.json()["code"] == "ADJUSTMENT_BEFORE_START"
+
     def test_management_starts_from_the_members_own_terms(self, client, auth_headers):
         org = _create_org(client, auth_headers)
         member = _new_user()
