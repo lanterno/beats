@@ -167,11 +167,13 @@ Worth deciding before building, not during:
 
 ## The decisions, and why
 
-Six, from the epic. Five are settled and recorded in
-[docs/organisations.md](organisations.md); the rows below say how, and the
-notes under them are kept as the reasoning. The sixth is an issue.
+Six, from the epic, all settled; the rows say how, and the notes under
+them are kept as the reasoning. The first five are recorded in
+[docs/organisations.md](organisations.md); pricing in
+[docs/pricing.md](pricing.md), with the payment machinery it needs as
+[#345](https://github.com/lanterno/beats/issues/345).
 
-| Decision | Settled / proposal | Gates |
+| Decision | Settled | Gates |
 |---|---|---|
 | Does an organisation see an entry's **note**? Do personal **tags** cross? | **Settled:** note yes, tags no. No surface writes a note today, so the marker goes where a note is shown; any note input brought back ships it | 2 |
 | Can a manager see that a **timer is running now**? | **Settled: no, in any stage.** The record takes finished entries only and carries no running flag | 2 |

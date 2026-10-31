@@ -1315,28 +1315,12 @@ Each addable later without migrating data:
 
 ---
 
-## How later phases build on it
+## What would build on it
 
-- **1b, billing budgets.** Built: see *Billing budgets (phase 1b)*. A
-  budget is scoped to a client or a billed project, in hours or in money
-  (minor units, in that client's currency), monthly or in total from a
-  day, with a warning and 100 %. Its spend is the sum, month by month, of
-  `assemble_client` over the scope, so a total agrees with the invoices to
-  the minor unit; unpriced hours are reported as unpriced, never as zero. A
-  money budget never mixes currencies, because a client has one.
-- **1c, report links.** Built: see *Report links (phase 1c)*. A link names
-  one client and a range, under a new public prefix, and is served by
-  `assemble_client` with only that client's inputs, through a response
-  schema written field by field; amounts only when the link says so. It
-  cannot structurally reach other clients, personal projects, flow,
-  biometrics or the coach, and since running beats are left out and the
-  range is frozen, it shows the same figures on every read.
-- **Stage 2, organisations.** Built: see [organisations.md](organisations.md).
-  An organisation's project document carries `organisation_id` and no
-  `user_id`; billing stayed personal and an organisation's project is billed
-  by nobody (409 `ORGANISATION_PROJECT`), and the organisation's reads never
-  touch these collections. `NOT_FREELANCE` can still loosen to "you are a
-  contractor on it" without moving data.
+Everything that already has — billing budgets, report links, organisations —
+is recorded in its own section or in [organisations.md](organisations.md).
+One seed stays, unbuilt:
+
 - **Invoices.** An invoice is a frozen copy of a `period`'s lines, which
   per-line rounding lets it quote verbatim; an "invoiced through" date can
   replace the month boundary in `past_change`.

@@ -696,12 +696,3 @@ afternoon. It repeats the two storage keys and the dusk sky's hex, which
 `.homepage-root` (`--hp-panel`, `--hp-ink`, `--hp-wash` …), so dusk has no
 rules of its own there. The accent is its running beat and primary button.
 
----
-
-## Follow-ups and open questions
-
-Tracked in [GitHub issues](https://github.com/lanterno/beats/issues). The
-*Project page follow-ups* milestone closed; what is left of it is the open
-question whether `apple-mobile-web-app-status-bar-style` still suits the sky,
-[#292](https://github.com/lanterno/beats/issues/292). The companion's week card
-shipped.
