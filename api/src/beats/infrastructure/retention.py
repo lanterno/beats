@@ -13,7 +13,14 @@ default, never below the country's floor — is handled by whose it is:
   they existed only for the record;
 - the organisation's **timesheets** for months wholly before the cutoff
   go, frozen figures with them, and **audit events** older than the cutoff
-  go too — the log lives as long as the records it explains.
+  go too — the log lives as long as the records it explains;
+- a **tombstoned membership**, with the name and address the organisation
+  knew the person by, and its assignments with the contract, go once no
+  tombstoned entry, absence, adjustment or timesheet of that tombstone is
+  left in the organisation (#408): they were kept to group the record, and
+  with the record gone they are the most personal data left;
+- **decided absence requests** dated before the cutoff go — a living
+  member's too, since the request was only ever the organisation's.
 
 The purge is run by the operator (`scripts/retention_purge.py`), dry by
 default, and is itself an audit event per organisation — counts and the
@@ -27,6 +34,7 @@ from typing import Any, NamedTuple
 
 from pymongo.asynchronous.database import AsyncDatabase
 
+from beats.domain.models import RequestStatus
 from beats.domain.retention import effective_retention_years, retention_cutoff
 from beats.infrastructure.organisations import member_row_collections
 
@@ -106,16 +114,69 @@ async def purge_expired_records(
         # A sheet goes only when its whole month is out: the month holding
         # the cutoff still has retained days, so the comparison is against
         # the cutoff's own month start, not the cutoff day.
-        sheets = {"organisation_id": org_id, "month": {"$lt": cutoff.replace(day=1).isoformat()}}
+        month_start = cutoff.replace(day=1).isoformat()
+        sheets = {"organisation_id": org_id, "month": {"$lt": month_start}}
         audit = {"organisation_id": org_id, "at": {"$lt": f"{day}T00:00:00"}}
+        requests = {
+            "organisation_id": org_id,
+            "status": {"$ne": RequestStatus.PENDING.value},
+            "date": {"$lt": day},
+        }
         if apply:
             counts["timesheets_deleted"] = (
                 await db.org_timesheets.delete_many(sheets)
             ).deleted_count
             counts["audit_deleted"] = (await db.org_audit.delete_many(audit)).deleted_count
+            counts["absence_requests_deleted"] = (
+                await db.org_absence_requests.delete_many(requests)
+            ).deleted_count
         else:
             counts["timesheets_deleted"] = await db.org_timesheets.count_documents(sheets)
             counts["audit_deleted"] = await db.org_audit.count_documents(audit)
+            counts["absence_requests_deleted"] = await db.org_absence_requests.count_documents(
+                requests
+            )
+
+        # A tombstone goes once nothing of its record is left: the rows it
+        # grouped are what justified keeping a name and an address. What is
+        # left is read as "dated on or after the cutoff", which in a dry run
+        # is what the purge would leave and after one is all there is.
+        counts["memberships_deleted"] = 0
+        counts["assignments_deleted"] = 0
+        stones = await db.org_members.find(
+            {"organisation_id": org_id, "user_id": _TOMBSTONE}, {"user_id": 1}
+        ).to_list(length=None)
+        for membership in stones:
+            stone = membership["user_id"]
+            left = (
+                await db.timeLogs.count_documents(
+                    {"organisation_id": org_id, "user_id": stone, "start": {"$gte": instant}}
+                )
+                + await db.absences.count_documents(
+                    {"organisation_id": org_id, "user_id": stone, "date": {"$gte": day}}
+                )
+                + await db.balance_adjustments.count_documents(
+                    {"project_id": {"$in": project_ids}, "user_id": stone, "date": {"$gte": day}}
+                )
+                + await db.org_timesheets.count_documents(
+                    {"organisation_id": org_id, "user_id": stone, "month": {"$gte": month_start}}
+                )
+            )
+            if left:
+                continue
+            its_assignments = {"organisation_id": org_id, "user_id": stone}
+            if apply:
+                counts["assignments_deleted"] += (
+                    await db.org_assignments.delete_many(its_assignments)
+                ).deleted_count
+                counts["memberships_deleted"] += (
+                    await db.org_members.delete_one({"_id": membership["_id"]})
+                ).deleted_count
+            else:
+                counts["assignments_deleted"] += await db.org_assignments.count_documents(
+                    its_assignments
+                )
+                counts["memberships_deleted"] += 1
 
         if apply and any(counts.values()):
             await db.org_audit.insert_one(
