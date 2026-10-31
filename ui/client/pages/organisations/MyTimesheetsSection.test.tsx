@@ -44,6 +44,28 @@ function sheet(id: string, userId: string, month: string): Timesheet {
 afterEach(cleanup);
 
 describe("MyTimesheetsSection", () => {
+	it("tells the member when the contract changed after a month was approved", () => {
+		state.sheets = [
+			{
+				...sheet("s1", "u-me", "2026-09-01"),
+				status: "approved",
+				frozen: { worked: 42.5, expected: 160, balanceEnd: -12.3, entries: 20, absenceDays: 1 },
+				supersededAt: "2026-10-20T10:00:00Z",
+			},
+		];
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<MyTimesheetsSection organisationId="o1" userId="u-me" timezone="Europe/Berlin" />
+			</QueryClientProvider>,
+		);
+
+		expect(screen.getByText("Terms changed since")).toBeInTheDocument();
+		expect(screen.getByText(/The contract changed on Oct 20, 2026, after/)).toBeInTheDocument();
+		// Still an approved month, frozen figures and all: nothing to resubmit.
+		expect(screen.getByText(/42.5 h worked/)).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Resubmit/ })).not.toBeInTheDocument();
+	});
+
 	it("shows the caller's own months out of everyone's", () => {
 		state.sheets = [
 			sheet("s1", "u-me", "2026-09-01"),

@@ -81,6 +81,39 @@ describe("TimesheetsSection", () => {
 		expect(screen.queryByRole("button", { name: /^Approve/ })).not.toBeInTheDocument();
 	});
 
+	it("marks an approved sheet whose contract has changed since, and keeps Reopen", () => {
+		// Decision 23: the month is still approved and locked, the frozen
+		// figures are still the record; the mark says the terms moved and
+		// names the way back. A current approval carries no mark.
+		state.sheets = [
+			sheet({
+				id: "s2",
+				status: "approved",
+				frozen: { worked: 42.5, expected: 160, balanceEnd: -12.3, entries: 20, absenceDays: 1 },
+				supersededAt: "2026-10-20T10:00:00Z",
+				supersededBy: "u-admin",
+				supersededByName: "Omar",
+				history: [
+					{ at: "2026-10-01T09:00:00Z", by: "u1", action: "submitted" },
+					{ at: "2026-10-02T09:00:00Z", by: "u-admin", action: "approved" },
+					{ at: "2026-10-20T10:00:00Z", by: "u-admin", action: "terms_changed" },
+				],
+			}),
+			sheet({
+				id: "s3",
+				month: "2026-08-01",
+				status: "approved",
+				frozen: { worked: 1, expected: 1, balanceEnd: 0, entries: 1, absenceDays: 0 },
+			}),
+		];
+		renderSection("admin");
+
+		expect(screen.getAllByText("Terms changed since")).toHaveLength(1);
+		expect(screen.getByText(/The contract changed on Oct 20, 2026 by Omar/)).toBeInTheDocument();
+		expect(screen.getByText(/reopen it to approve against the current terms/)).toBeInTheDocument();
+		expect(screen.getAllByRole("button", { name: /^Reopen/ })).toHaveLength(2);
+	});
+
 	it("renders Approve and Ask for changes on a submitted sheet", () => {
 		state.sheets = [sheet({ status: "submitted" })];
 		renderSection("admin");
