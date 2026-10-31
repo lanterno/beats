@@ -167,6 +167,13 @@ export interface ProjectFormProps {
 	 * paths and the contract stay editable: they are the member's.
 	 */
 	lockedBy?: string;
+	/**
+	 * The organisation named in `lockedBy` manages the contract (decision 21):
+	 * a change to it answers 409 CONTRACT_MANAGED, so the frame — region,
+	 * opening balance, end, vacation — is read, not edited, and the stored
+	 * contract goes back as it came, which the API accepts.
+	 */
+	contractManaged?: boolean;
 }
 
 function defaultValues(initial?: Partial<ProjectFormValues>): ProjectFormValues {
@@ -235,8 +242,10 @@ export function ProjectForm({
 	submitError,
 	kindNotice,
 	lockedBy,
+	contractManaged = false,
 }: ProjectFormProps) {
 	const locked = lockedBy !== undefined;
+	const contractLocked = locked && contractManaged;
 	const [values, setValues] = useState<ProjectFormValues>(() => defaultValues(initialValues));
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [clientErrors, setClientErrors] = useState<ProjectFormErrors>(emptyProjectFormErrors);
@@ -278,7 +287,8 @@ export function ProjectForm({
 	const currentTerm = existingContract ? displayTermOn(existingContract, today) : undefined;
 	// Whether the form is describing a contract at all: the frame of the one
 	// that exists, or the first term of a new one.
-	const editsContract = isDayJob && (existingContract !== undefined || values.addContract);
+	const editsContract =
+		isDayJob && !contractLocked && (existingContract !== undefined || values.addContract);
 	// A region change on a contract that marks dates as not given: the marks
 	// are bare dates, and the new region may have a holiday on one. Save
 	// waits for the notice's check, so no mark comes into force unseen.
@@ -374,8 +384,9 @@ export function ProjectForm({
 		<form ref={formRef} onSubmit={handleSubmit} className="space-y-4" noValidate>
 			{locked && (
 				<p className="text-xs text-muted-foreground leading-normal">
-					{lockedBy} owns this project's name, colour, kind, description, repository and category.
-					Your goal, local repo paths and contract are yours.
+					{contractLocked
+						? `${lockedBy} owns this project's name, colour, kind, description, repository and category, and manages its contract. Your goal and local repo paths are yours.`
+						: `${lockedBy} owns this project's name, colour, kind, description, repository and category. Your goal, local repo paths and contract are yours.`}
 				</p>
 			)}
 			<div>
@@ -525,7 +536,7 @@ export function ProjectForm({
 						Contract
 					</h3>
 
-					{!existingContract && (
+					{!existingContract && !contractLocked && (
 						<label className="flex items-start gap-2 text-sm text-foreground cursor-pointer">
 							<input
 								type="checkbox"
@@ -558,7 +569,7 @@ export function ProjectForm({
 									· since {formatDateOnly(currentTerm.effectiveFrom)}
 								</span>
 							</p>
-							{onChangeContract && (
+							{onChangeContract && !contractLocked && (
 								<Button
 									type="button"
 									variant="link"
@@ -570,9 +581,17 @@ export function ProjectForm({
 								</Button>
 							)}
 							<p className="text-[11px] text-muted-foreground mt-1">
-								Terms — a new percentage, a start date — are edited in the Contract panel.
+								{contractLocked
+									? `Managed by ${lockedBy}: the terms, the region, the opening balance and the end are the organisation's to change.`
+									: "Terms — a new percentage, a start date — are edited in the Contract panel."}
 							</p>
 						</div>
+					) : contractLocked ? (
+						existingContract ? null : (
+							<p className="text-[11px] text-muted-foreground">
+								No contract yet · Managed by {lockedBy}
+							</p>
+						)
 					) : (
 						values.addContract && (
 							<ContractTermFields

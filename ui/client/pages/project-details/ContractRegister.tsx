@@ -16,6 +16,12 @@
  * is never ambiguous between "fix the current term" and "a new term from this
  * date" — they are two buttons. Every change PUTs the whole contract; the
  * last remaining term cannot be removed, since a contract needs one.
+ *
+ * While an organisation manages the contract (docs/organisations.md,
+ * decision 21) every one of those writes answers 409 CONTRACT_MANAGED, so
+ * the register offers none of them — no term Edit or Remove, no "Change
+ * contract from…", no Holidays, no Edit of the constants, no Add contract —
+ * and says whose they are instead.
  */
 
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
@@ -399,6 +405,8 @@ function ContractVariant({
 		? undefined
 		: terms.find((t) => t.effectiveFrom > todayIso && (!endedOn || t.effectiveFrom <= endedOn));
 	const anyPending = updateContract.isPending;
+	// Stage 3: the contract is the employer's to write (409 CONTRACT_MANAGED).
+	const managedBy = project.organisation?.contractManaged ? project.organisation.name : undefined;
 
 	const handleRemove = (index: number) => {
 		if (terms.length <= 1) return;
@@ -499,31 +507,33 @@ function ContractVariant({
 							</span>
 							<span className="[grid-area:st] inline-flex gap-1.5 items-center justify-self-end">
 								{status && <StatusPill status={status} />}
-								<span className={OPS}>
-									<button
-										type="button"
-										onClick={() => setEditor({ mode: "edit", index })}
-										disabled={anyPending}
-										aria-label={`Edit term from ${when}`}
-										className={OP}
-									>
-										<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
-									</button>
-									<button
-										type="button"
-										onClick={() => handleRemove(index)}
-										disabled={anyPending || terms.length <= 1}
-										aria-label={`Remove term from ${when}`}
-										title={terms.length <= 1 ? "A contract needs at least one term" : undefined}
-										className={cn(OP, "hover:text-destructive")}
-									>
-										{pendingIndex === index ? (
-											<Loader2 className="w-[11px] h-[11px] animate-spin" aria-hidden="true" />
-										) : (
-											<Trash2 className="w-[11px] h-[11px]" aria-hidden="true" />
-										)}
-									</button>
-								</span>
+								{!managedBy && (
+									<span className={OPS}>
+										<button
+											type="button"
+											onClick={() => setEditor({ mode: "edit", index })}
+											disabled={anyPending}
+											aria-label={`Edit term from ${when}`}
+											className={OP}
+										>
+											<Pencil className="w-[11px] h-[11px]" aria-hidden="true" />
+										</button>
+										<button
+											type="button"
+											onClick={() => handleRemove(index)}
+											disabled={anyPending || terms.length <= 1}
+											aria-label={`Remove term from ${when}`}
+											title={terms.length <= 1 ? "A contract needs at least one term" : undefined}
+											className={cn(OP, "hover:text-destructive")}
+										>
+											{pendingIndex === index ? (
+												<Loader2 className="w-[11px] h-[11px] animate-spin" aria-hidden="true" />
+											) : (
+												<Trash2 className="w-[11px] h-[11px]" aria-hidden="true" />
+											)}
+										</button>
+									</span>
+								)}
 							</span>
 							<span className="[grid-area:what] min-w-0 text-foreground font-medium">
 								{describeTerm(term)}
@@ -539,10 +549,10 @@ function ContractVariant({
 			</ul>
 
 			<div className="mt-3.5">
-				{project.organisation?.contractManaged ? (
-					// Stage 3: the contract is the employer's to write (409 CONTRACT_MANAGED).
+				{managedBy ? (
 					<p className="text-xs text-muted-foreground font-medium leading-[1.6]">
-						Managed by {project.organisation.name}: the terms are the organisation's to change.
+						Managed by {managedBy}: the terms, the holidays, the region, the opening balance and the
+						end are the organisation's to change.
 					</p>
 				) : (
 					<Button
@@ -572,33 +582,39 @@ function ContractVariant({
 				{!contract.holidayCountry && (
 					<p className="text-destructive-ink">
 						Public holidays are not deducted.
-						<button
-							type="button"
-							onClick={() => onOpenSettings("holidayCountry")}
-							className={CONST_BUTTON}
-						>
-							Set region
-						</button>
+						{!managedBy && (
+							<button
+								type="button"
+								onClick={() => onOpenSettings("holidayCountry")}
+								className={CONST_BUTTON}
+							>
+								Set region
+							</button>
+						)}
 					</p>
 				)}
 				<p>
 					{constants}
-					<button
-						type="button"
-						onClick={onOpenHolidays}
-						className={CONST_BUTTON}
-						aria-label="Holidays: company days and public holidays not given"
-					>
-						Holidays
-					</button>
-					<button
-						type="button"
-						onClick={() => onOpenSettings("holidayCountry")}
-						className={CONST_BUTTON}
-						aria-label="Edit the region, the opening balance and the end"
-					>
-						Edit
-					</button>
+					{!managedBy && (
+						<>
+							<button
+								type="button"
+								onClick={onOpenHolidays}
+								className={CONST_BUTTON}
+								aria-label="Holidays: company days and public holidays not given"
+							>
+								Holidays
+							</button>
+							<button
+								type="button"
+								onClick={() => onOpenSettings("holidayCountry")}
+								className={CONST_BUTTON}
+								aria-label="Edit the region, the opening balance and the end"
+							>
+								Edit
+							</button>
+						</>
+					)}
 				</p>
 			</div>
 
@@ -736,17 +752,34 @@ function GoalVariant({
 
 			{dayJobWithoutContract && (
 				<p className="mt-2.5 pt-2.5 border-t border-border text-xs text-muted-foreground font-medium leading-[1.6]">
-					No contract yet
-					<button
-						type="button"
-						onClick={() => onOpenSettings("scheduleType")}
-						className={CONST_BUTTON}
-					>
-						Add contract
-					</button>
+					<NoContractYet project={project} onOpenSettings={onOpenSettings} />
 				</p>
 			)}
 		</Panel>
+	);
+}
+
+/**
+ * "No contract yet · Add contract" — or, while the organisation manages the
+ * contract, who would add one, since the member's write is refused.
+ */
+function NoContractYet({
+	project,
+	onOpenSettings,
+}: {
+	project: ProjectWithDuration;
+	onOpenSettings: (field: ProjectFormAutoFocusField) => void;
+}) {
+	if (project.organisation?.contractManaged) {
+		return <>No contract yet · Managed by {project.organisation.name}</>;
+	}
+	return (
+		<>
+			No contract yet
+			<button type="button" onClick={() => onOpenSettings("scheduleType")} className={CONST_BUTTON}>
+				Add contract
+			</button>
+		</>
 	);
 }
 
@@ -778,14 +811,7 @@ export function ContractRegister({
 				<h3 className={LABEL}>Contract</h3>
 				{/* The standing says what a contract brings; the rail only names the state. */}
 				<p className="mt-2.5 text-xs text-muted-foreground font-medium leading-[1.6]">
-					No contract yet
-					<button
-						type="button"
-						onClick={() => onOpenSettings("scheduleType")}
-						className={CONST_BUTTON}
-					>
-						Add contract
-					</button>
+					<NoContractYet project={project} onOpenSettings={onOpenSettings} />
 				</p>
 			</Panel>
 		);

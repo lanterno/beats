@@ -9,6 +9,9 @@
  * edited: the dot is a dot, the name a heading, and a chip after the kind
  * names the organisation and since when the hours are shared. The gear stays:
  * the goal, the local repo paths and the contract are still the member's.
+ * The organisation archives its own projects, so an archived one says
+ * "Archived by Acme" with no Restore: `/unarchive` would answer 409
+ * ORGANISATION_PROJECT.
  */
 
 import { Loader2, Settings } from "lucide-react";
@@ -217,7 +220,16 @@ export function ProjectHeader({ project, todayIso, onOpenSettings }: ProjectHead
 				onConnectGitHub={() => navigate("/settings#github")}
 			/>
 
-			{project.archived && (
+			{project.archived && organisation && (
+				<span
+					className="inline-flex items-center rounded-full bg-destructive/20 px-[11px] py-[3px] text-xs font-bold text-destructive whitespace-nowrap"
+					title={`${organisation.name} archived this project. Restoring it is the organisation's to do.`}
+				>
+					Archived by {organisation.name}
+				</span>
+			)}
+
+			{project.archived && !organisation && (
 				<span
 					className="inline-flex items-center gap-2 rounded-full bg-destructive/20 px-[11px] py-[3px] text-xs font-bold text-destructive whitespace-nowrap"
 					title="This project is archived. Hidden from active pickers and lists."

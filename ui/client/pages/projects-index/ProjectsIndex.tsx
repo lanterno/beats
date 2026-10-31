@@ -566,6 +566,11 @@ function ProjectsTable({
 	);
 }
 
+/**
+ * Restore, or on an organisation's project who archived it: the organisation
+ * archives its own, and `/unarchive` answers 409 ORGANISATION_PROJECT
+ * (docs/organisations.md).
+ */
 function RestoreButton({
 	project,
 	onRestore,
@@ -576,6 +581,13 @@ function RestoreButton({
 	restoringId?: string;
 }) {
 	if (!onRestore) return null;
+	if (project.organisation) {
+		return (
+			<span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+				Archived by {project.organisation.name}
+			</span>
+		);
+	}
 	const isRestoring = restoringId === project.id;
 	return (
 		<button

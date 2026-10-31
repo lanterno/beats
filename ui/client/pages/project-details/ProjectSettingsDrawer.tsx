@@ -18,9 +18,11 @@
  * the header keeps its own inline Restore.
  *
  * Organisations (docs/organisations.md): on an organisation's project the
- * form's identity fields are the organisation's and locked (`lockedBy`), and
- * the foot says who owns it instead of offering Archive. Connecting a
- * personal project is the rail's `OrganisationPanel`, not a step here.
+ * form's identity fields are the organisation's and locked (`lockedBy`), the
+ * contract's frame too while the organisation manages the contract
+ * (`contractManaged`, decision 21), and the foot says who owns it instead of
+ * offering Archive. Connecting a personal project is the rail's
+ * `OrganisationPanel`, not a step here.
  */
 
 import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
@@ -210,6 +212,7 @@ export function ProjectSettingsDrawer({
 				submitError={submitError}
 				kindNotice={kindNotice}
 				lockedBy={organisation?.name}
+				contractManaged={organisation?.contractManaged}
 			/>
 
 			{organisation ? (
