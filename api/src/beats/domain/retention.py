@@ -48,6 +48,19 @@ def retention_years(stored: int | None) -> int:
     return stored if stored is not None else DEFAULT_RETENTION_YEARS
 
 
+def effective_retention_years(stored: int | None, country: str | None) -> int:
+    """The period an organisation actually keeps its record for: its setting,
+    or the default, and never below its country's floor.
+
+    The write-time check (`RETENTION_BELOW_FLOOR`) only sees an explicit
+    setting, so an organisation that never set one would otherwise read as
+    the default whatever its country — four years for a Polish employer
+    whose statute says ten. This is the one place the period is worked out,
+    for the purge and for anything that shows it.
+    """
+    return max(retention_years(stored), retention_floor(country))
+
+
 def retention_cutoff(today: date, years: int) -> date:
     """The first day still kept: records dated before it have expired.
 

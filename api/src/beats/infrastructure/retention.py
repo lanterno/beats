@@ -3,7 +3,8 @@
 The decided shape (docs/organisations.md, stage 4 — retention): expiry
 removes **the organisation's record, not the person's data**. For each
 organisation, every stamped row dated before the cutoff —
-`retention_cutoff(today, retention_years)` — is handled by whose it is:
+`retention_cutoff(today, effective_retention_years)` — the setting, or the
+default, never below the country's floor — is handled by whose it is:
 
 - a **living member's** entries and absences lose the stamp and stay
   theirs (rule 1: the data is the person's; what expires is the
@@ -26,7 +27,7 @@ from typing import Any, NamedTuple
 
 from pymongo.asynchronous.database import AsyncDatabase
 
-from beats.domain.retention import retention_cutoff, retention_years
+from beats.domain.retention import effective_retention_years, retention_cutoff
 from beats.infrastructure.organisations import member_row_collections
 
 _TOMBSTONE = {"$regex": "^erased:"}
@@ -58,7 +59,7 @@ async def purge_expired_records(
 
     async for org in db.organisations.find({}):
         org_id = str(org["_id"])
-        years = retention_years(org.get("retention_years"))
+        years = effective_retention_years(org.get("retention_years"), org.get("holiday_country"))
         cutoff = retention_cutoff(today, years)
         # Beats store `start` as BSON datetimes (the beat repository's
         # dump_mode is "python"); absences, adjustments, timesheet months
