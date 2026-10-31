@@ -5,9 +5,21 @@ built, and why.
 
 | File | What it covers |
 |------|----------------|
-| [organisations.md](organisations.md) | The organisations epic (#353): the seven open issues, why each waits, and the three constraints any of them must keep |
+| [organisations.md](organisations.md) | The organisations epic (#353): what it still owes, why each piece waits, and the three constraints any of them must keep |
+| [organisation_sso.md](organisation_sso.md) | SSO per organisation (#342) and SCIM (#343): a per-organisation attestation over the OIDC code that exists |
+| [account-emails.md](account-emails.md) | Several verified addresses on one account — what #341 waits on, and the one place decision 11's no-email rule gets revisited |
+| [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
+| [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
+| [backoffice.md](backoffice.md) | Somewhere for the operator to stand (#424), starting with an organisation left without an owner |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
+
+Five of these were split out of `organisations.md` on 2026-10-31. The test
+each had to fail to stay: **is it an organisations feature?** A back office,
+push, an account's addresses, taking money and an identity protocol are
+none of them, and filing them under the epic was shaping each around one
+view of one feature. The epic's own file keeps, for each, the sentence
+saying what stays its own when the blocker clears.
 
 ## What belongs here
 

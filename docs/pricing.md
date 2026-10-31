@@ -76,7 +76,9 @@ the seat definition above is chosen to have none.
 
 Collecting the money — a payment provider, tax, invoices, dunning — is the
 first money flowing *to* us and is its own project
-([roadmaps/organisations.md](../roadmaps/organisations.md) § #345). Nothing here obliges a provider choice. Organisation-side money
-(rates, costs, budgets inside an organisation) is a separate, undesigned
-space guarded by its own rule — seeing money is a permission, not a role
-(#340) — and this file prices seats, not that.
+([roadmaps/subscriptions.md](../roadmaps/subscriptions.md)). Nothing here
+obliges a provider choice. Organisation-side money (rates, costs, budgets
+inside an organisation) is a separate, undesigned space, read by owners and
+admins when it exists — a capability on the role, decided 2026-10-31, where
+the epic had long assumed a permission of its own (#340) — and this file
+prices seats, not that.

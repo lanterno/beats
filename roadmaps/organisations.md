@@ -6,10 +6,13 @@ is **one page for the owner to read and five items that wait on something
 outside the code** — each written out in full below. Nothing here is built
 by hand any more; everything left is a decision, a reading, or a wait.
 
-Two things that used to live here now have roadmaps of their own, because
-neither is an organisations feature: SSO per organisation and SCIM
-([organisation_sso.md](organisation_sso.md)), and the operator's back
-office ([backoffice.md](backoffice.md)).
+Five things that used to live here now have roadmaps of their own, because
+none is an organisations feature: SSO per organisation and SCIM
+([organisation_sso.md](organisation_sso.md)), the operator's back office
+([backoffice.md](backoffice.md)), several verified addresses on an account
+([account-emails.md](account-emails.md)), server push
+([server-push.md](server-push.md)) and taking the money
+([subscriptions.md](subscriptions.md)).
 
 **This file is meant to be enough on its own.** Whoever picks it up may have
 no access to GitHub. So unlike the other roadmaps, which link to issues and
@@ -179,18 +182,21 @@ the epic.
 None of these should be started until its blocker clears. Each section says
 what blocks it, when to start, and what it must not do.
 
-Two items left this file on 2026-10-31 and have roadmaps of their own: SSO
-per organisation and SCIM ([organisation_sso.md](organisation_sso.md)), and
-the operator's back office ([backoffice.md](backoffice.md)) — a back office
-is not an organisations feature, and filing it here was shaping it around
-one view.
+Five things left this file on 2026-10-31, each because it is not an
+organisations feature and filing it here was shaping it around one view:
+SSO per organisation and SCIM ([organisation_sso.md](organisation_sso.md)),
+the operator's back office ([backoffice.md](backoffice.md)), several
+verified addresses on an account ([account-emails.md](account-emails.md)),
+server push ([server-push.md](server-push.md)) and taking the money
+([subscriptions.md](subscriptions.md)). The three items below that wait on
+one of them say what stays this epic's when it lands.
 
 | # | What | Blocked by | Start when |
 |---|------|-----------|------------|
 | 340 | Money behind the organisation's own roles | No organisation-side money exists to guard | Organisation-side money is designed |
-| 341 | Verified email domains for joining | An account has one email address, not many | Accounts carry verified secondary addresses |
-| 345 | Per-seat billing | No payment machinery anywhere; the beta runs for months yet | The end of the beta is decided; then as its own project |
-| 351 | Telling people what is missing or waiting | No channel: server push is #298 | #298 ships |
+| 341 | Verified email domains for joining | An account has one email address, not many ([account-emails.md](account-emails.md)) | Accounts carry verified secondary addresses |
+| 345 | Per-seat billing | No payment machinery anywhere; the beta runs for months yet ([subscriptions.md](subscriptions.md)) | The end of the beta is decided |
+| 351 | Telling people what is missing or waiting | No channel: server push is #298 ([server-push.md](server-push.md)) | #298 ships |
 | 352 | DPA, works-council sheet, DPIA template | Counsel review | The owner takes it up — **they have said it matters** |
 
 ### #340 — Money behind the organisation's own roles
@@ -229,46 +235,33 @@ every device prefix, with no coach port. Attach to that boundary, the way
 
 People with an `@acme.com` address ask to join, or join automatically.
 
-**Decided 2026-10-31 by the owner: this waits on an account being able to
-hold more than one address**, and the rule is then to match the domain
-against one of the account's **verified** addresses — never against a
-string somebody typed. An account keeps one **main** address, the one it is
-known and written to by, and any number of verified secondaries beside it.
+**Blocked on the account model, not on this epic.** The rule the owner set
+(2026-10-31) is to match the domain against one of the account's **verified**
+addresses — never a typed string — and an account holds one address today.
+That prerequisite is its own piece of work:
+[account-emails.md](account-emails.md), which also carries the verification
+flow and the narrow revisiting of decision 11's no-email rule that it needs.
 
-That ordering is the whole point. Decision 11 closed exactly this hole for
-invitations: an address is not verified at sign-up, so whoever registers one
-first must not be handed the way in. A domain rule over unverified
-addresses reopens it deliberately, and at organisation scale rather than one
-invite at a time.
-
-So the prerequisite is its own piece of work, not a detail of this one:
-multiple addresses per account, each verified or not, one of them main,
-with the verification flow that makes "verified" mean anything — which is
-the email infrastructure the API deliberately does not have yet. Build that
-first; then this is a small rule on top of it.
+What stays this epic's when that lands is small and worth stating now: a
+domain rule is a property of the organisation, it makes a **join request**
+or a membership by exactly the paths an invite link already does
+(`requires_approval`), and it must never be a way in that skips decision
+11's reasoning — whoever registers an address must not be handed the
+organisation because of it.
 
 ### #345 — Per-seat billing
 
-**The price is decided** ([docs/pricing.md](../docs/pricing.md), 2026-10-28):
+**The price is decided** ([docs/pricing.md](../docs/pricing.md), 2026-10-28)
+and **collecting it has a roadmap of its own**:
+[subscriptions.md](subscriptions.md). A payment provider, EU VAT, invoices
+and dunning are not an organisations feature, and the owner has it on hold
+while the beta runs (2026-10-31).
 
-- €8 a seat a month billed annually, €10 billed monthly; free up to five
-  seats; SSO included.
-- A seat is an active member with an assignment: viewers are free,
-  contractors count when assigned, and nobody counts before they join.
-- One subscription per organisation.
-- Everything is free during the beta, shown as a 100 % discount; the
-  marketing page already shows the price struck through
-  (`ui/client/pages/homepage/HomePage.tsx`).
-- After the beta, an organisation that does not pay goes read-only, never
-  deleted.
-
-What remains is collecting it, and that is the first time money flows *to
-us*. Nothing in the codebase handles payment: a provider, tax, invoices and
-dunning are a dependency well outside the shape of this epic.
-
-**On hold, deliberately: the owner expects the beta to run for some months
-yet (2026-10-31).** Treat it as its own project when the end of the beta is
-decided, not as the tail of this one.
+What is this epic's, and is written into that file rather than built here:
+a seat is counted off `org_members` and `org_assignments`, which already
+carry the dates; an organisation that does not pay goes **read-only, never
+deleted**, because its working-time record is a legal one; and no billing
+state may ever refuse a person their own data (rule 1).
 
 ### #351 — Telling people what is missing or waiting
 
@@ -276,20 +269,18 @@ Today this shows where people already look: a member's timesheet list offers
 the ended months still to submit and marks the ones sent back, and a
 decider's Approvals tab counts and groups what waits (decision 27).
 
-**Decided 2026-10-31 by the owner: the channel is server push, not email**,
-and **the person controls what they get.** So this waits on #298 ("Server
-push: APNs / FCM notifications", outside this epic; the companion's
-notifications are local only today), and when it comes it ships with its
-own settings rather than a switch somebody has to ask for:
+**Decided 2026-10-31 by the owner: the channel is server push, and the
+person controls what they get.** Push is a platform capability rather than
+an organisations one, so it has its own roadmap —
+[server-push.md](server-push.md), issue #298 — and it carries the
+constraints that decide its shape, Cloud Run's among them.
 
-- per category at least — a timesheet still to submit, a request waiting on
-  my decision, a request of mine decided — and off entirely as one choice;
-- the preference is the person's, not the organisation's. An employer must
-  not be able to turn on a notification its members cannot turn off; that is
-  the line the whole product sits on the right side of.
-
-Decision 11's no-email rule is untouched by this: push is not email, and the
-API still sends none.
+What is this epic's, once a channel exists: which moments are worth a push
+at all. The candidates are the three the surfaces already show — a month
+ended and still to submit, a request waiting on my decision, a request of
+mine decided — and the rule the owner set holds over all of them: an
+employer must not be able to turn on a notification its members cannot turn
+off. Decision 11's no-email rule is untouched; push is not email.
 
 ### #352 — Sales and legal material
 

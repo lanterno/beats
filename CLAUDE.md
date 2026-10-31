@@ -40,11 +40,16 @@ and a few test comments cite those ids.
 
 The organisations epic is #353, with what it still owes as issues linked from it;
 [roadmaps/organisations.md](roadmaps/organisations.md) keeps its reasoning and
-[docs/organisations.md](docs/organisations.md) its decisions and model. Two
-pieces that grew out of it have roadmaps of their own, because neither is an
+[docs/organisations.md](docs/organisations.md) its decisions and model. Five
+pieces that grew out of it have roadmaps of their own, because none is an
 organisations feature: SSO per organisation and SCIM
-([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)) and the
-operator's back office ([roadmaps/backoffice.md](roadmaps/backoffice.md)).
+([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)), the
+operator's back office ([roadmaps/backoffice.md](roadmaps/backoffice.md)),
+several verified addresses on an account
+([roadmaps/account-emails.md](roadmaps/account-emails.md)), server push
+([roadmaps/server-push.md](roadmaps/server-push.md)) and collecting the
+per-seat price ([roadmaps/subscriptions.md](roadmaps/subscriptions.md)).
+[roadmaps/README.md](roadmaps/README.md) indexes them.
 
 ## Quick Start
 
