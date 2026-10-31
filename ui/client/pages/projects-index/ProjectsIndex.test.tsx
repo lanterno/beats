@@ -181,6 +181,33 @@ describe("ProjectsIndex", () => {
 		expect(unarchiveMutate).toHaveBeenCalledWith("old", expect.anything());
 	});
 
+	it("offers no Restore on an organisation's archived project", async () => {
+		// #419: /unarchive answers 409 ORGANISATION_PROJECT there — the
+		// organisation archives its own, and the member is offered nothing.
+		useArchivedProjectsMock.mockReturnValue({
+			data: [
+				project({
+					id: "acme-old",
+					name: "AcmeProject",
+					archived: true,
+					weeklyMinutes: 0,
+					organisation: {
+						id: "o1",
+						name: "Acme",
+						sharedFrom: "2026-01-05T00:00:00Z",
+						contractManaged: false,
+					},
+				}),
+			],
+			isLoading: false,
+		});
+		renderPage();
+		await userEvent.click(screen.getByRole("tab", { name: /Archived/ }));
+
+		expect(screen.getByRole("row", { name: /AcmeProject/ })).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Restore AcmeProject" })).not.toBeInTheDocument();
+	});
+
 	it("FF.13: Archived tab drops the Integrations and This week columns; Active keeps them", async () => {
 		// The MED finding from the live prod inspection was that 'Last tracked'
 		// at 36px wide wrapped to one-char-per-line. The root cause was a

@@ -320,6 +320,58 @@ describe("ContractRegister on a day job", () => {
 		await userEvent.click(within(region).getByRole("button", { name: "Add contract" }));
 		expect(onOpenSettings).toHaveBeenCalledWith("scheduleType");
 	});
+
+	it("offers no write while the organisation manages the contract", () => {
+		// #419: the page swapped "Change contract from…" for "Managed by
+		// Acme" and left every other control live, each of which the API
+		// answers 409 CONTRACT_MANAGED.
+		renderRegister(
+			project({
+				organisation: {
+					id: "o1",
+					name: "Acme",
+					sharedFrom: "2026-01-05T00:00:00Z",
+					contractManaged: true,
+				},
+			}),
+		);
+		const region = screen.getByRole("region", { name: "Contract" });
+
+		expect(region).toHaveTextContent("Managed by Acme");
+		for (const name of [
+			/^Edit term from/,
+			/^Remove term from/,
+			"Change contract from…",
+			"Holidays: company days and public holidays not given",
+			"Edit the region, the opening balance and the end",
+		]) {
+			expect(within(region).queryByRole("button", { name })).not.toBeInTheDocument();
+		}
+		// What the register is for is still there: the terms, read-only.
+		expect(
+			within(screen.getByRole("list", { name: "Terms" })).getAllByRole("listitem"),
+		).toHaveLength(3);
+	});
+
+	it("keeps every write where the contract is the member's own", () => {
+		renderRegister(
+			project({
+				organisation: {
+					id: "o1",
+					name: "Acme",
+					sharedFrom: "2026-01-05T00:00:00Z",
+					contractManaged: false,
+				},
+			}),
+		);
+		const region = screen.getByRole("region", { name: "Contract" });
+
+		expect(region).not.toHaveTextContent("Managed by Acme");
+		expect(
+			within(region).getByRole("button", { name: "Change contract from…" }),
+		).toBeInTheDocument();
+		expect(within(region).getAllByRole("button", { name: /^Edit term from/ })).toHaveLength(3);
+	});
 });
 
 describe("ContractRegister's Goal variant", () => {
