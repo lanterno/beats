@@ -29,11 +29,16 @@ mistake already avoided once:
   that crosses users gets its own narrow class that does nothing else — as
   `MongoOrganisationRecords` and `MongoReportLinkLookup` do — not a filter
   applied after the fact, and not a field allowlist somebody has to remember.
-- **The coach stays ignorant of organisations.** It queries Mongo directly
-  with its own `user_id` filters in six modules (`brief.py`, `chat.py`,
-  `context.py`, `feedback.py`, `memory.py`, `usage.py`) and has no ports to
-  widen. Give it no organisation port either. It is safe today *because* it
-  cannot reach an organisation, not because it chooses not to.
+- **The coach never reaches past the member.** It reads projects through
+  the member's own merged repository (`project_repository_for`, in
+  `api/src/beats/coach/repos.py`), so it sees the organisation projects the
+  member is assigned to, with their own half — that is how it names their
+  day job. Its own collections it queries directly, with its own `user_id`
+  filters, in six modules (`brief.py`, `chat.py`, `context.py`,
+  `feedback.py`, `memory.py`, `usage.py`). It holds no `OrganisationStore`
+  and no `OrganisationRecords`: give it neither, nor any other port that
+  reads another member. It is safe today *because* it cannot reach another
+  member, not because it chooses not to.
 - **Nothing an organisation considers private may live on a project
   document.** `DEVICE_ALLOWED_PREFIXES` in `api/src/server.py` matches
   `/api/projects`, and the timer's status hands a paired device the project
@@ -50,13 +55,19 @@ mistake already avoided once:
 Seven issues, all under [#353](https://github.com/lanterno/beats/issues/353).
 Five are stage 4; two are older work that outlived their stage.
 
+The epic also lists bugs and open questions in what already shipped, found
+when the docs were checked against the code on 2026-10-31. They are not
+here: each is a fix to something
+[docs/organisations.md](../docs/organisations.md) already decides, not new
+scope, and its issue says what is wrong.
+
 | # | What | Blocked by | Start when |
 |---|------|-----------|------------|
 | [#340](https://github.com/lanterno/beats/issues/340) | Money as a permission of its own | Nothing external — there is no organisation money to guard yet | Organisation-side money is designed |
 | [#341](https://github.com/lanterno/beats/issues/341) | Verified email domains for joining | The API sends no email | Email infrastructure exists |
 | [#342](https://github.com/lanterno/beats/issues/342) | SSO per organisation, optionally required | Nothing — the shape is decided | A customer requires it |
 | [#343](https://github.com/lanterno/beats/issues/343) | SCIM provisioning | #342 | SSO per organisation ships |
-| [#345](https://github.com/lanterno/beats/issues/345) | Per-seat billing | No payment machinery anywhere in the codebase | Taken as its own project |
+| [#345](https://github.com/lanterno/beats/issues/345) | Per-seat billing | No payment machinery anywhere in the codebase | The end of the beta is decided; then as its own project |
 | [#351](https://github.com/lanterno/beats/issues/351) | A digest or push for what is missing or waiting | No channel: no email, no server push (#298) | Either channel exists |
 | [#352](https://github.com/lanterno/beats/issues/352) | DPA, works-council sheet, DPIA template | Counsel review | A customer asks, or counsel is engaged |
 
@@ -136,10 +147,11 @@ own project rather than an item here.
 
 ### #351 — A digest or push for what is missing or waiting
 
-Today this shows where people already look: a member's timesheet list says
-which months are unsubmitted or sent back, and a decider's sections say what
-waits. A digest or a push needs a channel first — email infrastructure, or
-server push ([#298](https://github.com/lanterno/beats/issues/298)).
+Today this shows where people already look: a member's timesheet list offers
+the ended months still to submit and marks the ones sent back, and a decider's
+Approvals tab counts and groups what waits (decision 27). A digest or a push
+needs a channel first — email infrastructure, or server push
+([#298](https://github.com/lanterno/beats/issues/298)).
 
 ### #352 — Sales and legal material
 
@@ -191,10 +203,11 @@ and expensive to add after:
   plus every organisation project I am assigned to" across every tenant.
 
 The one thing stage 3 broke on purpose: **approval stores a derived figure.**
-Nothing else does — every week's closing balance is recomputed on each read,
-billing budgets store only their limit, a report link stores no figure. A
-frozen month is the exception, because an edit after approval must not
-silently move an approved figure. It leaves the system with two answers to
-one question, and every reader has to know which it wants. That was decided
-deliberately rather than discovered, because it is very hard to migrate out
-of once approved periods exist.
+No other working-time or billing figure is stored — every week's closing
+balance is recomputed on each read, billing budgets store only their limit, a
+report link stores no figure. (The weekly digests keep their own totals,
+outside both.) A frozen month is the exception, because an edit after approval
+must not silently move an approved figure. It leaves the system with two
+answers to one question, and every reader has to know which it wants. That was
+decided deliberately rather than discovered, because it is very hard to
+migrate out of once approved periods exist.
