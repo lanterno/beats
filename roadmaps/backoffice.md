@@ -9,8 +9,10 @@ change, and everything an operator should *notice* is noticed only by going
 to look.
 
 Split out of [roadmaps/organisations.md](organisations.md) on 2026-10-31,
-designed on 2026-11-01 and re-architected the same day after a review of the
-codebase against it (§ *Architecture*). It was filed under that epic because
+designed on 2026-11-01, then twice revised the same day: once when the owner
+asked whether one API could serve both (it can, § *Architecture*), and once
+in a design review that found the first answer to that question broken (the
+`lifespan` paragraph says how). It was filed under that epic because
 an organisation left without an owner (decision 31) was the first thing
 anyone wanted to see; a control plane is not an organisations feature.
 
@@ -81,9 +83,8 @@ weaker than it looks.
 
 Two shapes were on the table, and the codebase review decided it.
 
-**A. A separate full-stack service.** Its own FastAPI app, server-rendered,
-reading Mongo with its own credential, sharing no code with the API. (The
-first draft of this file.)
+**A. A separate full-stack service.** Its own FastAPI app, reading Mongo with
+its own credential, sharing no code with the API. (This file's first draft.)
 
 **B. Operator endpoints in the existing API, plus a UI-only service.** The
 owner's proposal: one API codebase, one domain layer; the back office is a
@@ -91,185 +92,255 @@ front end over `/api/operator/*`.
 
 | | A — separate service | B — one API, UI service |
 |---|---|---|
-| Domain logic | **Reimplemented.** "Grant the owner role" has a last-owner guard, an audit write and a role rule, all already in `OrganisationService`; A writes them again, with no shared code | **One implementation.** An operator method on the service that already has them, auditing through the existing `_audit` |
+| Domain logic | **Reimplemented.** "Grant the owner role" has a last-owner guard, an audit write and a role rule, all already in `OrganisationService` | **One implementation**, auditing through the existing `_audit` |
 | Enforcement points | Live in the API regardless; A writes the flag from one codebase and checks it from another | Written and checked in one place, one model, one test |
-| Tests | A new harness, plus a cross-repo fixture dance to catch schema drift | `test_api.py`'s harness: testcontainers, real Mongo, the HTTP contract, 1473 tests already keeping the invariants |
+| Tests | A new harness, plus a cross-repo fixture dance to catch schema drift | `test_api.py`'s harness: testcontainers, real Mongo, the HTTP contract |
 | Schema coupling | The weak point: a renamed field silently empties a page | None — same models |
 | Migrations, settings, error envelope | Duplicated or diverged | Shared |
-| Public reachability of privileged routes | **None** — no public ingress at all | Mounted in the public app unless something prevents it (see below) |
-| Credential boundary | A narrow DB user | The API's own credential — unless the deployment is split (see below) |
+| Privileged routes reachable publicly | **No** | Only if the public app mounts them |
+| Credential boundary | A narrow DB user | The API's own — unless deployed separately |
 
-The left column's one real advantage is isolation. The right column wins
-everything else, and the repo's own rule — *rules implemented more than
-once* are the ones that drift — weighs against A hard: a control plane is
-mostly the API's own rules exercised by a different person.
+A's one real advantage is isolation. B wins everything else, and the repo's
+own rule — *rules implemented more than once* are the ones that drift —
+weighs against A hard: a control plane is mostly the API's own rules
+exercised by a different person.
 
-**Verdict: B, with one refinement that keeps A's isolation: one API codebase,
-deployed twice.**
+**Verdict: B, with a refinement that keeps A's isolation — one codebase, two
+composition roots, deployed separately.**
 
-### Why the scoping worry was overstated
+### Two composition roots, not a mode switch
 
-The first draft kept the back office out of the API to protect its "every
-query is scoped by `user_id`" invariant. On review that invariant is already
-narrower than stated: `MongoOrganisationRecords`, `MongoReportLinkLookup`,
-`MongoPeriodLocks._zone_of`, the whole of `infrastructure/organisations.py`
-("scoped by organisation, never by user"), `erasure.py`, `retention.py` and
-`migrations.py` all cross users, inside the API, today. The rule was never
-"nothing crosses"; it is **"what crosses is a named, narrow class, never a
-widening of `MongoStore._q`."** An operator reader obeys that rule as
-naturally as the record does.
+The obvious way to do B is an env var that decides which routers mount. **It
+does not survive contact with `lifespan`.** Today's lifespan runs five
+startup passes and builds the index set: `migrate_project_kinds`,
+`clear_personal_goal_on_day_jobs`, `move_sunday_plans_to_monday`,
+`mark_connected_assignments`, `date_pairing_codes`, `ensure_mutation_log_indexes`.
+An operator deployment booting that would either fail on its narrow
+credential or — worse — race the API's own startup passes. A switch that
+gates routers but shares a lifespan is broken, and one that gates the
+lifespan too has become an app factory wearing a disguise.
 
-### One API codebase, deployed twice
+So: **a second composition root in the same package.**
 
-A single `BEATS_ROLE` setting decides which routers `server.py` mounts:
+```
+api/src/server.py            BEATS the API         → uvicorn server:app
+api/src/operator_server.py   the operator API      → uvicorn operator_server:app
+api/src/beats/               the library both compose
+```
 
-- **`BEATS_ROLE=api`** — today's deployment, exactly as it is. The operator
-  router is **not mounted**: the public app has no `/api/operator` routes to
-  guard, so no bug in operator auth is reachable from the internet.
-- **`BEATS_ROLE=operator`** — a second Cloud Run service from the **same
-  image**, mounting the operator router (and, for its own health checks,
-  nothing else of the user-facing API). No public ingress; IAP in front.
-- **`BEATS_ROLE=job`** — Cloud Run Jobs from the same image for the wide,
-  irreversible work (below).
+Same image, same `pyproject.toml`, same tests; the Cloud Run service's
+command picks the module. What that buys over a flag:
 
-This is cheap — one `google_cloud_run_service` more in `terraform/`, one
-env var — and it buys back everything column A had:
+- **The public app cannot serve an operator route**, because it does not
+  import one. Not "a test asserts it is not mounted" — it is not reachable
+  by construction. (A cheap test still pins it, against the day somebody
+  adds the import.)
+- **Each lifespan is honest.** `operator_server`'s connects the database and
+  stops: no migrations, no index building, nothing that needs a write grant
+  on collections it must not touch.
+- **No third mode for jobs.** `BEATS_ROLE=job` was the same mistake again;
+  a Cloud Run Job runs `python -m beats.operator.jobs`, an entry point, not
+  an app in a costume.
+- **Middleware differs where it must.** Two roots means two middleware
+  stacks: the operator app's resolves an IAP assertion and nothing else,
+  rather than one dispatch carrying a branch for a caller it will never see
+  in production.
 
-- **No privileged route is public.** This matters more than it looks because
-  of the middleware's current shape: a *session* token passes **every path**
-  (the dispatch validates it and returns `call_next` with no path check;
-  only *device* tokens are allowlisted through `device_may_reach`). Mounting
-  operator routes in the public app would need a new *negative* rule for
-  sessions in a middleware whose pattern is positive allowlists. Not mounting
-  them needs nothing.
-- **The credential boundary survives.** The operator deployment reads its
-  `DB_DSN` from its own secret — a database user that reads what it shows
-  and writes only `users`, `org_members`, `organisations`, `webhooks`,
-  `account_limits` and `operator_audit`, with **no write grant on any content
-  collection**. Same image, narrower key.
-- **One domain layer, one test suite, one migration pass.** The operator
-  service is a module in `api/src/beats/domain/`, tested in
-  `api/src/test_operator.py` against the same real Mongo as everything else.
+### The one invariant this protects
 
-### The UI service: `backoffice/`
+`request.state.user_id` is what every user-scoped dependency reads. **The
+operator app never sets it.** It sets `request.state.operator` instead.
 
-A **React 19 SPA**, built with the toolchain `ui/` already runs — React 19.3,
-TypeScript 7, Vite 8, Tailwind 4, TanStack Query 5, Zod 4, react-router 8,
-Biome — because that *is* the latest stack and the team already owns it. The
-first draft proposed Jinja2 and htmx for simplicity; against an existing
-toolchain that is a step backwards and a second idiom to maintain, not a
-saving. It follows `ui/`'s Feature-Sliced layout (`app/ pages/ widgets/
-entities/ shared/`), and generates its API types with the same
-`openapi-typescript` step, pointed at the operator deployment's OpenAPI
-document.
+So if a user-scoped repository or router were ever imported into the
+operator app by mistake, it does not quietly scope to the operator — it
+fails, loudly, on a missing attribute. Fail-closed by construction, which is
+the same instinct as `MongoStore._q` stamping a filter nobody can forget.
 
-Self-contained, with its own `package.json` and config, the way
-`integrations/vscode-beats` already is — `ui/`'s pnpm workspace is rooted at
-`ui/` and only reaches `tools/*`, so a sibling surface cannot join it without
-re-rooting the workspace, which is not worth doing for this. Shared code with
-`ui/` is nothing at first; the API client pattern (`get`, `parseApiResponse`,
-the Zod schemas) is small enough to copy once and let diverge.
+### Queries and commands are different shapes
 
-Deliberately **not the sky**: no `SkyBackdrop`, no two hours, a denser, plainer
-look. An operator should never mistake which surface they are on.
+The operator surface is read-heavy with a handful of commands, and the two
+deserve different treatment. Giving both to one `OperatorService` would
+grow the god-object this design is otherwise avoiding.
 
-Served as static files from a tiny Cloud Run service behind the same IAP as
-the operator API, so one sign-in covers both.
+**Queries — no service layer.** "Accounts created per day", "organisations
+with no owner", "flow windows per account" are aggregation pipelines. There
+is no rule to enforce and nothing to decide, so a domain service in front of
+them would be a pass-through. They live in
+`infrastructure/operator_reads.py`, return frozen dataclasses, and the
+router calls them through an `OperatorReads` Protocol so a test can fake
+them. The repo's narrow-port convention is kept; the empty service is not.
 
-### Authentication, end to end
+**Commands — delegate, never reimplement.** Each command belongs to whatever
+already owns the rule:
 
-- **Google IAP** in front of both the UI and the operator deployment. Cloud
-  Run has had a built-in IAP option since 2025 that needs no load balancer
-  — which removes the standing LB cost that was the first draft's biggest
-  objection. *Verify it is GA in the deployment's region before relying on
-  it*; if not, the load balancer is the fallback.
-- The browser's requests to `/api/operator/*` carry IAP's signed assertion
-  (`x-goog-iap-jwt-assertion`). The operator deployment **verifies that JWT**
-  — issuer, audience, signature — and checks the asserted email against an
-  **operator allowlist** in settings, with a role beside each: `viewer` or
-  `operator`. Two roles from day one, so a contractor can look without acting.
-- A third token type in the middleware, `operator`, resolved from the IAP
-  assertion and nothing else: **a user session JWT is refused on the operator
-  deployment**, which is trivially true because that deployment never issues
-  or accepts one. Who may enter is an IAM policy plus an allowlist; the
-  service implements no login, session, passkey or password.
-- Locally, `BACKOFFICE_DEV_OPERATOR=<email>` stands in for the assertion, the
-  way `BEATS_TEST_ENV` stands in for testcontainers.
+| Command | Owned by |
+|---|---|
+| Grant the owner role | `OrganisationService` — the last-owner guard (decisions 10, 20) and the audit write are already there |
+| Start or extend a closing notice | `OrganisationService.start_closing` |
+| Suspend, unsuspend, sign out everywhere | A new account service — these are account rules, and they belong with the account, not with the operator who happens to invoke them |
+| Set or clear a limit | The same |
+| Disable a webhook | The webhook repository; `Webhook.active` exists |
+| Queue an erasure or a purge | Enqueued, never executed inline (below) |
 
-### Jobs for the wide and irreversible work
+`OperatorService` is then **a coordinator, not a domain**: resolve the
+operator, authorise the role, write the audit, delegate. If a rule ever
+starts living in it, that is the signal it was put in the wrong place.
 
-Erasure and the retention purge touch every collection and cannot be undone.
-They are not buttons in a request handler.
+### Commands are objects, so the audit cannot be forgotten
 
-The operator deployment **enqueues** (a row in `operator_jobs`: what, who,
-when, a cancellation deadline); a **Cloud Run Job** from the same image with
-`BEATS_ROLE=job` and the wide credential executes, running the same
-`infrastructure/erasure.py` and `infrastructure/retention.py` the scripts
-call today. Three things come free: the operator deployment's grant stays
-narrow, the act is auditable at both ends, and an irreversible act sits in a
-cancellation window before it runs. Cloud Scheduler triggers the job on a
-short cadence to pick up due work — the same mechanism
-[server-push.md](server-push.md) needs, for the same Cloud Run reason: there
-is no always-on process to wait in.
+An audit that each handler must remember to write is an audit that will be
+missing from the one action anybody cares about. So a mutation is not a
+function call in a route — it is a small object:
 
-### Audit, in two places
+```
+class OperatorCommand(Protocol):
+    name: str                      # "organisation.grant_owner"
+    wide: bool                     # execute inline, or enqueue as a job
+    confirmation: str | None       # what the operator must type back
+    def describe(self) -> dict     # subject + before, for the audit
+    async def execute(self, ctx) -> dict   # … and after
+```
 
-Every operator action writes an append-only `operator_audit` row — who, what,
-when, before and after. **And an action that touches an organisation also
-writes to that organisation's `org_audit`** through the existing `_audit`,
-which its admins already read: an operator granting someone the owner role is
-visible to the people it affects. The product's own value, applied to its
-operator.
+One runner executes them: check the role, check the typed confirmation,
+call `describe()`, run, write `operator_audit` with before and after, and —
+where a subject is an organisation — write that organisation's own
+`org_audit` too. Four properties fall out of one place rather than ten:
 
-Reads and page views go to **Cloud Logging** as structured logs, which is
-where Cloud Run already keeps every request URL. (The same URL logging is why
-`/api/reports` keeps its token in a header; here the logging is the point.)
+1. **Nothing is unaudited**; the runner is the only path.
+2. **Destructive work routes itself.** `wide = True` enqueues instead of
+   executing, so erasure and the retention purge cannot accidentally run in
+   a request handler holding the wrong credential. A queued job is just a
+   serialised command — one abstraction, not two mechanisms.
+3. **Confirmation is declared, not remembered** per handler.
+4. **The job runner is trivial**: load the command, run the same runner.
+
+Ten or so commands justify this; a hundred would justify more, and three
+would not.
+
+### Deployment, and the origin problem
+
+Three Cloud Run services from two images:
+
+| Service | Image | Command | Ingress |
+|---|---|---|---|
+| `beats-api` | API | `uvicorn server:app` | public (today, unchanged) |
+| `beats-operator` | API, **same image** | `uvicorn operator_server:app` | internal, IAP |
+| `beats-backoffice` | a static nginx/`distroless` image | serve `backoffice/dist` | internal, IAP |
+
+plus a `google_cloud_run_v2_job` running `python -m beats.operator.jobs` on
+a Cloud Scheduler trigger, with the wide credential.
+
+**One origin for the browser.** This is where the first draft was wrong: it
+proposed Cloud Run's built-in IAP (no load balancer) *and* two services. Two
+services means two origins, which means CORS on a privileged surface and the
+browser needing an IAP session per origin. Either:
+
+- **(recommended) one IAP-protected load balancer with path routing** — `/`
+  to the UI service, `/api/operator/*` to the operator API. One origin, one
+  sign-in, no CORS, and the UI never learns the API's hostname. The LB has a
+  standing cost, and it is the cost of doing this properly;
+- **(fallback) serve `backoffice/dist` from the operator app** via
+  `StaticFiles` and drop the UI *service* while keeping the UI *codebase*.
+  One service, built-in IAP, no LB, no CORS. The separation the owner asked
+  for is in the repo and the build, which is where it earns its keep;
+  whether it is also a second Cloud Run service is a deployment detail.
+
+Decide on cost. Do not ship two origins.
+
+### Authentication
+
+- **Google IAP** in front, at the load balancer. The operator app verifies
+  the signed assertion (`x-goog-iap-jwt-assertion`) — issuer, audience,
+  signature — and matches the asserted email against an allowlist in
+  settings with a role beside each: `viewer` or `operator`. Two roles from
+  day one, so a contractor can look without acting.
+- The operator app **neither issues nor accepts a beats session JWT**. Not a
+  rule to enforce: `SessionManager` is not in that composition root.
+- Locally, `BACKOFFICE_DEV_OPERATOR=<email>` stands in for the assertion, as
+  `BEATS_TEST_ENV` stands in for testcontainers.
+
+### The enforcement points, and their cost
+
+Suspension and `sessions_valid_after` are checked in the **public** API's
+middleware, on every authenticated request. Done naively that is a Mongo
+round-trip per request.
+
+The answer is already in the codebase: `auth/device_access.py` caches a
+device's revocation verdict for 30 seconds, process-local, with its reasoning
+written out — the token signature and expiry are still checked every time;
+only the flag lookup is skipped; revoking through the API drops the entry so
+it takes effect at once, and the TTL only bounds staleness from a change made
+directly in the database.
+
+An account's auth state takes the same shape: **one cached lookup returning
+both** `suspended` and `sessions_valid_after`, invalidated by the operator
+command that changes either. One cache, one round trip, both features.
 
 ### What is deliberately not here
 
 No message broker, no separate analytics store, no GraphQL layer, no tracing
-collector. The scale is one operator and a few dozen queries; every one of
-those would be a system to run for no question it answers better than an
-aggregation pipeline and a Cloud Run Job.
+collector, no event sourcing for the audit. The scale is one operator and a
+few dozen queries; each of those is a system to run for no question it
+answers better than an aggregation pipeline, an append-only collection and a
+Cloud Run Job.
+
+### Not in the self-hosted bundle
+
+`compose.selfhost.yml` does not gain the operator app. IAP does not exist
+outside GCP, a self-hoster already has the database, and shipping a
+privileged surface with a different, weaker auth story to people running it
+on their own box is how one ends up with a default credential on the
+internet. If it is ever wanted there, that is a separate decision with its
+own authentication design.
 
 ## Fit with the codebase
 
-What the review found, and where each piece goes so it reads like the rest.
-
-**API — `api/src/beats/`**
+**API — `api/src/`**
 
 | Piece | Where | In the shape of |
 |---|---|---|
-| `User.suspended_at/by/reason`, `User.sessions_valid_after`, `AccountLimits`, `OperatorAuditEvent`, `OperatorJob` | `domain/models.py` | `OrgAuditEvent`, `DeviceRegistration` |
-| `OperatorReads` (counts, overviews, outliers — returns aggregates, never a document) and `OperatorStore` (the narrow writes) | `domain/ports.py` | `OrganisationRecords`, `PeriodLocks` — narrow Protocols, so the service that reads cannot quietly write |
-| `OperatorService` — composes `OrganisationService` for the owner grant, `UsageTracker` for spend, the ports for the rest | `domain/operator.py` | `EmploymentService` extending `OrganisationService` |
-| `MongoOperatorReads`, `MongoOperatorStore` | `infrastructure/operator.py` | `MongoOrganisationRecords` — the named cross-tenant class, never a widened `_q` |
-| The router, `/api/operator/*`, mounted only under `BEATS_ROLE=operator` | `api/routers/operator.py` | `routers/employment.py`; same error envelope |
-| The IAP assertion → `operator` token type; the suspension and `sessions_valid_after` checks for session tokens | `src/server.py` middleware | the device branch: cached lookup, `DEVICE_REVOKED`-style codes |
-| `BEATS_ROLE`, the operator allowlist, the IAP audience | `settings.py` | pydantic-settings, env-overridable |
-| The per-account ceiling read before the global | `coach/usage.py` `enforce_budget` | its own existing shape |
-| `test_operator.py`: the HTTP contract, and the wall — a sentinel note, tag, project name and biometric value appear in **no byte** of any operator response | `api/src/` | `TestOrganisationWall` |
+| The second composition root: its own `lifespan` (connect, and nothing else), its own middleware, the operator router | `operator_server.py` | `server.py`, minus everything it must not do |
+| `User.suspended_at/by/reason`, `User.sessions_valid_after`, `AccountLimits`, `OperatorAuditEvent`, `OperatorJob` | `beats/domain/models.py` | `OrgAuditEvent`, `DeviceRegistration` |
+| Account rules: suspend, unsuspend, sign out everywhere, limits | `beats/domain/accounts.py` | `ContractService` — rules with the thing they govern |
+| `OperatorReads` (aggregates only) and `OperatorStore` (the narrow writes) | `beats/domain/ports.py` | `OrganisationRecords`, `PeriodLocks` |
+| The command protocol, the runner, the commands | `beats/operator/` (`commands.py`, `runner.py`, `jobs.py`) | `beats/coach/` — a package for a surface, beside the domain it uses |
+| `OperatorService`, the thin coordinator | `beats/domain/operator.py` | `EmploymentService` composing `OrganisationService` |
+| `MongoOperatorReads`, `MongoOperatorStore` | `beats/infrastructure/operator_reads.py`, `operator_store.py` | `MongoOrganisationRecords` — the named cross-tenant class, never a widened `_q` |
+| The router | `beats/api/routers/operator.py` | `routers/employment.py`; same error envelope |
+| The IAP assertion → `request.state.operator` | `operator_server.py` middleware | the device branch, minus the user id |
+| Suspension and `sessions_valid_after`, cached | `server.py` middleware + `auth/account_access.py` | `auth/device_access.py`, TTL and all |
+| The operator allowlist, the IAP audience | `beats/settings.py` | pydantic-settings, env-overridable |
+| The per-account ceiling, read before the global | `beats/coach/usage.py` | its own existing shape |
+| `test_operator.py`: the HTTP contract against `operator_server`, and **the wall** — a sentinel note, tag, project name and biometric value in no byte of any operator response | `api/src/` | `TestOrganisationWall` |
+| `scripts/dump_openapi_operator.py` → `backoffice/`'s types | `api/scripts/` | `dump_openapi.py`, which imports `server:app`; this one imports the other root |
 
-The wall test is the one that matters most. It is how "never user content"
-stops being a sentence in a roadmap and becomes something CI refuses.
+The wall test matters most. It is how "never user content" stops being a
+sentence in a roadmap and becomes something CI refuses.
 
-**UI — `backoffice/`**: `app/` (router, the IAP-aware API client), `pages/`
-(attention, accounts, organisations, abuse, capacity, compliance, audit),
-`entities/` (account, organisation, limits, job — each a Zod schema, a
-mapper, hooks under one query root), `shared/` (api client, ui primitives).
-Its own `biome.json`, `tsconfig`, `vite.config.ts`; `pnpm test` with Vitest;
-types from `openapi-typescript` against the operator OpenAPI document,
-`--check`ed in CI like `ui/`'s.
+**UI — `backoffice/`**: a React 19 SPA on the toolchain `ui/` already runs —
+React 19.3, TypeScript 7, Vite 8, Tailwind 4, TanStack Query 5, Zod 4,
+react-router 8, Biome — because that is the current stack and the team owns
+it. (The first draft proposed Jinja2 and htmx; against an existing toolchain
+that is a second idiom to maintain, not a saving.) Feature-Sliced like
+`ui/`: `app/ pages/ widgets/ entities/ shared/`. Self-contained with its own
+`package.json`, `biome.json` and `vite.config.ts`, the way
+`integrations/vscode-beats` is — `ui/`'s pnpm workspace is rooted at `ui/`
+and reaches only `tools/*`, so a sibling cannot join it without re-rooting,
+which is not worth doing for this. Nothing is shared with `ui/` at first:
+the API-client pattern is small enough to copy once and let diverge.
 
-**Infrastructure — `terraform/`**: a second `google_cloud_run_service`
-(`beats_operator`) and a third for the static UI, both with IAP and no
-`allUsers` invoker; a `google_cloud_run_v2_job` for `BEATS_ROLE=job` with a
-Cloud Scheduler trigger; a second Mongo user and a second `DB_DSN` secret;
-IAM for the operator allowlist. Same image, same Cloud Build, same deploy
-lock.
+Deliberately **not the sky** — no `SkyBackdrop`, no two hours, a denser and
+plainer look. An operator should never be unsure which surface they are on.
 
-**CLAUDE.md** gains `backoffice/` in the layout table and `/api/operator` in
-the routes table when it ships — not before.
+**Infrastructure — `terraform/`**: `beats_operator` and `beats_backoffice`
+Cloud Run services (no `allUsers` invoker), a `google_cloud_run_v2_job` with
+a Cloud Scheduler trigger, the IAP-protected load balancer with path
+routing, a second Mongo user and `DB_DSN` secret, and IAM for the allowlist.
+Same image for the operator service, same Cloud Build, same deploy lock.
+
+**CLAUDE.md** gains `backoffice/` in the layout table, `/api/operator` in
+the routes table, and a line in *Infrastructure* about the second
+deployment — when it ships, not before.
 
 ## What it does, by the job it serves
 
@@ -361,9 +432,14 @@ by nobody.
   exact-match lookup.
 - **No destructive act in a request handler.** Erasure and the purge are jobs
   with a typed confirmation and a cancellation window.
-- **The operator router is never mounted under `BEATS_ROLE=api`.** That one
-  line is the isolation; a test asserts the public app has no
-  `/api/operator` route.
+- **`server.py` never imports the operator router.** That import, absent, is
+  the isolation — not a flag, not a conditional. A test pins it for the day
+  somebody adds one.
+- **No rule lives in `OperatorService`.** It resolves, authorises, audits
+  and delegates. A guard written there is a guard that will disagree with the
+  one the member-facing route enforces.
+- **No mutation outside the command runner**, or the audit becomes a thing
+  people remember to write.
 - **The operator deployment's database user has no write grant on content
   collections**, whatever the code claims to do.
 - **Nothing silent inside an organisation.** An operator act that changes a
@@ -376,10 +452,19 @@ by nobody.
 
 ## Open, for when it starts
 
-- **Order.** The enforcement points first — the suspension flag is smallest
-  and unlocks most — then the operator deployment, then the UI.
-- **Cloud Run built-in IAP**: confirm GA in the region; otherwise a load
-  balancer, priced before committing.
+- **Order.** Four steps, each shippable and each useful alone:
+  1. the enforcement points in the public API — suspension first, it is the
+     smallest and unlocks the most, then `sessions_valid_after` and
+     `account_limits`, with the cached auth-state lookup;
+  2. `operator_server.py` with the queries only — a read-only control plane
+     is already worth having, and it proves the composition root and the
+     wall test before any command exists;
+  3. the command runner and the commands, inline ones first;
+  4. the job runner, and only then the irreversible work.
+- **The origin decision**: an IAP-protected load balancer with path routing
+  (one origin, a standing cost) against serving `backoffice/dist` from the
+  operator app (one service, built-in IAP, no LB). Price both. Either is
+  fine; two origins is not.
 - **PRIVACY.md** should say that an account can be suspended by the operator,
   and that operator actions are audited, before the first one ships.
 - **Pre-computed aggregates.** Per-request pipelines are fine at this size
