@@ -754,6 +754,18 @@ class MongoOrganisationStore:
         data = _dump(sheet)
         data.pop("_id", None)
         history = data.pop("history", [])
+        # `_dump` drops a None, so a resubmission's cleared decision —
+        # decided_at, decided_by, comment — has to be unset by name, or the
+        # sheet reads as submitted while still carrying the "changes
+        # requested" comment and decider (#413).
+        cleared = {
+            field: ""
+            for field in ("decided_at", "decided_by", "comment")
+            if getattr(sheet, field) is None
+        }
+        changes: dict[str, Any] = {"$set": data, "$push": {"history": {"$each": history}}}
+        if cleared:
+            changes["$unset"] = cleared
         doc = await self.timesheets.find_one_and_update(
             {
                 "project_id": sheet.project_id,
@@ -761,7 +773,7 @@ class MongoOrganisationStore:
                 "month": data["month"],
                 "status": {"$ne": TimesheetStatus.APPROVED.value},
             },
-            {"$set": data, "$push": {"history": {"$each": history}}},
+            changes,
             upsert=True,
             return_document=ReturnDocument.AFTER,
         )

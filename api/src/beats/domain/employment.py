@@ -440,9 +440,22 @@ class EmploymentService(OrganisationService):
         return decided
 
     async def withdraw_absence(self, organisation_id: str, user_id: str, request_id: str) -> None:
+        """The asker takes a pending request back. Audited like every other
+        step of a request (#413): the log should show a request that was
+        made and withdrawn, not one that vanished."""
         await self._member(organisation_id, user_id)
+        request = await self.store.get_absence_request(organisation_id, request_id)
         if not await self.store.withdraw_absence_request(organisation_id, request_id, user_id):
             raise AbsenceRequestNotFound()
+        await self._audit(
+            organisation_id,
+            user_id,
+            "absence.withdrawn",
+            project_id=request.project_id if request is not None else None,
+            subject_user_id=user_id,
+            date=request.date.isoformat() if request is not None else None,
+            type=request.type.value if request is not None else None,
+        )
 
     # --- timesheets (stage 3) ---------------------------------------------------------
 
