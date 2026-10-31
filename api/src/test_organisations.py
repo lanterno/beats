@@ -1730,6 +1730,51 @@ class TestDeletingAnOrganisation:
         assert not_closing.status_code == 409
         assert not_closing.json()["code"] == "ORGANISATION_NOT_CLOSING"
 
+    def test_a_crash_before_the_wipe_leaves_one_copy_on_the_re_run(
+        self, client, auth_headers, monkeypatch
+    ):
+        """Decision 29 runs the hand-backs before the wipe so a crash
+        midway strands nothing. Nothing was stranded — but the rows handed
+        back belonged to the new copies, so `row_owner_ids` no longer found
+        them and every contract holder was found again through their
+        assignment and given a second copy, holding the contract and no
+        rows (#414)."""
+        from beats.infrastructure.organisations import MongoOrganisationStore
+
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        client.put(
+            f"/api/projects/{project['id']}/contract", json={"terms": FULL_TIME}, headers=member
+        )
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        assert (
+            client.post(
+                f"/api/organisations/{org['id']}/close", json={}, headers=auth_headers
+            ).status_code
+            == 200
+        )
+        _db().organisations.update_one(
+            {"_id": ObjectId(org["id"])},
+            {"$set": {"closes_on": (datetime.now(UTC).date() - timedelta(days=1)).isoformat()}},
+        )
+
+        async def crash(self, organisation_id, project_ids):
+            raise RuntimeError("the wipe never ran")
+
+        monkeypatch.setattr(MongoOrganisationStore, "delete_organisation_rows", crash)
+        with pytest.raises(RuntimeError):
+            client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        monkeypatch.undo()
+
+        gone = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert gone.status_code == 204, gone.text
+        [mine] = _projects(client, member)
+        assert mine["contract"] is not None
+        assert len(client.get(f"/api/beats/?project_id={mine['id']}", headers=member).json()) == 1
+
     def test_deletion_hands_every_member_back_their_own(self, client, auth_headers):
         org = _create_org(client, auth_headers)
         member = _new_user()
