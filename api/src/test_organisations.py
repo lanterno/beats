@@ -1527,6 +1527,56 @@ class TestDeletingAnOrganisation:
         assert db.timeLogs.count_documents({"user_id": "erased:gone"}) == 0
         assert db.projects.count_documents({"organisation_id": org["id"]}) == 0
 
+    def test_a_rerun_after_a_crash_hands_out_no_second_copy(
+        self, client, auth_headers, monkeypatch
+    ):
+        # A bug that happened (#414): the hand-backs ran before the wipe, so
+        # a crash between them stranded nothing — but a re-run found every
+        # contract holder again on their still-existing assignment and gave
+        # them a second copy, holding the contract and no rows.
+        from beats.infrastructure.organisations import MongoOrganisationStore
+
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = _org_project(client, auth_headers, org["id"], kind="day_job")
+        _assign(client, auth_headers, org["id"], project["id"], member_id)
+        client.put(
+            f"/api/projects/{project['id']}/contract", json={"terms": FULL_TIME}, headers=member
+        )
+        _beat(client, member, project["id"], "2026-03-03T09:00:00", 60)
+        assert (
+            client.post(
+                f"/api/organisations/{org['id']}/close", json={}, headers=auth_headers
+            ).status_code
+            == 200
+        )
+        _db().organisations.update_one(
+            {"_id": ObjectId(org["id"])},
+            {"$set": {"closes_on": (datetime.now(UTC).date() - timedelta(days=1)).isoformat()}},
+        )
+
+        async def crash(self, *args, **kwargs):
+            raise RuntimeError("the wipe never ran")
+
+        monkeypatch.setattr(MongoOrganisationStore, "delete_organisation_rows", crash)
+        try:
+            crashed = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        except RuntimeError:
+            pass
+        else:
+            assert crashed.status_code >= 500, crashed.text
+        monkeypatch.undo()
+
+        gone = client.delete(f"/api/organisations/{org['id']}", headers=auth_headers)
+        assert gone.status_code == 204, gone.text
+        copies = [p for p in _projects(client, member) if p["name"] == project["name"]]
+        assert len(copies) == 1
+        [mine] = copies
+        assert mine["contract"] is not None
+        assert len(client.get(f"/api/beats/?project_id={mine['id']}", headers=member).json()) == 1
+        assert _db().projects.count_documents({"user_id": member_id, "name": project["name"]}) == 1
+
 
 class TestRetention:
     """The retention setting over its statutory floor, and the purge pass
