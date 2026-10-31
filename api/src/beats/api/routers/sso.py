@@ -257,5 +257,8 @@ async def complete(
         raise sso_error(status.HTTP_403_FORBIDDEN, "SSO_SIGNUP_CLOSED", str(e)) from e
 
     token = _session_manager.create_session_token(user.id or "", user.email)
-    logger.info("SSO sign-in: provider=%s user=%s created=%s", provider.id, user.id, created)
+    # The door is not recorded downstream (PRIVACY.md, Authentication): the
+    # provider stays out of this line too, which Cloud Logging keeps for 30
+    # days. A rejected sign-in above still names what rejected it.
+    logger.info("SSO sign-in: user=%s created=%s", user.id, created)
     return SSOCompleteResponse(intent="sign_in", provider=provider.id, token=token, created=created)
