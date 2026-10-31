@@ -552,7 +552,9 @@ what only matters past a handful of people. Decisions 21–30:
     does not know gets 4, so a gap can never permit deleting below a law we
     had not written down). The default is 4 years from the record's date —
     the strictest common floor, inside the CNIL's 5-year ceiling for
-    time-clock data. The period applies to the organisation's record — the
+    time-clock data — and an organisation that sets nothing keeps the
+    greater of the default and its floor (`effective_retention_years`),
+    since the write-time check sees only a setting that was made. The period applies to the organisation's record — the
     stamped entries and absences, the frozen months, the contract and
     adjustments behind a balance it read, and tombstoned ex-member rows —
     with the audit log living as long as the records it explains. Expiry
