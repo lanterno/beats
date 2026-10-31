@@ -79,6 +79,14 @@ List<Placed<T>> placeSpans<T>(
   return placed;
 }
 
+/// What a session's bar on the strip says: the project's name, and on a
+/// session a decider logged for the member (`entered_by` on the beat), the
+/// web app's mark after it — "Acme · entered for you". The mark on the
+/// member's own timeline is the notification (docs/organisations.md,
+/// decision 24); any non-empty `entered_by` is one, whoever it names.
+String sessionLabel(String projectName, {String? enteredBy}) =>
+    enteredBy == null || enteredBy.isEmpty ? projectName : '$projectName · entered for you';
+
 /// The average flow score in each [bucket] across [w], null where no window
 /// started. Windows are (start, score 0–1).
 List<double?> flowBuckets(

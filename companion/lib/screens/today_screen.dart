@@ -670,7 +670,14 @@ class _TodayScreenState extends State<TodayScreen> {
     final sessions = [
       for (final b in _beats)
         if (parse(b['start']) != null)
-          (parse(b['start'])!, parse(b['end']), widget.timer.projectById(b['project_id'] as String?)),
+          (
+            parse(b['start'])!,
+            parse(b['end']),
+            (
+              project: widget.timer.projectById(b['project_id'] as String?),
+              enteredBy: b['entered_by'] as String?,
+            ),
+          ),
     ];
     final events = [
       for (final e in _events)
@@ -755,16 +762,16 @@ class _TodayScreenState extends State<TodayScreen> {
                       top: 3,
                       bottom: 3,
                       child: Tooltip(
-                        message: s.item?.name ?? 'Session',
+                        message: sessionLabel(s.item.project?.name ?? 'Session', enteredBy: s.item.enteredBy),
                         child: Container(
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           decoration: BoxDecoration(
-                            color: s.item?.color ?? p.inkMuted,
+                            color: s.item.project?.color ?? p.inkMuted,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: w * s.width > 70
-                              ? Text(s.item?.name ?? '',
+                              ? Text(sessionLabel(s.item.project?.name ?? '', enteredBy: s.item.enteredBy),
                                   maxLines: 1,
                                   overflow: TextOverflow.clip,
                                   style: SkyType.body(12, weight: FontWeight.w700).copyWith(color: Colors.white))
