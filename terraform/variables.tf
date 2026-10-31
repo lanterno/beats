@@ -35,10 +35,17 @@ variable "memory_limit" {
   default     = "512Mi"
 }
 
+# One instance runs one event loop on one CPU, so a request that burns CPU
+# stalls every request sharing the instance with it. At 80, a slow ledger read
+# turned into timeouts for everything queued behind it (#390). At 16 the
+# requests beyond it wait for a free slot or start another instance, up to
+# max_instances. The companion's refresh sends about 25 requests within one
+# second, so it reaches a second instance, which costs nothing while it idles
+# (CPU is billed only during requests).
 variable "container_concurrency" {
   description = "Maximum number of concurrent requests per container instance"
   type        = number
-  default     = 80
+  default     = 16
 }
 
 variable "request_timeout_seconds" {
