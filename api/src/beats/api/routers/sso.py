@@ -257,5 +257,15 @@ async def complete(
         raise sso_error(status.HTTP_403_FORBIDDEN, "SSO_SIGNUP_CLOSED", str(e)) from e
 
     token = _session_manager.create_session_token(user.id or "", user.email)
-    logger.info("SSO sign-in: provider=%s user=%s created=%s", provider.id, user.id, created)
+    # Neither the provider nor the person. PRIVACY.md promises that nothing
+    # downstream records which door was used, and a line naming both on
+    # every sign-in was exactly such a record — Cloud Logging keeps 30 days
+    # of it, and #342 gates an organisation behind SSO on this promise
+    # holding. What is left still says the exchange works, and `created`
+    # still catches a provider left with `allow_signup` on by mistake.
+    #
+    # The link, unlink and account-creation lines in `auth/sso_accounts.py`
+    # stay: they fire on account-lifecycle acts rather than sign-ins, and
+    # name only what `identities[]` stores on the account permanently.
+    logger.info("SSO sign-in completed (new account: %s)", created)
     return SSOCompleteResponse(intent="sign_in", provider=provider.id, token=token, created=created)
