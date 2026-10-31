@@ -21,7 +21,7 @@
   laborales*].
 - **Categories of data**: per member, on the organisation's projects
   only — entry start/end/duration/note; absence date, type, half day;
-  contract terms and balance where managed; timesheet status and history;
+  contract terms and balance; timesheet status and history;
   name, email, role. **No special categories.** No location, no device
   telemetry, no app or website activity, no biometrics (the product holds
   biometric data for the person's own use; it is structurally unavailable
