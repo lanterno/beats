@@ -18,7 +18,7 @@ jobs:
         working-directory: api
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv sync --group dev
       - run: uv run ruff check src/
       - run: uv run ruff format --check src/
@@ -51,7 +51,7 @@ jobs:
       BEATS_TEST_ENV: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.2
+      - uses: astral-sh/setup-uv@v10.3.3
       - run: uv sync --group dev
       - run: uv run pytest src/ -v --cov=beats --cov-report=xml
       - uses: codecov/codecov-action@v7
