@@ -108,7 +108,8 @@ project's billing is in [project-page.md](project-page.md).
 14. **The privacy wall** is the collection boundary of Decision 2, the two
     prefixes no device token reaches, and a coach with no port to them.
     Budgets, report links and organisations extend it without moving data
-    (see *Billing budgets (phase 1b)* and *How later phases build on it*).
+    (see *Billing budgets (phase 1b)*, *Report links (phase 1c)* and
+    [organisations.md](organisations.md)).
 15. **Naming.** Phase 1b's limits are *billing budgets*, never "budgets"
     alone: `WeeklyPlan.budgets` already means a week's planned hours per
     project.
@@ -789,9 +790,10 @@ means one of its own.
     budget's spend, since it is derived from them, and keep their gate.
 16. **The privacy wall extends, with nothing moved.** A collection of its
     own scoped by `user_id`, the `/api/billing` prefix no device token
-    reaches, and no coach port. When phase 4 brings the money permission,
-    `unit` is what lets it hide money budgets while still showing hours
-    budgets, if it chooses to.
+    reaches, and no coach port. When an organisation has money of its own
+    (#340), read by its owners and admins alone, `unit` is what lets a
+    money budget be hidden from the roles below them while an hours budget
+    is still shown, if that is wanted.
 
 ### Data model
 
@@ -1055,7 +1057,7 @@ also be safe, since it only ever refuses; it is required to match
 Each addable later without migrating data:
 
 - **Pushed alerts**: webhook events for thresholds (they need "sent once"
-  state, and phase 4's permission before money reaches a third party);
+  state, and a change to PRIVACY.md before money reaches a third party);
   email, web push and OS notifications; anything on the companion, the menu
   bar, the daemon, the editor extension or the wall clock.
 - **The coach**: any budget figure in a brief or a chat, which would start
@@ -1085,8 +1087,8 @@ Each addable later without migrating data:
 - **Other places**: 1c's report links, the sessions CSV, invoices, the
   Insights and Plan pages, and any link to `WeeklyPlan` targets or
   `weekly_goal`.
-- **Organisations**: organisation-owned budgets and the money permission
-  (phases 2 and 4).
+- **Organisations**: organisation-owned budgets, which wait on an
+  organisation having money of its own (#340).
 
 ---
 
@@ -1156,8 +1158,8 @@ and change none of them; "decision N" in this section means one of its own.
 7. **A link says nothing about now.** `running` is not in the response, so a
    client cannot learn from a report that a timer is on at this moment.
    Organisations settled live presence the same way — the record carries no
-   running flag, in any stage ([roadmaps/organisations.md](../roadmaps/organisations.md));
-   a report link is not the back door to it.
+   running flag, in any stage ([organisations.md](organisations.md),
+   decision 2); a report link is not the back door to it.
 8. **The public prefix is narrow, slow and uncached.** `/api/reports` is the
    only entry in `PUBLIC_PREFIXES` that serves a user's data, and it serves
    exactly one shape. The route is rate-limited to 30/minute, answers
