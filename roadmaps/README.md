@@ -10,16 +10,18 @@ built, and why.
 | [account-emails.md](account-emails.md) | Several verified addresses on one account — what #341 waits on, and the one place decision 11's no-email rule gets revisited |
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
-| [backoffice.md](backoffice.md) | The operator's control plane (#424): operator routes in the one API, deployed a second time behind IAP, with a UI-only service in front — accounts, organisations, abuse and limits, capacity |
+| [backoffice.md](backoffice.md) | The operator's control plane (#424): what needs attention, accounts, organisations, abuse and limits, capacity and cost, and compliance — operational metadata, never user content |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
 
 Five of these were split out of `organisations.md` on 2026-10-31. The test
-each had to fail to stay: **is it an organisations feature?** A back office,
-push, an account's addresses, taking money and an identity protocol are
-none of them, and filing them under the epic was shaping each around one
-view of one feature. The epic's own file keeps, for each, the sentence
-saying what stays its own when the blocker clears.
+each had to fail to stay: **is it an organisations feature?** A control
+plane, push, an account's addresses, taking money and an identity protocol
+are none of them, and filing them under the epic was shaping each around one
+view of one feature. Three of the epic's own items wait on one of them
+(#341 on the addresses, #345 on the money, #351 on push), and its file
+keeps, for each of those three, the paragraph saying what stays the epic's
+when the blocker clears.
 
 ## What belongs here
 
@@ -60,3 +62,15 @@ is a rule nobody can trust.
 The file moves to `docs/`; if only part of it shipped, that part is **deleted
 here and written there**. Never copied — two accounts of one decision
 disagree the first time one of them is edited.
+
+What points at it changes in the same edit. If the whole file moved, its
+row in the table above goes and [docs/README.md](../docs/README.md) gains
+one. Every link into it is rewritten, not only repointed, because a sentence
+that sends a reader here says the thing is not built: `CLAUDE.md` names
+several roadmaps by path, `docs/` and the other roadmaps link here, and
+issue bodies link to their headings. `git grep -n '<file>'` from the root
+finds the first three, and
+`gh issue list --state all --search '"roadmaps/<file>" in:body'` the
+issues. Nothing else will — when `organisations.md` was split and its
+headings renamed on 2026-10-31, the links to them from #340, #342, #343
+and #351 broke without a sound.
