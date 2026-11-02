@@ -1,10 +1,19 @@
 # Organisations — what is left to build
 
-The epic is GitHub issue #353. Four stages of it shipped, and so have
-fourteen of the sixteen bugs the 2026-10-31 audit found. What is left here
+The epic is GitHub issue #353. Four stages of it have shipped, and so have
+fifteen of the sixteen bugs the 2026-10-31 audit found. What is left here
 is **one page for the owner to read and five items that wait on something
 outside the code** — each written out in full below. Nothing here is built
 by hand any more; everything left is a decision, a reading, or a wait.
+
+| # | What | Blocked by | Start when |
+|---|------|-----------|------------|
+| 422 | PRIVACY.md, drafted and already public on `main` | The owner reading every sentence | Nothing to start: once it is read, delete its section |
+| 340 | Money behind the organisation's own roles | No organisation-side money exists to guard | Organisation-side money is designed |
+| 341 | Verified email domains for joining | No verified address: the API sends no email, and an account has one address, not many ([account-emails.md](account-emails.md)) | Accounts carry verified secondary addresses |
+| 345 | Per-seat billing | No payment machinery anywhere; the beta runs for months yet ([subscriptions.md](subscriptions.md)) | The end of the beta is decided |
+| 351 | Telling people what is missing or waiting | No channel: server push is #298 ([server-push.md](server-push.md)) | #298 ships |
+| 352 | DPA, works-council sheet, DPIA template | Counsel review | The owner takes it up — **they have said it matters** |
 
 Five things that used to live here now have roadmaps of their own, because
 none is an organisations feature: SSO per organisation and SCIM
@@ -24,8 +33,8 @@ owner rather than picking one silently.
 
 What is already built — the four rules, decisions 1–33, the data model, the
 HTTP contract and the rules the UI keeps — is
-[docs/organisations.md](../docs/organisations.md). **Read it first.** Nothing
-here repeats it; items below cite its decisions by number.
+[docs/organisations.md](../docs/organisations.md). **Read it first.** Items
+below cite its decisions by number.
 
 ---
 
@@ -34,11 +43,11 @@ here repeats it; items below cite its decisions by number.
 1. **Read** [docs/organisations.md](../docs/organisations.md) and the
    repo-root `CLAUDE.md` (commands, conventions, and *What to test, and what
    not to*). For the API, also `api/CLAUDE.md`.
-2. **Pick** from [Order of work](#order-of-work). Items marked **Ask the
-   owner first** contain a choice that is the owner's to make. Ask in the
-   session, then write the answer into `docs/organisations.md` as a decision
-   before building. An item that records a decision already taken says so
-   and dates it — build to it rather than reopening it.
+2. **Pick** from the table at the top. Items marked **Ask the owner
+   first** contain a choice that is the owner's to make. Ask in the session,
+   then write the answer into `docs/organisations.md` as a decision before
+   building. An item that records a decision already taken says so and
+   dates it — build to it rather than reopening it.
 3. **Work on one branch in the worktree**, and **do not push and do not
    open a pull request**: the owner merges and syncs GitHub themselves
    (2026-10-31). Several items in one session share that branch; the
@@ -60,7 +69,7 @@ here repeats it; items below cite its decisions by number.
    - A change to a route's signature or docstring changes the generated
      types: run `cd ui && pnpm gen:types` and commit the result on its own.
 6. **When an item ships:**
-   - delete its section here, and its row in *Order of work*;
+   - delete its section here, and its row in the table at the top;
    - if behaviour changed, write it into `docs/organisations.md` (amend the
      decision it touches, or add one) and into `DATA.md` / `PRIVACY.md` if
      they describe it;
@@ -86,13 +95,14 @@ mistake already avoided once:
 - **Widen a collection boundary, never a serialiser.** `MongoStore._q`
   (`api/src/beats/infrastructure/repositories.py`) stamps
   `{"user_id": self.user_id}` onto every query, and that one line is what
-  enforces rule 3 mechanically across every collection. Stage 2 widened it
-  for exactly one collection (`projects`) and left the rest alone. A read
-  that crosses users gets its own narrow class that does nothing else — as
-  `MongoOrganisationRecords` and `MongoReportLinkLookup` do — not a filter
-  applied after the fact, and not a field allowlist somebody has to remember.
+  enforces rule 3 mechanically across every repository built on it
+  (decision 4). Stage 2 widened it for exactly one collection (`projects`)
+  and left the rest alone. A read that crosses users gets its own narrow
+  class that does nothing else — as `MongoOrganisationRecords` and
+  `MongoReportLinkLookup` do — not a filter applied after the fact, and not
+  a field allowlist somebody has to remember.
 - **The coach never reaches past the member.** It reads projects through
-  the member's own merged repository (`project_repository_for`, in
+  the member's own merged repository (`project_repository_for`, called in
   `api/src/beats/coach/repos.py`), so it sees the organisation projects the
   member is assigned to, with their own half — that is how it names their
   day job. Its own collections it queries directly, with its own `user_id`
@@ -117,59 +127,38 @@ Two more facts that trip up fixes here:
   must not break the SPA already deployed. FastAPI ignores unknown query
   parameters, so dropping one is safe; making a new one required is not.
 - **Only the person deletes their own rows** (decision 32). An organisation
-  removing a project ends the assignment; merging and deleting repoint
-  rows. The one exception is rows kept under an `erased:` tombstone, which
-  go when the organisation is deleted or its retention expires. Keep it
-  that way in every fix below.
-
----
-
-## Order of work
-
-Most important first.
-
-| # | What | Surface | Why at this place |
-|---|------|---------|-------------------|
-| 422 | The owner reads the PRIVACY.md draft | docs | Written and committed; one reading away from done |
-| 340–352 | The five waiting items | — | Each when its blocker clears; see the section |
-
-Fifteen of the sixteen bugs the 2026-10-31 audit found have shipped and
-their sections are deleted: #404, #405, #406, #407, #408, #409, #410, #411,
-#412, #413, #414, #415, #419, #420, #421. What they changed is in
-[docs/organisations.md](../docs/organisations.md); what is left of #422 is
-below.
+  taking a project off someone ends the assignment; merging two of its
+  projects (decision 28) and deleting the organisation (decision 29)
+  repoint rows. The one exception is rows kept under an `erased:`
+  tombstone, which go when the organisation is deleted or its retention
+  expires. Keep it that way in every fix below.
 
 ---
 
 ## Bugs in what shipped
 
 Found on 2026-10-31 by checking `docs/organisations.md` against the code.
-Of the sixteen, one is open: #422, which needs the owner's eyes rather than
-anybody's hands.
+Fifteen of the sixteen have shipped and their sections are deleted: #404,
+#405, #406, #407, #408, #409, #410, #411, #412, #413, #414, #415, #419,
+#420, #421; what they changed is in
+[docs/organisations.md](../docs/organisations.md). One is open: #422, which
+needs the owner's eyes rather than anybody's hands.
 
 ### #422 — PRIVACY.md, drafted and waiting for the owner to read it
 
 `PRIVACY.md` is the owner's promise to users, so **the owner reads every
-sentence before it ships.** That reading is the only thing left here; the
-work is done.
+sentence of it.** The draft has already shipped: commit `b8dd8f7b`, which
+brought `PRIVACY.md` and `DATA.md` up to what the code does, is on `main`,
+and the homepage's Privacy link opens `PRIVACY.md` on `main`
+(`ui/client/pages/homepage/HomePage.tsx`), so users read it today. The
+owner's reading is the only thing left here; the work is done.
 
-**Drafted.** Single sign-on's stored name, email and `linked_at` (and
-`identities[]` in `DATA.md`, which listed none of it); the contract's terms
-beside its balance, and that sharing hands over no power to delete; a
-connected project keeping its history back through every later edit;
-timesheets, approval, the lock and entered time working on any assignment
-rather than only a managed one, with owners and managers entering time;
-closing and deletion (decision 29); and retention named as the country's
-floor, reaching what #408 made it reach.
-
-**Settled 2026-10-31, and done.** The sentence "nothing downstream records
-which door was used" held for sessions but not for the log:
-`POST /api/auth/sso/complete` wrote `provider=… user=…` on every single
-sign-in into 30 days of Cloud Logging. The owner took the recommendation —
-the code changed, not the page. Dropping the provider alone would not have
-been enough, since a line firing only on the SSO path and naming the
-account still records that this person came through SSO; what is left names
-neither.
+That commit's message lists each change and why, and its diff is where the
+new promises are. For the one promise the code broke — that nothing
+downstream records which door a sign-in used — the owner chose to change
+the code, not the page: `13e6f9d7` took the provider and the person out of
+the sign-in log line in `api/src/beats/api/routers/sso.py`, and the comment
+there and that commit's message say why both had to go.
 
 **When the owner has read it**, delete this section. If a sentence needs
 changing, that is a `docs(legal):` commit of its own, not a reopening of
@@ -180,24 +169,9 @@ the epic.
 ## Waiting on something outside the code
 
 None of these should be started until its blocker clears. Each section says
-what blocks it, when to start, and what it must not do.
-
-Five things left this file on 2026-10-31, each because it is not an
-organisations feature and filing it here was shaping it around one view:
-SSO per organisation and SCIM ([organisation_sso.md](organisation_sso.md)),
-the operator's back office ([backoffice.md](backoffice.md)), several
-verified addresses on an account ([account-emails.md](account-emails.md)),
-server push ([server-push.md](server-push.md)) and taking the money
-([subscriptions.md](subscriptions.md)). The three items below that wait on
-one of them say what stays this epic's when it lands.
-
-| # | What | Blocked by | Start when |
-|---|------|-----------|------------|
-| 340 | Money behind the organisation's own roles | No organisation-side money exists to guard | Organisation-side money is designed |
-| 341 | Verified email domains for joining | An account has one email address, not many ([account-emails.md](account-emails.md)) | Accounts carry verified secondary addresses |
-| 345 | Per-seat billing | No payment machinery anywhere; the beta runs for months yet ([subscriptions.md](subscriptions.md)) | The end of the beta is decided |
-| 351 | Telling people what is missing or waiting | No channel: server push is #298 ([server-push.md](server-push.md)) | #298 ships |
-| 352 | DPA, works-council sheet, DPIA template | Counsel review | The owner takes it up — **they have said it matters** |
+what blocks it, when to start, and what it must not do. Three of them — #341,
+#345 and #351 — wait on a roadmap split out of this file (see the top), and
+say what stays this epic's when it lands.
 
 ### #340 — Money behind the organisation's own roles
 
@@ -209,10 +183,11 @@ waits on a design that does not exist rather than on a dependency.
 **Decided 2026-10-31 by the owner: money is read by owners and admins.**
 The epic had carried "seeing money is its own permission, independent of
 role" since stage 4; it is not that. It is the organisation's existing role
-ladder, which means it fits the shape decision 25 already set — rights are
-read off **capabilities on the role** (`administers`, `decides`,
-`reads_record`), not off rungs. So this is one more capability, true for
-owner and admin and false below:
+ladder, which means it fits the shape decision 25 already set — what the
+roles below admin may do is read off **capabilities on the role**
+(`decides`, `reads_record`), not off rungs, and administering is the ladder
+from admin up. So this is one more capability, true for owner and admin and
+false below:
 
 ```
 reads_money: owner yes, admin yes, manager no, viewer no, member no
@@ -223,13 +198,17 @@ money; a viewer — an accountant, a works-council seat — reads the whole
 working-time record and still sees no money, which is the case that proves
 the capability is not the record's.
 
-**It must not be bolted on.** Every other item here is additive; this one is
-a cross-cutting read rule, and the cheapest version — a flag checked in each
+**It must not be bolted on.** Every other item here is additive, but for
+#345's read-only state, which must be one gate on every write under
+`/api/organisations` ([subscriptions.md](subscriptions.md)). This one is a
+cross-cutting read rule, and the cheapest version — a flag checked in each
 billing route — is the version that leaks the first time somebody adds a
 route and forgets. The seam already exists: clients, project billing,
 billable overrides and billing budgets are their own collections, outside
 every device prefix, with no coach port. Attach to that boundary, the way
-#342 attaches its check to the organisation router in one place.
+#342 attaches its check in one place — `OrganisationService._member`, which
+both routers under `/api/organisations` go through
+([organisation_sso.md](organisation_sso.md)).
 
 ### #341 — Verified email domains
 
@@ -237,8 +216,8 @@ People with an `@acme.com` address ask to join, or join automatically.
 
 **Blocked on the account model, not on this epic.** The rule the owner set
 (2026-10-31) is to match the domain against one of the account's **verified**
-addresses — never a typed string — and an account holds one address today.
-That prerequisite is its own piece of work:
+addresses — never a typed string — and an account holds one address today,
+and nothing has verified it. That prerequisite is its own piece of work:
 [account-emails.md](account-emails.md), which also carries the verification
 flow and the narrow revisiting of decision 11's no-email rule that it needs.
 
@@ -258,10 +237,13 @@ and dunning are not an organisations feature, and the owner has it on hold
 while the beta runs (2026-10-31).
 
 What is this epic's, and is written into that file rather than built here:
-a seat is counted off `org_members` and `org_assignments`, which already
-carry the dates; an organisation that does not pay goes **read-only, never
-deleted**, because its working-time record is a legal one; and no billing
-state may ever refuse a person their own data (rule 1).
+a seat today is counted off `org_members` and `org_assignments`, but a past
+period is not — a rejoin or a reassignment reopens the same document, a
+membership keeps only its current role, and `org_audit` can lose an event —
+so billing a period needs seat history of its own; an organisation that
+does not pay goes **read-only, never deleted**, because its working-time
+record is a legal one; and no billing state may ever refuse a person their
+own data (rule 1).
 
 ### #351 — Telling people what is missing or waiting
 
@@ -290,10 +272,11 @@ Three drafts in [legal/](legal/), unreviewed by counsel:
 - `works-council-sheet.md`, the one-page "what LifePete records" sheet;
 - `dpia-template.md`, the DPIA template.
 
-[legal/README.md](legal/README.md) says whose document each is, the two
-facts to re-check before relying on them (Spain's fine amounts, Germany's
-reform status, both last checked October 2026), and that **counsel review
-is the whole blocker**. Nothing there reaches a customer first.
+[legal/README.md](legal/README.md) says whose document each is and that
+**counsel review is the whole blocker**. Two facts in the works-council
+sheet go stale on their own — Spain's fine amounts and Germany's reform
+status, both last checked in October 2026 — and are re-checked before
+anyone relies on them. Nothing there reaches a customer first.
 
 **The owner has said this one matters (2026-10-31)** and will take it up
 themselves; it is not waiting on a customer to ask. Re-read the three
@@ -311,28 +294,30 @@ point is that every sentence in it can be checked.
   on an organisation's project, following the project picked), because the
   organisation reads an entry's note (decision 1).
 - **Server push** (#298): the channel #351 waits on, and now the only one
-  it will use — email is not coming (decision 11, and the owner again on
-  2026-10-31).
+  it will use — no reminder goes by email (decision 11, and the owner again
+  on 2026-10-31).
 
 ---
 
 ## Settled — do not reopen
 
-A fresh reader tends to re-ask these. Each is decided in
-`docs/organisations.md`; reopening one is a new decision for the owner, not
-a fix.
+A fresh reader tends to re-ask these. Each is decided where its line
+points — a numbered decision in `docs/organisations.md`, or else the file
+or section it names; reopening one is a new decision for the owner, not a
+fix.
 
 - No live presence, ever: the record carries no `running` flag (decision 2).
 - The API sends no email, and the invitations list carries no token
-  (decision 11).
+  (decision 11). The one narrow revisit, a verification message and never
+  an invitation or a reminder, is [account-emails.md](account-emails.md)'s.
 - An approved month refuses edits until a recorded reopen (decision 23).
 - A merge never changes a stamp (decision 28). Closing is notice, and
   deletion hands back before it wipes (decision 29). Retention has a
   statutory floor, and expiry unstamps rather than deletes a living
   member's rows (decision 30).
 - An organisation left without an owner stays as it is (decision 31).
-- A decider reads the contract's terms on any assignment, and sharing is not
-  control (decision 32).
+- A decider reads the contract's terms on any assignment it decides for,
+  managed or not, and sharing is not control (decision 32).
 - A decider may approve their own timesheet and absence request, for now
   (decision 33).
 - The price (`docs/pricing.md`), and the SSO shape
@@ -340,60 +325,10 @@ a fix.
 - A contract write is never refused for an approved month; it marks the
   approval instead (decision 23, built 2026-10-31).
 - Money in an organisation is read by owners and admins, as a capability on
-  the role — not a permission of its own (#340 below, decided 2026-10-31).
-
----
-
-## Out of scope, by decision
-
-Not oversights. If one of these is asked for, it is a new decision, not a
-continuation of this epic.
-
-- **Separate work-only accounts an employer controls.** Large customers will
-  ask. It is a layer on top, later — never the default, which would undo
-  rule 1.
-- **Several workspaces inside one organisation**, for agencies.
-- **Payroll integrations**, and invoicing beyond what clients need.
-- **Screenshots, activity levels, app tracking for employers, idle detection
-  reported to employers. Not later, not ever.** This is the line the whole
-  product is built to sit on the right side of: a tracker that already knows
-  your flow, sleep and heart rate becomes a surveillance tool the moment an
-  employer can see any of it. What makes these records sellable to a works
-  council is that they *cannot* be used to watch anyone.
-
----
-
-## Why the stages went in the order they did
-
-Kept because it explains the shape of what is built, and because the same
-logic orders what is left.
-
-Stage 2 (foundations) was the only stage that changed the data model. Stages
-3 (employment) and 4 (scale) are additive on top of it — which is what made
-the sequencing simple: get the ownership model right, and the rest is
-ordinary work. The remaining items are additive too, with one exception,
-#340, which is why it carries the warning it does.
-
-Two things were deliberately done early because they are cheap to add before
-and expensive to add after:
-
-- **The audit log** was written from stage 2 on and only read from stage 4.
-  Every membership change, contract edit and approval made before it exists
-  is unrecorded, and those are exactly the events a works council asks about.
-- **The index on `projects`** (`{user_id: 1, archived: 1}`) went in before
-  any organisation code. Every project read had been a collection scan —
-  harmless at one person's scale, wrong as soon as the read became "mine,
-  plus every organisation project I am assigned to" across every tenant.
-
-The one thing stage 3 broke on purpose: **approval stores a derived figure.**
-No other working-time or billing figure is stored — every week's closing
-balance is recomputed on each read, billing budgets store only their limit, a
-report link stores no figure. (The weekly digests keep their own totals,
-outside both.) A frozen month is the exception, because an edit after approval
-must not silently move an approved figure. It leaves the system with two
-answers to one question, and every reader has to know which it wants. That was
-decided deliberately rather than discovered, because it is very hard to
-migrate out of once approved periods exist.
+  the role — not a permission of its own (#340 above, decided 2026-10-31).
+- What the epic will never build — work-only accounts, workspaces inside an
+  organisation, payroll, and above all any monitoring for employers — is in
+  [docs/organisations.md § Out of scope, by decision](../docs/organisations.md#out-of-scope-by-decision).
 
 ---
 

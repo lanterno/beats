@@ -162,7 +162,13 @@ Then the model's own:
    stamped rows stay: the organisation keeps its record under `/record`, and
    the person keeps their own rows, read through their own user-scoped
    repository, as the read-only "Acme (left)" archive with a CSV. Rejoining
-   reopens the membership; assignments are made again by an admin.
+   reopens the membership; assignments are made again by an admin, and so
+   are places in teams: leaving and removal take the person out of every
+   team, since a team is a manager's scope (decision 25) and a former
+   manager re-invited as one would otherwise get their old scope back
+   unasked. A manager's narrowed record then no longer lists them, past
+   months included; the whole record, which owners, admins and viewers
+   read, still does.
 10. **Roles are owner, admin, member, each including the ones below.**
     Admins run members, invites, requests, projects, assignments, settings
     and read the record. (Stage 4 put manager and viewer between admin and
@@ -189,7 +195,9 @@ Then the model's own:
     stages add their own (contracts, absence requests, timesheets, entered
     time, teams, merges, closing, retention). Stage 4 reads it
     (`GET /{id}/audit`); it cannot be backfilled, so it was cheaper to have
-    from stage 2.
+    from stage 2. Every membership change, contract edit and approval made
+    before it existed would be unrecorded, and those are exactly the events
+    a works council asks about.
 13. **A backup carries the member's view and restores only their half.** The
     full export lists an organisation's project as the member sees it, with
     `organisation` set, and their entries on it with their stamps. On import,
@@ -406,7 +414,8 @@ project that does not exist.
   from a day.
 - Wherever a note is shown on an organisation's project, and on the session
   editor's note input: "Acme can read this note". A session a decider
-  logged is marked "entered for you" in the web app's timeline.
+  logged is marked "entered for you" in the web app's timeline and on the
+  companion's "Your day" strip on Today.
 - `/organisations` lists the invitations waiting for me (who, and as what;
   joining takes the link I was sent, decision 11), my organisations with my
   role, and the ones I left ("Acme (left)" → the archive), and creates one.
@@ -470,14 +479,19 @@ what only matters past a handful of people. Decisions 21–30:
     absence days and the balance at the close, **the first stored derived
     working-time figure** (the weekly digests store their own totals; no
     balance, ledger, billing or budget figure is stored) — or asks for
-    changes with a comment. From approval on, every write dated inside the
-    month answers 409 `PERIOD_APPROVED`: beat create, edit (either end of
-    the move), delete, a back-dated timer start, absences, adjustments, and
-    the employer's own entries alike, and the removal of an absence or a
-    balance adjustment, and a session arriving in a backup — which the
-    import reports under `skipped` rather than writing
-    (`MongoPeriodLocks`, checked in the member-side services, and the
-    employer's own check in `EmploymentService`).
+    changes with a comment. Storing it leaves two answers to one question,
+    the frozen month and the live one, and every reader has to know which it
+    wants. That was decided deliberately rather than discovered: an edit
+    after approval must not silently move an approved figure, and a stored
+    figure is very hard to migrate out of once approved periods exist. From
+    approval on, every write dated inside the month answers 409
+    `PERIOD_APPROVED`: beat create, edit (either end of the move), delete, a
+    back-dated timer start, absences, adjustments, and the employer's own
+    entries alike, and the removal of an absence or a balance adjustment,
+    and a session arriving in a backup — which the import reports under
+    `skipped` rather than writing (`MongoPeriodLocks`, checked in the
+    member-side services, and the employer's own check in
+    `EmploymentService`).
     **A contract write is not dated inside a month and is never refused**
     (decided 2026-10-31): it is a list of terms spanning all of them, and a
     term the employer got wrong has to stay fixable without reopening every
@@ -509,7 +523,9 @@ what only matters past a handful of people. Decisions 21–30:
     timeline marked "entered for you", is stamped as the organisation's,
     and is in the audit log — the notification the epic asked for is the
     member's own timeline showing it. Every surface shows the session; the
-    web app's timeline (`TodayFeed`, `WeekDays`) is the one that marks it.
+    web app's timeline (`TodayFeed`, `WeekDays`) and the companion's "Your
+    day" strip (`sessionLabel` in `day_ribbon.dart`) mark it, in the same
+    words.
 25. **Teams are a manager's scope.** A team (`org_teams`) is a name and its
     members. The **manager** role decides requests and timesheets, writes
     managed contracts and enters time for the members of the teams the manager
@@ -539,7 +555,8 @@ what only matters past a handful of people. Decisions 21–30:
     (decision 11); what is missing or waiting shows where people already
     look — the member's timesheet list offers the ended months still to
     submit and marks the ones sent back, and the decider's Approvals tab
-    counts and groups what waits. A digest or push is later work (#351).
+    counts and groups what waits. A push is later work (#351), over the server
+    push of #298 ([roadmaps/server-push.md](../roadmaps/server-push.md)).
 
 28. **A merge moves rows, never stamps.** `POST /{id}/projects/{pid}/merge`
     (admins) folds one of the organisation's projects into another — the
@@ -648,23 +665,43 @@ Five, each an issue under
 [#353](https://github.com/lanterno/beats/issues/353): money behind the
 organisation's own roles (#340 — read by owners and admins, a capability on
 the role rather than a permission of its own, decided 2026-10-31), verified
-email domains (#341, which waits on an account holding more than one
-verified address), SSO per organisation (#342), SCIM (#343) and per-seat
-billing (#345, priced and on hold for the beta). They are decisions rather
-than omissions, and what each waits for is
-in [roadmaps/organisations.md](../roadmaps/organisations.md), with the rest of
-what is not built — except #342 and #343, which have a roadmap of their own
-in [roadmaps/organisation_sso.md](../roadmaps/organisation_sso.md), the
+email domains (#341, which waits on an account holding verified addresses
+beside its main one,
+[roadmaps/account-emails.md](../roadmaps/account-emails.md)), SSO per
+organisation (#342), SCIM (#343) and per-seat billing (#345, priced and on
+hold for the beta). They are decisions rather than omissions, and what each
+waits for is in [roadmaps/organisations.md](../roadmaps/organisations.md),
+with the rest of what is not built — except #342 and #343, which have a
+roadmap of their own in
+[roadmaps/organisation_sso.md](../roadmaps/organisation_sso.md), the
 attestation shape settled for #342 on 2026-10-28 included. The sales and
 legal material of the epic's section 7
 (#352) is drafted in [roadmaps/legal/](../roadmaps/legal/) and unreviewed by
 counsel, and nothing there reaches a customer first.
 
-The operator's back office of decision 31 is
-[roadmaps/backoffice.md](../roadmaps/backoffice.md): it is not an
-organisations feature, and noticing an organisation with no owner is only
-the first thing it owes. Designed 2026-11-01 as a separate control-plane
-service, where an ownerless organisation is a row with a *grant the owner
-role* beside it rather than a reason to open a shell against production.
-Decision 31 refuses to auto-promote; it still leaves somebody having to act,
-and that is where they act.
+The operator's back office of decision 31 is #424, not built yet: it is not
+an organisations feature, and noticing an organisation with no owner is only
+the first thing it owes. Its design, including what the operator may do to
+an organisation and when, lives in
+[roadmaps/backoffice.md](../roadmaps/backoffice.md) until it ships, and is
+not repeated here. Decision 31 refuses to auto-promote; it still leaves
+somebody having to act, and that is where they will act.
+
+---
+
+## Out of scope, by decision
+
+Not oversights. If one of these is asked for, it is a new decision, not a
+continuation of the epic.
+
+- **Separate work-only accounts an employer controls.** Large customers will
+  ask. It is a layer on top, later — never the default, which would undo
+  rule 1.
+- **Several workspaces inside one organisation**, for agencies.
+- **Payroll integrations**, and invoicing beyond what clients need.
+- **Screenshots, activity levels, app tracking for employers, idle detection
+  reported to employers. Not later, not ever.** This is the line the whole
+  product is built to sit on the right side of: a tracker that already knows
+  your flow, sleep and heart rate becomes a surveillance tool the moment an
+  employer can see any of it. What makes these records sellable to a works
+  council is that they *cannot* be used to watch anyone.
