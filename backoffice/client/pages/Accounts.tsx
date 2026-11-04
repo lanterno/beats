@@ -6,12 +6,13 @@
  */
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router";
 import { get, post } from "@/shared/api/client";
 import type { AccountDetail, AccountMatch } from "@/shared/api/schema";
 import { dayOf, formatBytes } from "@/shared/lib/format";
 import { Facts, Failed, Loading, Section, Table } from "@/shared/ui";
+import { CommandForm } from "@/shared/ui/CommandForm";
 
 export function Accounts() {
 	const [email, setEmail] = useState("");
@@ -107,7 +108,7 @@ export function Account() {
 			</Section>
 			<Section title="Devices">
 				<Table
-					head={["Device", "Created", "Last seen", "State"]}
+					head={["Device", "Created", "Last seen", "State", ""]}
 					rows={(data.devices ?? []).map((d) => [
 						<code key={d.device_id} className="text-xs">
 							{d.device_id}
@@ -115,9 +116,19 @@ export function Account() {
 						dayOf(d.created_at),
 						dayOf(d.last_seen),
 						d.revoked ? "revoked" : "paired",
+						d.revoked ? null : (
+							<CommandForm
+								key={`revoke-${d.device_id}`}
+								name="device.revoke"
+								label="Revoke"
+								args={{ user_id: data.id, device_id: d.device_id }}
+								invalidates={["account"]}
+							/>
+						),
 					])}
 				/>
 			</Section>
+			<AccountActions detail={data} />
 			<Section title="Organisations">
 				<Table
 					head={["Organisation", "Role", "Membership"]}
@@ -135,5 +146,105 @@ export function Account() {
 				/>
 			</Section>
 		</>
+	);
+}
+
+/**
+ * The account commands, each through the one runner. Suspension and erasure
+ * demand the account's email typed back — proof the operator is acting on
+ * the thing they think they are, never a cross-site defence (the Origin
+ * check holds that line).
+ */
+function AccountActions({ detail }: { detail: AccountDetail }) {
+	const [reason, setReason] = useState("");
+	const [limits, setLimits] = useState({
+		coach: "",
+		beats: "",
+		signals: "",
+		imports: "",
+		webhooksOff: false,
+	});
+
+	const limitArgs: Record<string, unknown> = {
+		user_id: detail.id,
+		coach_monthly_budget_usd: limits.coach ? Number(limits.coach) : null,
+		writes_per_minute_beats: limits.beats ? Number(limits.beats) : null,
+		writes_per_minute_signals: limits.signals ? Number(limits.signals) : null,
+		imports_per_hour: limits.imports ? Number(limits.imports) : null,
+		webhooks_disabled: limits.webhooksOff,
+	};
+
+	const numberField = (
+		key: "coach" | "beats" | "signals" | "imports",
+		placeholder: string,
+	): ReactNode => (
+		<input
+			key={key}
+			value={limits[key]}
+			onChange={(e) => setLimits({ ...limits, [key]: e.target.value })}
+			placeholder={placeholder}
+			className="border border-neutral-300 rounded px-2 py-1 text-sm w-36"
+			inputMode="numeric"
+		/>
+	);
+
+	return (
+		<Section title="Actions">
+			<CommandForm
+				name="account.suspend"
+				label="Suspend (abuse)"
+				args={{ user_id: detail.id, kind: "abuse", reason }}
+				confirmHint="type the account's email"
+				invalidates={["account", "attention"]}
+				fields={
+					<input
+						value={reason}
+						onChange={(e) => setReason(e.target.value)}
+						placeholder="reason — for the record, never shown"
+						className="border border-neutral-300 rounded px-2 py-1 text-sm w-72"
+					/>
+				}
+			/>
+			<CommandForm
+				name="account.unsuspend"
+				label="Unsuspend"
+				args={{ user_id: detail.id }}
+				invalidates={["account", "attention"]}
+			/>
+			<CommandForm
+				name="account.sign_out_everywhere"
+				label="Sign out everywhere"
+				args={{ user_id: detail.id }}
+				invalidates={["account"]}
+			/>
+			<CommandForm
+				name="account.set_limits"
+				label="Set limits"
+				args={limitArgs}
+				invalidates={["account"]}
+				fields={
+					<>
+						{numberField("coach", "coach $/month")}
+						{numberField("beats", "beat writes/min")}
+						{numberField("signals", "signal writes/min")}
+						{numberField("imports", "imports/hour")}
+						<label className="flex items-center gap-1 text-sm">
+							<input
+								type="checkbox"
+								checked={limits.webhooksOff}
+								onChange={(e) => setLimits({ ...limits, webhooksOff: e.target.checked })}
+							/>
+							webhooks off
+						</label>
+					</>
+				}
+			/>
+			<CommandForm
+				name="account.clear_limits"
+				label="Clear limits"
+				args={{ user_id: detail.id }}
+				invalidates={["account"]}
+			/>
+		</Section>
 	);
 }

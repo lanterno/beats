@@ -133,6 +133,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/commands/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run
+         * @description The one path a mutation takes (roadmaps/backoffice.md § Commands are
+         *     objects): role, confirmation, describe, execute, audit — so nothing is
+         *     unaudited and no rule lives in a handler. Answers the audit entry, and
+         *     the job when one was queued (step 4).
+         */
+        post: operations["run_api_operator_commands__name__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/jobs": {
         parameters: {
             query?: never;
@@ -406,6 +429,15 @@ export interface components {
             /** Storage Bytes */
             storage_bytes: number;
         };
+        /** CommandRequest */
+        CommandRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+            /** Confirmation */
+            confirmation?: string | null;
+        };
         /** DayFigure */
         DayFigure: {
             /** Day */
@@ -467,6 +499,8 @@ export interface components {
          *     team's name.
          */
         OrgAuditRow: {
+            /** Actor Kind */
+            actor_kind: string | null;
             /** Actor User Id */
             actor_user_id: string | null;
             /**
@@ -691,6 +725,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CapacityReport"];
+                };
+            };
+        };
+    };
+    run_api_operator_commands__name__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommandRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

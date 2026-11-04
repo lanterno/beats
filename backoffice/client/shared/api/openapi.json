@@ -450,6 +450,28 @@
         "title": "CollectionSize",
         "type": "object"
       },
+      "CommandRequest": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          }
+        },
+        "title": "CommandRequest",
+        "type": "object"
+      },
       "DayFigure": {
         "properties": {
           "day": {
@@ -598,6 +620,17 @@
       "OrgAuditRow": {
         "description": "An audit event **without its `details`**, which carry what the\norganisation wrote: a reopened month's reason, a created project's or\nteam's name.",
         "properties": {
+          "actor_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Kind"
+          },
           "actor_user_id": {
             "anyOf": [
               {
@@ -645,6 +678,7 @@
           "at",
           "event",
           "actor_user_id",
+          "actor_kind",
           "subject_user_id",
           "project_id"
         ],
@@ -1010,6 +1044,61 @@
           }
         },
         "summary": "Capacity",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/commands/{name}": {
+      "post": {
+        "description": "The one path a mutation takes (roadmaps/backoffice.md \u00a7 Commands are\nobjects): role, confirmation, describe, execute, audit \u2014 so nothing is\nunaudited and no rule lives in a handler. Answers the audit entry, and\nthe job when one was queued (step 4).",
+        "operationId": "run_api_operator_commands__name__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Api Operator Commands  Name  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run",
         "tags": [
           "operator"
         ]

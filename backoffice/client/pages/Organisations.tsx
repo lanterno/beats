@@ -6,11 +6,13 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { get } from "@/shared/api/client";
 import type { OrgAuditRow, OrganisationDetail, OrganisationSummary } from "@/shared/api/schema";
 import { dayOf } from "@/shared/lib/format";
 import { Facts, Failed, Loading, Section, Table } from "@/shared/ui";
+import { CommandForm } from "@/shared/ui/CommandForm";
 
 function roles(byRole: Record<string, number> | undefined): string {
 	const entries = Object.entries(byRole ?? {});
@@ -86,6 +88,7 @@ export function Organisation() {
 					]}
 				/>
 			</Section>
+			{s.owners === 0 ? <OrganisationActs summary={s} /> : null}
 			<Section title="Audit — what and when, never the details">
 				{audit.error ? <Failed error={audit.error} /> : null}
 				{audit.data ? (
@@ -103,5 +106,56 @@ export function Organisation() {
 				)}
 			</Section>
 		</>
+	);
+}
+
+/**
+ * The operator's organisation acts, offered only while there is no owner and
+ * only on a request that passes the rule (roadmaps/backoffice.md): each is
+ * refused server-side with 409 ORGANISATION_HAS_OWNER the moment an owner
+ * exists, whatever this page shows.
+ */
+function OrganisationActs({ summary }: { summary: OrganisationSummary }) {
+	const [requester, setRequester] = useState("");
+	const [closesOn, setClosesOn] = useState("");
+	return (
+		<Section title="Acts — only because no owner is left, and only when asked">
+			<CommandForm
+				name="organisation.grant_owner"
+				label="Grant the owner role"
+				args={{ organisation_id: summary.id, user_id: requester }}
+				confirmHint="type the organisation's name"
+				invalidates={["organisation", "organisations", "attention"]}
+				fields={
+					<input
+						value={requester}
+						onChange={(e) => setRequester(e.target.value)}
+						placeholder="the requester's account id"
+						className="border border-neutral-300 rounded px-2 py-1 text-sm w-64"
+					/>
+				}
+			/>
+			<CommandForm
+				name="organisation.begin_closing"
+				label="Start or move a closing notice"
+				args={{ organisation_id: summary.id, closes_on: closesOn || null }}
+				confirmHint="type the organisation's name"
+				invalidates={["organisation", "organisations"]}
+				fields={
+					<input
+						type="date"
+						value={closesOn}
+						onChange={(e) => setClosesOn(e.target.value)}
+						className="border border-neutral-300 rounded px-2 py-1 text-sm"
+					/>
+				}
+			/>
+			<CommandForm
+				name="organisation.cancel_closing"
+				label="Cancel the closing notice"
+				args={{ organisation_id: summary.id }}
+				invalidates={["organisation", "organisations"]}
+			/>
+		</Section>
 	);
 }
