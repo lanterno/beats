@@ -139,6 +139,17 @@ def _clear_device_cache():
     device_access.clear()
 
 
+@pytest.fixture(autouse=True)
+def _clear_account_cache():
+    """Account auth state (suspension, sign-out cut) is cached the same way;
+    without this a test's suspension would bleed into the next request."""
+    from beats.auth import account_access
+
+    account_access.clear()
+    yield
+    account_access.clear()
+
+
 @pytest.fixture(scope="class", autouse=True)
 def clean_db(mongo, _indexes):
     """Empty every collection before each test class.

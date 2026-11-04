@@ -7315,10 +7315,12 @@ class TestAccountAPI:
         assert body["sso_provisioned"] is False
         assert set(body) == {"email", "display_name", "identities", "sso_provisioned"}
 
-    def test_me_404_when_user_deleted_under_token(self, client, auth_info):
-        """Token still validates JWT-wise but the user row is gone — 404
-        rather than 200-with-empty. Locks in the behavior that lets a
-        deleted-account flow surface meaningfully on the client."""
+    def test_me_401_when_user_deleted_under_token(self, client, auth_info):
+        """Token still validates JWT-wise but the user row is gone — the
+        middleware's account lookup answers 401 INVALID_TOKEN before any
+        route runs: the session has ended with the account (an erasure), and
+        a client's sign-out handling of a 401 is right for it. This used to
+        reach the route and 404."""
         import os
 
         from bson import ObjectId
@@ -7331,8 +7333,8 @@ class TestAccountAPI:
         sync_client.close()
 
         resp = client.get("/api/account/me", headers=auth_info["headers"])
-        assert resp.status_code == 404
-        assert resp.json()["code"] == "NOT_FOUND"
+        assert resp.status_code == 401
+        assert resp.json()["code"] == "INVALID_TOKEN"
 
     def test_refresh_issues_a_new_working_token(self, client, auth_info):
         resp = client.post("/api/account/refresh", headers=auth_info["headers"])
@@ -10933,3 +10935,219 @@ class TestSSOAPI:
         resp = client.delete("/api/account/sso/open", headers=auth_info["headers"])
         assert resp.status_code == 404
         assert resp.json()["code"] == "SSO_NOT_LINKED"
+
+    # -------- suspension at this door --------
+
+    def test_a_suspended_account_cannot_sign_in_through_a_provider(self, client, mongo):
+        """The door refuses after the code exchange, so only someone the
+        provider vouched for learns that the account is suspended — and the
+        refusal carries the address to write to."""
+        from beats.brand import CONTACT_EMAIL
+
+        created = self._round_trip(client, self.open_idp).json()
+        assert created["token"]
+        mongo.users.update_one(
+            {"identities.subject": "idp-user-1"},
+            {
+                "$set": {
+                    "suspended_at": datetime.now(UTC).isoformat(),
+                    "suspended_kind": "abuse",
+                    "suspended_by": "test",
+                    "suspended_reason": "testing",
+                }
+            },
+        )
+
+        resp = self._round_trip(client, self.open_idp)
+
+        assert resp.status_code == 403, resp.text
+        assert resp.json()["code"] == "ACCOUNT_SUSPENDED"
+        assert CONTACT_EMAIL in resp.json()["detail"]
+
+
+class TestAccountSuspensionAPI:
+    """Suspension, sign-out everywhere and the day last seen
+    (roadmaps/backoffice.md step 1): the middleware on both credential
+    branches, the public doors, and the once-a-day stamps. State is written
+    the way the account service stores it; enforcement is read through the
+    cached lookup, which the per-test fixture clears."""
+
+    def _suspend(self, mongo, user_id: str, kind: str = "abuse", at: datetime | None = None):
+        from bson import ObjectId
+
+        mongo.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$set": {
+                    "suspended_at": (at or datetime.now(UTC)).isoformat(),
+                    "suspended_kind": kind,
+                    "suspended_by": "test",
+                    "suspended_reason": "testing",
+                }
+            },
+        )
+        # Enforcement is cached; a suspension written by another process is
+        # seen within the TTL. The tests don't wait for it.
+        from beats.auth import account_access
+
+        account_access.clear()
+
+    def _unsuspend(self, mongo, user_id: str):
+        from bson import ObjectId
+
+        from beats.auth import account_access
+
+        mongo.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$set": {
+                    "suspended_at": None,
+                    "suspended_kind": None,
+                    "suspended_by": None,
+                    "suspended_reason": None,
+                }
+            },
+        )
+        account_access.clear()
+
+    def _device_headers(self, client, auth_info) -> dict:
+        code = client.post("/api/device/pair/code", headers=auth_info["headers"]).json()["code"]
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+        assert resp.status_code == 200, resp.text
+        return {"Authorization": f"Bearer {resp.json()['device_token']}"}
+
+    @pytest.fixture(autouse=True)
+    def _lift(self, mongo, auth_info):
+        """Every test leaves the class user acting again."""
+        yield
+        self._unsuspend(mongo, auth_info["user_id"])
+
+    def test_a_suspended_session_is_refused_everywhere_with_the_address(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        from beats.brand import CONTACT_EMAIL
+
+        self._suspend(mongo, auth_info["user_id"])
+
+        for path in ("/api/projects/", "/api/account/me"):
+            resp = client.get(path, headers=auth_headers)
+            assert resp.status_code == 403, resp.text
+            assert resp.json()["code"] == "ACCOUNT_SUSPENDED"
+            assert CONTACT_EMAIL in resp.json()["detail"]
+        # Refresh is behind the middleware too: a suspended session cannot
+        # keep itself alive, and is not silently signed out either.
+        refresh = client.post("/api/account/refresh", headers=auth_headers)
+        assert refresh.status_code == 403
+        assert refresh.json()["code"] == "ACCOUNT_SUSPENDED"
+
+    def test_an_erasure_suspension_names_the_day_the_window_ends(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        queued = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+        self._suspend(mongo, auth_info["user_id"], kind="erasure", at=queued)
+
+        resp = client.get("/api/projects/", headers=auth_headers)
+
+        assert resp.status_code == 403
+        assert "2026-11-11" in resp.json()["detail"]
+        assert "deleted" in resp.json()["detail"]
+
+    def test_lifting_a_suspension_lets_the_account_act_again(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        self._suspend(mongo, auth_info["user_id"])
+        assert client.get("/api/projects/", headers=auth_headers).status_code == 403
+
+        self._unsuspend(mongo, auth_info["user_id"])
+        assert client.get("/api/projects/", headers=auth_headers).status_code == 200
+
+    def test_a_suspended_accounts_device_token_is_refused(self, client, auth_info, mongo):
+        """A device token has no expiry, so suspension must hold on the
+        device branch: an account whose daemon still writes flow windows has
+        not been suspended."""
+        device = self._device_headers(client, auth_info)
+        assert client.get("/api/timer/status", headers=device).status_code == 200
+
+        self._suspend(mongo, auth_info["user_id"])
+
+        resp = client.get("/api/timer/status", headers=device)
+        assert resp.status_code == 403, resp.text
+        assert resp.json()["code"] == "ACCOUNT_SUSPENDED"
+
+    def test_a_pairing_code_made_before_the_suspension_mints_nothing(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        """Otherwise the code would mint a device token that starts working
+        the moment the suspension lifts."""
+        code = client.post("/api/device/pair/code", headers=auth_headers).json()["code"]
+        self._suspend(mongo, auth_info["user_id"])
+
+        resp = client.post("/api/device/pair/exchange", json={"code": code})
+
+        assert resp.status_code == 403, resp.text
+        assert resp.json()["code"] == "ACCOUNT_SUSPENDED"
+
+    def test_a_suspended_owners_report_link_is_the_one_404(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        """Suspension is for abuse, and a public link serving the account's
+        data is the account acting. The same 404 as every other way a token
+        fails, per that route's one-404 rule."""
+        billed = _billed_march(client, auth_headers)
+        link = _mint_link(client, auth_headers, billed["client"]["id"])
+        assert _read_report(client, link["token"]).status_code == 200
+
+        self._suspend(mongo, auth_info["user_id"])
+
+        resp = _read_report(client, link["token"])
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "REPORT_NOT_FOUND"
+
+    def test_sign_out_everywhere_ends_older_sessions_and_only_those(self, client, auth_info, mongo):
+        """A session whose sign-in is older than the account's cut is
+        refused — through refreshes, which copy auth_time — while a sign-in
+        after the cut works. Devices are a different row: the paired daemon
+        stays."""
+        from bson import ObjectId
+
+        from beats.auth import account_access
+        from beats.auth.session import SessionManager
+        from beats.settings import settings
+
+        device = self._device_headers(client, auth_info)
+        sm = SessionManager(settings.jwt_secret)
+        now = int(time.time())
+        old = sm.create_session_token(
+            auth_info["user_id"], "test@example.com", auth_time=now - 3600
+        )
+        new = sm.create_session_token(auth_info["user_id"], "test@example.com", auth_time=now + 60)
+
+        mongo.users.update_one(
+            {"_id": ObjectId(auth_info["user_id"])},
+            {"$set": {"sessions_valid_after": datetime.now(UTC).isoformat()}},
+        )
+        account_access.clear()
+
+        resp = client.get("/api/projects/", headers={"Authorization": f"Bearer {old}"})
+        assert resp.status_code == 401
+        assert resp.json()["code"] == "INVALID_TOKEN"
+        assert (
+            client.get("/api/projects/", headers={"Authorization": f"Bearer {new}"}).status_code
+            == 200
+        )
+        assert client.get("/api/timer/status", headers=device).status_code == 200
+
+    def test_the_day_last_seen_is_stamped_as_a_date(self, client, auth_headers, auth_info, mongo):
+        """A UTC date, not a time: a session's times are the account's own
+        business, and a day is all "is this account in use?" needs. The
+        device's registration gets a datetime of its own."""
+        from bson import ObjectId
+
+        assert client.get("/api/projects/", headers=auth_headers).status_code == 200
+        doc = mongo.users.find_one({"_id": ObjectId(auth_info["user_id"])})
+        assert doc["last_seen_on"] == datetime.now(UTC).date().isoformat()
+
+        device = self._device_headers(client, auth_info)
+        assert client.get("/api/timer/status", headers=device).status_code == 200
+        reg = mongo.device_registrations.find_one({"user_id": auth_info["user_id"]})
+        assert isinstance(reg["last_seen"], datetime)
