@@ -10,3 +10,7 @@ line.
 """
 
 APP_NAME = "LifePete"
+
+# Where a person writes to reach the operator: the address PRIVACY.md gives
+# for deletion, and what a suspension's refusal tells the person to write to.
+CONTACT_EMAIL = "ahmed.elghareeb@proton.me"

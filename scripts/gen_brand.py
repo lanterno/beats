@@ -37,6 +37,11 @@ SOURCE = ROOT / "shared" / "brand.json"
 # Keeping it to characters none of them escape is simpler than escaping for each.
 SAFE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 .-]*")
 
+# The contact address: where a person writes to reach the operator, the one
+# PRIVACY.md gives for deletion. The API words refusals around it (a suspended
+# account's notice names it), so it is brand data the same way the name is.
+SAFE_EMAIL = re.compile(r"[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+")
+
 # (file, text before the name, text after it). Both are regexes; the name
 # between them is whatever is there now, so a rename rewrites the old value.
 TARGETS: list[tuple[str, str, str]] = [
@@ -65,6 +70,14 @@ TARGETS: list[tuple[str, str, str]] = [
     ("companion/windows/runner/Runner.rc", r'"ProductName", "', r'"'),
     ("companion/linux/runner/my_application.cc", r'gtk_header_bar_set_title\(header_bar, "', r'"'),
     ("companion/linux/runner/my_application.cc", r'gtk_window_set_title\(window, "', r'"'),
+]
+
+# The contact address lives only in the three code constants; no native file
+# shows it.
+EMAIL_TARGETS: list[tuple[str, str, str]] = [
+    ("ui/client/shared/config/brand.ts", r'export const CONTACT_EMAIL = "', r'";'),
+    ("api/src/beats/brand.py", r'CONTACT_EMAIL = "', r'"'),
+    ("companion/lib/brand.dart", r"const String contactEmail = '", r"';"),
 ]
 
 
@@ -101,14 +114,18 @@ def literals(name: str) -> list[str]:
     return found
 
 
-def load_name() -> str:
-    name = json.loads(SOURCE.read_text(encoding="utf-8"))["name"]
+def load_brand() -> tuple[str, str]:
+    data = json.loads(SOURCE.read_text(encoding="utf-8"))
+    name = data["name"]
     if not SAFE_NAME.fullmatch(name):
         raise SystemExit(
             f"{SOURCE.relative_to(ROOT)}: name {name!r} must be letters, digits, spaces, "
             "dots or hyphens"
         )
-    return name
+    email = data["contact_email"]
+    if not SAFE_EMAIL.fullmatch(email):
+        raise SystemExit(f"{SOURCE.relative_to(ROOT)}: contact_email {email!r} is not an address")
+    return name, email
 
 
 def stamp(text: str, before: str, after: str, name: str, where: str) -> str:
@@ -124,12 +141,13 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail if a target is out of date")
     args = parser.parse_args()
 
-    name = load_name()
+    name, email = load_brand()
     files: dict[str, str] = {}
-    for rel, before, after in TARGETS:
-        if rel not in files:
-            files[rel] = (ROOT / rel).read_text(encoding="utf-8")
-        files[rel] = stamp(files[rel], before, after, name, rel)
+    for value, targets in ((name, TARGETS), (email, EMAIL_TARGETS)):
+        for rel, before, after in targets:
+            if rel not in files:
+                files[rel] = (ROOT / rel).read_text(encoding="utf-8")
+            files[rel] = stamp(files[rel], before, after, value, rel)
 
     stale: list[str] = []
     for rel, updated in files.items():
