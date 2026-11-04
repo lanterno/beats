@@ -439,12 +439,21 @@ nothing and the API's deploys stay green.
      `operator_allowlist` tfvar says what they may do** — both name the same
      people.
 
-3. **The secret's first version** (Terraform manages the container and the
-   binding only; the value never passes through it):
+3. **The job runner's database user**, also in Atlas: a custom role
+   `beatsOperatorJobs` that finds, inserts, updates and removes in **every**
+   collection of the database — erasure, an organisation's deletion and the
+   purge between them touch nearly all of them — creating no index and
+   dropping nothing. A user of its own, not the API's or the operator's, so
+   each credential rotates alone.
+
+4. **The secrets' first versions** (Terraform manages the containers and the
+   bindings only; the values never pass through it):
 
    ```bash
    printf 'mongodb+srv://beats-operator:...@.../beats' | \
      gcloud secrets versions add beats-operator-dsn --data-file=- --project=beats-476914
+   printf 'mongodb+srv://beats-operator-jobs:...@.../beats' | \
+     gcloud secrets versions add beats-jobs-dsn --data-file=- --project=beats-476914
    ```
 
 Then, in `terraform.tfvars` — **added to the `beats-terraform-tfvars` secret

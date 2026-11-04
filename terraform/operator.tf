@@ -203,3 +203,189 @@ resource "google_monitoring_alert_policy" "operator_5xx" {
 locals {
   operator_metrics = "resource.type=\"cloud_run_revision\" AND resource.label.service_name=\"${var.operator_service_name}\""
 }
+
+# ── The job runner (roadmaps/backoffice.md step 4) ───────────────────────────
+#
+# A Cloud Run Job running `python -m beats.operator.jobs`, started by Cloud
+# Scheduler every 15 minutes. It finds nothing due and exits on almost every
+# run, which on Cloud Run Jobs costs next to nothing. Nothing else is
+# scheduled: the retention purge stays an act the operator starts (decision
+# 30), now from a page rather than a shell.
+
+resource "google_project_service" "cloudscheduler" {
+  count = var.operator_enabled ? 1 : 0
+
+  service            = "cloudscheduler.googleapis.com"
+  project            = var.project_id
+  disable_on_destroy = false
+}
+
+resource "google_service_account" "beats_operator_jobs" {
+  count = var.operator_enabled ? 1 : 0
+
+  project      = var.project_id
+  account_id   = "beats-operator-jobs"
+  display_name = "The operator job runner (beats-operator-jobs)"
+  description  = "Runs the queued irreversible work. A database user of its own, so each credential rotates alone and the operator's stays narrow."
+}
+
+resource "google_secret_manager_secret" "beats_jobs_dsn" {
+  count = var.operator_enabled ? 1 : 0
+
+  project   = var.project_id
+  secret_id = "beats-jobs-dsn"
+
+  replication {
+    auto {}
+  }
+
+  depends_on = [google_project_service.secretmanager]
+}
+
+resource "google_secret_manager_secret_iam_member" "jobs_dsn_reader" {
+  count = var.operator_enabled ? 1 : 0
+
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.beats_jobs_dsn[0].secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.beats_operator_jobs[0].email}"
+}
+
+resource "google_artifact_registry_repository_iam_member" "jobs_image_reader" {
+  count = var.operator_enabled ? 1 : 0
+
+  project    = var.project_id
+  location   = local.artifact_registry_location
+  repository = local.artifact_registry_repo
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${google_service_account.beats_operator_jobs[0].email}"
+}
+
+resource "google_cloud_run_v2_job" "beats_operator_jobs" {
+  count = var.operator_enabled ? 1 : 0
+
+  project  = var.project_id
+  name     = "beats-operator-jobs"
+  location = var.region
+
+  template {
+    template {
+      service_account = google_service_account.beats_operator_jobs[0].email
+      max_retries     = 0 # the queue retries to its own attempt cap
+
+      containers {
+        image = "${local.built_image}:${var.container_image_tag}"
+        # A bare `python` in the image is the system interpreter without the
+        # project's dependencies, hence uv; PYTHONPATH because the module
+        # lives under src/.
+        command = ["uv"]
+        args    = ["run", "--no-dev", "python", "-m", "beats.operator.jobs"]
+
+        env {
+          name  = "PYTHONPATH"
+          value = "src"
+        }
+
+        env {
+          name = "OPERATOR_JOBS_DB_DSN"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.beats_jobs_dsn[0].secret_id
+              version = "latest"
+            }
+          }
+        }
+
+        env {
+          name  = "OPERATOR_JOBS_DB_NAME"
+          value = var.mongodb_database_name
+        }
+      }
+    }
+  }
+}
+
+resource "google_service_account" "beats_operator_scheduler" {
+  count = var.operator_enabled ? 1 : 0
+
+  project      = var.project_id
+  account_id   = "beats-operator-scheduler"
+  display_name = "Starts beats-operator-jobs on its tick"
+}
+
+resource "google_cloud_run_v2_job_iam_member" "scheduler_invokes_jobs" {
+  count = var.operator_enabled ? 1 : 0
+
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_job.beats_operator_jobs[0].name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.beats_operator_scheduler[0].email}"
+}
+
+resource "google_cloud_scheduler_job" "operator_jobs_tick" {
+  count = var.operator_enabled ? 1 : 0
+
+  project   = var.project_id
+  region    = var.region
+  name      = "beats-operator-jobs-tick"
+  schedule  = "*/15 * * * *"
+  time_zone = "Etc/UTC"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.beats_operator_jobs[0].name}:run"
+
+    oauth_token {
+      service_account_email = google_service_account.beats_operator_scheduler[0].email
+    }
+  }
+
+  depends_on = [google_project_service.cloudscheduler]
+}
+
+# A failing job logs at ERROR (beats/operator/jobs.py) — a silently failing
+# erasure must page somebody. Every other alert watches only beats-api.
+resource "google_logging_metric" "operator_job_failures" {
+  count = var.operator_enabled ? 1 : 0
+
+  project = var.project_id
+  name    = "operator-job-failures"
+  filter  = "resource.type=\"cloud_run_job\" AND resource.labels.job_name=\"beats-operator-jobs\" AND severity>=ERROR"
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+  }
+}
+
+resource "google_monitoring_alert_policy" "operator_job_failed" {
+  count = var.operator_enabled ? 1 : 0
+
+  display_name          = "beats-operator-jobs: a queued job failed"
+  project               = var.project_id
+  combiner              = "OR"
+  severity              = "ERROR"
+  notification_channels = local.alert_channels
+
+  conditions {
+    display_name = "More than zero job errors in 15 minutes"
+
+    condition_threshold {
+      filter = "resource.type=\"cloud_run_job\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.operator_job_failures[0].name}\""
+
+      aggregations {
+        alignment_period   = "900s"
+        per_series_aligner = "ALIGN_SUM"
+      }
+
+      comparison      = "COMPARISON_GT"
+      threshold_value = 0
+      duration        = "0s"
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+}
