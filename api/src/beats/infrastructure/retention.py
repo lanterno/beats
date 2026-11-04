@@ -32,10 +32,16 @@ decision refused, which is why this module ships with the setting.
 from datetime import UTC, date, datetime
 from typing import Any, NamedTuple
 
+from bson import ObjectId
+from bson.errors import InvalidId
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.models import ActorKind
-from beats.domain.retention import effective_retention_years, retention_cutoff
+from beats.domain.retention import (
+    DEFAULT_RETENTION_YEARS,
+    effective_retention_years,
+    retention_cutoff,
+)
 from beats.infrastructure.organisations import member_row_collections, record_org_audit
 
 _TOMBSTONE = {"$regex": "^erased:"}
@@ -61,15 +67,31 @@ async def purge_expired_records(
     today: date | None = None,
     apply: bool = False,
     actor_kind: ActorKind = "system",
+    organisation_id: str | None = None,
 ) -> PurgeReport:
-    """One pass over every organisation. Dry by default: counts what would
-    go without touching a row; with `apply`, deletes tombstoned rows first
-    and unstamps living members' after, so a crash midway never leaves an
-    ex-member's rows outliving a current member's stamp."""
+    """One pass over every organisation — or, with `organisation_id`, one.
+    Dry by default: counts what would go without touching a row; with
+    `apply`, deletes tombstoned rows first and unstamps living members'
+    after, so a crash midway never leaves an ex-member's rows outliving a
+    current member's stamp. A whole-platform apply also trims the
+    operator's own audit at the platform's default retention
+    (roadmaps/backoffice.md § Jobs): it is kept four years, like the record
+    it narrates."""
     today = today or datetime.now(UTC).date()
     report: list[OrganisationPurge] = []
 
-    async for org in db.organisations.find({}):
+    query: dict = {}
+    if organisation_id is not None:
+        try:
+            query = {"_id": ObjectId(organisation_id)}
+        except InvalidId:
+            return PurgeReport(today=today, applied=apply, organisations=[])
+
+    if organisation_id is None and apply:
+        operator_cutoff = retention_cutoff(today, DEFAULT_RETENTION_YEARS)
+        await db.operator_audit.delete_many({"at": {"$lt": operator_cutoff.isoformat()}})
+
+    async for org in db.organisations.find(query):
         org_id = str(org["_id"])
         years = effective_retention_years(org.get("retention_years"), org.get("holiday_country"))
         cutoff = retention_cutoff(today, years)

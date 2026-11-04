@@ -22,7 +22,8 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field
 from pymongo.asynchronous.database import AsyncDatabase
 
-from beats.domain.accounts import AccountService
+from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountService
+from beats.domain.exceptions import DomainException
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
@@ -49,6 +50,10 @@ class OperatorCommand(Protocol):
     async def confirmation(self, ctx: CommandContext, args: Any) -> str | None: ...
     async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]: ...
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]: ...
+    # What queueing itself does, for a windowed command: an erasure suspends
+    # the account the moment it is queued, so the window is visible to the
+    # person whose address may have been impersonated.
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None: ...
 
 
 # ── accounts ─────────────────────────────────────────────────────────
@@ -101,6 +106,9 @@ class _AccountCommand:
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
 
 
 class SuspendAccount(_AccountCommand):
@@ -245,6 +253,9 @@ class _OrganisationCommand:
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         raise NotImplementedError
 
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
 
 class GrantOwnerArgs(OrganisationArgs):
     user_id: str = Field(min_length=1, max_length=64)
@@ -284,6 +295,152 @@ class CancelClosing(_OrganisationCommand):
         return await _organisation_state(ctx, args.organisation_id)
 
 
+# ── the irreversible work (step 4): jobs with a window ───────────────
+
+
+class EraseAccount(_AccountCommand):
+    """Queued with a 7-day window — the operator's second thoughts and the
+    person's. Queueing suspends the account with the erasure's own wording,
+    which names the day the window ends, so an account holder whose address
+    was impersonated in a deletion mail finds out the moment they next open
+    the app. Its rules run when it runs: erase_account tombstones before it
+    deletes, so a re-run after a death midway is safe."""
+
+    name = "account.erase"
+    window: timedelta | None = timedelta(days=ERASURE_WINDOW_DAYS)
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return await _account_email(ctx, args.user_id)
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        await ctx.accounts.suspend(
+            args.user_id,
+            kind=SuspensionKind.ERASURE,
+            reason="erasure queued",
+            by=ctx.operator.sub,
+        )
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        from beats.infrastructure.erasure import erase_account
+
+        report = await erase_account(ctx.db, args.user_id, actor_kind="operator")
+        return {
+            "deleted": sum(report.deleted.values()),
+            "retained": sum(report.retained.values()),
+        }
+
+
+class DeleteOrganisation(_OrganisationCommand):
+    """Queued with a 1-day window. The notice was the request, so no second
+    one is needed; the twin's rules run when the job does, so an organisation
+    given an owner while it waited is refused then."""
+
+    name = "organisation.delete"
+    window: timedelta | None = timedelta(days=1)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        counts = await ctx.organisations.operator_delete_organisation(args.organisation_id)
+        return dict(counts)
+
+
+class RetentionPurgeArgs(BaseModel):
+    # None purges every organisation; the confirmation is then the word
+    # "all", typed.
+    organisation_id: str | None = Field(default=None, max_length=64)
+
+
+class RetentionPurge:
+    """Still an act the operator starts, never scheduled (decision 30 —
+    PRIVACY.md and the DPA both promise it); now from a page rather than a
+    shell, with a day to think."""
+
+    name = "retention.purge"
+    subject_kind = "organisation"
+    window: timedelta | None = timedelta(days=1)
+    args_model: type[BaseModel] = RetentionPurgeArgs
+
+    def subject_id(self, args: Any) -> str:
+        return args.organisation_id or "all"
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        if args.organisation_id is None:
+            return "all"
+        return await _organisation_name(ctx, args.organisation_id)
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        from beats.infrastructure.retention import purge_expired_records
+
+        report = await purge_expired_records(
+            ctx.db, apply=False, organisation_id=args.organisation_id
+        )
+        return {"would_touch_organisations": len(report.organisations)}
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        from beats.infrastructure.retention import purge_expired_records
+
+        report = await purge_expired_records(
+            ctx.db, apply=True, actor_kind="operator", organisation_id=args.organisation_id
+        )
+        return {"purged_organisations": len(report.organisations)}
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class JobNotFound(DomainException):
+    status_code = 404
+    message = "No queued job with that id"
+    code = "JOB_NOT_FOUND"
+
+
+class CancelJobArgs(BaseModel):
+    job_id: str = Field(min_length=1, max_length=64)
+
+
+class CancelJob:
+    """Second thoughts inside the window. Cancelling an erasure lifts the
+    suspension the queueing placed — and only that kind: a suspension for
+    abuse is not lifted by cancelling an erasure."""
+
+    name = "job.cancel"
+    subject_kind = "job"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = CancelJobArgs
+
+    def subject_id(self, args: Any) -> str:
+        return args.job_id
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        from beats.infrastructure.operator_jobs import MongoOperatorJobs
+
+        job = await MongoOperatorJobs(ctx.db).get(args.job_id)
+        if job is None:
+            raise JobNotFound()
+        return {"command": job["command"], "state": job["state"]}
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        from beats.infrastructure.operator_jobs import MongoOperatorJobs
+
+        jobs = MongoOperatorJobs(ctx.db)
+        cancelled = await jobs.cancel(args.job_id)
+        if cancelled is None:
+            job = await jobs.get(args.job_id)
+            if job is None:
+                raise JobNotFound()
+            return {"command": job["command"], "state": job["state"], "cancelled": False}
+        if cancelled["command"] == "account.erase":
+            user = await ctx.accounts.find(cancelled["subject_id"])
+            if user is not None and user.suspended_kind is SuspensionKind.ERASURE:
+                await ctx.accounts.unsuspend(cancelled["subject_id"])
+        return {"command": cancelled["command"], "state": "cancelled", "cancelled": True}
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
 # The runner resolves names here and nowhere else: the registry is the one
 # list of what an operator can do, so a command absent from it does not
 # exist.
@@ -299,5 +456,9 @@ COMMANDS: dict[str, OperatorCommand] = {
         GrantOwner(),
         BeginClosing(),
         CancelClosing(),
+        EraseAccount(),
+        DeleteOrganisation(),
+        RetentionPurge(),
+        CancelJob(),
     )
 }

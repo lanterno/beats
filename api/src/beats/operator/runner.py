@@ -19,6 +19,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from beats.domain.exceptions import DomainException
+from beats.infrastructure.operator_jobs import MongoOperatorJobs
 from beats.infrastructure.operator_store import MongoOperatorAudit
 from beats.operator.commands import COMMANDS, CommandContext
 
@@ -59,15 +60,21 @@ async def run_command(
     args: dict[str, Any],
     confirmation: str | None,
     *,
-    enqueue_only: bool = False,
+    from_queue: bool = False,
 ) -> dict[str, Any]:
-    """Execute (or, for a windowed command, enqueue) one command, and answer
-    the audit entry. `enqueue_only` is unused until step 4's queue exists;
-    the registry holds only inline commands today."""
+    """Execute one command — or, for a windowed command arriving from a
+    request, enqueue it — and answer the audit entry (with the job under
+    `job` when one was queued; the queueing itself is kept by the job row's
+    `queued_by`, and the execution writes the audit when it runs).
+
+    `from_queue` is the job runner's path: the role and the typed
+    confirmation were checked once, by the request that queued it; the job
+    sees no request and holds no allowlist, so it checks neither again, and
+    the audit is written under the operator the command carries."""
     command = COMMANDS.get(name)
     if command is None:
         raise UnknownCommand()
-    if ctx.operator.role != "operator":
+    if not from_queue and ctx.operator.role != "operator":
         raise ViewerCannotAct()
 
     try:
@@ -75,9 +82,26 @@ async def run_command(
     except ValidationError as e:
         raise InvalidCommandArgs(str(e)) from None
 
-    expected = await command.confirmation(ctx, parsed)
-    if expected is not None and confirmation != expected:
-        raise ConfirmationMismatch()
+    if not from_queue:
+        expected = await command.confirmation(ctx, parsed)
+        if expected is not None and confirmation != expected:
+            raise ConfirmationMismatch()
+
+    if command.window is not None and not from_queue:
+        # Destructive work routes itself: it cannot accidentally run in a
+        # request handler holding the wrong credential. A queued job is a
+        # serialised command — one abstraction, not two mechanisms.
+        job = await MongoOperatorJobs(ctx.db).enqueue(
+            command=command.name,
+            args=parsed.model_dump(mode="json"),
+            subject_kind=command.subject_kind,
+            subject_id=command.subject_id(parsed),
+            queued_by_sub=ctx.operator.sub,
+            queued_by_email=ctx.operator.email,
+            window=command.window,
+        )
+        await command.on_queued(ctx, parsed)
+        return {"queued": True, "job": job}
 
     before = await command.describe(ctx, parsed)
     after = await command.execute(ctx, parsed)

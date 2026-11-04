@@ -113,6 +113,14 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.report_links.create_index("token", unique=True)
     # The owner's list, per client.
     await db.report_links.create_index([("user_id", 1), ("client_id", 1)])
+    # The operator's collections (roadmaps/backoffice.md): built here because
+    # the public API is the one deployment with the index grant — the
+    # operator's narrow database user creates none. One account_limits
+    # document per account; the job claim reads state + run_after; the audit
+    # is read newest-first and purged by age.
+    await db.account_limits.create_index("user_id", unique=True)
+    await db.operator_jobs.create_index([("state", 1), ("run_after", 1)])
+    await db.operator_audit.create_index("at")
 
 
 class Database:

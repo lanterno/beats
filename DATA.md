@@ -31,6 +31,16 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
   the operator has overridden something — a coach budget, write ceilings, an
   import ceiling, webhooks off — with when and by whom. Keyed on the account
   so deletion takes it with the rest
+- **The operator's audit** (`operator_audit`): every act through the control
+  plane — the command, which operator ran it, the subject as an id (never a
+  name or address, so it can outlive the account it names), and the
+  subject's state before and after. Editable by nobody; kept four years, the
+  platform's default retention, then purged
+- **The operator's job queue** (`operator_jobs`): the irreversible work
+  waiting out its window — an erasure (seven days), an organisation's
+  deletion or a retention purge (one day) — as the serialised command, who
+  queued it, when it runs, and its state. The subject is an id here too, so
+  an erasure cannot sweep the record of itself
 - WebAuthn credentials: public key, credential id, sign counter, device label
 - **Single sign-on identities** (`identities[]` on the user): per linked
   OpenID Connect provider, its configured id, the `issuer` and `subject`

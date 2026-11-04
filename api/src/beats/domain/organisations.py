@@ -481,10 +481,26 @@ class OrganisationService:
         then found a second time and given a second copy, holding the
         contract and no rows (#414)."""
         me = await self._member(organisation_id, actor, OrgRole.OWNER)
-        closes_on = me.organisation.closes_on
+        return await self._delete_organisation(me.organisation)
+
+    async def operator_delete_organisation(self, organisation_id: str) -> dict[str, int]:
+        """The operator twin of delete_organisation: only an ownerless
+        organisation (409 ORGANISATION_HAS_OWNER), only once its notice has
+        run out — the notice was the request, and no second one is needed.
+        Run as a queued job (step 4), whose re-run after a death midway is
+        safe for the reason the member path's is: a hand-back takes the
+        assignment with it (#414). Its rules are checked when it runs, not
+        when it was queued: an organisation given an owner while the job
+        waited is refused here."""
+        organisation = await self._ownerless(organisation_id)
+        return await self._delete_organisation(organisation)
+
+    async def _delete_organisation(self, organisation: Organisation) -> dict[str, int]:
+        organisation_id = organisation.id or ""
+        closes_on = organisation.closes_on
         if closes_on is None:
             raise OrganisationNotClosing()
-        if self._today(me.organisation) < closes_on:
+        if self._today(organisation) < closes_on:
             raise OrganisationStillClosing(closes_on)
         projects = await self.store.list_projects(organisation_id)
         assignments = await self.store.list_assignments(organisation_id, active_only=False)

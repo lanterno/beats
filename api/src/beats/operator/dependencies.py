@@ -12,16 +12,9 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Request, status
 from pymongo.asynchronous.database import AsyncDatabase
 
-from beats.domain.accounts import AccountService
-from beats.domain.organisations import OrganisationService
 from beats.infrastructure.operator_reads import MongoOperatorReads
-from beats.infrastructure.operator_store import MongoAccountLimitsStore
-from beats.infrastructure.organisations import MongoOrganisationRecords, MongoOrganisationStore
-from beats.infrastructure.repositories import (
-    MongoDeviceRegistrationRepository,
-    MongoUserRepository,
-)
 from beats.operator.commands import CommandContext
+from beats.operator.context import build_command_context
 from beats.operator.reads import OperatorReads
 from beats.operator.settings import OperatorIdentity
 
@@ -62,32 +55,8 @@ def get_operator_reads(request: Request, db: OperatorDbDep) -> OperatorReads:
 OperatorReadsDep = Annotated[OperatorReads, Depends(get_operator_reads)]
 
 
-class RefusingBillingPresence:
-    """The operator never reads billing. Only `connect_project` asks a
-    `BillingPresence`, which is a member's act the operator cannot perform,
-    and a stand-in that answered would be a guess about somebody's billing."""
-
-    async def exists(self, project_id: str) -> bool:
-        raise RuntimeError("the operator's organisation service never reads billing")
-
-
 def get_command_context(db: OperatorDbDep, operator: CurrentOperator) -> CommandContext:
-    """The services a command delegates to — each built on the operator's own
-    client, each owning the rule the command invokes, so the rule never lives
-    in two places."""
-    users = MongoUserRepository(db.users)
-    return CommandContext(
-        operator=operator,
-        db=db,
-        accounts=AccountService(users, MongoAccountLimitsStore(db)),
-        organisations=OrganisationService(
-            store=MongoOrganisationStore(db),
-            records=MongoOrganisationRecords(db),
-            users=users,
-            billing=RefusingBillingPresence(),
-        ),
-        devices=MongoDeviceRegistrationRepository(db.device_registrations),
-    )
+    return build_command_context(db, operator)
 
 
 CommandContextDep = Annotated[CommandContext, Depends(get_command_context)]
