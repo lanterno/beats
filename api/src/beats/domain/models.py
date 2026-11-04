@@ -79,7 +79,7 @@ class User(TzNormalizedModel):
     sso_provisioned: bool = False
 
     # Suspension: refused everywhere the account can act, 403
-    # ACCOUNT_SUSPENDED (roadmaps/backoffice.md § Suspension, end to end).
+    # ACCOUNT_SUSPENDED (docs/account-controls.md § Suspension, end to end).
     # `suspended_at` set is what "suspended" means; the reason is the
     # operator's own and is never shown to the person.
     suspended_at: datetime | None = None
@@ -106,7 +106,7 @@ class User(TzNormalizedModel):
 
 
 class AccountLimits(TzNormalizedModel):
-    """One account's operator-set ceilings (roadmaps/backoffice.md § Limits).
+    """One account's operator-set ceilings (docs/account-controls.md § Per-account limits).
 
     A document exists only when something is overridden; None on a field
     means the global setting. Keyed on `user_id` **deliberately**, unlike the

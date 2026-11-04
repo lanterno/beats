@@ -3,7 +3,7 @@
 A named cross-tenant class in the shape of `MongoOrganisationRecords`: the one
 other reader not scoped by `user_id`, never a widened `MongoStore._q`. Every
 pipeline here returns ids, counts, dates, states and domains — the left-hand
-column of roadmaps/backoffice.md § *The line* — and the wall test in
+column of docs/backoffice.md § The line — and the wall test in
 `test_operator.py` plants a sentinel in everything on the right-hand column
 and greps every response for it.
 

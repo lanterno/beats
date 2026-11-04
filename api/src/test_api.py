@@ -10967,7 +10967,7 @@ class TestSSOAPI:
 
 class TestAccountSuspensionAPI:
     """Suspension, sign-out everywhere and the day last seen
-    (roadmaps/backoffice.md step 1): the middleware on both credential
+    (docs/account-controls.md): the middleware on both credential
     branches, the public doors, and the once-a-day stamps. State is written
     the way the account service stores it; enforcement is read through the
     cached lookup, which the per-test fixture clears."""
@@ -11154,7 +11154,7 @@ class TestAccountSuspensionAPI:
 
 
 class TestAccountLimitsAPI:
-    """Per-account limits (roadmaps/backoffice.md § Limits): the write
+    """Per-account limits (docs/account-controls.md § Per-account limits): the write
     ceilings off account_limits and the global settings, the coach budget
     override, and webhooks_disabled. Off (None) means uncounted — the whole
     rest of the suite runs that way — so these turn a ceiling on and pin

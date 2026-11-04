@@ -15,7 +15,7 @@ way `device_access` caches a device's, with the same reasoning:
 
 The entry also carries the day the account was last seen, so the middleware
 can stamp `last_seen_on` at most once a day instead of on every request — and
-the account's ceilings (`account_limits`, roadmaps/backoffice.md § Limits)
+the account's ceilings (`account_limits`, docs/account-controls.md § Per-account limits)
 ride with it: one cache, two reads on a miss, for every feature that needs
 the account on the request path. The rate-limit callables are synchronous, so
 the ceiling must already be in the process, and it is: the middleware filled

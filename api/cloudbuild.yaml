@@ -1,7 +1,7 @@
 steps:
   # Build the back office into the API image's tree first: Vite's outDir is
   # api/src/beats/operator/static (gitignored), so the docker build's COPY
-  # carries it and operator_server serves it (roadmaps/backoffice.md
+  # carries it and operator_server serves it (docs/backoffice.md
   # - Deployment). corepack reads the pinned pnpm from package.json's
   # packageManager field. A back-office-only change therefore builds a new
   # image and redeploys beats-api with the same code, under the same deploy

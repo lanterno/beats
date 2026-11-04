@@ -100,7 +100,7 @@ export interface paths {
         };
         /**
          * Audit Log
-         * @description The operator's own audit — empty until step 3's commands write it.
+         * @description The operator's own audit: every command the runner executed.
          */
         get: operations["audit_log_api_operator_audit_get"];
         put?: never;
@@ -144,10 +144,10 @@ export interface paths {
         put?: never;
         /**
          * Run
-         * @description The one path a mutation takes (roadmaps/backoffice.md § Commands are
+         * @description The one path a mutation takes (docs/backoffice.md § Commands are
          *     objects): role, confirmation, describe, execute, audit — so nothing is
          *     unaudited and no rule lives in a handler. Answers the audit entry, and
-         *     the job when one was queued (step 4).
+         *     the job when one was queued.
          */
         post: operations["run_api_operator_commands__name__post"];
         delete?: never;
@@ -165,7 +165,7 @@ export interface paths {
         };
         /**
          * Jobs
-         * @description The job queue — empty until step 4's jobs exist.
+         * @description The job queue: the irreversible work waiting out its window.
          */
         get: operations["jobs_api_operator_jobs_get"];
         put?: never;

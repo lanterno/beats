@@ -38,7 +38,7 @@ class ApiClient {
   ApiClient({required this.baseUrl, this.deviceToken});
 
   /// The API's suspension notice, when the account is suspended (403
-  /// ACCOUNT_SUSPENDED, roadmaps/backoffice.md step 1): the envelope's own
+  /// ACCOUNT_SUSPENDED, docs/account-controls.md): the envelope's own
   /// sentence, which names the address to write to. Set by any refused
   /// call, cleared by the next timer-status poll that succeeds — the poll
   /// every surface already runs — so the banner lifts within its cadence.

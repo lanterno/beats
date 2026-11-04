@@ -1,14 +1,15 @@
 # The API's secrets, out of its spec
 
 **What is blocked:** the control plane's deploy-state row
-([backoffice.md](backoffice.md) § *Attention*). That row reads the API's
+([docs/backoffice.md](../docs/backoffice.md) § *The pages*, and the open
+row in [backoffice.md](backoffice.md)). That row reads the API's
 service and its revisions, and can't until this lands. Nothing else waits on it.
 It is still worth doing first, control plane or not: today anyone who can
 describe the Cloud Run service can read every user's session key.
 
 **What blocks it:** one question for the owner. The apply creates secrets, a
 service account and IAM bindings, and nothing in the repo says Cloud Build's
-account may. [backoffice.md](backoffice.md) § *Needs the owner* asks it, with
+account may. [backoffice.md](backoffice.md)'s Cloud Build question asks it, with
 what to do for each answer; the control plane needs the same answer. A failed
 apply blocks every API deploy, so it is answered before the first merge.
 
@@ -103,7 +104,7 @@ project.
   state in the clear.
 - **The control plane's service accounts get no binding on these secrets.**
   The operator deployment and its job read secrets of their own
-  ([backoffice.md](backoffice.md) § *Credentials*), each bound to its own
+  ([docs/backoffice.md](../docs/backoffice.md) § *Deployment*), each bound to its own
   account. No project-level `secretAccessor` for anyone.
 - **The self-hosted bundle is unaffected.** `compose.selfhost.yml` reads
   `api/.env`, and none of this touches the API's code: `Settings` reads the

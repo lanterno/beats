@@ -7,7 +7,7 @@ import (
 
 // The two refusals that mean the API will keep refusing this daemon until a
 // person acts: the account is suspended, or this device's registration was
-// revoked (roadmaps/backoffice.md step 1). Backing off to a slow probe is
+// revoked (docs/account-controls.md). Backing off to a slow probe is
 // the right answer to both — retrying five endpoints every few seconds
 // changes nothing and fills the log — and the probe is what lets the daemon
 // notice on its own when the suspension lifts.

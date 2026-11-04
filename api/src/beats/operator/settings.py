@@ -2,7 +2,7 @@
 
 Deliberately not `beats.settings`, which requires `JWT_SECRET`: the operator
 deployment never holds it, because holding it is holding every user's session
-(roadmaps/backoffice.md § Authentication). That isn't a rule enforced at
+(docs/backoffice.md § Authentication). That isn't a rule enforced at
 runtime — this class simply has no such field, and `operator_server` composes
 nothing that reads it.
 """
@@ -48,8 +48,8 @@ class OperatorSettings(BaseSettings):
     )
 
     # The operator's own database credential — in production a user whose
-    # grant is the short write list in roadmaps/backoffice.md
-    # § Infrastructure, never the API's.
+    # grant is the short write list in terraform/README.md's Operator
+    # Deployment section, never the API's.
     db_dsn: str = Field(default="mongodb://localhost:27017", validation_alias="OPERATOR_DB_DSN")
     db_name: str = Field(default="beats", validation_alias="OPERATOR_DB_NAME")
 

@@ -2,12 +2,11 @@
 
 What the API enforces about an account itself: suspension, sign-out
 everywhere, the day last seen, and per-account limits. Shipped 2026-11-04 as
-step 1 of the control plane ([roadmaps/backoffice.md](../roadmaps/backoffice.md)),
-whose premise it serves: a control plane can only control what the API
-enforces. Until the operator deployment exists, `api/scripts/suspend_account.py`
-drives the account rules (`beats/domain/accounts.py`), and `account_limits`
-documents are written by hand; the rules live in the API either way, so the
-control plane's commands will delegate rather than reimplement.
+step 1 of the control plane ([backoffice.md](backoffice.md)), whose premise
+it serves: a control plane can only control what the API enforces. The
+control plane's commands delegate to the same rules
+(`beats/domain/accounts.py`), and `api/scripts/suspend_account.py` stays as
+the break-glass path beside them.
 
 Each act means one thing, and they deliberately do not overlap:
 

@@ -1,8 +1,8 @@
 """What the operator's pages read, as shapes and a Protocol.
 
-Queries have no service layer (roadmaps/backoffice.md § Queries and commands
-are different shapes): "accounts created per day" and "organisations with no
-owner" are aggregation pipelines with no rule to enforce, so a domain service
+Queries have no service layer (docs/backoffice.md § Architecture): "accounts
+created per day" and "organisations with no owner" are aggregation pipelines
+with no rule to enforce, so a domain service
 in front of them would be a pass-through. The router calls
 `MongoOperatorReads` (infrastructure/operator_reads.py) through this
 Protocol so a test can fake it.

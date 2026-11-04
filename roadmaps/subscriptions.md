@@ -112,7 +112,8 @@ is a public path, but not on the terms the comment on `PUBLIC_PREFIXES` in
 `api/src/server.py` gives: a signature is its whole authorisation and it
 serves nothing, so that comment gains a line saying so. It belongs to the
 public deployment; the operator's sits behind IAP, which the provider cannot
-pass ([backoffice.md](backoffice.md)). It checks the signature, records the
+pass ([docs/backoffice.md](../docs/backoffice.md) § *Authentication*). It
+checks the signature, records the
 event's id so a second delivery does nothing, and assumes no order: Stripe,
 for one, retries a delivery for three days and does not promise the order
 events arrive in. Stripe also advises answering before processing, which
@@ -126,12 +127,11 @@ gate below, never a call to the provider inside a request: an outage at the
 provider refuses nobody. A seat change never waits on the provider either.
 `org_members` is right and the invoice follows it, so assigning or removing
 someone cannot fail because the provider is down; the new count reaches the
-provider from a queued job or from the reconciliation. Both need something
-to run them, and nothing does: `terraform/` schedules nothing today.
-[backoffice.md](backoffice.md) (#424) plans a Cloud Run Job on a Cloud
-Scheduler trigger, and [server-push.md](server-push.md) (#298) cannot send
-at 07:00 without a scheduler either. The reconciliation runs on whichever of
-those lands first, not on a third.
+provider from a queued job or from the reconciliation. Both need something to run
+them, and the control plane's job runner now exists: a Cloud Run Job on a
+Cloud Scheduler tick ([docs/backoffice.md](../docs/backoffice.md) § *Jobs*).
+The reconciliation runs on it, not on a third scheduler; whatever it needs
+beyond draining the queue is this work's change to argue.
 
 ## What must not happen
 

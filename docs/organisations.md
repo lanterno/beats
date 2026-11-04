@@ -697,13 +697,13 @@ legal material of the epic's section 7
 (#352) is drafted in [roadmaps/legal/](../roadmaps/legal/) and unreviewed by
 counsel, and nothing there reaches a customer first.
 
-The operator's back office of decision 31 is #424, not built yet: it is not
-an organisations feature, and noticing an organisation with no owner is only
-the first thing it owes. Its design, including what the operator may do to
-an organisation and when, lives in
-[roadmaps/backoffice.md](../roadmaps/backoffice.md) until it ships, and is
-not repeated here. Decision 31 refuses to auto-promote; it still leaves
-somebody having to act, and that is where they will act.
+The operator's control plane of decision 31 is #424, built 2026-11-04: it is
+not an organisations feature, and noticing an organisation with no owner is
+only the first thing it does. What the operator may do to an organisation and
+when — only one with no owner, only when asked, each act in its own audit log
+under `actor_kind: operator` — is [backoffice.md](backoffice.md), and is not
+repeated here. Decision 31 refuses to auto-promote; it still leaves somebody
+having to act, and that is where they act.
 
 ---
 

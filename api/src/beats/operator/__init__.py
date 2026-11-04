@@ -1,4 +1,4 @@
-"""The operator's side of the API (roadmaps/backoffice.md).
+"""The operator's side of the API (docs/backoffice.md).
 
 A package for a surface, beside the domain it uses, the way `beats/coach/`
 is. Composed only by `operator_server.py` — the public API never imports it,

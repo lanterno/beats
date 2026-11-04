@@ -1,4 +1,4 @@
-# The operator deployment (roadmaps/backoffice.md step 2): the same API image
+# The operator deployment (docs/backoffice.md step 2): the same API image
 # running `operator_server:app`, behind Cloud Run's own IAP — no load
 # balancer, by decision (about $18 a month standing buys one person nothing).
 #
@@ -204,7 +204,7 @@ locals {
   operator_metrics = "resource.type=\"cloud_run_revision\" AND resource.label.service_name=\"${var.operator_service_name}\""
 }
 
-# ── The job runner (roadmaps/backoffice.md step 4) ───────────────────────────
+# ── The job runner (docs/backoffice.md step 4) ───────────────────────────
 #
 # A Cloud Run Job running `python -m beats.operator.jobs`, started by Cloud
 # Scheduler every 15 minutes. It finds nothing due and exits on almost every

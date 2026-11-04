@@ -4,13 +4,13 @@
 inline, or (with a window) enqueue as a job; 5. write `operator_audit` with
 before and after. Four properties fall out of one place rather than ten:
 nothing is unaudited, destructive work routes itself to the queue,
-confirmation is declared rather than remembered per handler, and step 4's
+confirmation is declared rather than remembered per handler, and the
 job runner is trivial — load the command and run this same function, which
 executes it rather than queueing it again.
 
 There is deliberately no OperatorService: this resolves, authorises, audits
 and delegates. If a rule ever starts living here or in a command, that is
-the signal it was put in the wrong place (roadmaps/backoffice.md § Commands
+the signal it was put in the wrong place (docs/backoffice.md § Commands
 are objects).
 """
 

@@ -76,4 +76,4 @@ issuer keeps its own numbering series, and a payment provider set up to
 collect LifePete's price cannot issue them. The two never share a series or
 a collection: a client, a rate and an amount stay in the freelancer's own
 collections (decision 2 of [docs/billing.md](../docs/billing.md)), on the
-side of [backoffice.md](backoffice.md)'s line the operator never sees.
+side of [docs/backoffice.md](../docs/backoffice.md)'s line the operator never sees.

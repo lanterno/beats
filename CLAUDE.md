@@ -9,6 +9,7 @@ shared/                       Cross-surface data (app-labels.json, brand.json, b
 scripts/                      Cross-surface codegen (gen_app_labels.py, gen_brand.py, gen_icons.py, gen_latin_dash.py)
 api/                          Python (FastAPI + PyMongo/MongoDB)
 ui/                           React 19 SPA (Vite + TypeScript)
+backoffice/                   The operator's control plane UI (its own pnpm workspace; served by the operator deployment)
 daemon/                       Go ambient daemon (beatsd) — flow score + auto-timer
 HomebrewFormula/              The beatsd Homebrew formula; this repo is the tap, and a release bumps it
 companion/                    Flutter desktop companion (timer, coach, integrations)
@@ -50,10 +51,11 @@ The organisations epic is #353, with what it still owes as issues linked from it
 pieces that grew out of it have roadmaps of their own, because none is an
 organisations feature: SSO per organisation and SCIM
 ([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)),
-the operator's control plane ([roadmaps/backoffice.md](roadmaps/backoffice.md)
-— operator routes in this API, mounted only by a second deployment behind
-IAP, which also serves a UI of its own; operational metadata, never user
-content),
+the operator's control plane ([docs/backoffice.md](docs/backoffice.md), shipped
+2026-11-04 — operator routes in this API, mounted only by a second deployment
+behind IAP, which also serves a UI of its own; operational metadata, never
+user content; what it still owes is
+[roadmaps/backoffice.md](roadmaps/backoffice.md)),
 several verified addresses on an account
 ([roadmaps/account-emails.md](roadmaps/account-emails.md)), server push
 ([roadmaps/server-push.md](roadmaps/server-push.md)) and collecting the
@@ -70,6 +72,10 @@ cd api && uv run --group dev pytest src/ -v
 cd ui && pnpm dev          # Dev server on :8080
 cd ui && pnpm test         # Vitest unit tests
 cd ui && pnpm e2e          # Playwright (needs API + UI running)
+
+# Back office (docs/backoffice.md)
+cd backoffice && pnpm dev           # Dev server on :8081, proxying /api/operator to :7998
+cd api && just run-operator-locally # The operator API on :7998 (needs .env.operator)
 
 # API local server
 cd api && just run-locally  # uvicorn on :7999
@@ -91,13 +97,13 @@ cd integrations/vscode-beats && npm test    # tsc + node --test
 Pre-commit (parallel, fast — runs only on staged files for the relevant surface):
 - `ruff check` + `ruff format --check` (Python)
 - `ty check src/` (Python type check)
-- `biome check client/` (TypeScript lint + format)
+- `biome check client/` (TypeScript lint + format; ui/ and backoffice/ each)
 - `gofmt -l` (Go formatting)
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 1505 tests)
-- `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 1535 tests)
+- `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check; backoffice/ runs the same three against the operator API's schema)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
 - `npm test` (VS Code extension — biome + tsc + node --test)
@@ -116,6 +122,9 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 | UI typecheck           | ui/                           | `pnpm typecheck`                 |
 | UI test                | ui/                           | `pnpm test`                      |
 | UI E2E                 | ui/                           | `pnpm e2e`                       |
+| Backoffice lint        | backoffice/                   | `pnpm lint`                      |
+| Backoffice typecheck   | backoffice/                   | `pnpm typecheck`                 |
+| Backoffice test        | backoffice/                   | `pnpm test`                      |
 | Daemon test            | daemon/                       | `go test ./...`                  |
 | Daemon format          | daemon/                       | `gofmt -w .`                     |
 | Daemon vet             | daemon/                       | `go vet ./...`                   |
@@ -128,7 +137,7 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full suite (1505 tests) takes about 30 seconds. `src/test_organisations.py` holds
+  the full suite (1535 tests) takes about 30 seconds. `src/test_organisations.py` holds
   the organisations contract, including the wall tests in the shape of 1c's: a sentinel
   planted on a personal project, a tag, a flow window and a biometric is in no byte the
   organisation can read.
@@ -411,6 +420,14 @@ Cloudflare proxy on `api.lifepete.com` would be a second hop to name). A change 
 touches origins, hosts, proxies, auth cookies, or the deploy pipeline has to be
 considered against that topology.
 
+A second deployment, `beats-operator`, runs the same image with the
+`operator_server:app` command behind Cloud Run's own IAP: the operator's
+control plane ([docs/backoffice.md](docs/backoffice.md)) — operational
+metadata, never user content, and never `JWT_SECRET`. It is gated off
+(`operator_enabled` in `terraform/`) until the hand-made prerequisites in
+terraform/README.md exist. Its job runner, `beats-operator-jobs`, drains the
+queued irreversible work on a Cloud Scheduler tick.
+
 Anything else LifePete talks to — another identity provider, a service of
 your own — connects through single sign-on or an integration.
 `api/compose.yml` is what local development uses.
@@ -502,6 +519,7 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials — including `/credentials/start` and `/verify`, the ceremony that puts another passkey on a signed-in account — logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
+| `/api/operator` | **Mounted only by `operator_server`, never by this app** (docs/backoffice.md): the control plane's reads (attention, accounts by exact email in a POST body, organisations with their detail-less audit, abuse, capacity, the operator audit and job queue) and `POST /commands/{name}`, the one path a mutation takes. Behind IAP; operational metadata, never user content |
 | `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join` (GET to preview, POST to take, the token in `X-Invite-Token` rather than the path); per organisation its settings, `/close` (notice, then `DELETE /{id}` hands members their projects back), `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments and `/{pid}/merge`, `/connect`, `/record` (readers; a manager their teams), `/visible`(+`.csv`), `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
 | `/api/reports` | **Public.** `GET` with the link's token in `X-Report-Token`, never in the path (Cloud Run logs every URL for 30 days): one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |

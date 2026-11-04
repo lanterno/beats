@@ -978,7 +978,7 @@
     },
     "/api/operator/audit": {
       "get": {
-        "description": "The operator's own audit \u2014 empty until step 3's commands write it.",
+        "description": "The operator's own audit: every command the runner executed.",
         "operationId": "audit_log_api_operator_audit_get",
         "parameters": [
           {
@@ -1051,7 +1051,7 @@
     },
     "/api/operator/commands/{name}": {
       "post": {
-        "description": "The one path a mutation takes (roadmaps/backoffice.md \u00a7 Commands are\nobjects): role, confirmation, describe, execute, audit \u2014 so nothing is\nunaudited and no rule lives in a handler. Answers the audit entry, and\nthe job when one was queued (step 4).",
+        "description": "The one path a mutation takes (docs/backoffice.md \u00a7 Commands are\nobjects): role, confirmation, describe, execute, audit \u2014 so nothing is\nunaudited and no rule lives in a handler. Answers the audit entry, and\nthe job when one was queued.",
         "operationId": "run_api_operator_commands__name__post",
         "parameters": [
           {
@@ -1106,7 +1106,7 @@
     },
     "/api/operator/jobs": {
       "get": {
-        "description": "The job queue \u2014 empty until step 4's jobs exist.",
+        "description": "The job queue: the irreversible work waiting out its window.",
         "operationId": "jobs_api_operator_jobs_get",
         "parameters": [
           {

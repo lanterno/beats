@@ -67,7 +67,7 @@ can change. The operator finds an account by it to erase it
 PRIVACY.md and DATA.md have deletion asked for "from the address on your
 account"; and the back office will look accounts up by it too, though
 regardless of case, since sign-up stores an address as typed
-([backoffice.md](backoffice.md), *Accounts*). Which address those two match
+([docs/backoffice.md](../docs/backoffice.md), *The pages*). Which address those two match
 once there are several — the main only, or any verified one too — is this
 work's to settle, and PRIVACY.md's wording with it. An added address not
 yet verified is never one of them.

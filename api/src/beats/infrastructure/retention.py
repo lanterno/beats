@@ -75,7 +75,7 @@ async def purge_expired_records(
     after, so a crash midway never leaves an ex-member's rows outliving a
     current member's stamp. A whole-platform apply also trims the
     operator's own audit at the platform's default retention
-    (roadmaps/backoffice.md § Jobs): it is kept four years, like the record
+    (docs/backoffice.md § Jobs): it is kept four years, like the record
     it narrates."""
     today = today or datetime.now(UTC).date()
     report: list[OrganisationPurge] = []

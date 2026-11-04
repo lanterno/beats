@@ -3,7 +3,7 @@
 An audit each handler must remember to write will be missing from the one
 action anybody cares about, so a mutation is never a function call in a
 route: it is one of these, executed only by the runner
-(roadmaps/backoffice.md § Commands are objects). **No rule lives here.**
+(docs/backoffice.md § Commands). **No rule lives here.**
 Each command resolves ids, declares its confirmation, describes its subject
 before and after, and delegates to whatever already owns the rule — the
 account service, the device repository, the organisation service's operator
@@ -11,7 +11,7 @@ twins. A guard written here would disagree with the one the member-facing
 route enforces.
 
 A command with a `window` is destructive and enqueues instead of executing
-(step 4's job runner); every command today needs the `operator` role — a
+(the job runner); every command today needs the `operator` role — a
 `viewer` runs none.
 """
 
@@ -42,7 +42,7 @@ class CommandContext:
 class OperatorCommand(Protocol):
     name: str
     subject_kind: str
-    # None: execute inline. Else: enqueue, run after the window (step 4).
+    # None: execute inline. Else: enqueue, run after the window.
     window: timedelta | None
     args_model: type[BaseModel]
 
@@ -64,7 +64,7 @@ class AccountArgs(BaseModel):
 
 
 class SuspendArgs(AccountArgs):
-    # Erasure suspensions belong to the erasure job (step 4), never to this
+    # Erasure suspensions belong to the erasure job, never to this
     # command: job.cancel lifts only that kind.
     kind: SuspensionKind = SuspensionKind.ABUSE
     reason: str = Field(min_length=1, max_length=2000)
@@ -295,7 +295,7 @@ class CancelClosing(_OrganisationCommand):
         return await _organisation_state(ctx, args.organisation_id)
 
 
-# ── the irreversible work (step 4): jobs with a window ───────────────
+# ── the irreversible work: jobs with a window ────────────────────────
 
 
 class EraseAccount(_AccountCommand):

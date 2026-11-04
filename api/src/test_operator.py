@@ -1,4 +1,4 @@
-"""The operator deployment's contract (roadmaps/backoffice.md step 2).
+"""The operator deployment's contract (docs/backoffice.md step 2).
 
 The wall test matters most: a sentinel is planted in every stored thing the
 right-hand column of § *The line* names — a session's note and its day, a

@@ -209,7 +209,7 @@ variable "alert_email" {
 }
 
 
-# ── The operator deployment (roadmaps/backoffice.md step 2) ─────────────────
+# ── The operator deployment (docs/backoffice.md step 2) ─────────────────
 
 variable "operator_enabled" {
   description = "Whether the operator deployment's resources exist. Off until the hand-made prerequisites do (the README's Operator deployment section): the custom OAuth client for IAP, the narrow Atlas database user, and the first version of beats-operator-dsn."

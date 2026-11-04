@@ -408,7 +408,7 @@ describe("describeError", () => {
 
 // A suspension is not an expired session: the person is told why, in the
 // API's words, and nothing redirects them into a sign-in loop
-// (roadmaps/backoffice.md step 1).
+// (docs/account-controls.md).
 describe("apiClient — 403 ACCOUNT_SUSPENDED side effect", () => {
 	beforeEach(() => {
 		resetSuspensionForTests();

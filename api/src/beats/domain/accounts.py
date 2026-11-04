@@ -1,8 +1,8 @@
 """Rules on the account itself: suspension and sign-out everywhere.
 
-Driven today by `api/scripts/suspend_account.py`; the control plane's
-`account.*` commands delegate here when step 3 of roadmaps/backoffice.md
-ships, so the rule never lives in two places.
+Driven by `api/scripts/suspend_account.py` and by the control plane's
+`account.*` commands (docs/backoffice.md § Commands), so the rule never
+lives in two places.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -31,7 +31,8 @@ class AccountLimitsStore(Protocol):
     async def clear(self, user_id: str) -> bool: ...
 
 
-# The window between queueing an erasure and running it (step 4's job). The
+# The window between queueing an erasure and running it (the erasure job,
+# docs/backoffice.md § Jobs). The
 # suspension an erasure places starts when it is queued, so the refusal can
 # name the day the window ends.
 ERASURE_WINDOW_DAYS = 7
@@ -103,7 +104,7 @@ class AccountService:
         return await self._users.update(user)
 
     async def set_limits(self, limits: AccountLimits) -> AccountLimits:
-        """Replace the account's ceilings (roadmaps/backoffice.md § Limits).
+        """Replace the account's ceilings (docs/account-controls.md § Per-account limits).
         The whole document at once, never a field at a time: what is not sent
         reads as "the global setting decides", so a partial write would
         silently clear overrides the operator meant to keep. Enforcement

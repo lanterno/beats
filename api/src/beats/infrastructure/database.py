@@ -4,7 +4,7 @@ Deliberately free of `beats.settings`: importing that module demands the
 API's secrets (JWT_SECRET among them), and this file is imported by every
 `beats.infrastructure.*` module — which the operator deployment composes
 too, and it must never hold the session secret
-(roadmaps/backoffice.md § Two composition roots). The caller names the
+(docs/backoffice.md § Architecture). The caller names the
 database; `server.py` passes the API's settings, `operator_server.py` its
 own.
 """
@@ -113,7 +113,7 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.report_links.create_index("token", unique=True)
     # The owner's list, per client.
     await db.report_links.create_index([("user_id", 1), ("client_id", 1)])
-    # The operator's collections (roadmaps/backoffice.md): built here because
+    # The operator's collections (docs/backoffice.md): built here because
     # the public API is the one deployment with the index grant — the
     # operator's narrow database user creates none. One account_limits
     # document per account; the job claim reads state + run_after; the audit

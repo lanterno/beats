@@ -7,7 +7,7 @@ Usage:
   uv run python scripts/suspend_account.py <email> sign-out --yes
 
 The rules are `beats.domain.accounts.AccountService`, which the control
-plane's commands will drive once it exists (roadmaps/backoffice.md step 3);
+plane's commands will drive once it exists (docs/backoffice.md step 3);
 until then this script is the way the operator invokes them. Enforcement is
 the API middleware's cached lookup, so a change here takes effect on every
 instance within its TTL (30 seconds). The reason is the operator's own and is

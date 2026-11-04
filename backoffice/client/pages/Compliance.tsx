@@ -1,7 +1,7 @@
 /**
  * The operator's own records: the audit (editable by nobody, kept four
- * years) and the job queue, erasures first. Both empty until steps 3 and 4
- * write them — the pages exist so the first command lands somewhere visible.
+ * years) and the job queue, erasures first — where every command the runner
+ * executed shows, and where a queued window is waited out or cancelled.
  */
 
 import { useQuery } from "@tanstack/react-query";

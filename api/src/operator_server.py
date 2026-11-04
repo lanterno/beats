@@ -1,7 +1,7 @@
 """The operator deployment's entry point — the second composition root.
 
 `uvicorn operator_server:app` beside `uvicorn server:app`, composing the same
-`beats` library (roadmaps/backoffice.md § Two composition roots): same image,
+`beats` library (docs/backoffice.md § Architecture): same image,
 the Cloud Run service's command picks the module. What that buys over a mode
 switch is isolation by construction:
 
@@ -184,7 +184,7 @@ app.add_middleware(OperatorAuthMiddleware)
 
 # The UI: the built SPA's assets, and index.html for any path outside
 # /api/operator — the SPA's own routes. Served by this app so the browser has
-# one origin and one IAP session (roadmaps/backoffice.md § Deployment).
+# one origin and one IAP session (docs/backoffice.md § Deployment).
 if (STATIC_DIR / "index.html").exists():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
 

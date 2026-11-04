@@ -65,7 +65,7 @@ This layout is the issues'.
 ## Working a roadmap step
 
 The same loop without a number. Branch `<type>/<short-slug>`; the PR body names
-the file and the step (`roadmaps/backoffice.md`, step 1) where an issue would have
+the file and the item (`roadmaps/backoffice.md`, a Work bullet) where an issue would have
 `Fixes #n`. When the step ships, its part of the roadmap is deleted and what was
 built, and why, is written into `docs/`, in a commit of its own
 (`roadmaps/README.md` § *When something ships*).

@@ -21,7 +21,7 @@ export default defineConfig(() => ({
 	},
 	build: {
 		// Into the API image: the Dockerfile's existing `COPY src/` carries it
-		// (roadmaps/backoffice.md § Deployment). Gitignored there.
+		// (docs/backoffice.md § Deployment). Gitignored there.
 		outDir: "../api/src/beats/operator/static",
 		emptyOutDir: true,
 	},

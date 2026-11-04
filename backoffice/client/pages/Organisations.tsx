@@ -111,7 +111,7 @@ export function Organisation() {
 
 /**
  * The operator's organisation acts, offered only while there is no owner and
- * only on a request that passes the rule (roadmaps/backoffice.md): each is
+ * only on a request that passes the rule (docs/backoffice.md): each is
  * refused server-side with 409 ORGANISATION_HAS_OWNER the moment an owner
  * exists, whatever this page shows.
  */

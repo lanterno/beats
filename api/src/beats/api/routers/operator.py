@@ -6,9 +6,9 @@ API's settings: the operator deployment never holds `JWT_SECRET`. Providers
 come from `beats.operator.dependencies`; the error envelope is the shared one
 (`beats.api.errors` loads no settings).
 
-Every route is a read in this step (roadmaps/backoffice.md step 2); the
-commands arrive with step 3 through one runner, so the audit cannot be
-forgotten. A `GET` changes nothing, and the account lookup takes its address
+The reads have no service layer; every mutation goes through one runner
+(docs/backoffice.md § Commands), so the audit cannot be forgotten. A `GET`
+changes nothing, and the account lookup takes its address
 in the **body** — an address in a URL is in Cloud Run's request log for 30
 days, the reason `/api/reports` takes its token in a header.
 """
@@ -152,7 +152,7 @@ async def audit_log(
     reads: OperatorReadsDep,
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> list[dict]:
-    """The operator's own audit — empty until step 3's commands write it."""
+    """The operator's own audit: every command the runner executed."""
     return await reads.audit_log(limit)
 
 
@@ -165,10 +165,10 @@ class CommandRequest(BaseModel):
 
 @router.post("/commands/{name}")
 async def run(name: str, body: CommandRequest, ctx: CommandContextDep) -> dict:
-    """The one path a mutation takes (roadmaps/backoffice.md § Commands are
+    """The one path a mutation takes (docs/backoffice.md § Commands are
     objects): role, confirmation, describe, execute, audit — so nothing is
     unaudited and no rule lives in a handler. Answers the audit entry, and
-    the job when one was queued (step 4)."""
+    the job when one was queued."""
     return await run_command(ctx, name, body.args, body.confirmation)
 
 
@@ -178,5 +178,5 @@ async def jobs(
     reads: OperatorReadsDep,
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> list[dict]:
-    """The job queue — empty until step 4's jobs exist."""
+    """The job queue: the irreversible work waiting out its window."""
     return await reads.jobs(limit)

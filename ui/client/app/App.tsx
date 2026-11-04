@@ -36,7 +36,7 @@ import { QueryProvider } from "./providers";
 
 /**
  * The account is suspended: the API's own sentence, full-page, instead of the
- * app (roadmaps/backoffice.md step 1). It names the address to write to; the
+ * app (docs/account-controls.md). It names the address to write to; the
  * session has already ended, the sync engine has stopped, and every queued
  * write waits under its own account. A reload starts from the login screen —
  * where a suspended sign-in is refused with the same sentence.

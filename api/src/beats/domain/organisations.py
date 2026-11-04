@@ -379,7 +379,7 @@ class OrganisationService:
         await self._audit(organisation_id, actor, "organisation.closing_cancelled")
         return organisation
 
-    # --- the operator's acts (roadmaps/backoffice.md, step 3) --------------------------
+    # --- the operator's acts (docs/backoffice.md § Commands) -----------------------
     #
     # Each is a twin of the member's method beside it, taking no actor and
     # sharing everything after the membership check, because the member's
@@ -487,7 +487,7 @@ class OrganisationService:
         """The operator twin of delete_organisation: only an ownerless
         organisation (409 ORGANISATION_HAS_OWNER), only once its notice has
         run out — the notice was the request, and no second one is needed.
-        Run as a queued job (step 4), whose re-run after a death midway is
+        Run as a queued job, whose re-run after a death midway is
         safe for the reason the member path's is: a hand-back takes the
         assignment with it (#414). Its rules are checked when it runs, not
         when it was queued: an organisation given an owner while the job

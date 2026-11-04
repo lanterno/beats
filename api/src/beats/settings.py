@@ -228,7 +228,7 @@ class Settings(BaseSettings):
             raise ValueError(f"OIDC_PROVIDERS repeats the id(s): {', '.join(duplicates)}")
         return self
 
-    # Per-account write ceilings (roadmaps/backoffice.md § Limits): the first
+    # Per-account write ceilings (docs/account-controls.md § Per-account limits): the first
     # rate limits on the routes a hostile or broken client can flood, keyed on
     # the account rather than the address. None (the default) means no limit —
     # each is turned on by setting it, and **before one is turned on, check it

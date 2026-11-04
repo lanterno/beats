@@ -1,7 +1,7 @@
 """`operator_jobs` — the queue the irreversible work waits in.
 
 A queued job is just a serialised command: one abstraction, not two
-mechanisms (roadmaps/backoffice.md § Jobs). Like `operator_audit`, the
+mechanisms (docs/backoffice.md § Jobs). Like `operator_audit`, the
 subject is `subject_id`, **never `user_id`** — erasure's sweep would
 otherwise delete the erasure job's own entry mid-run.
 

@@ -101,7 +101,7 @@ async def record_org_audit(
 ) -> None:
     """The one writer for an audit row whose actor is not a member: erasure's
     tombstoning and the retention purge write through it (`system` when run by
-    hand, `operator` when step 4's job runs them), so the kind cannot be
+    hand, `operator` when the job runner runs them), so the kind cannot be
     forgotten the way the raw inserts used to leave it implied."""
     await db.org_audit.insert_one(
         {

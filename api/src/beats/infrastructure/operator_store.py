@@ -43,7 +43,7 @@ class MongoAccountLimitsStore:
 
 class MongoOperatorAudit:
     """Append-only; editable by nobody; kept four years, the platform's
-    default retention (step 4's purge removes older entries)."""
+    default retention (the whole-platform purge removes older entries)."""
 
     def __init__(self, db: AsyncDatabase):
         self._col = db.operator_audit

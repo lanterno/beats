@@ -403,7 +403,7 @@ The zone id is the `cloudflare_zone_id` output and the record id is
 
 ## Operator Deployment (One-Time Setup)
 
-The control plane (`beats-operator`, [roadmaps/backoffice.md](../roadmaps/backoffice.md))
+The control plane (`beats-operator`, [docs/backoffice.md](../docs/backoffice.md))
 is gated behind `operator_enabled = false` until three things exist that no
 API creates, each made once by hand. Until the flag flips, an apply changes
 nothing and the API's deploys stay green.
@@ -418,7 +418,7 @@ nothing and the API's deploys stay green.
      (`revoked`), `organisations` (closing), `org_members`, `org_audit`,
      `operator_audit`, `operator_jobs`. It creates no index. That list is the
      grant — a command that needs another collection changes
-     roadmaps/backoffice.md first.
+     docs/backoffice.md first.
    - Create a database user `beats-operator` with that role. Atlas's access
      list already admits Cloud Run's addresses (the API connects with no VPC
      connector); confirm the new service appears in the access logs after the

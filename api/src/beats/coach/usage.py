@@ -75,7 +75,7 @@ class UsageTracker:
 
     async def budget_usd(self) -> float:
         """The account's own ceiling when one is set (`account_limits`,
-        roadmaps/backoffice.md § Limits), else the global setting. Read
+        docs/account-controls.md § Per-account limits), else the global setting. Read
         through the cached account lookup by user id — the coach gateway has
         no `request.state` — so it costs a Mongo read only on a cache miss.
         The same figure draws the SPA's usage bar (`GET /api/coach/usage`)."""
