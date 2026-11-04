@@ -228,6 +228,27 @@ class Settings(BaseSettings):
             raise ValueError(f"OIDC_PROVIDERS repeats the id(s): {', '.join(duplicates)}")
         return self
 
+    # Per-account write ceilings (roadmaps/backoffice.md § Limits): the first
+    # rate limits on the routes a hostile or broken client can flood, keyed on
+    # the account rather than the address. None (the default) means no limit —
+    # each is turned on by setting it, and **before one is turned on, check it
+    # against the per-account rate those routes actually see** in the request
+    # logs: a default that refuses a real client is a 429 storm in the SPA's
+    # sync engine, which retries 429. Recommended starting values, about ten
+    # times the clients' own cadence: 120 (beats), 60 (signals — the daemon
+    # flushes once a minute and replays at most its 32-window buffer), 10
+    # (imports — a restore is a few calls, not a stream). An `account_limits`
+    # document may set a different ceiling for one account; these are the
+    # defaults beneath it. Counted per instance, like the IP limits and by the
+    # same decision (the comment above `limiter` in beats/api/routers/auth.py).
+    writes_per_minute_beats: int | None = Field(
+        default=None, validation_alias="WRITES_PER_MINUTE_BEATS"
+    )
+    writes_per_minute_signals: int | None = Field(
+        default=None, validation_alias="WRITES_PER_MINUTE_SIGNALS"
+    )
+    imports_per_hour: int | None = Field(default=None, validation_alias="IMPORTS_PER_HOUR")
+
     # AI Coach (Stage 2)
     anthropic_api_key: str = Field(default="", validation_alias="ANTHROPIC_API_KEY")
     # Sonnet 5.5, at $2/$10 per Mtok. Set COACH_MODEL=claude-opus-5-5 for the

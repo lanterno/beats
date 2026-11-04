@@ -11,6 +11,7 @@ from fastapi import APIRouter, Query, Response
 from beats.api.dependencies import (
     BeatRepoDep,
     ContractServiceDep,
+    CurrentUserId,
     GitHubServiceDep,
     MondayDate,
     ProjectServiceDep,
@@ -506,6 +507,7 @@ async def get_project_summary(project_id: str, service: ProjectServiceDep):
 async def start_project_timer(
     project_id: str,
     time_validator: RecordTimeRequest,
+    user_id: CurrentUserId,
     service: TimerServiceDep,
     webhook_repo: WebhookRepoDep,
 ):
@@ -516,6 +518,7 @@ async def start_project_timer(
         "timer.start",
         {"project_id": project_id, "project_name": project.name, "beat_id": beat.id},
         webhook_repo,
+        user_id,
     )
     return beat.model_dump()
 
@@ -523,6 +526,7 @@ async def start_project_timer(
 @router.post("/stop")
 async def end_project_timer(
     time_validator: StopTimerRequest,
+    user_id: CurrentUserId,
     service: TimerServiceDep,
     webhook_repo: WebhookRepoDep,
 ):
@@ -537,5 +541,6 @@ async def end_project_timer(
             "duration_minutes": int(beat.duration.total_seconds() / 60),
         },
         webhook_repo,
+        user_id,
     )
     return beat.model_dump()

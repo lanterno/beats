@@ -27,7 +27,6 @@ from beats.coach.repos import (
 from beats.coach.usage import BudgetExceeded, UsageTracker, budget_message
 from beats.domain.exceptions import CoachNotConfigured
 from beats.infrastructure.database import Database
-from beats.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -284,7 +283,10 @@ async def get_usage(
             for d in daily
         ],
         month_total_usd=month_total,
-        budget_usd=settings.coach_monthly_budget_usd,
+        # The account's own ceiling when the operator set one, else the
+        # global setting — the same figure enforce_budget refuses on, so the
+        # SPA's usage bar and the refusal agree.
+        budget_usd=await tracker.budget_usd(),
     )
 
 

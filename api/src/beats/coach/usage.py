@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
+from beats.auth import account_access
 from beats.coach.repos import LLM_USAGE_COLLECTION
 from beats.infrastructure.database import Database
 from beats.settings import settings
@@ -72,8 +73,19 @@ class UsageTracker:
             return float(result[0]["total"])
         return 0.0
 
+    async def budget_usd(self) -> float:
+        """The account's own ceiling when one is set (`account_limits`,
+        roadmaps/backoffice.md § Limits), else the global setting. Read
+        through the cached account lookup by user id — the coach gateway has
+        no `request.state` — so it costs a Mongo read only on a cache miss.
+        The same figure draws the SPA's usage bar (`GET /api/coach/usage`)."""
+        access = await account_access.resolve(Database.get_db(), self._user_id)
+        if access.coach_monthly_budget_usd is not None:
+            return access.coach_monthly_budget_usd
+        return settings.coach_monthly_budget_usd
+
     async def enforce_budget(self) -> None:
-        limit = settings.coach_monthly_budget_usd
+        limit = await self.budget_usd()
         if limit <= 0:
             return
         spent = await self.month_spend()

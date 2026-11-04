@@ -100,6 +100,31 @@ class User(TzNormalizedModel):
         return self.suspended_at is not None
 
 
+class AccountLimits(TzNormalizedModel):
+    """One account's operator-set ceilings (roadmaps/backoffice.md § Limits).
+
+    A document exists only when something is overridden; None on a field
+    means the global setting. Keyed on `user_id` **deliberately**, unlike the
+    operator's own collections, so erasure's sweep takes it with the rest of
+    the account.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
+    user_id: str
+    coach_monthly_budget_usd: float | None = None
+    writes_per_minute_beats: int | None = None
+    writes_per_minute_signals: int | None = None
+    imports_per_hour: int | None = None
+    # On the account, not the webhook: a per-webhook flag is undone by
+    # deleting and re-creating the same URL.
+    webhooks_disabled: bool = False
+    set_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # The operator's sub.
+    set_by: str = ""
+
+
 class GoalType(StrEnum):
     """Type of weekly goal: target to reach or cap to stay under."""
 

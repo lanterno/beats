@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from bson import ObjectId
-from fastapi import APIRouter, Query, UploadFile
+from fastapi import APIRouter, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
@@ -27,6 +27,8 @@ from beats.api.dependencies import (
     TimezoneDep,
 )
 from beats.api.errors import error_code
+from beats.api.rate_limits import account_key, imports_limit, imports_off
+from beats.api.routers.auth import limiter
 from beats.api.schemas import ImportCounts, ImportResponse, ImportSkip
 from beats.domain.exceptions import (
     BackupOfAnotherAccount,
@@ -345,7 +347,9 @@ def _skip(
 
 
 @router.post("/import", response_model=ImportResponse)
+@limiter.limit(imports_limit, key_func=account_key, exempt_when=imports_off)
 async def import_full_json(
+    request: Request,
     file: UploadFile,
     beat_repo: BeatRepoDep,
     project_repo: ProjectRepoDep,

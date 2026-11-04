@@ -14,7 +14,12 @@ way `device_access` caches a device's, with the same reasoning:
   sound for a bound this short.
 
 The entry also carries the day the account was last seen, so the middleware
-can stamp `last_seen_on` at most once a day instead of on every request.
+can stamp `last_seen_on` at most once a day instead of on every request — and
+the account's ceilings (`account_limits`, roadmaps/backoffice.md § Limits)
+ride with it: one cache, two reads on a miss, for every feature that needs
+the account on the request path. The rate-limit callables are synchronous, so
+the ceiling must already be in the process, and it is: the middleware filled
+the cache on the way in.
 """
 
 import time
@@ -37,6 +42,13 @@ class AccountAccess:
     suspended_kind: str | None = None
     sessions_valid_after: datetime | None = None
     last_seen_on: date | None = None
+    # The account's own ceilings, off its `account_limits` document. None
+    # means no override: the global setting decides.
+    coach_monthly_budget_usd: float | None = None
+    writes_per_minute_beats: int | None = None
+    writes_per_minute_signals: int | None = None
+    imports_per_hour: int | None = None
+    webhooks_disabled: bool = False
 
     @property
     def suspended(self) -> bool:
@@ -115,12 +127,18 @@ async def lookup(db: AsyncDatabase, user_id: str) -> AccountAccess:
     )
     if doc is None:
         return MISSING
+    limits = await db.account_limits.find_one({"user_id": user_id}) or {}
     return AccountAccess(
         exists=True,
         suspended_at=_as_datetime(doc.get("suspended_at")),
         suspended_kind=doc.get("suspended_kind"),
         sessions_valid_after=_as_datetime(doc.get("sessions_valid_after")),
         last_seen_on=_as_date(doc.get("last_seen_on")),
+        coach_monthly_budget_usd=limits.get("coach_monthly_budget_usd"),
+        writes_per_minute_beats=limits.get("writes_per_minute_beats"),
+        writes_per_minute_signals=limits.get("writes_per_minute_signals"),
+        imports_per_hour=limits.get("imports_per_hour"),
+        webhooks_disabled=bool(limits.get("webhooks_disabled", False)),
     )
 
 

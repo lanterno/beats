@@ -6,13 +6,16 @@ import logging
 from datetime import UTC, datetime
 
 import httpx
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from beats.api.dependencies import (
+    CurrentUserId,
     WebhookRepoDep,
 )
+from beats.auth import account_access
 from beats.domain.models import Webhook
+from beats.infrastructure.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,15 @@ class WebhookResponse(BaseModel):
     created_at: datetime
 
 
+async def _webhooks_disabled(user_id: str) -> bool:
+    """The operator's per-account switch (`account_limits`): outbound HTTP
+    from our servers to arbitrary URLs is ours to answer for. On the account,
+    not the webhook, so deleting and re-creating one gets around nothing;
+    `Webhook.active` stays what it is, the owner's own flag."""
+    access = await account_access.resolve(Database.get_db(), user_id)
+    return access.webhooks_disabled
+
+
 @router.get("/", response_model=list[WebhookResponse])
 async def list_webhooks(repo: WebhookRepoDep):
     """List all registered webhooks."""
@@ -40,8 +52,18 @@ async def list_webhooks(repo: WebhookRepoDep):
 
 
 @router.post("/", status_code=http.HTTPStatus.CREATED, response_model=WebhookResponse)
-async def create_webhook(request: CreateWebhookRequest, repo: WebhookRepoDep):
+async def create_webhook(
+    request: CreateWebhookRequest, user_id: CurrentUserId, repo: WebhookRepoDep
+):
     """Register a new webhook URL."""
+    if await _webhooks_disabled(user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "WEBHOOKS_DISABLED",
+                "message": "Webhooks are disabled on this account.",
+            },
+        )
     webhook = Webhook(url=request.url, events=request.events)
     created = await repo.create(webhook)
     return created.model_dump(mode="json")
@@ -67,6 +89,7 @@ async def dispatch_webhook_event(
     event: str,
     payload: dict,
     repo: WebhookRepoDep,
+    user_id: str,
 ) -> None:
     """Fire-and-forget webhook dispatch for a timer event.
 
@@ -78,6 +101,11 @@ async def dispatch_webhook_event(
     detached background tasks. Callers return immediately to the
     user; webhook delivery happens out-of-band.
     """
+    # The operator's switch is checked at dispatch too, not only at create:
+    # a webhook registered before the switch was thrown must also fall
+    # silent. Suspension can be undone; so can this.
+    if await _webhooks_disabled(user_id):
+        return
     webhooks = await repo.list_by_event(event)
     if not webhooks:
         return

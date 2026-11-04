@@ -16,9 +16,25 @@ from beats.api.dependencies import (
     SignalSummaryRepoDep,
     TimerServiceDep,
 )
+from beats.api.rate_limits import account_key, signals_writes_limit, signals_writes_off
+from beats.api.routers.auth import limiter
 from beats.domain.models import FlowWindow, PendingSuggestion, Project, SignalSummary
 
 router = APIRouter(prefix="/api/signals", tags=["signals"])
+
+
+def _write_limit():
+    """The daemon's writes share one per-account bucket, capped by the
+    account's own ceiling or WRITES_PER_MINUTE_SIGNALS, and uncounted while
+    neither is set. The ceiling comes off the cached account lookup the
+    middleware filled, so the flow window the daemon posts every minute
+    costs no extra read."""
+    return limiter.shared_limit(
+        signals_writes_limit,
+        scope="signals-writes",
+        key_func=account_key,
+        exempt_when=signals_writes_off,
+    )
 
 
 # --- Schemas ---
@@ -108,6 +124,7 @@ class FlowWindowSummaryResponse(BaseModel):
 
 
 @router.post("/flow-windows", status_code=status.HTTP_201_CREATED)
+@_write_limit()
 async def post_flow_window(
     body: PostFlowWindowRequest,
     request: Request,
@@ -370,6 +387,7 @@ def _top_bucket(windows: list[FlowWindow], key_of) -> TopBucket | None:
 
 
 @router.post("/summaries", status_code=status.HTTP_200_OK)
+@_write_limit()
 async def post_signal_summary(
     body: PostSignalSummaryRequest,
     request: Request,
@@ -441,6 +459,7 @@ async def get_timer_context(
 
 
 @router.post("/suggest-timer", response_model=AutoTimerSuggestion)
+@_write_limit()
 async def suggest_timer(
     body: PostFlowWindowRequest,
     request: Request,
@@ -569,6 +588,7 @@ class PostDriftEventRequest(BaseModel):
 
 
 @router.post("/drift", status_code=status.HTTP_201_CREATED)
+@_write_limit()
 async def post_drift_event(
     body: PostDriftEventRequest,
     request: Request,
