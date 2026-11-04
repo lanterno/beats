@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { endSession, provideSession, sessionToken, signOut } from "./index";
+import { endSession, provideSession, sessionAccountId, sessionToken, signOut } from "./index";
 
 const signedOutDefaults = {
 	getToken: () => null,
@@ -43,5 +43,20 @@ describe("session port", () => {
 		provideSession({ ...signedOutDefaults, getToken: () => "first" });
 		provideSession({ ...signedOutDefaults, getToken: () => "second" });
 		expect(sessionToken()).toBe("second");
+	});
+});
+
+describe("sessionAccountId", () => {
+	it("reads the token's sub synchronously", () => {
+		const payload = btoa(JSON.stringify({ sub: "u-42", exp: 9999999999 }));
+		provideSession({ ...signedOutDefaults, getToken: () => `h.${payload}.s` });
+		expect(sessionAccountId()).toBe("u-42");
+	});
+
+	it("null when signed out or the token is unreadable", () => {
+		provideSession(signedOutDefaults);
+		expect(sessionAccountId()).toBeNull();
+		provideSession({ ...signedOutDefaults, getToken: () => "not-a-jwt" });
+		expect(sessionAccountId()).toBeNull();
 	});
 });

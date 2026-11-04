@@ -114,3 +114,51 @@ describe("mutation queue", () => {
 		expect(await listPending()).toEqual([]);
 	});
 });
+
+describe("drainPending — per-account replay", () => {
+	const stamped = (
+		accountId: string | undefined,
+		clientId = newClientId(),
+	): Omit<PendingMutation, "id" | "enqueuedAt" | "attempts"> => ({
+		method: "POST",
+		path: "/api/beats/",
+		body: {},
+		clientId,
+		accountId,
+	});
+
+	it("replays only the signed-in account's rows and leaves the rest waiting", async () => {
+		const mine = newClientId();
+		const theirs = newClientId();
+		await enqueueMutation(stamped("u-theirs", theirs));
+		await enqueueMutation(stamped("u-mine", mine));
+
+		const replayed: string[] = [];
+		const result = await drainPending(async (m) => {
+			replayed.push(m.clientId);
+		}, "u-mine");
+
+		expect(replayed).toEqual([mine]);
+		expect(result.drained).toBe(1);
+		// The other account's write is neither drained nor an error: it
+		// waits, in its own order, for its own account's next sign-in.
+		expect(result.remaining).toBe(1);
+		expect(result.error).toBeUndefined();
+		const pending = await listPending();
+		expect(pending).toHaveLength(1);
+		expect(pending[0].accountId).toBe("u-theirs");
+	});
+
+	it("rows from before the stamp existed replay under anyone", async () => {
+		const legacy = newClientId();
+		await enqueueMutation(stamped(undefined, legacy));
+
+		const replayed: string[] = [];
+		await drainPending(async (m) => {
+			replayed.push(m.clientId);
+		}, "u-whoever");
+
+		expect(replayed).toEqual([legacy]);
+		expect(await listPending()).toHaveLength(0);
+	});
+});

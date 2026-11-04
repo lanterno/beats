@@ -14,8 +14,18 @@
  */
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { provideSession, type SessionPort } from "@/shared/session";
 import { clearAll, listPending } from "../lib/mutationQueue";
+import { resetSuspensionForTests, suspensionNotice } from "../lib/suspension";
 import { ApiError, type ApiErrorField, apiClient, apiMutate, describeError } from "./client";
+
+const signedOutPort: SessionPort = {
+	getToken: () => null,
+	getUserKey: () => null,
+	subscribe: () => () => {},
+	clear: () => {},
+	signOut: async () => {},
+};
 
 const originalFetch = globalThis.fetch;
 
@@ -393,5 +403,72 @@ describe("describeError", () => {
 		// An exotic case (`throw new Error()`) — the empty message would
 		// produce a blank toast, which reads worse than the fallback.
 		expect(describeError(new Error(""), "Failed to save")).toBe("Failed to save");
+	});
+});
+
+// A suspension is not an expired session: the person is told why, in the
+// API's words, and nothing redirects them into a sign-in loop
+// (roadmaps/backoffice.md step 1).
+describe("apiClient — 403 ACCOUNT_SUSPENDED side effect", () => {
+	beforeEach(() => {
+		resetSuspensionForTests();
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { ...window.location, replace: vi.fn() },
+		});
+	});
+
+	afterEach(() => {
+		resetSuspensionForTests();
+		provideSession(signedOutPort);
+	});
+
+	it("records the API's sentence, ends the session, and does not redirect", async () => {
+		const clear = vi.fn();
+		provideSession({ ...signedOutPort, clear });
+		const detail =
+			"This account is suspended. Write to op@example.test from this account's address.";
+		mockFetchOnce(403, { detail, code: "ACCOUNT_SUSPENDED" });
+
+		const err = (await apiClient("/api/projects/").catch((e) => e)) as ApiError;
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect(err.code).toBe("ACCOUNT_SUSPENDED");
+		expect(suspensionNotice()).toBe(detail);
+		expect(clear).toHaveBeenCalled();
+		expect(window.location.replace).not.toHaveBeenCalled();
+	});
+
+	it("an ordinary 403 records nothing", async () => {
+		mockFetchOnce(403, { detail: "Not an owner", code: "FORBIDDEN" });
+		await apiClient("/api/anything").catch(() => {});
+		expect(suspensionNotice()).toBeNull();
+	});
+});
+
+describe("apiMutate — the queued write carries its account", () => {
+	beforeEach(async () => {
+		await clearAll();
+	});
+
+	afterEach(() => {
+		provideSession(signedOutPort);
+	});
+
+	it("stamps the token's sub on a write queued by a network failure", async () => {
+		// A JWT-shaped token whose payload carries sub: the stamp is read
+		// synchronously off it, not off /me, which may not have answered yet.
+		const payload = btoa(JSON.stringify({ sub: "u-1" }));
+		provideSession({ ...signedOutPort, getToken: () => `h.${payload}.s` });
+		globalThis.fetch = vi.fn(() =>
+			Promise.reject(new TypeError("Failed to fetch")),
+		) as unknown as typeof fetch;
+
+		const result = await apiMutate("POST", "/api/beats/", { x: 1 });
+
+		expect(result.status).toBe("queued");
+		const pending = await listPending();
+		expect(pending).toHaveLength(1);
+		expect(pending[0].accountId).toBe("u-1");
 	});
 });
