@@ -39,6 +39,7 @@
 // Timing Configuration
 // ============================================================================
 #define STATUS_POLL_INTERVAL_MS 10000  // Poll API every 10 seconds
+#define STATUS_POLL_BACKOFF_MS 60000  // One poll a minute while the API refuses (403)
 #define EINK_REFRESH_INTERVAL_MS 60000  // Refresh e-ink every 60 seconds
 #define HEARTBEAT_INTERVAL_MS 300000  // Send heartbeat every 5 minutes
 #define DEBOUNCE_MS 50

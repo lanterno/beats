@@ -53,9 +53,17 @@ public:
     bool postHeartbeat(float batteryVoltage = NAN, int wifiRssi = -1, long uptimeSeconds = -1);
     bool getDashboard(DeviceStatus& status, String& nextEvent, int& goalPct);
 
+    // refused(): the last call was answered 403 — the API refusing this
+    // device (revoked registration, suspended account), not a transient
+    // failure. The caller backs its polling off to STATUS_POLL_BACKOFF_MS
+    // and shows the idle face; a later 200 clears it
+    // (roadmaps/backoffice.md step 1). 0 while no call has completed.
+    bool refused() const { return _lastCode == 403; }
+
 private:
     String _baseUrl;
     String _token;
+    int _lastCode = 0;
 
     bool httpGet(const String& path, JsonDocument& doc);
     bool httpPost(const String& path, const String& body = "{}");

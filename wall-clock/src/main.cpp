@@ -39,6 +39,12 @@ int currentFavoriteIndex = 0;
 DisplayMode displayMode = DisplayMode::ACTIVE_TIMER;
 
 unsigned long lastStatusPoll = 0;
+// The API answered 403: this device is revoked or its account suspended.
+// Poll once a minute instead of every 10 seconds — the slow poll is the
+// probe that notices the refusal lifting — and show the idle face rather
+// than a stale timer. Heartbeats pause too; the status poll keeps enough
+// of an "I'm alive" signal.
+bool apiRefused = false;
 unsigned long lastEinkRefresh = 0;
 unsigned long lastHeartbeat = 0;
 
@@ -246,10 +252,12 @@ void loop() {
     }
 
     // ----- API polling -----
-    if (now - lastStatusPoll >= STATUS_POLL_INTERVAL_MS) {
+    unsigned long pollInterval = apiRefused ? STATUS_POLL_BACKOFF_MS : STATUS_POLL_INTERVAL_MS;
+    if (now - lastStatusPoll >= pollInterval) {
         lastStatusPoll = now;
         DeviceStatus newStatus;
         if (api.getStatus(newStatus)) {
+            apiRefused = false;
             bool wasActive = status.is_active;
             status = newStatus;
 
@@ -263,11 +271,21 @@ void loop() {
                 // Idle — ambient energy meter
                 leds.showEnergyMeter(status.energy_leds, status.theme_accent);
             }
+        } else if (api.refused() && !apiRefused) {
+            // Refused, just now: drop to the idle face once. A stale
+            // "timer running" display would be a wall-sized lie for as
+            // long as the refusal stands.
+            apiRefused = true;
+            if (status.is_active) {
+                status.is_active = false;
+                leds.fadeToBlack();
+                lastEinkRefresh = 0;  // repaint the idle summary now
+            }
         }
     }
 
     // ----- Heartbeat -----
-    if (now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+    if (!apiRefused && now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
         lastHeartbeat = now;
         // Send real telemetry so /api/device/heartbeat surfaces
         // battery / signal / uptime to the dashboard. Earlier

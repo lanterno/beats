@@ -14,6 +14,7 @@ bool ApiClient::httpGet(const String& path, JsonDocument& doc) {
     http.addHeader("Accept", "application/json");
 
     int code = http.GET();
+    _lastCode = code;
     if (code != 200) {
         http.end();
         return false;
@@ -33,6 +34,7 @@ bool ApiClient::httpPost(const String& path, const String& body) {
     http.addHeader("Content-Type", "application/json");
 
     int code = http.POST(body);
+    _lastCode = code;
     http.end();
     return code >= 200 && code < 300;
 }
