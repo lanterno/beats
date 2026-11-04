@@ -23,6 +23,7 @@ mistake to fix, not a section to maintain.
 | [organisations.md](organisations.md) | One account, one timeline, many employers: the four rules, the decisions, the data model, employment and scale |
 | [pricing.md](pricing.md) | What an organisation pays, and the market it was priced against |
 | [companion-offline.md](companion-offline.md) | The companion's offline queue: what is queued, in what order, and what a replay may and may not do |
+| [account-controls.md](account-controls.md) | Suspension, sign-out everywhere, the day last seen and per-account limits: what the API enforces about an account itself, and what each client does with a refusal |
 | [images/](images/) | The README's screenshot, and the social preview with the command that renders it |
 
 Documents outside this folder, because they are read by people who are not

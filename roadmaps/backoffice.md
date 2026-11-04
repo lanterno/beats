@@ -34,10 +34,12 @@ plane is not an organisations feature.
 
 ## What blocks what
 
+Step 1 — enforcement in the public API — shipped on 2026-11-04; what it
+built is [docs/account-controls.md](../docs/account-controls.md).
+
 | Step | Blocked by | Gives |
 |---|---|---|
-| 1. Enforcement in the public API | Nothing | Suspension, sign-out everywhere, per-account limits, the day last seen. Useful on its own, even driven by a script |
-| 2. The operator deployment, read-only | Step 1's fields, the `beats.settings` split, the hand-made OAuth client and database user (§ *Infrastructure*), and the answer to § *Needs the owner* | Every page, and no button |
+| 2. The operator deployment, read-only | The `beats.settings` split, the hand-made OAuth client and database user (§ *Infrastructure*), and the answer to § *Needs the owner* | Every page, and no button |
 | 3. Inline commands | Step 2 | Suspend, limits, revoke, the organisation acts |
 | 4. The job runner and the irreversible work | Step 3 | Erasure, an organisation's deletion, the retention purge |
 | The landing page's deploy-state row | [secret-manager.md](secret-manager.md) | Its reads need the API's spec to carry no secret |
@@ -88,198 +90,32 @@ question the control plane answers is a `mongosh` session against production
 that doesn't happen.** The wide credential stops being the everyday tool,
 which is also what makes a second operator safe to add later.
 
-## The finding that shapes the work
+## The finding that shaped step 1
 
-**A control plane can only control what the API enforces, and today the API
-enforces almost none of it.** Checked 2026-11-01, and again 2026-11-04:
+**A control plane can only control what the API enforces, and when this was
+checked (2026-11-01, and again 2026-11-04) the API enforced almost none of
+it**: no suspension anywhere, a revocation list in one instance's memory, one
+global coach budget, no rate limit on the write routes that matter, and
+nothing recording that an account was in use at all. Those enforcement
+points were API work whichever way the back office is built, so they were
+built first — a control plane whose controls do nothing is a viewer with
+buttons — and shipped as step 1 on 2026-11-04.
 
-| The operator wants to | What exists now | What the API must grow |
-|---|---|---|
-| Suspend an abusive account | **Nothing**: no field on `User`, no check anywhere | Suspension fields on `User`, and the checks § *Suspension, end to end* lists: the middleware on both branches (session and device), the three sign-in doors, the pairing exchange and report links |
-| Sign someone out everywhere | `SessionManager._revoked_tokens`, an **in-memory dict per instance** | `sessions_valid_after` on `User`. A session whose sign-in is older is refused. Read it off an `auth_time` claim that `refresh_token` copies unchanged, not off `iat`, which every refresh renews (§ *The enforcement points*). One field, one claim, one middleware check, no token list to share. Sessions only; devices are the next row |
-| Stop one device: a broken daemon, a stolen laptop | `DeviceRegistration.revoked` **already exists**, and the middleware refuses a revoked device | Nothing; the operator invokes it |
-| Cap one account's coach spend | `settings.coach_monthly_budget_usd`, **one global number** | An `account_limits` document the budget check reads before the global (§ *Limits*) |
-| Rate-limit one abuser | **Nothing** on the write routes that matter: import, signals, beats. `@limiter.limit` guards only the sign-in, session and credential routes, the pairing exchange and `/api/reports`, keyed on IP and counted per instance | A first limit on those routes, keyed on the account, with a global default and a per-account ceiling from the same document (§ *Limits*). Still counted per instance, like the IP limits and by the same decision (#391; the reasoning is the comment above `limiter` in `beats/api/routers/auth.py`). The document sets the ceiling, not a shared counter |
-| Stop an account's webhooks | `Webhook.active` exists, but no route sets it. An owner would see `active: false` with no reason, couldn't turn it back on, and could delete it and re-create the same URL | `webhooks_disabled` on `account_limits`: dispatch skips the account's webhooks, and creating one answers 403 `WEBHOOKS_DISABLED`. On the account, so deleting and re-creating gets around nothing. `Webhook.active` stays as it is |
-| See when an account was last used | **Nothing** on `User`. `DeviceRegistration.last_seen` exists but nothing writes it (`update_last_seen` has no caller and would write an ISO **string**, the bug `date_pairing_codes` had to fix for pairing codes) | `last_seen_on` on `User`, a UTC date, and a device's `last_seen` as a datetime. Each is stamped at most once a day by the cached lookups (§ *The enforcement points*). The SPA's daemon section, which shows the always-empty field today, starts showing a value |
+What the API now enforces — suspension end to end (403 `ACCOUNT_SUSPENDED`
+everywhere the account can act, worded around `contact_email`), sign-out
+everywhere (`sessions_valid_after` against the token's `auth_time`), the two
+last-seen stamps, `account_limits` with the write ceilings and
+`webhooks_disabled`, and what each client does with a refusal — is
+[docs/account-controls.md](../docs/account-controls.md). Device revocation
+(`DeviceRegistration.revoked`) predates it; the operator only invokes it.
 
-Most of the value is unlocked by those small enforcement points. They are API
-work whichever way the back office is built, so build them first: a control
-plane whose controls do nothing is a viewer with buttons.
-
-On revocation, be accurate about severity. `SESSION_TTL` is 3600, so a
-revoked token dies within the hour anyway. The real gap is that
-`refresh_token` mints a fresh hour on every call, so a session in active use
-renews indefinitely while only one instance knows it was revoked. The user's
-own logout (`account.py`) is weaker than it looks. That is **#451**, and
-`sessions_valid_after` with `auth_time` is the mechanism that fixes it: logout
-becomes "this session's `jti`, everywhere" once the check reads the account
-rather than the instance. Whether #451 ships with step 1 or after it is #451's
-call, and the mechanism doesn't change either way.
-
-Device tokens are the longer-lived credential, by design.
-`validate_device_token` skips expiry, and `create_device_token` sets none, so
-a paired daemon's token is good until its registration is revoked. That is
-why suspension is checked on the device branch as well as the session branch:
-an account whose daemon still writes flow windows has not been suspended. It
-is also why signing out everywhere ends sessions and leaves devices to their
-own row. Each act means one thing:
-
-- sign-out ends sessions;
-- revocation ends one device;
-- suspension ends both.
-
-## Suspension, end to end
-
-Suspension is refused everywhere the account can act, and the refusal is
-the same everywhere: **403 `ACCOUNT_SUSPENDED`** in the error envelope. It is
-not a 401: a 401 would sign the person out with the words for an expired
-session, which isn't what happened. The `detail` says what to do:
-"This account is suspended. Write to {contact} from this account's address."
-A queued erasure (§ *Jobs*) says instead: "This account is being deleted on
-{date}. To keep it, write to {contact} from this account's address."
-
-`{contact}` is a new `contact_email` in `shared/brand.json`, stamped by
-`scripts/gen_brand.py` into the API, the SPA and the companion, the way the
-product name is. It holds the address PRIVACY.md already gives for deletion.
-The operator's own reason for a suspension is never shown to the person; it
-lives in `operator_audit`.
-
-### Where it is refused
-
-- **The middleware, on every request that carries a valid session**, public
-  path or not. The session branch runs before the `is_public` check today
-  (`server.py`), and SSO linking depends on that. A suspended account linking
-  an identity should be refused, and it is.
-- **The device branch**, once the token's `sub` is known: after the
-  revocation check, before `device_may_reach`.
-- **The three doors that mint a session**: passkey login
-  (`webauthn.py`'s login verify), registration verify on an existing account,
-  and `POST /api/auth/sso/complete`. They are public paths, so the middleware
-  never sees them. Each refuses **after** the ceremony or the code exchange
-  succeeds, so only someone who can sign in learns that the account is
-  suspended.
-- **`POST /api/device/pair/exchange`**, which is public. A code made before
-  the suspension would otherwise mint a device token that starts working the
-  moment the suspension lifts.
-- **`/api/reports`.** A suspended account's report links answer the same 404
-  as every other way a token fails, per that route's one-404 rule.
-  Suspension is for abuse, and a public link serving the account's data is
-  the account acting.
-- **Refresh** is behind the middleware, so it is covered.
-
-### What it doesn't touch
-
-- **An organisation's record of the person.** The organisation reads the
-  stamped rows it already reads, and an admin can still enter time on the
-  person's assignment. That is the organisation acting, not the account.
-- **An organisation whose owner is suspended still has an owner.** The
-  operator does not act for it (§ *The operator's organisation acts*). The
-  landing page lists *organisations whose every owner is suspended*, so the
-  case is seen. The way out is to lift the suspension, or an erasure, after
-  which the no-owner rule applies.
-- **Background work.** There is none per account to stop. Nothing schedules
-  anything, webhook dispatch starts only from timer start and stop (which are
-  behind the middleware), and the integrations sync only inside requests.
-
-### An account that no longer exists
-
-The cached lookup can find no `User`: after an erasure, `erase_account`
-deletes it.
-
-- On the session branch that is **401 `INVALID_TOKEN`**. The session has
-  ended, and the SPA's handling of a 401 is right for it.
-- On the device branch it is **403 `DEVICE_REVOKED`**. Erasure deletes the
-  registrations too, so that branch already answers it today.
-
-### What each client does with it
-
-The first draft said a queued write waits for the suspension to be lifted.
-**No client does that today**, and the SPA does worse:
-
-- **SPA.** A 403 on refresh or on `/me` clears the session
-  (`authStore.ts`), so a suspended person is signed out with no reason, signs
-  in again, and loops. And the IndexedDB write queue (`mutationQueue.ts`) is
-  tied to no user, so it replays under whoever signs in next in that browser.
-  Step 1 changes three things:
-  - `ACCOUNT_SUSPENDED` from any call, refresh and `/me` included, shows a
-    full-page notice with the `detail` and stops the sync engine's polling
-    until the page reloads;
-  - the session then ends as it would on sign-out;
-  - every queued write is stamped with the account it was made under and
-    replays only under that account. A write queued before the suspension
-    waits, under its own account, for the next sign-in that is allowed.
-
-  The queue fix stands on its own, suspension or not.
-- **Daemon.** It handles no 403 code (`internal/client/client.go`). Failed
-  flow windows go to a 32-entry `RetryBuffer` that drops the oldest, and it
-  keeps polling with no backoff. On `ACCOUNT_SUSPENDED` or `DEVICE_REVOKED` it
-  stops flushing and backs off to one probe every 10 minutes, logs the
-  refusal once, and `beatsd status` and `beatsd doctor` say which it was. A
-  suspension longer than about half an hour loses flow windows past the
-  buffer. That is accepted: they are derived signals, not the person's
-  record.
-- **Companion.** Its queue keeps any 403 (rule 7,
-  [docs/companion-offline.md](../docs/companion-offline.md)), which is right.
-  But `isChatForbidden` and `needsNewerServer` read **any** 403 as an old
-  server and say "Needs a newer server". Both start reading the code, not
-  the status, and `ACCOUNT_SUSPENDED` shows the `detail` as a banner.
-- **Wall clock.** It polls `/api/device/status` every 10 seconds and handles
-  no 401 or 403. On 403 it backs off to one poll a minute and shows its idle
-  face.
-
-Do not add `ACCOUNT_SUSPENDED` to the codes a queue drops. Suspension can be
-undone, and dropping would make it delete the person's own writes.
-
-## Limits
-
-One `account_limits` document per account, present only when something is
-overridden. It is **keyed on `user_id`, deliberately**, so erasure's sweep
-takes it with the rest of the account (§ *Jobs*).
-
-```
-account_limits
-  user_id                    the account
-  coach_monthly_budget_usd   float | null   null = the global setting
-  writes_per_minute          {beats, signals}: int | null   null = the global default
-  imports_per_hour           int | null
-  webhooks_disabled          bool
-  set_at, set_by             the operator's sub
-```
-
-**Defaults.** The write routes get their first limit with this work, so the
-global defaults are new limits on every account. Starting values:
-
-| Routes | Default | Why |
-|---|---|---|
-| `POST`, `PUT`, `DELETE` under `/api/beats` | 120 a minute | A person editing by hand; the SPA's queue replaying a backlog |
-| `POST` under `/api/signals` (flow windows, summaries, drift, suggest-timer) | 60 a minute | The daemon flushes once a minute, and replays at most its 32-window buffer after an outage |
-| `POST /api/export/import` | 10 an hour | A restore is a few calls, not a stream |
-
-They are settings (`Settings`, from env), not constants. **Before a default
-is turned on, check it against the per-account rate those routes actually
-see** in the request logs. Cloud Monitoring has the counts per route, and a
-default that refuses a real client is a 429 storm in the SPA's sync engine,
-which retries 429. Set it to at least ten times the observed busiest account.
-
-**How the ceiling is read.** slowapi's limit can be a callable, and one that
-takes a `key` receives `key_func(request)`. So:
-
-- `key_func` returns `request.state.user_id`;
-- the limit callable reads the ceiling from the cached account lookup.
-
-The callable is synchronous, so the ceiling must already be in the process,
-and it is: the middleware filled the cache on the way in. slowapi also wants
-the Starlette `Request` in a parameter named `request`. `beats.py` names its
-body parameter `request` (`CreateBeatRequest`, `UpdateBeatRequest`), so those
-are renamed first. `export.py`'s import takes no `Request` yet.
-
-**The coach.** `UsageTracker.enforce_budget` (`coach/usage.py`), called from
-both gateway paths, reads the account's ceiling before the global. So does
-`GET /api/coach/usage`, whose `budget_usd` draws the SPA's usage bar. The
-gateway has no `request.state`, so it asks the same cache by user id. The
-check sums the month and then calls, so concurrent calls can overshoot by one
-call each. That is accepted, as it is today.
+One piece of that analysis stays open here: the user's own logout
+(`account.py`) is weaker than it looks, because `refresh_token` mints a
+fresh hour on every call while only one instance knows a token was revoked.
+That is **#451**, and `sessions_valid_after` with `auth_time` is the
+mechanism that fixes it: logout becomes "this session's `jti`, everywhere"
+once the check reads the account rather than the instance. Whether that
+ships is #451's call.
 
 ## Architecture
 
@@ -462,7 +298,8 @@ membership check. Its rule is new, and it amends decisions 10, 29 and 31
 ([docs/organisations.md](../docs/organisations.md)) when step 3 ships:
 **the operator acts only for an organisation with no owner, and only when
 asked.** "Has an owner" is a count of active members with the owner role
-(`count_owners`). A suspended owner counts (§ *Suspension, end to end*).
+(`count_owners`). A suspended owner counts
+([docs/account-controls.md](../docs/account-controls.md)).
 
 - **The request.** It comes by email to the PRIVACY.md address, from the
   address on the requester's account, the way PRIVACY.md takes an erasure
@@ -654,7 +491,8 @@ operator_jobs
   - **An erasure's window is 7 days, and queueing one suspends the account**
     with the erasure's own reason. Nothing new is written in that week, and if
     the mail didn't come from the account holder, they find out the moment
-    they next open the app, from the `detail` above.
+    they next open the app, from the erasure wording the suspension already
+    carries ([docs/account-controls.md](../docs/account-controls.md)).
   - `job.cancel` inside the window lifts that suspension, and only that kind:
     a suspension for abuse is not lifted by cancelling an erasure.
   - PRIVACY.md gains the window (§ *Work*).
@@ -821,76 +659,17 @@ interpreter, without the project's dependencies.
 
 ### The enforcement points, and their cost
 
-Suspension and `sessions_valid_after` are checked in the **public** API's
-middleware on every authenticated request, suspension on the device branch as
-well as the session branch. Done naively, that is a Mongo round-trip per
-request.
-
-The answer is already in the codebase. `auth/device_access.py` caches a
-device's revocation verdict for 30 seconds, process-local, with its reasoning
-written out:
-
-- the token's signature is still checked every time (a device token has no
-  expiry to check);
-- only the flag lookup is skipped;
-- revoking through the API drops the entry on the instance that served the
-  revocation, so it takes effect there at once;
-- the TTL bounds staleness everywhere else.
-
-An account's auth state takes the same shape, in `auth/account_access.py`,
-and its ceilings ride with it: **one cached lookup**. It returns `suspended`,
-`sessions_valid_after` and `last_seen_on` off `User`, or "no such account",
-plus the ceilings off its `account_limits` document. That is one cache and
-two reads on a miss, for every feature that needs the account on the request
-path. That includes the ceiling on the flow window a daemon posts every
-minute, which would otherwise read Mongo for it.
-
-- When the cached `last_seen_on` isn't today (UTC), the middleware writes
-  today with a conditional update (`last_seen_on` not already today). An
-  account costs one write a day, not one a request, however many instances
-  see it.
-- The device branch does the same for the registration's `last_seen` on its
-  own cache miss.
-
-**It isn't invalidated by the operator's command, and can't be.** The cache
-is per process in the public API, and the command runs in another service. An
-operator's suspension or sign-out therefore takes effect within the TTL (30
-seconds, on every instance). That is the bound `device_access` already
-accepts for a change made elsewhere, and it is short enough for both acts.
-Revoking a device from the control plane is the same: the operator app
-doesn't import `device_access` (it loads the settings), so the public API's
-instances see the revocation when their entry expires.
-
-That window is why sign-out compares against the **sign-in**, not the token:
-
-- **Why not `iat`.** `refresh_token` mints a new token with a new `iat`.
-  Compared against `iat`, a session refreshed on an instance whose cache
-  hadn't yet seen the sign-out would come out newer than
-  `sessions_valid_after` and outlive it for good.
-- **`auth_time` instead.** A session token carries `auth_time`, when the
-  passkey or SSO sign-in happened, and every refresh copies it. So a
-  refreshed token is exactly as old as the sign-in behind it, and is refused
-  the moment the cache catches up.
-- **Tokens without the claim are refused.** A token minted before the claim
-  exists has none, and a refresh would have nothing to copy. Let through, a
-  tab open on the day this ships, which the SPA's `scheduleRefresh` renews
-  every 55 minutes, would outlive every sign-out for as long as it stayed
-  open.
-- **So `validate_session_token` refuses a session token without
-  `auth_time`**, which keeps it from the middleware and from `refresh_token`
-  alike. Whoever is signed in when it deploys signs in once more. Reading
-  such a token's `iat` instead would spare them that, for a branch that is
-  dead an hour later.
-
-Every place that mints a session token gains the claim:
-
-- `webauthn.py`: registration verify and login;
-- `routers/sso.py`: complete;
-- `session.py`: `refresh_token` copies it, which changes
-  `create_session_token`'s signature;
-- `api/scripts/e2e_session.py`;
-- the test helpers in `conftest.py`, `test_api.py`, `test_organisations.py`
-  and `beats/test_auth.py`.
+Shipped with step 1: the public API checks suspension and
+`sessions_valid_after` off one cached account lookup
+(`auth/account_access.py`, the shape and TTL of `device_access.py`), which
+also stamps the two last-seen fields and carries the account's ceilings.
+[docs/account-controls.md](../docs/account-controls.md) holds the detail,
+including why the sign-out cut compares against `auth_time` and never `iat`.
+What matters to the steps left here: the cache is process-local in the
+public API, so **an operator's command cannot invalidate it and doesn't
+need to** — a suspension or sign-out written by the operator deployment
+takes effect within the TTL (30 seconds) on every instance, the same bound
+`device_access` already accepts for a change made elsewhere.
 
 ### What is deliberately not here
 
@@ -924,24 +703,17 @@ authentication design.
 | The second composition root: its own `lifespan` (its own client into `app.state`, and nothing else), its own middleware, the operator router, the static UI | `operator_server.py` | `server.py`, minus everything it must not do |
 | `connect()` stops building indexes and stops importing the settings singleton; every caller passes the DSN and name; `server.py`'s lifespan calls `ensure_indexes` | `beats/infrastructure/database.py` | the test harness, which already calls `ensure_indexes` directly |
 | `OperatorSettings`: DSN, database name, the IAP audience or the local stand-in (exactly one), the allowlist by `sub`, the app's origin, and no `JWT_SECRET` | `beats/operator/settings.py` | `beats/settings.py`, without the API's secrets |
-| `User.suspended_at/by/kind/reason`, `User.sessions_valid_after`, `User.last_seen_on`, `AccountLimits`, `OperatorAuditEvent`, `OperatorJob`, `OrgAuditEvent.actor_kind` | `beats/domain/models.py` | `OrgAuditEvent`, `DeviceRegistration` |
-| `auth_time` on a session token, copied by `refresh_token`; a session token without it refused by `validate_session_token` | `beats/auth/session.py` | the claims `create_session_token` already sets |
-| Account rules: suspend, unsuspend, sign out everywhere, limits | `beats/domain/accounts.py` | `ContractService`: rules with the thing they govern |
-| Suspension refused at passkey login, registration verify, SSO complete, the pairing exchange and report links | `beats/auth/webauthn.py`, `routers/sso.py`, `routers/device.py`, `routers/reports.py` | the checks each already makes |
+| `OperatorAuditEvent`, `OperatorJob`, `OrgAuditEvent.actor_kind` | `beats/domain/models.py` | `OrgAuditEvent`, and step 1's fields on `User` and `AccountLimits`, already there |
+| The `account_limits` writes the operator's commands make (set, clear) | `beats/domain/accounts.py` | the shipped suspend / unsuspend / sign-out beside them |
 | The operator's organisation acts, refused while an owner exists; a closing notice that may always move later | `beats/domain/organisations.py`, beside `set_role`, `begin_closing`, `cancel_closing`, `delete_organisation` | the member's method beside each, sharing all but `_member` |
 | One `org_audit` writer taking the actor kind, used by `_audit`, erasure and the purge | `beats/infrastructure/organisations.py` | `_audit` |
 | `purge_expired_records(organisation_id=…)`, and the operator audit's four years | `beats/infrastructure/retention.py` | its existing pass |
-| `webhooks_disabled`: dispatch skips, create refuses | `beats/api/routers/webhooks.py`, the dispatcher | the active filter `list_by_event` already applies |
 | `OperatorReads` (aggregates only) and `OperatorStore` (the narrow writes) | `beats/domain/ports.py` | `OrganisationRecords`, `PeriodLocks` |
 | The command protocol, the runner (the one coordinator), the commands, the IAP verifier, the job entry point | `beats/operator/` (`commands.py`, `runner.py`, `iap.py`, `jobs.py`) | `beats/coach/`: a package for a surface, beside the domain it uses |
 | `MongoOperatorReads`, `MongoOperatorStore`, `MongoOperatorJobs` | `beats/infrastructure/operator_reads.py`, `operator_store.py`, `operator_jobs.py` | `MongoOrganisationRecords`: the named cross-tenant class, never a widened `_q` |
 | The router | `beats/api/routers/operator.py` | `routers/employment.py`; same error envelope |
 | The operator's providers: the client on `app.state`, the organisation service with a refusing `BillingPresence`, `OperatorReads`, `OperatorStore`, the runner | `beats/operator/dependencies.py` | `beats/api/dependencies.py`, which the operator root must not import |
 | The IAP assertion → `request.state.operator`; the `Origin` check on every `POST` | `operator_server.py` middleware | the device branch, minus the user id |
-| Suspension (both branches), `sessions_valid_after` against `auth_time`, `last_seen_on` and a device's `last_seen`, the account's ceilings, cached | `server.py` middleware + `auth/account_access.py` | `auth/device_access.py`, TTL and all |
-| The per-account ceiling, read before the global by the budget check and by `GET /api/coach/usage` | `beats/coach/usage.py`, `beats/api/routers/coach.py` | its own existing shape |
-| Per-account rate limits on beats, signals and import; `beats.py`'s body parameters renamed off `request` | `routers/beats.py`, `signals.py`, `export.py` | the `@limiter.limit` routes in `auth.py` |
-| `contact_email` | `shared/brand.json` → `scripts/gen_brand.py` | the product name |
 | `test_operator.py` (below) | `api/src/` | `TestOrganisationWall` |
 | `scripts/dump_openapi_operator.py` → `backoffice/`'s types. It imports `operator_server` with `BACKOFFICE_DEV_OPERATOR` set and an unused DSN, and never runs the lifespan | `api/scripts/` | `dump_openapi.py`, which imports `server:app` under `.env.test` |
 
@@ -1128,8 +900,8 @@ The reason to open it. Each row is a count, linking to the thing.
   someone notices, and today the only trace is an `account.erased` line in
   that organisation's audit log.
 - **Organisations whose every owner is suspended.** They have an owner, so the
-  operator doesn't act for them (§ *Suspension, end to end*), but somebody
-  should know.
+  operator doesn't act for them (the decision below; a suspended owner is
+  still an owner), but somebody should know.
 - **Queued jobs inside their window**, erasures first, and **failed jobs**.
   Erasure requests themselves are not counted here. PRIVACY.md has a person
   ask by email, so a request lives in the operator's inbox until it is queued
@@ -1332,31 +1104,12 @@ of this file moves to `docs/` (roadmaps/README.md § *When something ships*).
 
 ### Step 1: enforcement in the public API
 
-- `User`: `suspended_at`, `suspended_by`, `suspended_kind` (`abuse`,
-  `erasure`, `other`), `suspended_reason`, `sessions_valid_after`,
-  `last_seen_on`. And `AccountLimits`.
-- `auth/account_access.py`, the cached lookup. Then the middleware checks on
-  both branches, `last_seen_on`, and a device's `last_seen` as a datetime
-  (fix `update_last_seen`'s string).
-- `auth_time` at every place listed under § *The enforcement points*; a token
-  without it refused.
-- Suspension refused at the three sign-in doors, the pairing exchange and
-  report links. An account that no longer exists answers 401 on the session
-  branch.
-- `contact_email` in `shared/brand.json`, regenerated.
-- The account service in `beats/domain/accounts.py`, with a script driving it
-  until step 3 (`api/scripts/suspend_account.py`, in the shape of
-  `erase_account.py`). That makes step 1 useful alone.
-- Limits: the global defaults as settings, checked against real traffic
-  before they are on; slowapi keyed on the account; `beats.py`'s parameters
-  renamed; the coach's ceiling and `GET /api/coach/usage`; `webhooks_disabled`
-  in dispatch and create.
-- **SPA**: the suspended notice; no silent sign-out on `ACCOUNT_SUSPENDED`;
-  the write queue stamped per account. **Daemon**: the back-off, and the
-  status in `status` and `doctor`. **Companion**: read codes, not statuses.
-  **Wall clock**: back off on 403. Each is its own commit, on its own side.
-- PRIVACY.md and DATA.md: suspension, and the day last seen (account and
-  device).
+**Shipped 2026-11-04.** What it built — suspension end to end, sign-out
+everywhere over `auth_time`, the two last-seen stamps, `account_limits` and
+the write ceilings, `contact_email`, and each client's handling of a refusal
+— is [docs/account-controls.md](../docs/account-controls.md). The write-limit
+defaults ship off; turning one on starts with the traffic check that file
+describes.
 
 ### Step 2: the operator deployment, read-only
 
@@ -1414,14 +1167,11 @@ them is wrong, it is cheaper to say so now than after step 1.
 | Decision | Why |
 |---|---|
 | One service behind Cloud Run's IAP; no load balancer | About $18 a month standing buys one person nothing; Cloud Run's IAP works for a project with no organisation |
-| Suspension refused at sign-in, pairing and report links, after the ceremony | Suspension stops the account acting, and a public link is it acting; only someone who can sign in learns of it |
 | A suspended owner is still an owner | Otherwise suspending an owner hands the operator their organisation |
 | The owner role goes to the requester holding the organisation's highest role | Picking among members is taking a side |
 | A closing notice may always move later | The 30-day minimum protects members, and a later day only gives them more |
-| Per-account webhooks off, not `Webhook.active` | A per-webhook flag is undone by delete and re-create |
 | Erasure: 7-day window, the account suspended meanwhile | Time to catch a mail that wasn't the holder's; well inside GDPR's month |
 | `operator_audit` holds ids, not addresses, for four years | It outlives the account it names; the platform's default retention |
-| Write-limit defaults 120, 60 a minute and 10 an hour | Ten times what the clients' own cadence produces; checked against traffic before they are on |
 | The job is a third database user | Each credential rotates alone; the operator's stays narrow |
 | The retention purge stays unscheduled | Decision 30, PRIVACY.md and the DPA all promise an operator runs it |
 
