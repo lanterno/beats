@@ -202,6 +202,58 @@ class TestSessionManagerRefresh:
         assert sm.refresh_token("garbage") is None
 
 
+class TestSessionManagerAuthTime:
+    """auth_time is when the sign-in behind the session happened, and a
+    refresh copies it unchanged. That is the claim sessions_valid_after
+    compares against — iat cannot serve, since every refresh renews it —
+    so pin the copy, and pin that a token without the claim (minted
+    before it existed) is refused rather than read by its iat."""
+
+    def test_fresh_token_carries_auth_time_of_now(self):
+        sm = _sm()
+        before = int(time.time())
+        token = sm.create_session_token("user-1")
+        payload = sm.validate_session_token(token)
+        assert payload is not None
+        assert before <= payload["auth_time"] <= int(time.time())
+
+    def test_refresh_copies_auth_time_unchanged(self):
+        """A session refreshed an hour after sign-in is still exactly as
+        old as the sign-in. With iat-copying instead, a sign-out-everywhere
+        would never catch an actively refreshed session."""
+        sm = _sm()
+        signed_in_at = int(time.time()) - 7200
+        old = sm.create_session_token("user-1", auth_time=signed_in_at)
+        new = sm.refresh_token(old)
+        assert new is not None
+        payload = sm.validate_session_token(new)
+        assert payload is not None
+        assert payload["auth_time"] == signed_in_at
+
+    def test_token_without_auth_time_is_refused(self):
+        """A token minted before the claim existed. Refused outright: a
+        refresh would have nothing to copy, and falling back to iat would
+        let a tab that renews every 55 minutes outlive every sign-out."""
+        import uuid
+        from datetime import UTC, datetime, timedelta
+
+        sm = _sm()
+        now = datetime.now(UTC)
+        legacy = jwt.encode(
+            {
+                "sub": "user-1",
+                "iat": now,
+                "exp": now + timedelta(hours=1),
+                "type": "session",
+                "jti": str(uuid.uuid4()),
+            },
+            JWT_SECRET,
+            algorithm="HS256",
+        )
+        assert sm.validate_session_token(legacy) is None
+        assert sm.refresh_token(legacy) is None
+
+
 class TestSessionManagerChallenges:
     """WebAuthn challenges are stored in-memory with a 5-minute
     TTL. Pin: store-then-validate-then-consumed (one-time use),
