@@ -17,8 +17,9 @@ import os
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, ClassVar
 
 import httpx
 import jwt
@@ -459,3 +460,285 @@ class TestIAPVerifier:
         verifier = IAPVerifier(AUDIENCE, transport=httpx.MockTransport(down))
         with pytest.raises(IAPUnavailable):
             await verifier.verify(_assertion(key))
+
+
+class TestOperatorCommands:
+    """POST /commands/{name}: the one path a mutation takes. The runner's
+    gates (confirmation, role, unknown command), the delegation to the
+    services that own each rule, and the audit that cannot be forgotten."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        mongo.operator_audit.delete_many({})
+        mongo.account_limits.delete_many({})
+
+    def _user(self, mongo, email="cmd@example.test") -> str:
+        user_id = str(ObjectId())
+        mongo.users.insert_one(
+            {"_id": ObjectId(user_id), "email": email, "created_at": datetime.now(UTC)}
+        )
+        return user_id
+
+    def _run(self, operator_client, name, args, confirmation=None):
+        return operator_client.post(
+            f"/api/operator/commands/{name}",
+            json={"args": args, "confirmation": confirmation},
+            headers=self.OWN,
+        )
+
+    def test_suspend_needs_the_accounts_email_typed_back(self, operator_client, mongo):
+        user_id = self._user(mongo)
+        wrong = self._run(
+            operator_client,
+            "account.suspend",
+            {"user_id": user_id, "reason": "scraping"},
+            confirmation="someone-else@example.test",
+        )
+        assert wrong.status_code == 409
+        assert wrong.json()["code"] == "CONFIRMATION_MISMATCH"
+        assert mongo.users.find_one({"_id": ObjectId(user_id)}).get("suspended_at") is None
+
+        right = self._run(
+            operator_client,
+            "account.suspend",
+            {"user_id": user_id, "reason": "scraping"},
+            confirmation="cmd@example.test",
+        )
+        assert right.status_code == 200, right.text
+        assert mongo.users.find_one({"_id": ObjectId(user_id)})["suspended_at"] is not None
+
+        # The audit cannot be forgotten: the runner is the only path, and the
+        # entry carries before and after, the subject as subject_id (never
+        # user_id, which erasure's sweep would take), and no address.
+        entry = right.json()
+        assert entry["command"] == "account.suspend"
+        assert entry["subject_id"] == user_id
+        assert entry["before"]["suspended"] is False
+        assert entry["after"]["suspended"] is True
+        stored = mongo.operator_audit.find_one({"subject_id": user_id})
+        assert stored is not None
+        assert "user_id" not in stored
+        assert "cmd@example.test" not in str(stored)
+
+    def test_unsuspend_set_limits_and_revoke_delegate(
+        self, operator_client, mongo, auth_info, client
+    ):
+        user_id = self._user(mongo, "acts@example.test")
+        self._run(
+            operator_client,
+            "account.suspend",
+            {"user_id": user_id, "reason": "r"},
+            confirmation="acts@example.test",
+        )
+        assert (
+            self._run(operator_client, "account.unsuspend", {"user_id": user_id}).status_code == 200
+        )
+        assert mongo.users.find_one({"_id": ObjectId(user_id)})["suspended_at"] is None
+
+        limits = self._run(
+            operator_client,
+            "account.set_limits",
+            {"user_id": user_id, "writes_per_minute_beats": 5, "webhooks_disabled": True},
+        )
+        assert limits.status_code == 200, limits.text
+        doc = mongo.account_limits.find_one({"user_id": user_id})
+        assert doc["writes_per_minute_beats"] == 5
+        assert doc["webhooks_disabled"] is True
+        assert doc["set_by"] == OPERATOR_SUB
+        assert (
+            self._run(operator_client, "account.clear_limits", {"user_id": user_id}).status_code
+            == 200
+        )
+        assert mongo.account_limits.find_one({"user_id": user_id}) is None
+
+        # device.revoke: the narrow answer to one broken daemon.
+        code = client.post("/api/device/pair/code", headers=auth_info["headers"]).json()["code"]
+        device_id = client.post("/api/device/pair/exchange", json={"code": code}).json()[
+            "device_id"
+        ]
+        revoked = self._run(
+            operator_client,
+            "device.revoke",
+            {"user_id": auth_info["user_id"], "device_id": device_id},
+        )
+        assert revoked.status_code == 200, revoked.text
+        assert mongo.device_registrations.find_one({"device_id": device_id})["revoked"] is True
+
+    def test_sign_out_everywhere_sets_the_cut(self, operator_client, mongo):
+        user_id = self._user(mongo, "cut@example.test")
+        resp = self._run(operator_client, "account.sign_out_everywhere", {"user_id": user_id})
+        assert resp.status_code == 200
+        assert mongo.users.find_one({"_id": ObjectId(user_id)})["sessions_valid_after"]
+
+    def test_an_unknown_command_is_404_and_bad_args_422(self, operator_client):
+        assert self._run(operator_client, "account.explode", {"user_id": "x"}).status_code == 404
+        bad = self._run(operator_client, "account.suspend", {"user_id": ""})
+        assert bad.status_code == 422
+        assert bad.json()["code"] == "INVALID_COMMAND_ARGS"
+
+    async def test_a_viewer_runs_no_command(self):
+        """The role gate is the runner's, so it holds for every command at
+        once — pinned at the runner, since the dev stand-in fixes one
+        identity per process."""
+        from typing import cast
+
+        from beats.operator.commands import CommandContext
+        from beats.operator.runner import ViewerCannotAct, run_command
+        from beats.operator.settings import OperatorIdentity
+
+        # None stands in for everything after the role gate, which refuses
+        # before any of it is touched.
+        absent = cast("Any", None)
+        ctx = CommandContext(
+            operator=OperatorIdentity(sub=VIEWER_SUB, email="v@example.test", role="viewer"),
+            db=absent,
+            accounts=absent,
+            organisations=absent,
+            devices=absent,
+        )
+        with pytest.raises(ViewerCannotAct):
+            await run_command(ctx, "account.unsuspend", {"user_id": "u"}, None)
+
+
+class TestOperatorOrganisationActs:
+    """The operator acts only for an organisation with no owner, and only
+    when asked — and each act lands in the organisation's own audit log
+    under actor_kind operator, with no operator id in it."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    def _org(self, mongo, *, name="Orphaned Org", owner=False, closes_on=None) -> dict:
+        org_id = str(ObjectId())
+        mongo.organisations.insert_one(
+            {
+                "_id": ObjectId(org_id),
+                "name": name,
+                "created_by": "nobody",
+                "created_at": datetime.now(UTC).isoformat(),
+                "timezone": "UTC",
+                "closes_on": closes_on,
+            }
+        )
+        member_id = str(ObjectId())
+        mongo.users.insert_one({"_id": ObjectId(member_id), "email": f"m-{member_id}@x.test"})
+        mongo.org_members.insert_one(
+            {
+                "organisation_id": org_id,
+                "user_id": member_id,
+                "role": "owner" if owner else "admin",
+                "name": "M",
+                "email": f"m-{member_id}@x.test",
+                "joined_at": datetime.now(UTC).isoformat(),
+                "left_at": None,
+            }
+        )
+        return {"org_id": org_id, "member_id": member_id}
+
+    def _run(self, operator_client, name, args, confirmation=None):
+        return operator_client.post(
+            f"/api/operator/commands/{name}",
+            json={"args": args, "confirmation": confirmation},
+            headers=self.OWN,
+        )
+
+    def test_nothing_while_an_owner_exists(self, operator_client, mongo):
+        planted = self._org(mongo, name="Owned Org", owner=True)
+        resp = self._run(
+            operator_client,
+            "organisation.grant_owner",
+            {"organisation_id": planted["org_id"], "user_id": planted["member_id"]},
+            confirmation="Owned Org",
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["code"] == "ORGANISATION_HAS_OWNER"
+
+    def test_grant_owner_to_the_requester_with_the_organisations_name_typed(
+        self, operator_client, mongo
+    ):
+        planted = self._org(mongo)
+        args = {"organisation_id": planted["org_id"], "user_id": planted["member_id"]}
+
+        unconfirmed = self._run(operator_client, "organisation.grant_owner", args)
+        assert unconfirmed.status_code == 409
+        assert unconfirmed.json()["code"] == "CONFIRMATION_MISMATCH"
+
+        granted = self._run(
+            operator_client, "organisation.grant_owner", args, confirmation="Orphaned Org"
+        )
+        assert granted.status_code == 200, granted.text
+        member = mongo.org_members.find_one({"user_id": planted["member_id"]})
+        assert member["role"] == "owner"
+
+        # In the organisation's own log, as the operator and as nobody:
+        # actor_kind says whose act it was, and no operator id is in it.
+        row = mongo.org_audit.find_one(
+            {"organisation_id": planted["org_id"], "event": "member.role_changed"}
+        )
+        assert row["actor_kind"] == "operator"
+        assert row.get("actor_user_id") is None
+        assert OPERATOR_SUB not in str(row)
+
+    def test_the_requester_must_hold_the_highest_active_role(self, operator_client, mongo):
+        planted = self._org(mongo)  # the candidate is an admin
+        lower_id = str(ObjectId())
+        mongo.org_members.insert_one(
+            {
+                "organisation_id": planted["org_id"],
+                "user_id": lower_id,
+                "role": "member",
+                "name": "L",
+                "email": "l@x.test",
+                "joined_at": datetime.now(UTC).isoformat(),
+                "left_at": None,
+            }
+        )
+        refused = self._run(
+            operator_client,
+            "organisation.grant_owner",
+            {"organisation_id": planted["org_id"], "user_id": lower_id},
+            confirmation="Orphaned Org",
+        )
+        assert refused.status_code == 409
+        assert refused.json()["code"] == "REQUESTER_NOT_HIGHEST"
+
+    def test_a_closing_notice_may_always_move_later(self, operator_client, mongo):
+        """Amends decision 29: a notice with five days left can be extended
+        by a week, while a fresh short notice is still refused."""
+        soon = (datetime.now(UTC).date() + timedelta(days=5)).isoformat()
+        planted = self._org(mongo, name="Closing Org", closes_on=soon)
+
+        later = (datetime.now(UTC).date() + timedelta(days=12)).isoformat()
+        moved = self._run(
+            operator_client,
+            "organisation.begin_closing",
+            {"organisation_id": planted["org_id"], "closes_on": later},
+            confirmation="Closing Org",
+        )
+        assert moved.status_code == 200, moved.text
+        assert (
+            mongo.organisations.find_one({"_id": ObjectId(planted["org_id"])})["closes_on"] == later
+        )
+
+        earlier = (datetime.now(UTC).date() + timedelta(days=3)).isoformat()
+        refused = self._run(
+            operator_client,
+            "organisation.begin_closing",
+            {"organisation_id": planted["org_id"], "closes_on": earlier},
+            confirmation="Closing Org",
+        )
+        assert refused.status_code == 409
+        assert refused.json()["code"] == "CLOSE_NOTICE_TOO_SHORT"
+
+        cancelled = self._run(
+            operator_client,
+            "organisation.cancel_closing",
+            {"organisation_id": planted["org_id"]},
+        )
+        assert cancelled.status_code == 200
+        assert (
+            mongo.organisations.find_one({"_id": ObjectId(planted["org_id"])}).get("closes_on")
+            is None
+        )
