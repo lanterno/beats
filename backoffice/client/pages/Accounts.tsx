@@ -245,6 +245,18 @@ function AccountActions({ detail }: { detail: AccountDetail }) {
 				args={{ user_id: detail.id }}
 				invalidates={["account"]}
 			/>
+			<CommandForm
+				name="account.erase"
+				label="Queue erasure (7-day window)"
+				args={{ user_id: detail.id }}
+				confirmHint="type the account's email"
+				invalidates={["account", "operator-jobs", "attention"]}
+			/>
+			<p className="px-3 pb-3 text-xs text-neutral-500">
+				Queueing an erasure suspends the account with the erasure's own wording, which names the day
+				the window ends; cancel it from Compliance inside the week. The deletion keeps each
+				organisation's working-time record under a tombstone, as PRIVACY.md promises.
+			</p>
 		</Section>
 	);
 }

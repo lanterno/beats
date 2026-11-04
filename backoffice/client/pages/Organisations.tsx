@@ -156,6 +156,20 @@ function OrganisationActs({ summary }: { summary: OrganisationSummary }) {
 				args={{ organisation_id: summary.id }}
 				invalidates={["organisation", "organisations"]}
 			/>
+			<CommandForm
+				name="organisation.delete"
+				label="Queue deletion (1-day window)"
+				args={{ organisation_id: summary.id }}
+				confirmHint="type the organisation's name"
+				invalidates={["organisation", "organisations", "operator-jobs"]}
+			/>
+			<CommandForm
+				name="retention.purge"
+				label="Queue retention purge (1-day window)"
+				args={{ organisation_id: summary.id }}
+				confirmHint="type the organisation's name"
+				invalidates={["operator-jobs"]}
+			/>
 		</Section>
 	);
 }
