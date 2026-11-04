@@ -21,7 +21,16 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 
 ### Account and auth
 
-- User document: id, email, display name, created-at
+- User document: id, email, display name, created-at; the day (UTC, never a
+  time) a request last carried the account's credential (`last_seen_on`,
+  written at most once a day); and, when the operator has acted on the
+  account, its suspension (`suspended_at`, `suspended_kind`, who suspended it
+  and the operator's reason — shown to nobody) and the sign-out-everywhere
+  cut (`sessions_valid_after`)
+- **Account limits** (`account_limits`): one document per account, only when
+  the operator has overridden something — a coach budget, write ceilings, an
+  import ceiling, webhooks off — with when and by whom. Keyed on the account
+  so deletion takes it with the rest
 - WebAuthn credentials: public key, credential id, sign counter, device label
 - **Single sign-on identities** (`identities[]` on the user): per linked
   OpenID Connect provider, its configured id, the `issuer` and `subject`
@@ -182,6 +191,9 @@ Coach prompts are sent to the [Anthropic Claude API](https://www.anthropic.com/)
 
 ### Devices
 
+- **Paired devices** (`device_registrations`): device id, the name given at
+  pairing, created-at, whether it is revoked, and when it last authenticated
+  (`last_seen`, written at most once a day)
 - **Wall clock pairing**: device id, pairing token, last heartbeat, favorites, weekly bars
 
 ### Short-lived records

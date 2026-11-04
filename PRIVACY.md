@@ -31,6 +31,12 @@ Beats uses [WebAuthn passkeys](https://www.w3.org/TR/webauthn-2/). The server ne
 
 A deployment can also offer **single sign-on** through an OpenID Connect provider (Google, Microsoft, Keycloak, …) as a second door beside the passkey. Beats stores the identity the provider asserts — its issuer and subject, at most one per provider per account — and still never a password. It also keeps the name and email address that provider tells it, refreshed each time you sign in through them, and the day you linked it; they are shown to you on the Settings page, never used to match an account to one. Either door issues an ordinary Beats session: **nothing downstream records which door was used**, and nothing in your account behaves differently for it. You can link and unlink a provider identity in Settings; an unlink that would leave the account with no way to sign in is refused.
 
+## Suspension, and the day last seen
+
+I can suspend an account. A suspended account is refused everywhere it can act — the web app, the apps, the daemon, the wall clock, even the report links it shared — with one sentence: "This account is suspended. Write to <ahmed.elghareeb@proton.me> from this account's address." It is not told why; writing to that address is how it gets resolved. Suspension deletes nothing: lifting it puts the account back exactly as it was, and nothing you wrote while offline is thrown away because of it. An organisation you are in keeps the hours already on its record — suspension stops the account acting, not what the record already holds. I can also end an account's signed-in sessions ("sign out everywhere"), which signs its browsers out and touches nothing else; paired devices stay paired unless revoked on their own.
+
+Beats also keeps, per account, the **day** a request last carried its credential — a date, never a time, written at most once a day — and per paired device the time it last authenticated, also at most once a day. That is what lets an operator see that an account is in use at all without reading when you work.
+
 ## Third-party integrations (all optional)
 
 If you connect any of these, the relevant OAuth token is stored in the database and used only to fetch the data that integration is for:
