@@ -46,6 +46,7 @@ SAFE_EMAIL = re.compile(r"[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+")
 # between them is whatever is there now, so a rename rewrites the old value.
 TARGETS: list[tuple[str, str, str]] = [
     ("ui/client/shared/config/brand.ts", r'export const APP_NAME = "', r'";'),
+    ("backoffice/client/shared/config/brand.ts", r'export const APP_NAME = "', r'";'),
     ("api/src/beats/brand.py", r'APP_NAME = "', r'"'),
     ("companion/lib/brand.dart", r"const String appName = '", r"';"),
     ("companion/macos/Runner/Info.plist", r"<key>CFBundleName</key>\s*<string>", r"</string>"),
@@ -84,10 +85,11 @@ EMAIL_TARGETS: list[tuple[str, str, str]] = [
 # The code that may name the product: the constants the stamp writes, which
 # every other file reads through. A name in any other file under these trees
 # is a literal, whatever it is spelled in.
-CODE_TREES = ("ui/client", "api/src", "companion/lib")
+CODE_TREES = ("ui/client", "api/src", "companion/lib", "backoffice/client")
 CODE_SUFFIXES = (".ts", ".tsx", ".py", ".dart")
 NAMING_FILES = {
     "ui/client/shared/config/brand.ts",
+    "backoffice/client/shared/config/brand.ts",
     "api/src/beats/brand.py",
     "companion/lib/brand.dart",
 }

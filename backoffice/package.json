@@ -1,0 +1,40 @@
+{
+  "name": "beats-backoffice",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=26.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest --run",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc",
+    "gen:openapi": "cd ../api && uv run python scripts/dump_openapi_operator.py ../backoffice/client/shared/api/openapi.json",
+    "gen:types": "pnpm gen:openapi && pnpm --filter @beats/openapi-types gen",
+    "gen:types:check": "pnpm gen:types && git diff --exit-code client/shared/api/openapi.json client/shared/api/generated.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.104.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.5.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.2",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react-swc": "^4.3.3",
+    "postcss": "^8.5.31",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.0"
+  },
+  "packageManager": "pnpm@12.16.1+sha512.091d1dee7927575661b25dab3c2ae31cafc1c54d6b71ed6a6600cf0c1cb10434a447eae14015f1b23e2e6bedeed79df94a932e2164d2832280dce3fb32f656d1"
+}

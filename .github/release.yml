@@ -11,6 +11,8 @@ changelog:
       labels: [dependencies]
     - title: Web app
       labels: [ui]
+    - title: Back office
+      labels: [backoffice]
     - title: Desktop and phone app
       labels: [companion]
     - title: Daemon

@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Deliberately not the sky (roadmaps/backoffice.md § UI): the operator must
+   never be unsure which surface they are on. Dense, plain, one neutral
+   palette, system fonts. */
+
+:root {
+	color-scheme: light;
+}
+
+body {
+	@apply bg-neutral-100 text-neutral-900 antialiased;
+	font-family:
+		ui-sans-serif,
+		system-ui,
+		sans-serif;
+}

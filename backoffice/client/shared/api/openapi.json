@@ -1,0 +1,1218 @@
+{
+  "components": {
+    "schemas": {
+      "AbuseReport": {
+        "properties": {
+          "coach_spend_per_account": {
+            "items": {
+              "$ref": "#/components/schemas/AccountFigure"
+            },
+            "title": "Coach Spend Per Account",
+            "type": "array"
+          },
+          "devices_per_account": {
+            "items": {
+              "$ref": "#/components/schemas/AccountFigure"
+            },
+            "title": "Devices Per Account",
+            "type": "array"
+          },
+          "flow_windows_per_account_today": {
+            "items": {
+              "$ref": "#/components/schemas/AccountFigure"
+            },
+            "title": "Flow Windows Per Account Today",
+            "type": "array"
+          },
+          "report_links_per_account": {
+            "items": {
+              "$ref": "#/components/schemas/AccountFigure"
+            },
+            "title": "Report Links Per Account",
+            "type": "array"
+          },
+          "sessions_created_7d_per_account": {
+            "items": {
+              "$ref": "#/components/schemas/AccountFigure"
+            },
+            "title": "Sessions Created 7D Per Account",
+            "type": "array"
+          },
+          "signups_per_day": {
+            "items": {
+              "$ref": "#/components/schemas/DayFigure"
+            },
+            "title": "Signups Per Day",
+            "type": "array"
+          },
+          "webhook_domains": {
+            "items": {
+              "$ref": "#/components/schemas/DomainFigure"
+            },
+            "title": "Webhook Domains",
+            "type": "array"
+          }
+        },
+        "required": [
+          "coach_spend_per_account",
+          "flow_windows_per_account_today",
+          "sessions_created_7d_per_account",
+          "report_links_per_account",
+          "webhook_domains",
+          "devices_per_account",
+          "signups_per_day"
+        ],
+        "title": "AbuseReport",
+        "type": "object"
+      },
+      "AccountDetail": {
+        "properties": {
+          "biometric_rows": {
+            "default": 0,
+            "title": "Biometric Rows",
+            "type": "integer"
+          },
+          "coach_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coach Budget Usd"
+          },
+          "coach_spend_usd": {
+            "default": 0.0,
+            "title": "Coach Spend Usd",
+            "type": "number"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "devices": {
+            "items": {
+              "$ref": "#/components/schemas/DeviceSummary"
+            },
+            "title": "Devices",
+            "type": "array"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "integrations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Integrations",
+            "type": "array"
+          },
+          "last_seen_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen On"
+          },
+          "limits_overridden": {
+            "default": false,
+            "title": "Limits Overridden",
+            "type": "boolean"
+          },
+          "organisations": {
+            "items": {
+              "$ref": "#/components/schemas/MembershipSummary"
+            },
+            "title": "Organisations",
+            "type": "array"
+          },
+          "passkeys": {
+            "title": "Passkeys",
+            "type": "integer"
+          },
+          "projects": {
+            "default": 0,
+            "title": "Projects",
+            "type": "integer"
+          },
+          "sessions": {
+            "default": 0,
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "sessions_valid_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessions Valid After"
+          },
+          "sso_providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sso Providers",
+            "type": "array"
+          },
+          "storage_bytes": {
+            "default": 0,
+            "title": "Storage Bytes",
+            "type": "integer"
+          },
+          "suspended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspended At"
+          },
+          "suspended_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspended By"
+          },
+          "suspended_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspended Kind"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "created_at",
+          "last_seen_on",
+          "suspended_at",
+          "suspended_kind",
+          "suspended_by",
+          "sessions_valid_after",
+          "passkeys"
+        ],
+        "title": "AccountDetail",
+        "type": "object"
+      },
+      "AccountFigure": {
+        "description": "One account on an abuse axis: an id and a number, nothing else.",
+        "properties": {
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "user_id",
+          "value"
+        ],
+        "title": "AccountFigure",
+        "type": "object"
+      },
+      "AccountLookupRequest": {
+        "description": "Exact email (case-insensitive) or an account id. The common entry is a\nsupport or erasure mail carrying a full address; exact match serves that\nand is useless for fishing.",
+        "properties": {
+          "email": {
+            "default": "",
+            "maxLength": 320,
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "title": "AccountLookupRequest",
+        "type": "object"
+      },
+      "AccountMatch": {
+        "description": "One row of the exact-email lookup. Case-insensitive, so one mail can\nmatch two accounts spelled apart.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen On"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "created_at",
+          "last_seen_on",
+          "suspended"
+        ],
+        "title": "AccountMatch",
+        "type": "object"
+      },
+      "AttentionCounts": {
+        "description": "The landing page: each count links to the thing.",
+        "properties": {
+          "absence_requests_pending_over_14d": {
+            "title": "Absence Requests Pending Over 14D",
+            "type": "integer"
+          },
+          "accounts_near_coach_cap": {
+            "title": "Accounts Near Coach Cap",
+            "type": "integer"
+          },
+          "approvals_superseded_over_30d": {
+            "title": "Approvals Superseded Over 30D",
+            "type": "integer"
+          },
+          "jobs_failed": {
+            "title": "Jobs Failed",
+            "type": "integer"
+          },
+          "jobs_queued": {
+            "title": "Jobs Queued",
+            "type": "integer"
+          },
+          "organisations_all_owners_suspended": {
+            "title": "Organisations All Owners Suspended",
+            "type": "integer"
+          },
+          "organisations_without_owner": {
+            "title": "Organisations Without Owner",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "organisations_without_owner",
+          "organisations_all_owners_suspended",
+          "jobs_queued",
+          "jobs_failed",
+          "approvals_superseded_over_30d",
+          "absence_requests_pending_over_14d",
+          "accounts_near_coach_cap"
+        ],
+        "title": "AttentionCounts",
+        "type": "object"
+      },
+      "CapacityReport": {
+        "properties": {
+          "coach_cost": {
+            "items": {
+              "$ref": "#/components/schemas/CoachCostDay"
+            },
+            "title": "Coach Cost",
+            "type": "array"
+          },
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/CollectionSize"
+            },
+            "title": "Collections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "collections",
+          "coach_cost"
+        ],
+        "title": "CapacityReport",
+        "type": "object"
+      },
+      "CoachCostDay": {
+        "properties": {
+          "cache_read_tokens": {
+            "title": "Cache Read Tokens",
+            "type": "integer"
+          },
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "model",
+          "cost_usd",
+          "input_tokens",
+          "cache_read_tokens",
+          "calls"
+        ],
+        "title": "CoachCostDay",
+        "type": "object"
+      },
+      "CollectionSize": {
+        "properties": {
+          "documents": {
+            "title": "Documents",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "storage_bytes": {
+            "title": "Storage Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "documents",
+          "storage_bytes"
+        ],
+        "title": "CollectionSize",
+        "type": "object"
+      },
+      "DayFigure": {
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "value"
+        ],
+        "title": "DayFigure",
+        "type": "object"
+      },
+      "DeviceSummary": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "string"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "device_id",
+          "created_at",
+          "last_seen",
+          "revoked"
+        ],
+        "title": "DeviceSummary",
+        "type": "object"
+      },
+      "DomainFigure": {
+        "description": "Webhook destinations by domain: outbound HTTP from our servers to\narbitrary URLs is ours to answer for. The domain, never the full URL.",
+        "properties": {
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "domain",
+          "value"
+        ],
+        "title": "DomainFigure",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MembershipSummary": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "organisation_id": {
+            "title": "Organisation Id",
+            "type": "string"
+          },
+          "organisation_name": {
+            "title": "Organisation Name",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organisation_id",
+          "organisation_name",
+          "role",
+          "active"
+        ],
+        "title": "MembershipSummary",
+        "type": "object"
+      },
+      "OperatorMe": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "sub": {
+            "title": "Sub",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sub",
+          "email",
+          "role"
+        ],
+        "title": "OperatorMe",
+        "type": "object"
+      },
+      "OrgAuditRow": {
+        "description": "An audit event **without its `details`**, which carry what the\norganisation wrote: a reopened month's reason, a created project's or\nteam's name.",
+        "properties": {
+          "actor_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor User Id"
+          },
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "subject_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject User Id"
+          }
+        },
+        "required": [
+          "at",
+          "event",
+          "actor_user_id",
+          "subject_user_id",
+          "project_id"
+        ],
+        "title": "OrgAuditRow",
+        "type": "object"
+      },
+      "OrganisationDetail": {
+        "properties": {
+          "connected_projects": {
+            "title": "Connected Projects",
+            "type": "integer"
+          },
+          "projects": {
+            "title": "Projects",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/OrganisationSummary"
+          },
+          "timesheets_by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Timesheets By Status",
+            "type": "object"
+          }
+        },
+        "required": [
+          "summary",
+          "projects",
+          "connected_projects",
+          "timesheets_by_status"
+        ],
+        "title": "OrganisationDetail",
+        "type": "object"
+      },
+      "OrganisationSummary": {
+        "properties": {
+          "active_assignments": {
+            "title": "Active Assignments",
+            "type": "integer"
+          },
+          "all_owners_suspended": {
+            "title": "All Owners Suspended",
+            "type": "boolean"
+          },
+          "closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes On"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "members_by_role": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Members By Role",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owners": {
+            "title": "Owners",
+            "type": "integer"
+          },
+          "retention_years": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retention Years"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "members_by_role",
+          "active_assignments",
+          "retention_years",
+          "closes_on",
+          "owners",
+          "all_owners_suspended"
+        ],
+        "title": "OrganisationSummary",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "The control plane: operational metadata, never user content",
+    "title": "Beats operator API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/operator/abuse": {
+      "get": {
+        "description": "Outliers rather than guessed thresholds: who is far from the median on\nthe axes a hostile account shows on.",
+        "operationId": "abuse_api_operator_abuse_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbuseReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Abuse",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/accounts/lookup": {
+      "post": {
+        "description": "Every account an address matches, case-insensitively \u2014 `Ana@` and\n`ana@` can be two accounts, and a mail from either spelling must find\nboth. A read, despite the POST: the body keeps the address out of the\nrequest log.",
+        "operationId": "lookup_accounts_api_operator_accounts_lookup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountLookupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountMatch"
+                  },
+                  "title": "Response Lookup Accounts Api Operator Accounts Lookup Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lookup Accounts",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/accounts/{user_id}": {
+      "get": {
+        "description": "One account: state, counts and a storage estimate \u2014 how big, never\nwhat. Which identities it holds per provider is a fact the account\nstores; which door a sign-in used is deliberately not kept, and must not\ngrow out of this page.",
+        "operationId": "account_api_operator_accounts__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/attention": {
+      "get": {
+        "description": "The landing page's counts: the reason to open the control plane.",
+        "operationId": "attention_api_operator_attention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttentionCounts"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Attention",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/audit": {
+      "get": {
+        "description": "The operator's own audit \u2014 empty until step 3's commands write it.",
+        "operationId": "audit_log_api_operator_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Audit Log Api Operator Audit Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Log",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/capacity": {
+      "get": {
+        "description": "What the platform will cost: documents and storage per collection, and\nthe coach's cost by day and model with the cache-hit ratio's inputs.\nLatency and error rates are Cloud Monitoring's \u2014 link, don't rebuild.",
+        "operationId": "capacity_api_operator_capacity_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Capacity",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/jobs": {
+      "get": {
+        "description": "The job queue \u2014 empty until step 4's jobs exist.",
+        "operationId": "jobs_api_operator_jobs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Jobs Api Operator Jobs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Jobs",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/me": {
+      "get": {
+        "description": "The signed-in operator, as the allowlist knows them.",
+        "operationId": "me_api_operator_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorMe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/organisations": {
+      "get": {
+        "operationId": "organisations_api_operator_organisations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrganisationSummary"
+                  },
+                  "title": "Response Organisations Api Operator Organisations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Organisations",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/organisations/{organisation_id}": {
+      "get": {
+        "operationId": "organisation_api_operator_organisations__organisation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganisationDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Organisation",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/organisations/{organisation_id}/audit": {
+      "get": {
+        "description": "The organisation's log without each event's `details`, which carry\nwhat the organisation wrote.",
+        "operationId": "organisation_audit_api_operator_organisations__organisation_id__audit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organisation_id",
+            "required": true,
+            "schema": {
+              "title": "Organisation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrgAuditRow"
+                  },
+                  "title": "Response Organisation Audit Api Operator Organisations  Organisation Id  Audit Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Organisation Audit",
+        "tags": [
+          "operator"
+        ]
+      }
+    }
+  }
+}

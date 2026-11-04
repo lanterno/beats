@@ -6,6 +6,9 @@ api:
 ui:
   - changed-files:
       - any-glob-to-any-file: ["ui/**"]
+backoffice:
+  - changed-files:
+      - any-glob-to-any-file: ["backoffice/**"]
 companion:
   - changed-files:
       - any-glob-to-any-file: ["companion/**"]

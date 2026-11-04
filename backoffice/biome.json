@@ -1,0 +1,27 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"files": {
+		"includes": [
+			"**/client/**",
+			"vite.config.ts",
+			"vitest.config.ts",
+			"!**/*.css",
+			"!**/dist",
+			"!**/client/shared/api/generated.ts",
+			"!**/client/shared/api/openapi.json"
+		]
+	},
+	"formatter": {
+		"indentStyle": "tab",
+		"indentWidth": 2,
+		"lineWidth": 100
+	},
+	"linter": {
+		"rules": {
+			"preset": "recommended",
+			"a11y": {
+				"preset": "recommended"
+			}
+		}
+	}
+}

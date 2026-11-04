@@ -71,3 +71,4 @@ terraform/*.tfplan
 
 .env
 .env.operator
+src/beats/operator/static/
