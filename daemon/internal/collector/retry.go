@@ -38,6 +38,16 @@ func NewRetryBuffer(cap int) *RetryBuffer {
 // Len reports how many windows are currently buffered for retry.
 func (b *RetryBuffer) Len() int { return len(b.pending) }
 
+// Hold buffers w without attempting to post it. Used while the API has
+// refused the account or the device and the loop is down to a slow probe:
+// the windows of a short suspension still land once it lifts, and one past
+// the cap evicts the oldest as any enqueue does — losing windows beyond the
+// buffer is the accepted cost (they are derived signals, not the person's
+// record).
+func (b *RetryBuffer) Hold(w FlowWindow) {
+	b.enqueue(w)
+}
+
 // enqueue appends w, evicting the oldest entry first if the buffer is at
 // capacity so memory stays bounded.
 func (b *RetryBuffer) enqueue(w FlowWindow) {

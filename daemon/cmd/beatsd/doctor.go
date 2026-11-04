@@ -164,6 +164,10 @@ func checkAPI(cfg *config.Config) (string, error) {
 	defer cancel()
 	start := time.Now()
 	if err := c.PostHeartbeat(ctx); err != nil {
+		if code := client.ErrorCode(err); code == client.CodeAccountSuspended ||
+			code == client.CodeDeviceRevoked {
+			return cfg.API.BaseURL, fmt.Errorf("refused (%s): %w", client.RefusalWord(code), err)
+		}
 		return cfg.API.BaseURL, err
 	}
 	return fmt.Sprintf("%s (%dms)", cfg.API.BaseURL, time.Since(start).Milliseconds()), nil

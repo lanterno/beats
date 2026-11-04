@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,6 +56,36 @@ func describeErrorBody(body []byte) string {
 	return string(bytes.TrimSpace(body))
 }
 
+// APIError is a non-2xx answer from the API, carrying the error envelope's
+// machine-readable code so a caller can branch on a refusal —
+// ACCOUNT_SUSPENDED, DEVICE_REVOKED — without parsing message text. Its
+// Error() renders exactly the string `do` always produced, so nothing that
+// prints errors changes.
+type APIError struct {
+	Op         string
+	StatusCode int
+	Code       string
+	// The rendered describeErrorBody suffix; may be empty.
+	detail string
+}
+
+func (e *APIError) Error() string {
+	if e.detail != "" {
+		return fmt.Sprintf("%s failed (HTTP %d): %s", e.Op, e.StatusCode, e.detail)
+	}
+	return fmt.Sprintf("%s failed (HTTP %d)", e.Op, e.StatusCode)
+}
+
+// ErrorCode returns the API error envelope's code behind err ("" when err
+// is nil, not an API error, or the body carried no code).
+func ErrorCode(err error) string {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code
+	}
+	return ""
+}
+
 // do sends one API call and returns the response body, having already
 // checked the status and rendered any error envelope. `op` names the
 // operation for the error message, e.g. "flow-windows GET".
@@ -97,10 +128,14 @@ func (c *Client) do(ctx context.Context, method, path string, body any, op strin
 	}
 
 	if resp.StatusCode >= 300 {
-		if detail := describeErrorBody(respBody); detail != "" {
-			return nil, fmt.Errorf("%s failed (HTTP %d): %s", op, resp.StatusCode, detail)
+		var env errorEnvelope
+		_ = json.Unmarshal(respBody, &env)
+		return nil, &APIError{
+			Op:         op,
+			StatusCode: resp.StatusCode,
+			Code:       env.Code,
+			detail:     describeErrorBody(respBody),
 		}
-		return nil, fmt.Errorf("%s failed (HTTP %d)", op, resp.StatusCode)
 	}
 	return respBody, nil
 }

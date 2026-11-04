@@ -38,6 +38,12 @@ const (
 	// risking unbounded growth on a long one.
 	flowRetryBufferCap = 32
 
+	// refusalProbeInterval is how often one call is let through while the
+	// API refuses the account or the device (ACCOUNT_SUSPENDED,
+	// DEVICE_REVOKED): often enough to notice a lifted suspension soon,
+	// rare enough to be no hammering.
+	refusalProbeInterval = 10 * time.Minute
+
 	// flowShutdownPostTimeout bounds the final POST attempt(s) made after
 	// the run ctx is cancelled, so a hung API can't block process exit.
 	flowShutdownPostTimeout = 10 * time.Second
@@ -145,6 +151,15 @@ func run(args []string) int {
 		}
 
 		c := client.New(cfg.API.BaseURL, cfg.API.DeviceToken)
+
+		// Once the API refuses the account or the device, retrying is
+		// noise: everything pauses behind this gate, one call per ten
+		// minutes probes whether the refusal still stands, and windows
+		// flushed meanwhile are held in the retry buffer so a short
+		// suspension loses nothing. `beatsd status` and `doctor` name
+		// the refusal from their own calls.
+		gate := client.NewRefusalGate(refusalProbeInterval)
+
 		if !dryRun {
 			fmt.Printf("beatsd %s — daemon running (API: %s)\n", version, cfg.API.BaseURL)
 			if err := c.PostHeartbeat(ctx); err != nil {
@@ -192,7 +207,7 @@ func run(args []string) int {
 		// free.
 		var timerRunning atomic.Bool
 		if !dryRun {
-			go pollTimerContext(ctx, c, &timerRunning)
+			go pollTimerContext(ctx, c, gate, &timerRunning)
 		}
 		shieldTracker := shield.NewTracker(func(ev shield.DriftEvent) {
 			fmt.Printf("drift: %s for %s\n", bundle.ShortLabel(ev.BundleID), ev.Duration.Round(time.Second))
@@ -294,8 +309,22 @@ func run(args []string) int {
 				defer cancel()
 			}
 
-			if postErr := retryBuf.Send(postCtx, poster, w); postErr != nil {
-				fmt.Fprintf(os.Stderr, "post flow window: %v (buffered=%d)\n", postErr, retryBuf.Len())
+			// Checked once per window: Blocked() hands out the probe,
+			// so asking it again for the tracker below would spend a
+			// second one.
+			blocked := gate.Blocked()
+			if blocked {
+				retryBuf.Hold(w)
+			} else if postErr := retryBuf.Send(postCtx, poster, w); postErr != nil {
+				if gate.Note(postErr) {
+					// Logged once; everything skipped or probed after
+					// this stays silent until the refusal lifts.
+					fmt.Fprintf(os.Stderr,
+						"uploads paused: %v — probing every %s (buffered=%d)\n",
+						postErr, refusalProbeInterval, retryBuf.Len())
+				} else if gate.Refusal() == "" {
+					fmt.Fprintf(os.Stderr, "post flow window: %v (buffered=%d)\n", postErr, retryBuf.Len())
+				}
 				// Bump the dropped counter so /health surfaces the
 				// asymmetry. A user with windows_emitted=42 and
 				// windows_dropped=15 has a producing-but-not-landing
@@ -304,12 +333,17 @@ func run(args []string) int {
 				// the producing-nothing case (Accessibility revoked).
 				editorListener.RecordWindowDropped()
 			} else {
+				if gate.Clear() {
+					fmt.Fprintln(os.Stderr, "uploads resumed")
+				}
 				// Record the success so /health's windows_emitted
 				// counter reflects only actually-landed windows.
 				editorListener.RecordWindowEmitted()
 			}
 
-			tracker.OnFlowWindow(postCtx, w)
+			if !blocked {
+				tracker.OnFlowWindow(postCtx, w)
+			}
 		}, func(s collector.Sample) {
 			shieldTracker.OnSample(s, timerRunning.Load())
 		})
@@ -510,7 +544,7 @@ func run(args []string) int {
 // active timer on the API side. Runs until ctx is cancelled. Failures (API
 // down, bad token) are logged once per minute at most so a flaky network
 // doesn't flood stderr.
-func pollTimerContext(ctx context.Context, c *client.Client, running *atomic.Bool) {
+func pollTimerContext(ctx context.Context, c *client.Client, gate *client.RefusalGate, running *atomic.Bool) {
 	const interval = 30 * time.Second
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
@@ -518,15 +552,23 @@ func pollTimerContext(ctx context.Context, c *client.Client, running *atomic.Boo
 	var lastErrLog time.Time
 
 	check := func() {
+		if gate.Blocked() {
+			return // paused with the rest; a probe elsewhere reopens it
+		}
 		ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		tc, err := c.GetTimerContext(ctx2)
 		if err != nil {
-			if time.Since(lastErrLog) > time.Minute {
+			if gate.Note(err) {
+				fmt.Fprintf(os.Stderr, "uploads paused: %v — probing every %s\n", err, refusalProbeInterval)
+			} else if gate.Refusal() == "" && time.Since(lastErrLog) > time.Minute {
 				fmt.Fprintf(os.Stderr, "timer-context poll: %v\n", err)
 				lastErrLog = time.Now()
 			}
 			return
+		}
+		if gate.Clear() {
+			fmt.Fprintln(os.Stderr, "uploads resumed")
 		}
 		running.Store(tc.TimerRunning)
 	}

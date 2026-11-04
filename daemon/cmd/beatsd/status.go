@@ -66,6 +66,10 @@ type apiStatus struct {
 	URL       string `json:"url"`
 	Reachable bool   `json:"reachable"`
 	Error     string `json:"error,omitempty"`
+	// ACCOUNT_SUSPENDED or DEVICE_REVOKED when the API answered but
+	// refused this daemon — reachable in the network sense, refused in
+	// the only sense that matters. Empty otherwise.
+	Refused string `json:"refused,omitempty"`
 }
 
 type timerStatus struct {
@@ -118,6 +122,10 @@ func collectStatus(cfg *config.Config) (statusReport, error) {
 	tc, err := c.GetTimerContext(ctx)
 	if err != nil {
 		report.API.Error = err.Error()
+		if code := client.ErrorCode(err); code == client.CodeAccountSuspended ||
+			code == client.CodeDeviceRevoked {
+			report.API.Refused = code
+		}
 		return report, err
 	}
 	report.API.Reachable = true
@@ -223,6 +231,10 @@ func printStatusHuman(cfg *config.Config, r statusReport) {
 		fmt.Println("  daemon: not running (start with `beatsd run`)")
 	}
 
+	if r.API.Refused != "" {
+		fmt.Printf("  api:    refused (%s) — %s\n", client.RefusalWord(r.API.Refused), r.API.Error)
+		return
+	}
 	if !r.API.Reachable {
 		fmt.Printf("  api:    unreachable — %s\n", r.API.Error)
 		return
