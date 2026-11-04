@@ -237,8 +237,12 @@ ChatReply applyChatEvent(ChatReply reply, Map<String, dynamic> event) {
 ChatReply foldChatEvents(Iterable<Map<String, dynamic>> events) =>
     events.fold(const ChatReply(), applyChatEvent);
 
-/// A server too old to let a paired device chat answers 403.
-bool isChatForbidden(Object error) => error is ApiException && error.statusCode == 403;
+/// A server too old to let a paired device chat refuses the path. Read off
+/// the envelope's code, not the bare status: a 403 can also be a suspended
+/// account (ACCOUNT_SUSPENDED), which is not about the server's age and has
+/// a banner of its own.
+bool isChatForbidden(Object error) =>
+    error is ApiException && error.code == 'DEVICE_PATH_FORBIDDEN';
 
 /// What to show for a send that failed before any reply streamed.
 String chatFailureText(Object error) {

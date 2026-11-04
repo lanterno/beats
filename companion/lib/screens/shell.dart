@@ -220,6 +220,23 @@ class MainWindowState extends State<MainWindow> {
           Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: page)),
         ]);
       }
+      // A suspended account's refusal, in the API's own words (it names the
+      // address to write to). The client sets it on any ACCOUNT_SUSPENDED
+      // answer and clears it when the timer poll succeeds again, so the
+      // banner lifts on its own once the suspension does. Writes made
+      // meanwhile stay queued (rule 7, docs/companion-offline.md) — a
+      // suspension can be undone, so nothing is dropped.
+      page = ValueListenableBuilder<String?>(
+        valueListenable: widget.client.suspendedNotice,
+        builder: (context, notice, child) {
+          if (notice == null) return child!;
+          return Column(children: [
+            SafeArea(bottom: false, child: _SuspendedBanner(notice: notice)),
+            Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: child!)),
+          ]);
+        },
+        child: page,
+      );
       if (!wide) return page;
       return Row(children: [
         _Sidebar(
@@ -488,6 +505,31 @@ class _SampleBanner extends StatelessWidget {
             decoration: TextDecoration.underline,
             decorationColor: p.onSun.withValues(alpha: 0.4),
           )),
+        ),
+      ]),
+    );
+  }
+}
+
+/// The account is suspended: the API's own sentence, which names the
+/// address to write to. Nothing else about the shell changes — reads keep
+/// failing and writes keep queueing until the suspension lifts.
+class _SuspendedBanner extends StatelessWidget {
+  final String notice;
+  const _SuspendedBanner({required this.notice});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(color: p.sun.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(24)),
+      child: Row(children: [
+        Icon(Icons.lock_outline, size: 18, color: p.onSun),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(notice, style: SkyType.body(13, weight: FontWeight.w700).copyWith(color: p.onSun)),
         ),
       ]),
     );

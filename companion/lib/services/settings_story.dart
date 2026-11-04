@@ -33,8 +33,10 @@ int workspaceCount(List<Map<String, dynamic>> windows) => {
     }.length;
 
 /// True when [e] is the API refusing this device the path — an older server
-/// that predates the paths the redesigned app reads.
-bool needsNewerServer(Object e) => e is ApiException && e.statusCode == 403;
+/// that predates the paths the redesigned app reads. Read off the envelope's
+/// code, not the bare status: a 403 can also be a suspended account
+/// (ACCOUNT_SUSPENDED), which no newer server would fix.
+bool needsNewerServer(Object e) => e is ApiException && e.code == 'DEVICE_PATH_FORBIDDEN';
 
 /// A failure short enough for a row's subtitle: the API's own sentence
 /// without the "X failed:" prefix, cut at [max] characters.

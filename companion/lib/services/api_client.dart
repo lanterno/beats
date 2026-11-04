@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class PairResult {
@@ -35,6 +36,31 @@ class ApiClient {
   String? deviceToken;
 
   ApiClient({required this.baseUrl, this.deviceToken});
+
+  /// The API's suspension notice, when the account is suspended (403
+  /// ACCOUNT_SUSPENDED, roadmaps/backoffice.md step 1): the envelope's own
+  /// sentence, which names the address to write to. Set by any refused
+  /// call, cleared by the next timer-status poll that succeeds — the poll
+  /// every surface already runs — so the banner lifts within its cadence.
+  /// A getter so [OfflineApi] can hand back its network client's.
+  ValueNotifier<String?> get suspendedNotice => _suspendedNotice;
+  final ValueNotifier<String?> _suspendedNotice = ValueNotifier(null);
+
+  /// Build a fully-formatted ApiException for a non-200 [resp].
+  /// Centralizes the "verb failed: [suffix]" rendering so the 12+ throw
+  /// sites in [ApiClient] don't drift apart — and it is where a
+  /// suspension is noticed, whichever call met it first.
+  ApiException _apiError(http.Response resp, String verb) {
+    final code = _envelopeCode(resp.body);
+    if (code == 'ACCOUNT_SUSPENDED') {
+      _suspendedNotice.value = _envelopeDetail(resp.body) ?? 'This account is suspended.';
+    }
+    return ApiException(
+      resp.statusCode,
+      '$verb: ${describeErrorBody(resp.body)}',
+      code: code,
+    );
+  }
 
   Map<String, String> get _headers {
     final h = {'Content-Type': 'application/json'};
@@ -163,6 +189,9 @@ class ApiClient {
     if (resp.statusCode != 200) {
       throw _apiError(resp, 'Timer status failed');
     }
+    // The poll every surface runs: a success here means the account acts
+    // again, so a standing suspension banner comes down.
+    _suspendedNotice.value = null;
     return jsonDecode(resp.body);
   }
 
@@ -701,14 +730,19 @@ String? _envelopeCode(String body) {
   return null;
 }
 
-/// Build a fully-formatted ApiException for a non-200 [resp].
-/// Centralizes the "verb failed: [suffix]" rendering so the 12+ throw
-/// sites in [ApiClient] don't drift apart.
-ApiException _apiError(http.Response resp, String verb) {
-  final detail = describeErrorBody(resp.body);
-  return ApiException(
-    resp.statusCode,
-    '$verb: $detail',
-    code: _envelopeCode(resp.body),
-  );
+/// The envelope's `detail` sentence, or null when the body is not
+/// envelope-shaped. Best-effort like [_envelopeCode].
+String? _envelopeDetail(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      final detail = decoded['detail'];
+      if (detail is String && detail.isNotEmpty) return detail;
+    }
+  } on FormatException {
+    // Non-JSON body, no detail.
+  }
+  return null;
 }
+
+
