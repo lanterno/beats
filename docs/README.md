@@ -9,10 +9,11 @@ code does, so it points here. Moving or renaming one means updating those
 citations, which is why the files are flat and named for their subject rather
 than filed into folders.
 
-Open work is not here. A bug, a follow-up or a question to decide is a
-[GitHub issue](https://github.com/lanterno/beats/issues); a "Remaining" or
-"Follow-ups" section in one of these files is a mistake to fix, not a section
-to maintain.
+Open work is not here. A bug, a follow-up or a question to decide is written
+in [roadmaps/](../roadmaps/), or is one of the
+[GitHub issues](https://github.com/lanterno/beats/issues) filed before
+2026-11-04; a "Remaining" or "Follow-ups" section in one of these files is a
+mistake to fix, not a section to maintain.
 
 | File | What it covers |
 |------|----------------|

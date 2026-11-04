@@ -16,27 +16,33 @@ integrations/vscode-beats/    VS Code extension (workspace heartbeats + status b
 wall-clock/                   ESP32 firmware (Arduino/C++)
 terraform/                    GCP infrastructure
 docs/                         What is built, and why — one file per area, plus the README's images
-roadmaps/                     What is not built yet: the plan behind an epic, design seeds, drafts
+roadmaps/                     What is not built yet: the plan behind an epic, design seeds, drafts, open work
 ```
 
 `docs/` and `roadmaps/` split on whether the thing is done. A decision that
 shipped, and the reasoning behind it, is documentation; a plan, a seed for work
 nobody has started, a mockup of a design still being argued, or a draft awaiting
-somebody's review is a roadmap. Work itself is neither — it is a GitHub issue.
+somebody's review is a roadmap, and so is the open work itself: what a plan
+still owes, under its *Work* section, and a bug or follow-up that belongs to no
+plan, in a file of its own.
 Code comments cite `docs/`: a comment describes what the code does, and what it
 does is built. A file moves from `roadmaps/` to `docs/` when its subject ships,
 and the part of a roadmap that ships is deleted rather than copied across.
 
 ## Project Management
 
-Open work lives in [GitHub issues](https://github.com/lanterno/beats/issues). Docs
-and READMEs hold decisions and designs, never to-do lists. The `github-issues` skill
-(`.claude/skills/github-issues/`) has the layout and the loop: branch
-`<type>/<n>-<slug>`, `Fixes #n` in the PR body, no issue number in commit subjects,
-and anything found along the way filed as an issue. Milestones group the work, labels
-say the surface and what blocks it, and `decision` marks an open question. Until
-2026-10-26 the tracker was Linear, which is why older commit subjects end in `(AHM-n)`
-and a few test comments cite those ids.
+Open work is written in `roadmaps/` (decided 2026-11-04; [roadmaps/README.md](roadmaps/README.md)
+says what goes there), not filed as an issue: anything found along the way goes
+into the *Work* section of the plan it belongs to, or a file of its own. `docs/` and
+the READMEs hold decisions and designs, never to-do lists. The
+[GitHub issues](https://github.com/lanterno/beats/issues) filed before then stay
+open until done, and roadmaps cite them by number. The `github-issues` skill
+(`.claude/skills/github-issues/`) has the loop for both: branch `<type>/<n>-<slug>`
+(`<type>/<slug>` for a roadmap step), `Fixes #n` in the PR body, no issue number in
+commit subjects. Milestones group the issues, labels say the surface and what blocks
+it, and `decision` marks an open question. Until 2026-10-26 the tracker was Linear,
+which is why older commit subjects end in `(AHM-n)` and a few test comments cite
+those ids.
 
 The organisations epic is #353, with what it still owes as issues linked from it;
 [roadmaps/organisations.md](roadmaps/organisations.md) keeps its reasoning and

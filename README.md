@@ -186,10 +186,11 @@ before removing anything that looks like dead config.
 
 ## Design notes
 
-Open work — bugs, follow-ups, open questions — is tracked in
-[GitHub issues](https://github.com/lanterno/beats/issues). These documents hold the
-decisions and designs behind what is built; what is not built yet — the plan behind
-an epic, and drafts awaiting review — is in [roadmaps/](roadmaps/).
+These documents hold the decisions and designs behind what is built. What is not
+built yet — the plan behind an epic, drafts awaiting review, and the open work
+itself: bugs, follow-ups, what each plan still owes — is in [roadmaps/](roadmaps/).
+The [GitHub issues](https://github.com/lanterno/beats/issues) filed before
+2026-11-04 stay open there until they are done.
 
 | Document | What it covers |
 |----------|----------------|

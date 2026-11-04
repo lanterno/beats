@@ -26,15 +26,14 @@ when the blocker clears.
 ## What belongs here
 
 A plan behind an epic. A design seed nobody has started. A mockup of
-something still being argued. A draft awaiting review.
+something still being argued. A draft awaiting review. **And the open work
+itself**: what a plan still owes is written in its own file, under a *Work*
+section, step by step. A bug or a follow-up that belongs to no plan gets a
+file of its own here. Issues already filed are cited by number; new work is
+not filed as one (decided 2026-11-04).
 
-Three things that look like roadmaps and are not:
+Two things that look like roadmaps and are not:
 
-- **Open work.** A bug, a follow-up, a question to decide: that is a
-  [GitHub issue](https://github.com/lanterno/beats/issues). Files here link
-  to issues and never restate them — an issue says the work is *owed*, a file
-  here says why it is *shaped* the way it is. If you are tempted to write a
-  checklist, you want an issue.
 - **A decision not to build something.** "Left out of 1b" in
   [docs/billing.md](../docs/billing.md) reads like a to-do list and is the
   opposite of one: it records scope deliberately cut, so it is not re-argued.
