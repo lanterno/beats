@@ -742,3 +742,247 @@ class TestOperatorOrganisationActs:
             mongo.organisations.find_one({"_id": ObjectId(planted["org_id"])}).get("closes_on")
             is None
         )
+
+
+def _run_jobs() -> int:
+    """Drain the queue the way the Cloud Run Job does: a fresh client on a
+    fresh loop, because the job runner is its own process in production."""
+    import asyncio
+
+    from pymongo import AsyncMongoClient
+
+    from beats.operator.jobs import run_due_jobs
+
+    async def go() -> int:
+        client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+        try:
+            return await run_due_jobs(client[os.environ.get("DB_NAME", "beats_test")])
+        finally:
+            await client.close()
+
+    return asyncio.run(go())
+
+
+class TestOperatorJobs:
+    """The window, the queue, and the sweep that must not eat its own record."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        mongo.operator_jobs.delete_many({})
+        mongo.operator_audit.delete_many({})
+        yield
+        mongo.operator_jobs.delete_many({})
+        mongo.operator_audit.delete_many({})
+
+    def _user(self, mongo, email: str) -> str:
+        user_id = str(ObjectId())
+        mongo.users.insert_one(
+            {"_id": ObjectId(user_id), "email": email, "created_at": datetime.now(UTC)}
+        )
+        return user_id
+
+    def _run(self, operator_client, name, args, confirmation=None):
+        return operator_client.post(
+            f"/api/operator/commands/{name}",
+            json={"args": args, "confirmation": confirmation},
+            headers=self.OWN,
+        )
+
+    def _due_now(self, mongo, job_id: str):
+        mongo.operator_jobs.update_one(
+            {"_id": ObjectId(job_id)},
+            {"$set": {"run_after": (datetime.now(UTC) - timedelta(minutes=1)).isoformat()}},
+        )
+
+    def test_an_erasure_waits_out_its_window_suspended(self, operator_client, mongo):
+        user_id = self._user(mongo, "erase-me@example.test")
+        resp = self._run(
+            operator_client,
+            "account.erase",
+            {"user_id": user_id},
+            confirmation="erase-me@example.test",
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["queued"] is True
+        job = body["job"]
+        assert job["state"] == "queued"
+        assert job["subject_id"] == user_id
+        assert "user_id" not in job
+
+        # Queueing suspended the account with the erasure's own wording — the
+        # refusal names the day the window ends, inside the week there is to
+        # stop it. Nothing is deleted yet.
+        user = mongo.users.find_one({"_id": ObjectId(user_id)})
+        assert user["suspended_kind"] == "erasure"
+        run_after = datetime.fromisoformat(job["run_after"])
+        assert run_after - datetime.now(UTC) > timedelta(days=6)
+
+        # Second thoughts: job.cancel lifts that suspension — it was the
+        # erasure's.
+        cancelled = self._run(operator_client, "job.cancel", {"job_id": job["id"]})
+        assert cancelled.status_code == 200, cancelled.text
+        assert mongo.operator_jobs.find_one({"_id": ObjectId(job["id"])})["state"] == "cancelled"
+        assert mongo.users.find_one({"_id": ObjectId(user_id)}).get("suspended_at") is None
+
+    def test_cancelling_an_erasure_never_lifts_an_abuse_suspension(self, operator_client, mongo):
+        user_id = self._user(mongo, "abusive@example.test")
+        # Suspended for abuse first; the erasure queued on top keeps its own
+        # wording, but cancelling it must not open the abuse door.
+        self._run(
+            operator_client,
+            "account.suspend",
+            {"user_id": user_id, "reason": "scraping"},
+            confirmation="abusive@example.test",
+        )
+        job = self._run(
+            operator_client,
+            "account.erase",
+            {"user_id": user_id},
+            confirmation="abusive@example.test",
+        ).json()["job"]
+        # Put the abuse suspension back the way the operator would after a
+        # mistaken queue-on-top: the kind decides what cancel may lift.
+        mongo.users.update_one({"_id": ObjectId(user_id)}, {"$set": {"suspended_kind": "abuse"}})
+
+        self._run(operator_client, "job.cancel", {"job_id": job["id"]})
+
+        assert mongo.users.find_one({"_id": ObjectId(user_id)})["suspended_at"] is not None
+
+    def test_the_job_runs_the_erasure_and_the_sweep_spares_its_own_record(
+        self, operator_client, mongo
+    ):
+        user_id = self._user(mongo, "gone@example.test")
+        mongo.projects.insert_one({"user_id": user_id, "name": "P"})
+        mongo.account_limits.insert_one({"user_id": user_id, "webhooks_disabled": True})
+
+        job = self._run(
+            operator_client,
+            "account.erase",
+            {"user_id": user_id},
+            confirmation="gone@example.test",
+        ).json()["job"]
+        self._due_now(mongo, job["id"])
+
+        assert _run_jobs() == 1
+
+        # The account and everything keyed on it went — account_limits keyed
+        # on user_id deliberately, so the sweep takes it — while the job's
+        # own entry and the audit of the act survive: their subject is
+        # subject_id, which the sweep never matches.
+        assert mongo.users.find_one({"_id": ObjectId(user_id)}) is None
+        assert mongo.projects.find_one({"user_id": user_id}) is None
+        assert mongo.account_limits.find_one({"user_id": user_id}) is None
+        job_row = mongo.operator_jobs.find_one({"_id": ObjectId(job["id"])})
+        assert job_row["state"] == "done"
+        audit = mongo.operator_audit.find_one({"subject_id": user_id})
+        assert audit is not None
+        assert audit["command"] == "account.erase"
+        assert audit["operator_sub"] == OPERATOR_SUB
+        assert "gone@example.test" not in str(audit)
+
+    def test_a_deletion_queued_then_outranked_by_a_new_owner_fails_its_job(
+        self, operator_client, mongo
+    ):
+        """A command's rules are checked when it runs, not when it was
+        queued; and after three attempts the entry is failed, for the alert
+        to see."""
+        org_id = str(ObjectId())
+        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+        mongo.organisations.insert_one(
+            {
+                "_id": ObjectId(org_id),
+                "name": "Doomed Org",
+                "created_by": "x",
+                "created_at": datetime.now(UTC).isoformat(),
+                "timezone": "UTC",
+                "closes_on": yesterday,
+            }
+        )
+        job = self._run(
+            operator_client,
+            "organisation.delete",
+            {"organisation_id": org_id},
+            confirmation="Doomed Org",
+        ).json()["job"]
+
+        # An owner appears while the job waits.
+        mongo.org_members.insert_one(
+            {
+                "organisation_id": org_id,
+                "user_id": str(ObjectId()),
+                "role": "owner",
+                "name": "O",
+                "email": "o@x.test",
+                "joined_at": datetime.now(UTC).isoformat(),
+                "left_at": None,
+            }
+        )
+
+        self._due_now(mongo, job["id"])
+        # One drain retries a due, failing entry up to its attempt cap —
+        # three claims — and then marks it failed, for the alert to see.
+        assert _run_jobs() == 3
+        row = mongo.operator_jobs.find_one({"_id": ObjectId(job["id"])})
+        assert row["state"] == "failed"
+        assert row["attempts"] == 3
+        assert "owner" in row["error"].lower()
+        assert mongo.organisations.find_one({"_id": ObjectId(org_id)}) is not None
+
+    def test_an_ownerless_organisations_deletion_runs_once_due(self, operator_client, mongo):
+        org_id = str(ObjectId())
+        yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
+        mongo.organisations.insert_one(
+            {
+                "_id": ObjectId(org_id),
+                "name": "Ends Now",
+                "created_by": "x",
+                "created_at": datetime.now(UTC).isoformat(),
+                "timezone": "UTC",
+                "closes_on": yesterday,
+            }
+        )
+        job = self._run(
+            operator_client,
+            "organisation.delete",
+            {"organisation_id": org_id},
+            confirmation="Ends Now",
+        ).json()["job"]
+        self._due_now(mongo, job["id"])
+
+        assert _run_jobs() == 1
+
+        assert mongo.organisations.find_one({"_id": ObjectId(org_id)}) is None
+        assert mongo.operator_jobs.find_one({"_id": ObjectId(job["id"])})["state"] == "done"
+
+    def test_the_purge_trims_the_operator_audit_at_four_years(self, mongo):
+        import asyncio
+
+        from pymongo import AsyncMongoClient
+
+        from beats.infrastructure.retention import purge_expired_records
+
+        old = (datetime.now(UTC) - timedelta(days=5 * 365)).isoformat()
+        fresh = datetime.now(UTC).isoformat()
+        mongo.operator_audit.insert_many(
+            [
+                {"at": old, "command": "account.suspend", "subject_id": "s1"},
+                {"at": fresh, "command": "account.suspend", "subject_id": "s2"},
+            ]
+        )
+
+        async def go():
+            client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                await purge_expired_records(
+                    client[os.environ.get("DB_NAME", "beats_test")], apply=True
+                )
+            finally:
+                await client.close()
+
+        asyncio.run(go())
+
+        remaining = list(mongo.operator_audit.find({}))
+        assert [r["subject_id"] for r in remaining] == ["s2"]
