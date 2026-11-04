@@ -178,7 +178,13 @@ Then the model's own:
     neither leave, be removed
     nor be demoted (409 `LAST_OWNER`). A non-member and an unknown
     organisation read the same, 404 `ORGANISATION_NOT_FOUND`; a member
-    without the role is 403 `ORGANISATION_ROLE_REQUIRED`.
+    without the role is 403 `ORGANISATION_ROLE_REQUIRED`. (Amended with the
+    control plane, 2026-11-04: for an organisation with **no** owner, and
+    only then, the platform's operator can grant the owner role — to the
+    requester who asked by mail, and only one holding the highest role any
+    active member holds (409 `REQUESTER_NOT_HIGHEST`). While an owner
+    exists, suspended or not, every operator act answers 409
+    `ORGANISATION_HAS_OWNER`: the organisation can act for itself.)
 11. **The API sends no email, and hands out no token.** An invitation to an
     address is a token the inviter passes on, and only the account holding
     that address can take it (anyone else gets 404). The invitee also finds
@@ -587,7 +593,12 @@ what only matters past a handful of people. Decisions 21–30:
     day) that every member sees in-app, on the organisation's page — the
     notice decision 11's no-email rule leaves us. Tracking carries on
     until the day, and the closing can be called off (`DELETE
-    /{id}/close`).
+    /{id}/close`). (Amended with the control plane, 2026-11-04: a notice may
+    always be moved **later** — a day at least 30 days out, *or any day
+    later than the one already set*. The minimum protects members from short
+    notice, and a later day only gives them more; moving a notice earlier
+    still needs the 30 days. The same rule for the owner and, on an
+    ownerless organisation, the operator.)
     `DELETE /{id}` works only from the day on (409
     `ORGANISATION_STILL_CLOSING` / `ORGANISATION_NOT_CLOSING`): each
     member is handed a personal copy of every project they hold rows or a
@@ -632,9 +643,16 @@ Three questions the 2026-10-31 audit raised, answered the same day.
     membership ends like any other erasure, and the organisation runs on
     under its admins. Owner-only acts — granting the owner role, closing,
     deleting — wait until someone acts on it. Noticing an organisation with
-    no owner is the operator's job, in a back office (#424,
-    [roadmaps/backoffice.md](../roadmaps/backoffice.md)), not something
-    the product decides on the organisation's behalf. (The last-owner check of
+    no owner is the operator's job, in the control plane (#424), not
+    something the product decides on the organisation's behalf. (Amended
+    2026-11-04: the operator acts for such an organisation **only when
+    asked** — a mail to the PRIVACY.md address, from the address on the
+    requester's account — and the acts are the owner's own, through the
+    service's operator twins: granting the owner role to the requester,
+    starting, moving or cancelling a closing notice, and queueing the
+    deletion once a notice has run out. Each lands in the organisation's own
+    audit log under `actor_kind: operator`, so its admins can tell an act of
+    ours from an act of theirs; the operator's id is never in that log.) (The last-owner check of
     decisions 10 and 20 still guards leaving, removal and demotion: those
     are the organisation's own acts, an erasure is the person's.)
 32. **Connecting shares the project, contract included — and sharing is not

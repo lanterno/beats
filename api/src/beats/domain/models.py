@@ -39,6 +39,11 @@ class LinkedIdentity(BaseModel):
     linked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+# Who kind of actor wrote an organisation's audit row. A plain alias so the
+# writers (`_audit`, `record_org_audit`) and the model agree by construction.
+ActorKind = Literal["member", "system", "operator"]
+
+
 class SuspensionKind(StrEnum):
     """Why an account is suspended. The kind picks the refusal's wording
     (an erasure's names the day it ends), and a cancelled erasure lifts
@@ -1799,10 +1804,23 @@ class OrgAuditEvent(TzNormalizedModel):
     organisation_id: str
     at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     actor_user_id: str | None
+    # Who kind of actor it was: a member of the organisation, the system
+    # (erasure's tombstoning, the retention purge run by hand), or the
+    # platform's operator. The operator's id is never in the organisation's
+    # log; the kind is enough for an admin to tell an act of ours from an act
+    # of theirs. Derived for rows that predate the field: an actor meant a
+    # member, none meant the system.
+    actor_kind: ActorKind | None = None
     event: str
     subject_user_id: str | None = None
     project_id: str | None = None
     details: dict[str, object] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _derive_actor_kind(self) -> OrgAuditEvent:
+        if self.actor_kind is None:
+            object.__setattr__(self, "actor_kind", "member" if self.actor_user_id else "system")
+        return self
 
 
 class OrgProject(BaseModel):

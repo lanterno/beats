@@ -161,6 +161,9 @@ class ReopenBody(BaseModel):
 class AuditEventResponse(BaseModel):
     at: datetime
     actor_user_id: str | None
+    # member | system | operator — how an admin tells an act of ours from an
+    # act of theirs. The SPA says "by LifePete" for an operator's.
+    actor_kind: str | None
     event: str
     subject_user_id: str | None
     project_id: str | None
@@ -533,6 +536,7 @@ async def read_audit(
         AuditEventResponse(
             at=e.at,
             actor_user_id=e.actor_user_id,
+            actor_kind=e.actor_kind,
             event=e.event,
             subject_user_id=e.subject_user_id,
             project_id=e.project_id,

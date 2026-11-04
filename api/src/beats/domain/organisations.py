@@ -33,6 +33,7 @@ from beats.domain.exceptions import (
     MemberNotFound,
     MergeIntoItself,
     NotAssigned,
+    OrganisationHasOwner,
     OrganisationNotClosing,
     OrganisationNotFound,
     OrganisationProject,
@@ -42,6 +43,7 @@ from beats.domain.exceptions import (
     PeriodApproved,
     ProjectHasBilling,
     ProjectNotFound,
+    RequesterNotHighest,
     RetentionBelowFloor,
     ShareFromInFuture,
     UnknownHolidayRegion,
@@ -50,6 +52,7 @@ from beats.domain.exceptions import (
 from beats.domain.holidays import check_region, contract_holidays
 from beats.domain.models import (
     PERSONAL_FIELDS,
+    ActorKind,
     Beat,
     JoinDecision,
     MembershipEnd,
@@ -242,8 +245,19 @@ class OrganisationService:
         return (user.display_name or user.email, user.email)
 
     async def _audit(
-        self, organisation_id: str, actor: str | None, event: str, **details: Any
+        self,
+        organisation_id: str,
+        actor: str | None,
+        event: str,
+        *,
+        actor_kind: ActorKind | None = None,
+        **details: Any,
     ) -> None:
+        """One entry in the organisation's own log. The kind defaults off the
+        actor — a member when one acted, the system when none did — and the
+        operator twins pass "operator" explicitly: an admin can tell an act
+        of ours from an act of theirs, and the operator's id is never in the
+        organisation's log (the kind is enough)."""
         subject = details.pop("subject_user_id", None)
         project_id = details.pop("project_id", None)
         await self.store.record(
@@ -251,6 +265,7 @@ class OrganisationService:
                 organisation_id=organisation_id,
                 at=self._now(),
                 actor_user_id=actor,
+                actor_kind=actor_kind,
                 event=event,
                 subject_user_id=subject,
                 project_id=project_id,
@@ -335,14 +350,25 @@ class OrganisationService:
         today = self._today(me.organisation)
         if closes_on is None:
             closes_on = today + timedelta(days=DEFAULT_CLOSE_NOTICE_DAYS)
-        if closes_on < today + timedelta(days=MIN_CLOSE_NOTICE_DAYS):
-            raise CloseNoticeTooShort(MIN_CLOSE_NOTICE_DAYS)
+        self._check_notice(me.organisation, today, closes_on)
         organisation = me.organisation.model_copy(update={"closes_on": closes_on})
         await self.store.update_organisation(organisation)
         await self._audit(
             organisation_id, actor, "organisation.closing", closes_on=closes_on.isoformat()
         )
         return organisation
+
+    @staticmethod
+    def _check_notice(organisation: Organisation, today: date, closes_on: date) -> None:
+        """A day at least MIN_CLOSE_NOTICE_DAYS out, **or any day later than
+        the one already set** (amending decision 29): the minimum protects
+        members from short notice, and a later day only gives them more — a
+        notice with five days left could otherwise never be extended by a
+        week. Moving a notice earlier still needs the full 30 days. The same
+        rule for the owner and the operator alike."""
+        later_than_set = organisation.closes_on is not None and closes_on > organisation.closes_on
+        if closes_on < today + timedelta(days=MIN_CLOSE_NOTICE_DAYS) and not later_than_set:
+            raise CloseNoticeTooShort(MIN_CLOSE_NOTICE_DAYS)
 
     async def cancel_closing(self, organisation_id: str, actor: str) -> Organisation:
         me = await self._member(organisation_id, actor, OrgRole.OWNER)
@@ -352,6 +378,86 @@ class OrganisationService:
         await self.store.update_organisation(organisation)
         await self._audit(organisation_id, actor, "organisation.closing_cancelled")
         return organisation
+
+    # --- the operator's acts (roadmaps/backoffice.md, step 3) --------------------------
+    #
+    # Each is a twin of the member's method beside it, taking no actor and
+    # sharing everything after the membership check, because the member's
+    # methods cannot be called as they stand: `_member` refuses any caller
+    # who isn't one, and in the case these exist for there is no owner at
+    # all. The rule is one rule: **the operator acts only for an organisation
+    # with no owner, and only when asked** (the request comes by mail to the
+    # PRIVACY.md address, from the address on the requester's account). A
+    # suspended owner counts as an owner — otherwise suspending an owner
+    # would hand the operator their organisation.
+
+    async def _ownerless(self, organisation_id: str) -> Organisation:
+        organisation = await self.store.get_organisation(organisation_id)
+        if organisation is None:
+            raise OrganisationNotFound()
+        if await self.store.count_owners(organisation_id) >= 1:
+            raise OrganisationHasOwner()
+        return organisation
+
+    async def operator_grant_owner(
+        self, organisation_id: str, requester_user_id: str
+    ) -> OrgMembership:
+        """The owner role goes to the requester, nobody else — and only to a
+        requester holding the highest role any active member holds: picking
+        among members is taking a side (amending decision 31)."""
+        organisation = await self._ownerless(organisation_id)
+        target = await self.store.membership(organisation_id, requester_user_id)
+        if target is None or not target.active:
+            raise MemberNotFound()
+        for member in await self.store.list_members(organisation_id):
+            if not target.role.at_least(member.role):
+                raise RequesterNotHighest()
+        updated = await self.store.set_role(organisation_id, requester_user_id, OrgRole.OWNER)
+        if updated is None:
+            raise MemberNotFound()
+        await self._audit(
+            organisation.id or organisation_id,
+            None,
+            "member.role_changed",
+            actor_kind="operator",
+            subject_user_id=requester_user_id,
+            role=OrgRole.OWNER.value,
+            was=target.role.value,
+        )
+        return updated
+
+    async def operator_begin_closing(
+        self, organisation_id: str, closes_on: date | None
+    ) -> Organisation:
+        """Start or move a closing notice on the owner's own terms: at least
+        30 days out, 60 by default, in the organisation's timezone — or any
+        day later than the one already set (_check_notice)."""
+        organisation = await self._ownerless(organisation_id)
+        today = self._today(organisation)
+        if closes_on is None:
+            closes_on = today + timedelta(days=DEFAULT_CLOSE_NOTICE_DAYS)
+        self._check_notice(organisation, today, closes_on)
+        updated = organisation.model_copy(update={"closes_on": closes_on})
+        await self.store.update_organisation(updated)
+        await self._audit(
+            organisation_id,
+            None,
+            "organisation.closing",
+            actor_kind="operator",
+            closes_on=closes_on.isoformat(),
+        )
+        return updated
+
+    async def operator_cancel_closing(self, organisation_id: str) -> Organisation:
+        organisation = await self._ownerless(organisation_id)
+        if organisation.closes_on is None:
+            raise OrganisationNotClosing()
+        updated = organisation.model_copy(update={"closes_on": None})
+        await self.store.update_organisation(updated)
+        await self._audit(
+            organisation_id, None, "organisation.closing_cancelled", actor_kind="operator"
+        )
+        return updated
 
     async def delete_organisation(self, organisation_id: str, actor: str) -> dict[str, int]:
         """The end of the organisation, once its notice has run out: every

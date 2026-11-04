@@ -10,7 +10,7 @@ from typing import Protocol
 
 from beats.brand import CONTACT_EMAIL
 from beats.domain.exceptions import DomainException
-from beats.domain.models import SuspensionKind, User
+from beats.domain.models import AccountLimits, SuspensionKind, User
 
 
 class AccountStore(Protocol):
@@ -20,6 +20,15 @@ class AccountStore(Protocol):
 
     async def get_by_id(self, user_id: str) -> User | None: ...
     async def update(self, user: User) -> User: ...
+
+
+class AccountLimitsStore(Protocol):
+    """One account_limits document per account, present only when something
+    is overridden. `MongoAccountLimitsStore` (infrastructure/operator_store.py)
+    satisfies it structurally."""
+
+    async def set(self, limits: AccountLimits) -> AccountLimits: ...
+    async def clear(self, user_id: str) -> bool: ...
 
 
 # The window between queueing an erasure and running it (step 4's job). The
@@ -62,14 +71,20 @@ class AccountService:
     on every instance. Nothing needs invalidating from this side.
     """
 
-    def __init__(self, users: AccountStore):
+    def __init__(self, users: AccountStore, limits: AccountLimitsStore | None = None):
         self._users = users
+        self._limits = limits
 
     async def _get(self, user_id: str) -> User:
         user = await self._users.get_by_id(user_id)
         if user is None:
             raise AccountNotFound()
         return user
+
+    async def find(self, user_id: str) -> User | None:
+        """The account, or None — for callers (the operator's commands) that
+        render its state rather than act on it."""
+        return await self._users.get_by_id(user_id)
 
     async def suspend(self, user_id: str, *, kind: SuspensionKind, reason: str, by: str) -> User:
         user = await self._get(user_id)
@@ -86,6 +101,23 @@ class AccountService:
         user.suspended_kind = None
         user.suspended_reason = None
         return await self._users.update(user)
+
+    async def set_limits(self, limits: AccountLimits) -> AccountLimits:
+        """Replace the account's ceilings (roadmaps/backoffice.md § Limits).
+        The whole document at once, never a field at a time: what is not sent
+        reads as "the global setting decides", so a partial write would
+        silently clear overrides the operator meant to keep. Enforcement
+        reads it through the cached lookup; nothing to invalidate."""
+        await self._get(limits.user_id)
+        if self._limits is None:
+            raise RuntimeError("AccountService was built without a limits store")
+        return await self._limits.set(limits)
+
+    async def clear_limits(self, user_id: str) -> bool:
+        await self._get(user_id)
+        if self._limits is None:
+            raise RuntimeError("AccountService was built without a limits store")
+        return await self._limits.clear(user_id)
 
     async def sign_out_everywhere(self, user_id: str) -> User:
         """End every session: a token whose sign-in is older than this moment

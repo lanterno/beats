@@ -51,7 +51,8 @@ from typing import Any, NamedTuple
 from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
 
-from beats.domain.models import MembershipEnd
+from beats.domain.models import ActorKind, MembershipEnd
+from beats.infrastructure.organisations import record_org_audit
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,9 @@ def tombstone(membership_id: str) -> str:
     return f"erased:{membership_id}"
 
 
-async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
+async def erase_account(
+    db: AsyncDatabase, user_id: str, *, actor_kind: ActorKind = "system"
+) -> ErasureReport:
     """Erase one account, keeping each organisation's working-time record.
 
     Not reversible. The organisation rows are rewritten first, so a crash
@@ -198,16 +201,13 @@ async def erase_account(db: AsyncDatabase, user_id: str) -> ErasureReport:
             {"organisation_id": org_id, "subject_user_id": user_id},
             {"$set": {"subject_user_id": stone}},
         )
-        await db.org_audit.insert_one(
-            {
-                "organisation_id": org_id,
-                "at": now,
-                "actor_user_id": None,
-                "event": "account.erased",
-                "subject_user_id": stone,
-                "project_id": None,
-                "details": {},
-            }
+        await record_org_audit(
+            db,
+            org_id,
+            "account.erased",
+            actor_kind=actor_kind,
+            subject_user_id=stone,
+            at=now,
         )
 
     # Now everything else keyed to the user, in every collection there is.

@@ -29,6 +29,7 @@ from beats.domain.models import (
     ORGANISATION_FIELDS,
     PERSONAL_FIELDS,
     Absence,
+    ActorKind,
     BalanceAdjustment,
     Beat,
     JoinDecision,
@@ -85,6 +86,35 @@ def member_row_collections(db: AsyncDatabase) -> tuple[tuple[str, AsyncCollectio
 
 def _org_project(doc: dict[str, Any]) -> OrgProject:
     return OrgProject(**{**serialize_from_document(doc), "id": str(doc["_id"])})
+
+
+async def record_org_audit(
+    db: AsyncDatabase,
+    organisation_id: str,
+    event: str,
+    *,
+    actor_kind: ActorKind,
+    subject_user_id: str | None = None,
+    project_id: str | None = None,
+    at: str | None = None,
+    details: dict[str, object] | None = None,
+) -> None:
+    """The one writer for an audit row whose actor is not a member: erasure's
+    tombstoning and the retention purge write through it (`system` when run by
+    hand, `operator` when step 4's job runs them), so the kind cannot be
+    forgotten the way the raw inserts used to leave it implied."""
+    await db.org_audit.insert_one(
+        {
+            "organisation_id": organisation_id,
+            "at": at or datetime.now(UTC).isoformat(),
+            "actor_user_id": None,
+            "actor_kind": actor_kind,
+            "event": event,
+            "subject_user_id": subject_user_id,
+            "project_id": project_id,
+            "details": dict(details or {}),
+        }
+    )
 
 
 class MongoOrganisationStore:

@@ -44,6 +44,7 @@ from starlette.staticfiles import StaticFiles
 from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
 from beats.api.routers.operator import router as operator_router
+from beats.domain.exceptions import DomainException
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
 from beats.operator.settings import OperatorSettings
 
@@ -163,6 +164,20 @@ class OperatorAuthMiddleware(BaseHTTPMiddleware):
 
 app.exception_handler(HTTPException)(http_exception_handler)
 app.exception_handler(RequestValidationError)(validation_exception_handler)
+
+
+@app.exception_handler(DomainException)
+async def domain_exception_handler(request: Request, exc: DomainException):
+    """The services the commands delegate to raise the same domain errors
+    they raise for members (ORGANISATION_HAS_OWNER, ACCOUNT_NOT_FOUND, …);
+    the envelope is the shared one."""
+    return error_envelope(
+        status_code=exc.status_code,
+        detail=exc.message,
+        code=getattr(exc, "code", None),
+        fields=getattr(exc, "fields", None),
+    )
+
 
 app.include_router(operator_router)
 app.add_middleware(OperatorAuthMiddleware)

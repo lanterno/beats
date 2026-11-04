@@ -122,6 +122,7 @@ class OrgAuditRow:
     at: datetime
     event: str
     actor_user_id: str | None
+    actor_kind: str | None
     subject_user_id: str | None
     project_id: str | None
 

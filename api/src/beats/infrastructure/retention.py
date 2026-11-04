@@ -34,8 +34,9 @@ from typing import Any, NamedTuple
 
 from pymongo.asynchronous.database import AsyncDatabase
 
+from beats.domain.models import ActorKind
 from beats.domain.retention import effective_retention_years, retention_cutoff
-from beats.infrastructure.organisations import member_row_collections
+from beats.infrastructure.organisations import member_row_collections, record_org_audit
 
 _TOMBSTONE = {"$regex": "^erased:"}
 
@@ -55,7 +56,11 @@ class PurgeReport(NamedTuple):
 
 
 async def purge_expired_records(
-    db: AsyncDatabase, *, today: date | None = None, apply: bool = False
+    db: AsyncDatabase,
+    *,
+    today: date | None = None,
+    apply: bool = False,
+    actor_kind: ActorKind = "system",
 ) -> PurgeReport:
     """One pass over every organisation. Dry by default: counts what would
     go without touching a row; with `apply`, deletes tombstoned rows first
@@ -162,16 +167,12 @@ async def purge_expired_records(
         )
 
         if apply and any(counts.values()):
-            await db.org_audit.insert_one(
-                {
-                    "organisation_id": org_id,
-                    "at": datetime.now(UTC).isoformat(),
-                    "actor_user_id": None,
-                    "event": "retention.purged",
-                    "subject_user_id": None,
-                    "project_id": None,
-                    "details": {"cutoff": day, "years": years, **counts},
-                }
+            await record_org_audit(
+                db,
+                org_id,
+                "retention.purged",
+                actor_kind=actor_kind,
+                details={"cutoff": day, "years": years, **counts},
             )
         report.append(OrganisationPurge(org_id, org.get("name", "?"), years, cutoff, counts))
 

@@ -16,7 +16,7 @@ days, the reason `/api/reports` takes its token in a header.
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from beats.operator.dependencies import CurrentOperator, OperatorReadsDep
+from beats.operator.dependencies import CommandContextDep, CurrentOperator, OperatorReadsDep
 from beats.operator.reads import (
     AbuseReport,
     AccountDetail,
@@ -27,6 +27,7 @@ from beats.operator.reads import (
     OrganisationSummary,
     OrgAuditRow,
 )
+from beats.operator.runner import run_command
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
 
@@ -153,6 +154,22 @@ async def audit_log(
 ) -> list[dict]:
     """The operator's own audit — empty until step 3's commands write it."""
     return await reads.audit_log(limit)
+
+
+class CommandRequest(BaseModel):
+    args: dict = Field(default_factory=dict)
+    # What the operator typed back — the account's email, the organisation's
+    # name — compared by the runner against the subject, never stored.
+    confirmation: str | None = None
+
+
+@router.post("/commands/{name}")
+async def run(name: str, body: CommandRequest, ctx: CommandContextDep) -> dict:
+    """The one path a mutation takes (roadmaps/backoffice.md § Commands are
+    objects): role, confirmation, describe, execute, audit — so nothing is
+    unaudited and no rule lives in a handler. Answers the audit entry, and
+    the job when one was queued (step 4)."""
+    return await run_command(ctx, name, body.args, body.confirmation)
 
 
 @router.get("/jobs")

@@ -446,7 +446,14 @@ class MongoOperatorReads:
         cursor = (
             self._db.org_audit.find(
                 {"organisation_id": organisation_id},
-                projection=["at", "event", "actor_user_id", "subject_user_id", "project_id"],
+                projection=[
+                    "at",
+                    "event",
+                    "actor_user_id",
+                    "actor_kind",
+                    "subject_user_id",
+                    "project_id",
+                ],
             )
             .sort("at", -1)
             .limit(limit)
@@ -456,6 +463,8 @@ class MongoOperatorReads:
                 at=_as_datetime(doc.get("at")) or datetime.now(UTC),
                 event=doc.get("event", ""),
                 actor_user_id=doc.get("actor_user_id"),
+                actor_kind=doc.get("actor_kind")
+                or ("member" if doc.get("actor_user_id") else "system"),
                 subject_user_id=doc.get("subject_user_id"),
                 project_id=doc.get("project_id"),
             )

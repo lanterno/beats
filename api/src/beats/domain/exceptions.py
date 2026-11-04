@@ -609,6 +609,28 @@ class CloseNoticeTooShort(DomainException):
         super().__init__(f"Closing needs at least {minimum_days} days' notice")
 
 
+class OrganisationHasOwner(DomainException):
+    """The operator acts only for an organisation with no owner, and only
+    when asked: while an owner exists the organisation can act for itself,
+    and an operator who acts there is taking a side in its dispute. A
+    suspended owner counts."""
+
+    status_code = 409
+    message = "The organisation has an owner, who can act for it"
+    code = "ORGANISATION_HAS_OWNER"
+
+
+class RequesterNotHighest(DomainException):
+    """The owner role goes to the requester, nobody else — and only to a
+    requester holding the highest role any active member holds: picking
+    among members is taking a side, and the requester must be the person
+    the organisation already trusted most."""
+
+    status_code = 409
+    message = "Another active member outranks the requester"
+    code = "REQUESTER_NOT_HIGHEST"
+
+
 class OrganisationNotClosing(DomainException):
     """Deletion and cancel both need a closing under way."""
 

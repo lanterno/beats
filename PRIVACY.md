@@ -35,6 +35,8 @@ A deployment can also offer **single sign-on** through an OpenID Connect provide
 
 I can suspend an account. A suspended account is refused everywhere it can act — the web app, the apps, the daemon, the wall clock, even the report links it shared — with one sentence: "This account is suspended. Write to <ahmed.elghareeb@proton.me> from this account's address." It is not told why; writing to that address is how it gets resolved. Suspension deletes nothing: lifting it puts the account back exactly as it was, and nothing you wrote while offline is thrown away because of it. An organisation you are in keeps the hours already on its record — suspension stops the account acting, not what the record already holds. I can also end an account's signed-in sessions ("sign out everywhere"), which signs its browsers out and touches nothing else; paired devices stay paired unless revoked on their own.
 
+Anything I do through the control plane is written to an audit record of its own, which nobody can edit; where the act touches an organisation — only one left with no owner, and only when its members ask — it also lands in that organisation's own audit log, marked as the operator's act, so its admins can tell an act of mine from an act of theirs.
+
 Beats also keeps, per account, the **day** a request last carried its credential — a date, never a time, written at most once a day — and per paired device the time it last authenticated, also at most once a day. That is what lets an operator see that an account is in use at all without reading when you work.
 
 ## Third-party integrations (all optional)
