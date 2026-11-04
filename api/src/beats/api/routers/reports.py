@@ -35,9 +35,11 @@ from fastapi import APIRouter, Header, Request, Response
 from beats.api.dependencies import ReportLinkLookupDep, billing_service_for
 from beats.api.routers.auth import limiter
 from beats.api.schemas import ReportEntryResponse, ReportLineResponse, ReportResponse
+from beats.auth import account_access
 from beats.domain.billing import ClientBilling
 from beats.domain.exceptions import ReportNotFound
 from beats.domain.models import ReportLink
+from beats.infrastructure.database import Database
 
 router = APIRouter(
     prefix="/api/reports",
@@ -115,6 +117,12 @@ async def read_report(
     """
     owned = await lookup.find_by_token(token)
     if owned is None:
+        raise ReportNotFound()
+    # A suspended account's links answer the route's one 404 like every other
+    # way a token fails: suspension is for abuse, and a public link serving
+    # the account's data is the account acting.
+    owner = await account_access.resolve(Database.get_db(), owned.user_id)
+    if not owner.exists or owner.suspended:
         raise ReportNotFound()
     # The one place in the API where a request's account comes from a stored
     # record rather than a token the caller proved. Everything below it is

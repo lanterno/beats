@@ -11,6 +11,7 @@ from slowapi.util import get_remote_address
 from beats.auth.session import SessionManager
 from beats.auth.storage import MongoCredentialStorage
 from beats.auth.webauthn import WebAuthnManager
+from beats.domain.accounts import suspension_detail
 from beats.domain.models import User
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import MongoUserRepository, UserRepository
@@ -86,6 +87,23 @@ def get_webauthn_manager(
 
 
 WebAuthnDep = Annotated[WebAuthnManager, Depends(get_webauthn_manager)]
+
+
+def refuse_suspended(user: User | None) -> None:
+    """403 ACCOUNT_SUSPENDED for a suspended account, at a sign-in door.
+
+    Called only after the ceremony or code exchange has succeeded, so only
+    someone who can actually sign in learns that the account is suspended.
+    The middleware never sees these doors — they are public paths.
+    """
+    if user is not None and user.suspended:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ACCOUNT_SUSPENDED",
+                "message": suspension_detail(user.suspended_kind, user.suspended_at),
+            },
+        )
 
 
 class RegisterStartRequest(BaseModel):
@@ -189,6 +207,10 @@ async def verify_registration(
             user=user,
             device_name=body.device_name,
         )
+        # A retried sign-up on an existing (abandoned) account can reach a
+        # suspended one. The ceremony ran — the refusal tells the account
+        # holder, not a prober.
+        refuse_suspended(user)
         return RegistrationVerifyResponse(
             verified=result["verified"],
             token=result["token"],
@@ -220,11 +242,13 @@ async def get_login_options(request: Request, webauthn: WebAuthnDep) -> LoginOpt
 async def verify_login(
     request: Request,
     body: LoginVerifyRequest,
+    user_repo: UserRepoDep,
     webauthn: WebAuthnDep,
 ) -> LoginVerifyResponse:
     """Verify an authentication response and return a session token."""
     try:
         result = await webauthn.verify_authentication(credential=body.credential)
+        refuse_suspended(await user_repo.get_by_id(result["user_id"]))
         return LoginVerifyResponse(
             verified=result["verified"],
             token=result["token"],

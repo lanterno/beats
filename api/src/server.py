@@ -3,9 +3,11 @@
 import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
 
+from bson import ObjectId
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,7 +51,8 @@ from beats.api.routers.signals import router as signals_router
 from beats.api.routers.sso import router as sso_router
 from beats.api.routers.timer import router as timer_router
 from beats.api.routers.webhooks import router as webhooks_router
-from beats.auth import device_access
+from beats.auth import account_access, device_access
+from beats.domain.accounts import suspension_detail
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.database import Database
 from beats.infrastructure.migrations import (
@@ -217,6 +220,22 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     Sets request.state.user_id on successful auth.
     """
 
+    @staticmethod
+    async def _stamp_last_seen(user_id: str, access: account_access.AccountAccess) -> None:
+        """Write today onto `User.last_seen_on` — a date, deliberately not a
+        time (a session's times are the account's own business). The cached
+        entry remembers the day, and the update is conditional, so an account
+        costs one write a day, not one a request, however many instances see
+        it."""
+        today = datetime.now(UTC).date()
+        if access.last_seen_on == today:
+            return
+        await Database.get_db().users.update_one(
+            {"_id": ObjectId(user_id), "last_seen_on": {"$ne": today.isoformat()}},
+            {"$set": {"last_seen_on": today.isoformat()}},
+        )
+        account_access.note_seen(user_id, today)
+
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         # Allow OPTIONS requests (CORS preflight) to pass through
         if request.method == "OPTIONS":
@@ -233,7 +252,43 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             # Try session token first
             payload = session_manager.validate_session_token(token)
             if payload is not None:
-                request.state.user_id = payload["sub"]
+                user_id = payload["sub"]
+
+                # The account behind the session, cached briefly
+                # (auth/account_access.py). Runs on public paths too — this
+                # branch sits before the is_public check, and SSO linking
+                # depends on that: a suspended account linking an identity
+                # should be refused, and is.
+                access = await account_access.resolve(Database.get_db(), user_id)
+                if not access.exists:
+                    # Erased while the token lived. The session has ended,
+                    # and a client's handling of a 401 is right for it.
+                    return error_envelope(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid or expired session token",
+                        code="INVALID_TOKEN",
+                    )
+                if access.suspended:
+                    return error_envelope(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=suspension_detail(access.suspended_kind, access.suspended_at),
+                        code="ACCOUNT_SUSPENDED",
+                    )
+                # Sign-out everywhere: a session whose sign-in is older than
+                # the account's cut is refused. Compared against auth_time,
+                # which every refresh copies — iat would read newer on each
+                # refresh and never be caught.
+                if access.sessions_valid_after is not None and payload["auth_time"] < int(
+                    access.sessions_valid_after.timestamp()
+                ):
+                    return error_envelope(
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Invalid or expired session token",
+                        code="INVALID_TOKEN",
+                    )
+
+                await self._stamp_last_seen(user_id, access)
+                request.state.user_id = user_id
                 return await call_next(request)
 
             # Try device token
@@ -252,11 +307,37 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     reg = await repo.get_by_device_id(device_id)
                     allowed = reg is not None and not reg.revoked
                     device_access.remember(device_id, allowed=allowed)
+                    if allowed:
+                        # The registration's own last-seen, stamped on the
+                        # cache miss and conditionally, so it too costs one
+                        # write a day.
+                        await repo.update_last_seen(device_id)
                 if not allowed:
                     return error_envelope(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail="Device token has been revoked",
                         code="DEVICE_REVOKED",
+                    )
+
+                # A device token has no expiry by design, so suspension must
+                # hold on this branch too: an account whose daemon still
+                # writes flow windows has not been suspended. Checked after
+                # revocation, before the path allowlist.
+                account_id = device_payload["sub"]
+                access = await account_access.resolve(Database.get_db(), account_id)
+                if not access.exists:
+                    # Erasure deletes registrations too, so this is the
+                    # answer that branch already gives.
+                    return error_envelope(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Device token has been revoked",
+                        code="DEVICE_REVOKED",
+                    )
+                if access.suspended:
+                    return error_envelope(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=suspension_detail(access.suspended_kind, access.suspended_at),
+                        code="ACCOUNT_SUSPENDED",
                     )
 
                 # Check path allowlist
@@ -267,7 +348,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                         code="DEVICE_PATH_FORBIDDEN",
                     )
 
-                request.state.user_id = device_payload["sub"]
+                await self._stamp_last_seen(account_id, access)
+                request.state.user_id = account_id
                 request.state.device_id = device_id
                 return await call_next(request)
 

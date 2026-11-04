@@ -30,7 +30,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from beats.api.routers.auth import UserRepoDep, _session_manager, limiter
+from beats.api.routers.auth import UserRepoDep, _session_manager, limiter, refuse_suspended
 from beats.auth.oidc import (
     OIDCProvider,
     OIDCRegistry,
@@ -255,6 +255,10 @@ async def complete(
         user, created = await accounts.sign_in(identity, allow_signup=provider.allow_signup)
     except SSOSignupClosed as e:
         raise sso_error(status.HTTP_403_FORBIDDEN, "SSO_SIGNUP_CLOSED", str(e)) from e
+
+    # After the exchange, like the passkey doors: only someone the provider
+    # vouched for learns that the account is suspended.
+    refuse_suspended(user)
 
     token = _session_manager.create_session_token(user.id or "", user.email)
     # Neither the provider nor the person. PRIVACY.md promises that nothing

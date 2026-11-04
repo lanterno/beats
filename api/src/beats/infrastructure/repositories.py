@@ -1022,9 +1022,21 @@ class MongoDeviceRegistrationRepository(DeviceRegistrationRepository):
         return result.modified_count > 0
 
     async def update_last_seen(self, device_id: str) -> None:
+        """Stamp when the device last authenticated, at most once a day.
+
+        A BSON datetime, not the ISO string this used to write (the bug
+        `date_pairing_codes` had to fix for pairing codes): a string never
+        matches the `$lt` below, so the once-a-day condition would stop
+        holding. Called by the auth middleware on a device-cache miss.
+        """
+        now = datetime.now(UTC)
+        day_start = datetime(now.year, now.month, now.day, tzinfo=UTC)
         await self.collection.update_one(
-            {"device_id": device_id},
-            {"$set": {"last_seen": datetime.now(UTC).isoformat()}},
+            {
+                "device_id": device_id,
+                "$or": [{"last_seen": None}, {"last_seen": {"$lt": day_start}}],
+            },
+            {"$set": {"last_seen": now}},
         )
 
 

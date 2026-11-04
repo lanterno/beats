@@ -17,7 +17,7 @@ from beats.api.dependencies import (
     ProjectServiceDep,
     TimerServiceDep,
 )
-from beats.api.routers.auth import get_session_manager, limiter
+from beats.api.routers.auth import UserRepoDep, get_session_manager, limiter, refuse_suspended
 from beats.auth import device_access
 from beats.domain.models import DeviceRegistration, PairingCode
 
@@ -254,6 +254,7 @@ async def exchange_pair_code(
     body: PairExchangeRequest,
     pairing_repo: PairingCodeRepoDep,
     device_repo: DeviceRegistrationRepoDep,
+    user_repo: UserRepoDep,
 ) -> PairExchangeResponse:
     """Exchange a pairing code for a long-lived device token (public endpoint).
 
@@ -275,6 +276,11 @@ async def exchange_pair_code(
 
     # One-time use: delete immediately
     await pairing_repo.delete(pairing_code.id)
+
+    # A code made before a suspension must not mint a device token that
+    # starts working the moment the suspension lifts. The code was real, so
+    # the refusal reaches the account holder, not a guesser.
+    refuse_suspended(await user_repo.get_by_id(pairing_code.user_id))
 
     # Create device registration
     device_id = str(uuid.uuid4())

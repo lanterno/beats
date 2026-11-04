@@ -39,6 +39,16 @@ class LinkedIdentity(BaseModel):
     linked_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class SuspensionKind(StrEnum):
+    """Why an account is suspended. The kind picks the refusal's wording
+    (an erasure's names the day it ends), and a cancelled erasure lifts
+    only its own kind — never a suspension for abuse."""
+
+    ABUSE = "abuse"
+    ERASURE = "erasure"
+    OTHER = "other"
+
+
 class User(TzNormalizedModel):
     """A registered user of the Beats system.
 
@@ -63,8 +73,31 @@ class User(TzNormalizedModel):
     # in step with the provider until then.
     sso_provisioned: bool = False
 
+    # Suspension: refused everywhere the account can act, 403
+    # ACCOUNT_SUSPENDED (roadmaps/backoffice.md § Suspension, end to end).
+    # `suspended_at` set is what "suspended" means; the reason is the
+    # operator's own and is never shown to the person.
+    suspended_at: datetime | None = None
+    suspended_by: str | None = None
+    suspended_kind: SuspensionKind | None = None
+    suspended_reason: str | None = None
+
+    # Sign out everywhere: a session whose sign-in (`auth_time`) is older
+    # than this is refused. One field — no token list to share between
+    # instances.
+    sessions_valid_after: datetime | None = None
+
+    # The day (UTC) a request last carried this account's credential. A
+    # date, not a time: a session's times are the account's own business,
+    # and a day is all the operator's "is this account in use?" needs.
+    last_seen_on: date_type | None = None
+
     def identity_for(self, provider: str) -> LinkedIdentity | None:
         return next((i for i in self.identities if i.provider == provider), None)
+
+    @property
+    def suspended(self) -> bool:
+        return self.suspended_at is not None
 
 
 class GoalType(StrEnum):
