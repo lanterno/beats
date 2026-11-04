@@ -21,6 +21,15 @@ export interface PendingMutation {
 	path: string;
 	body: unknown;
 	clientId: string;
+	/**
+	 * The account (the token's `sub`) the write was made under. The queue is
+	 * the browser's, not the account's, so a write replays only under its own
+	 * account — never under whoever signs in next on a shared machine. A write
+	 * queued before a suspension simply waits, under its own account, for the
+	 * next sign-in that is allowed. Absent on rows queued before this field
+	 * existed; those replay as they always did.
+	 */
+	accountId?: string;
 	enqueuedAt: string;
 	attempts: number;
 	lastError?: string;
@@ -148,14 +157,25 @@ export interface DrainResult {
  * Replay queued mutations in insertion order. Returns when either the queue
  * is empty or a replay throws — the latter keeps the mutation in place so it
  * can be retried on the next reconnect / tick.
+ *
+ * With `accountId`, a stamped row belonging to another account is left in
+ * place and skipped — neither replayed, nor a failure, nor counted drained.
+ * It waits, in its own order, for its own account's next sign-in. Unstamped
+ * rows predate the stamp and replay under anyone, as they always did.
  */
 export async function drainPending(
 	replay: (mutation: PendingMutation) => Promise<void>,
+	accountId?: string | null,
 ): Promise<DrainResult> {
 	const pending = await listPending();
 	let drained = 0;
+	let skipped = 0;
 
 	for (const mutation of pending) {
+		if (mutation.accountId !== undefined && mutation.accountId !== accountId) {
+			skipped += 1;
+			continue;
+		}
 		try {
 			await replay(mutation);
 			if (mutation.id !== undefined) await removeMutation(mutation.id);
@@ -167,5 +187,5 @@ export async function drainPending(
 		}
 	}
 
-	return { drained, remaining: 0 };
+	return { drained, remaining: skipped };
 }

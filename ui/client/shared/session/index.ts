@@ -45,6 +45,24 @@ export function sessionToken(): string | null {
 	return port.getToken();
 }
 
+/**
+ * The signed-in account's id — the session token's `sub` — or null when
+ * signed out or unreadable. Synchronous, unlike the user key, which waits on
+ * `/me`: the write queue stamps every queued write with the account it was
+ * made under, and a write can be made before `/me` has answered.
+ */
+export function sessionAccountId(): string | null {
+	const token = port.getToken();
+	if (!token) return null;
+	try {
+		const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+		const sub = JSON.parse(atob(base64)).sub;
+		return typeof sub === "string" && sub !== "" ? sub : null;
+	} catch {
+		return null;
+	}
+}
+
 export function endSession(): void {
 	port.clear();
 }

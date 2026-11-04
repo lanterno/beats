@@ -75,6 +75,7 @@ export type {
 } from "./mutationQueue";
 export { rememberReturnTo, takeReturnTo } from "./returnTo";
 // Hooks
+export { recordSuspension, suspensionNotice, useSuspensionNotice } from "./suspension";
 export { type CommandContext, useCommandActions } from "./useCommandActions";
 export { useFavicon } from "./useFavicon";
 export { useInstallPrompt } from "./useInstallPrompt";

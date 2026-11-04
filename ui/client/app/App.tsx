@@ -28,11 +28,32 @@ import ProjectsIndex from "@/pages/projects-index";
 import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
-import { leaveLanding, rememberReturnTo, takeReturnTo } from "@/shared/lib";
+import { leaveLanding, rememberReturnTo, takeReturnTo, useSuspensionNotice } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
 import { QueryProvider } from "./providers";
+
+/**
+ * The account is suspended: the API's own sentence, full-page, instead of the
+ * app (roadmaps/backoffice.md step 1). It names the address to write to; the
+ * session has already ended, the sync engine has stopped, and every queued
+ * write waits under its own account. A reload starts from the login screen —
+ * where a suspended sign-in is refused with the same sentence.
+ */
+function SuspendedNotice({ detail }: { detail: string }) {
+	return (
+		<div className="min-h-screen bg-background flex items-center justify-center p-6">
+			<div className="max-w-md text-center space-y-4">
+				<h1 className="text-xl font-heading font-bold">Account suspended</h1>
+				<p className="text-muted-foreground">{detail}</p>
+				<p className="text-muted-foreground text-sm">
+					Nothing you tracked has been deleted, and anything saved on this device waits here.
+				</p>
+			</div>
+		</div>
+	);
+}
 
 /**
  * Protected Route wrapper that redirects to login if not authenticated.
@@ -97,6 +118,14 @@ function AuthInitializer({ children }: { children: React.ReactNode }) {
 }
 
 export function App() {
+	const suspended = useSuspensionNotice();
+	if (suspended !== null) {
+		return (
+			<ErrorBoundary>
+				<SuspendedNotice detail={suspended} />
+			</ErrorBoundary>
+		);
+	}
 	return (
 		<ErrorBoundary>
 			<QueryProvider>

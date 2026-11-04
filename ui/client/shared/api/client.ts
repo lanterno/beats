@@ -4,7 +4,7 @@
  * Mirrors the backend's exception handling pattern.
  */
 
-import { endSession, sessionToken } from "@/shared/session";
+import { endSession, sessionAccountId, sessionToken } from "@/shared/session";
 import { config } from "../config";
 import {
 	countPending,
@@ -13,6 +13,7 @@ import {
 	newClientId,
 	type PendingMutation,
 } from "../lib/mutationQueue";
+import { recordSuspension } from "../lib/suspension";
 
 /**
  * One entry in the {@link ApiError.fields} array. Mirrors the API's
@@ -158,16 +159,25 @@ function getReadHeaders(): Record<string, string> {
  * The ApiError a non-ok response stands for, read off the envelope
  * (`{detail, code, fields?}`). A 401 also ends the session and sends the
  * browser home, whoever made the call: an expired token is the same on
- * every route.
+ * every route. A 403 ACCOUNT_SUSPENDED instead shows the suspension notice
+ * (shared/lib/suspension.ts) — the session ends there too, but the person
+ * is told why rather than finding themselves signed out into a loop.
  */
 export async function apiErrorFrom(response: Response): Promise<ApiError> {
+	const errorBody = await response.json().catch(() => ({}));
+
 	// Handle expired/invalid session tokens
 	if (response.status === 401) {
 		endSession();
 		window.location.replace("/");
 	}
-
-	const errorBody = await response.json().catch(() => ({}));
+	if (response.status === 403 && errorBody.code === "ACCOUNT_SUSPENDED") {
+		recordSuspension(
+			typeof errorBody.detail === "string" && errorBody.detail !== ""
+				? errorBody.detail
+				: "This account is suspended.",
+		);
+	}
 	const fields = Array.isArray(errorBody.fields)
 		? (errorBody.fields as ApiErrorField[])
 		: undefined;
@@ -337,12 +347,19 @@ export async function apiMutate<T>(
 	const headers: Record<string, string> = {};
 	if (idempotent) headers["X-Client-Id"] = clientId;
 
+	// Every queued write is stamped with the account it was made under, read
+	// synchronously off the token's `sub`, and replays only under that
+	// account (drainPending): the IndexedDB queue is the browser's, not the
+	// account's, and an unstamped write would replay under whoever signs in
+	// next on this machine.
+	const accountId = sessionAccountId() ?? undefined;
+
 	// Queued behind earlier writes, not raced past them. Only for a caller
 	// that would have queued on failure anyway: `queueOnFailure: false` asks
 	// for the answer now and gets to keep asking.
 	if (queueOnFailure && (await countPending()) > 0) {
 		try {
-			await enqueueMutation({ method, path, body, clientId });
+			await enqueueMutation({ method, path, body, clientId, accountId });
 			return { status: "queued", clientId };
 		} catch {
 			// The queue could not take it. Sending is then better than
@@ -365,6 +382,7 @@ export async function apiMutate<T>(
 					path,
 					body,
 					clientId,
+					accountId,
 				};
 				await enqueueMutation(pending);
 				return { status: "queued", clientId };

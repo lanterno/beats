@@ -11,7 +11,9 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, replayMutation } from "@/shared/api";
+import { sessionAccountId } from "@/shared/session";
 import { drainPending, listPending, type PendingMutation } from "./mutationQueue";
+import { subscribeSuspension, suspensionNotice } from "./suspension";
 
 const IDLE_POLL_MS = 30_000;
 const ACTIVE_POLL_MS = 5_000;
@@ -64,10 +66,16 @@ class SyncController {
 
 	async drain(): Promise<void> {
 		if (this.draining) return;
+		// A suspended account replays nothing: its writes wait, stamped, for
+		// a sign-in that is allowed. 403s are retryable, so nothing would be
+		// dropped anyway — this just stops the futile traffic.
+		if (suspensionNotice() !== null) return;
 		this.draining = true;
 		this.emit({ syncing: true });
 		try {
-			const result = await drainPending(replayPoisonAware);
+			// Only the signed-in account's writes (and unstamped rows from
+			// before the stamp existed); another account's wait in place.
+			const result = await drainPending(replayPoisonAware, sessionAccountId());
 			await this.refreshPending();
 			this.emit({ syncing: false, lastError: result.error });
 		} finally {
@@ -78,6 +86,15 @@ class SyncController {
 	start(): void {
 		if (this.started) return;
 		this.started = true;
+
+		// A suspension stops the polling outright, until the page reloads:
+		// the full-page notice is up, and a timer asking the API every few
+		// seconds for another 403 serves nobody.
+		this.stopFns.push(
+			subscribeSuspension(() => {
+				if (suspensionNotice() !== null) this.stop();
+			}),
+		);
 
 		const onOnline = () => {
 			this.emit({ online: true });
