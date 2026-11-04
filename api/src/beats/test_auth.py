@@ -8,6 +8,7 @@ import jwt
 import pytest
 
 from beats.auth.storage import StoredCredential
+from beats.settings import settings
 
 # SessionManager — JWT tokens, WebAuthn challenges, revocation
 
@@ -1158,7 +1159,7 @@ class TestMongoCredentialStorage:
     async def _setup(self):
         from beats.infrastructure.database import Database
 
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         db = Database.get_db()
         await db.credentials.delete_many({})
         yield

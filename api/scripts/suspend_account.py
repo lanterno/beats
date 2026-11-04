@@ -26,10 +26,11 @@ from beats.domain.accounts import AccountService
 from beats.domain.models import SuspensionKind
 from beats.infrastructure.database import Database
 from beats.infrastructure.repositories import MongoUserRepository
+from beats.settings import settings
 
 
 async def run(email: str, args: argparse.Namespace) -> int:
-    await Database.connect()
+    await Database.connect(settings.db_dsn, settings.db_name)
     try:
         db = Database.get_db()
         doc = await db.users.find_one({"email": email})

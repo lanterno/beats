@@ -50,6 +50,7 @@ from beats.coach.repos import (
 )
 from beats.coach.usage import BudgetExceeded, UsageTracker
 from beats.infrastructure.database import Database
+from beats.settings import settings
 
 
 def _async_db():
@@ -277,9 +278,9 @@ class TestUsageTracker:
     @pytest.fixture(autouse=True)
     async def _setup(self):
         # Connect Database to the testcontainer's Mongo. The conftest
-        # sets DB_DSN/DB_NAME; Database.connect() reads those by
-        # default via beats.settings.
-        await Database.connect()
+        # sets DB_DSN/DB_NAME, which beats.settings reads; connect()
+        # itself no longer touches the settings.
+        await Database.connect(settings.db_dsn, settings.db_name)
         # Wipe any prior usage rows so each test starts deterministic.
         await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
         yield
@@ -481,7 +482,7 @@ class TestGenerateBrief:
 
     @pytest.fixture(autouse=True)
     async def _setup(self):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[DAILY_BRIEFS_COLLECTION].delete_many({})
         yield
         await Database.disconnect()
@@ -611,7 +612,7 @@ class TestGetAndListBriefs:
 
     @pytest.fixture(autouse=True)
     async def _setup(self):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[DAILY_BRIEFS_COLLECTION].delete_many({})
         yield
         await Database.disconnect()
@@ -976,7 +977,7 @@ class TestHandleChatTurn:
 
     @pytest.fixture(autouse=True)
     async def _setup(self, monkeypatch):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[COACH_CONVERSATIONS_COLLECTION].delete_many({})
 
         # Replace the upstream context builder so we don't need to
@@ -1450,7 +1451,7 @@ class TestRewriteCoachMemory:
 
     @pytest.fixture(autouse=True)
     async def _setup(self, monkeypatch):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[COACH_MEMORY_COLLECTION].delete_many({})
 
         # Stub the heavy upstream — _recent_data_summary calls many
@@ -2288,7 +2289,7 @@ class TestBuildUserContext:
     async def _setup_db(self):
         """build_user_context reads from MemoryStore which uses
         Database.get_db(). Connect for the duration of the test."""
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[COACH_MEMORY_COLLECTION].delete_many({})
         yield
         await Database.disconnect()
@@ -2586,7 +2587,7 @@ class TestGatewayBudgetInvariant:
 
     @pytest.fixture(autouse=True)
     async def _setup(self):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
         yield
         await Database.disconnect()
@@ -2765,7 +2766,7 @@ class TestGatewayCacheControlIntegration:
     async def _setup(self, monkeypatch):
         from beats import settings as settings_module
 
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
         # Disable budget enforcement so the tests focus on the
         # cache-control integration.
@@ -3015,7 +3016,7 @@ class TestBuildDayContext:
 
     @pytest.fixture(autouse=True)
     async def _setup(self):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         # Clean any stale biometric / calendar docs from prior tests
         db = Database.get_db()
         await db.biometric_days.delete_many({})
@@ -4082,7 +4083,7 @@ class TestGatewayRetryAndMissingKey:
 
     @pytest.fixture(autouse=True)
     async def _setup(self):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await Database.get_db()[LLM_USAGE_COLLECTION].delete_many({})
         yield
         await Database.disconnect()

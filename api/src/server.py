@@ -54,7 +54,7 @@ from beats.api.routers.webhooks import router as webhooks_router
 from beats.auth import account_access, device_access
 from beats.domain.accounts import suspension_detail
 from beats.domain.exceptions import DomainException
-from beats.infrastructure.database import Database
+from beats.infrastructure.database import Database, ensure_indexes
 from beats.infrastructure.migrations import (
     clear_personal_goal_on_day_jobs,
     date_pairing_codes,
@@ -164,8 +164,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application lifespan manager for startup/shutdown events."""
     # Startup: Connect to database
     logger.info("Connecting to database...")
-    await Database.connect()
+    await Database.connect(settings.db_dsn, settings.db_name)
     logger.info("Database connected.")
+    # The public API is the one deployment that builds indexes — it holds
+    # the grant; the operator deployment and the scripts never need one.
+    await ensure_indexes(Database.get_db())
     # A project without `kind` predates contracts; stamp it once, here, so
     # the terms derived from its overrides are stored and then owned by the
     # user rather than recomputed on every read. Then — in this order, since

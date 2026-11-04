@@ -18,6 +18,7 @@ from beats.api.middleware.idempotency import (
     ensure_mutation_log_indexes,
 )
 from beats.infrastructure.database import Database
+from beats.settings import settings
 
 
 class TestIdempotencyReservation:
@@ -29,7 +30,7 @@ class TestIdempotencyReservation:
 
     @pytest.fixture(autouse=True)
     async def _db(self):
-        await Database.connect()
+        await Database.connect(settings.db_dsn, settings.db_name)
         await ensure_mutation_log_indexes()
         await Database.get_db().mutation_log.delete_many({})
         yield

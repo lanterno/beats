@@ -21,10 +21,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from beats.infrastructure.database import Database
 from beats.infrastructure.retention import purge_expired_records
+from beats.settings import settings
 
 
 async def run(apply: bool) -> int:
-    await Database.connect()
+    await Database.connect(settings.db_dsn, settings.db_name)
     try:
         report = await purge_expired_records(Database.get_db(), apply=apply)
     finally:

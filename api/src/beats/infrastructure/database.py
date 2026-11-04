@@ -1,9 +1,16 @@
-"""Database connection management using the PyMongo async MongoDB driver."""
+"""Database connection management using the PyMongo async MongoDB driver.
+
+Deliberately free of `beats.settings`: importing that module demands the
+API's secrets (JWT_SECRET among them), and this file is imported by every
+`beats.infrastructure.*` module — which the operator deployment composes
+too, and it must never hold the session secret
+(roadmaps/backoffice.md § Two composition roots). The caller names the
+database; `server.py` passes the API's settings, `operator_server.py` its
+own.
+"""
 
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
-
-from beats.settings import settings
 
 
 async def ensure_indexes(db: AsyncDatabase) -> None:
@@ -119,18 +126,17 @@ class Database:
     db: AsyncDatabase | None = None
 
     @classmethod
-    async def connect(cls, dsn: str | None = None, db_name: str | None = None) -> None:
+    async def connect(cls, dsn: str, db_name: str) -> None:
         """Establish connection to MongoDB.
 
-        Args:
-            dsn: MongoDB connection string. Defaults to settings.db_dsn.
-            db_name: Database name. Defaults to settings.db_name.
+        Builds nothing: index building moved to the public API's lifespan
+        (`server.py` calls `ensure_indexes` after connecting), so the one
+        deployment that holds the index grant is the one that builds them,
+        and a caller on a narrow credential — the operator deployment, a
+        script — can connect without needing one.
         """
-        dsn = dsn or settings.db_dsn
-        db_name = db_name or settings.db_name
         cls.client = AsyncMongoClient(dsn)
         cls.db = cls.client[db_name]
-        await ensure_indexes(cls.db)
 
     @classmethod
     async def disconnect(cls) -> None:
