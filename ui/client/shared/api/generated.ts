@@ -4084,6 +4084,8 @@ export interface components {
         };
         /** AuditEventResponse */
         AuditEventResponse: {
+            /** Actor Kind */
+            actor_kind: string | null;
             /** Actor User Id */
             actor_user_id: string | null;
             /**

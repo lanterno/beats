@@ -344,10 +344,14 @@ export function toManagedContract(api: ApiManagedContract): ManagedContract {
 	};
 }
 
+const ACTOR_KINDS = ["member", "system", "operator"] as const;
+
 export function toAuditEvent(api: ApiAuditEvent): AuditEvent {
+	const kind = ACTOR_KINDS.find((k) => k === api.actor_kind);
 	return {
 		at: api.at,
 		actorUserId: api.actor_user_id ?? undefined,
+		actorKind: kind,
 		event: api.event,
 		subjectUserId: api.subject_user_id ?? undefined,
 		projectId: api.project_id ?? undefined,

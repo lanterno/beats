@@ -341,6 +341,13 @@ export interface ManagedContract {
 export interface AuditEvent {
 	at: string;
 	actorUserId?: string;
+	/**
+	 * Who kind of actor: a member, the system, or the platform's operator —
+	 * whose acts the section renders as "by LifePete", since the operator's
+	 * id is never in the organisation's log. Absent on an older API, which
+	 * reads as it always did.
+	 */
+	actorKind?: "member" | "system" | "operator";
 	event: string;
 	subjectUserId?: string;
 	projectId?: string;

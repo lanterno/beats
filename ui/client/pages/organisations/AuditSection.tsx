@@ -12,6 +12,7 @@ import { useId, useState } from "react";
 import type { AuditEvent } from "@/entities/organisation";
 import { useAuditLog, useMembers, useOrgProjects } from "@/entities/organisation";
 import { describeError } from "@/shared/api";
+import { APP_NAME } from "@/shared/config";
 import { formatDate, formatTime } from "@/shared/lib";
 import { Button } from "@/shared/ui";
 import { Section } from "./Section";
@@ -94,6 +95,12 @@ export function AuditSection({ organisationId }: { organisationId: string }) {
 												<span className="text-muted-foreground">
 													· by {memberName(event.actorUserId)}
 												</span>
+											)}
+											{event.actorKind === "operator" && (
+												// The platform's act, not a member's: the operator's
+												// id is never in the organisation's log, so the kind
+												// is all there is to say — and enough.
+												<span className="text-muted-foreground">· by {APP_NAME}</span>
 											)}
 										</div>
 										{Object.keys(event.details).length > 0 && (

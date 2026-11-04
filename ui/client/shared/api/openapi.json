@@ -540,6 +540,17 @@
       },
       "AuditEventResponse": {
         "properties": {
+          "actor_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Kind"
+          },
           "actor_user_id": {
             "anyOf": [
               {
@@ -591,6 +602,7 @@
         "required": [
           "at",
           "actor_user_id",
+          "actor_kind",
           "event",
           "subject_user_id",
           "project_id",

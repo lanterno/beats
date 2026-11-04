@@ -1105,6 +1105,10 @@ export const ApiTimesheetListSchema = z.array(ApiTimesheetSchema);
 export const ApiAuditEventSchema = z.object({
 	at: z.string(),
 	actor_user_id: z.string().nullable().optional(),
+	// member | system | operator — how an admin tells an act of ours from an
+	// act of theirs. Optional: an API older than the field sends none, and
+	// the event then reads as it always did.
+	actor_kind: z.string().nullable().optional(),
 	event: z.string(),
 	subject_user_id: z.string().nullable().optional(),
 	project_id: z.string().nullable().optional(),
