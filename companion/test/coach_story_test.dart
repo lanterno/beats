@@ -144,8 +144,11 @@ void main() {
   });
 
   group('chat failures', () {
-    test('only a 403 means the server does not let devices chat', () {
+    test('only a refused path means the server does not let devices chat', () {
       expect(isChatForbidden(ApiException(403, 'x', code: 'DEVICE_PATH_FORBIDDEN')), isTrue);
+      // A suspended account's 403 is not about the server's age; it shows
+      // the suspension banner instead.
+      expect(isChatForbidden(ApiException(403, 'x', code: 'ACCOUNT_SUSPENDED')), isFalse);
       expect(isChatForbidden(ApiException(500, 'x')), isFalse);
       expect(isChatForbidden(Exception('offline')), isFalse);
     });

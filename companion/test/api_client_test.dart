@@ -5,6 +5,9 @@
 // companion, or the daemon CLI should see the same readable
 // sentence rather than three different error styles.
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:beats_companion/services/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -113,6 +116,41 @@ void main() {
         ApiException(401, 'Token expired').toString(),
         'ApiException(401): Token expired',
       );
+    });
+  });
+
+  group('suspendedNotice', () {
+    test('set by an ACCOUNT_SUSPENDED answer, cleared by the next good poll', () async {
+      // A real loopback server, because the notice is wired inside the
+      // client's one error path and the timer poll's success path — the
+      // two places every surface already runs through.
+      var suspended = true;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) {
+        req.response.headers.contentType = ContentType.json;
+        if (suspended) {
+          req.response.statusCode = 403;
+          req.response.write(jsonEncode({
+            'detail': 'This account is suspended. Write to op@example.test from this account\'s address.',
+            'code': 'ACCOUNT_SUSPENDED',
+          }));
+        } else {
+          req.response.statusCode = 200;
+          req.response.write(jsonEncode({'clocked_in': false}));
+        }
+        req.response.close();
+      });
+      addTearDown(() => server.close(force: true));
+
+      final client = ApiClient(baseUrl: 'http://127.0.0.1:${server.port}', deviceToken: 't');
+      expect(client.suspendedNotice.value, isNull);
+
+      await expectLater(client.getTimerStatus(), throwsA(isA<ApiException>()));
+      expect(client.suspendedNotice.value, contains('op@example.test'));
+
+      suspended = false;
+      await client.getTimerStatus();
+      expect(client.suspendedNotice.value, isNull);
     });
   });
 }

@@ -53,8 +53,19 @@ void main() {
   });
 
   group('errors', () {
-    test('a 403 means the server is older than the app', () {
-      expect(needsNewerServer(ApiException(403, 'Oura status failed: forbidden')), isTrue);
+    test('only a refused path means the server is older than the app', () {
+      expect(
+        needsNewerServer(ApiException(403, 'Oura status failed: forbidden',
+            code: 'DEVICE_PATH_FORBIDDEN')),
+        isTrue,
+      );
+      // A suspended account is also a 403, and no newer server would fix
+      // it — it must not read as "Needs a newer server".
+      expect(
+        needsNewerServer(ApiException(403, 'suspended', code: 'ACCOUNT_SUSPENDED')),
+        isFalse,
+      );
+      expect(needsNewerServer(ApiException(403, 'proxy page, no envelope')), isFalse);
       expect(needsNewerServer(ApiException(500, 'x')), isFalse);
       expect(needsNewerServer(StateError('x')), isFalse);
     });
