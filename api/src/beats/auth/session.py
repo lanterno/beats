@@ -133,13 +133,25 @@ class SessionManager:
             return None
         return self._pending_registrations.get(challenge_b64)
 
-    def create_session_token(self, user_id: str, email: str = "") -> str:
-        """Create a JWT session token."""
+    def create_session_token(
+        self, user_id: str, email: str = "", auth_time: int | None = None
+    ) -> str:
+        """Create a JWT session token.
+
+        `auth_time` is when the passkey or SSO sign-in behind this session
+        happened, as epoch seconds. A fresh sign-in leaves it unset (now);
+        `refresh_token` passes the old token's through unchanged, so however
+        often a session is refreshed it stays exactly as old as its sign-in.
+        That is what lets a sign-out-everywhere cut (`sessions_valid_after`
+        on the account) hold: compared against `iat`, which every refresh
+        renews, an actively refreshed session would outlive it for good.
+        """
         now = datetime.now(UTC)
         payload: dict[str, Any] = {
             "sub": user_id,
             "iat": now,
             "exp": now + timedelta(seconds=self._session_ttl),
+            "auth_time": int(now.timestamp()) if auth_time is None else auth_time,
             "type": "session",
             "jti": str(uuid.uuid4()),
         }
@@ -195,6 +207,15 @@ class SessionManager:
                 logger.warning("Token type is not 'session'")
                 return None
 
+            # A token minted before `auth_time` existed. Refused rather than
+            # read by its `iat`: a refresh would have nothing to copy, and a
+            # tab that renews such a token every 55 minutes would outlive
+            # every sign-out for as long as it stayed open. Whoever is signed
+            # in when this ships signs in once more.
+            if "auth_time" not in payload:
+                logger.debug("Session token has no auth_time claim")
+                return None
+
             return payload
         except jwt.ExpiredSignatureError:
             logger.debug("Session token expired")
@@ -212,9 +233,10 @@ class SessionManager:
         user_id = payload["sub"]
         email = payload.get("email", "")
 
-        # Revoke the old token and issue a new one
+        # Revoke the old token and issue a new one. The sign-in behind the
+        # session travels with it: see create_session_token on auth_time.
         self.revoke_token(token)
-        return self.create_session_token(user_id, email)
+        return self.create_session_token(user_id, email, auth_time=payload["auth_time"])
 
     def revoke_token(self, token: str) -> None:
         """Add a token to the revocation list. It stays until its natural expiry."""
