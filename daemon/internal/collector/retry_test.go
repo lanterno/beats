@@ -152,3 +152,39 @@ func TestRetryBuffer_NonPositiveCapClampedToOne(t *testing.T) {
 		t.Fatalf("expected cap clamped to 1, got %d buffered", b.Len())
 	}
 }
+
+// --- Hold: buffering without posting, while the API refuses the account ---
+
+func TestRetryBufferHold_KeepsWindowsForTheNextSend(t *testing.T) {
+	b := NewRetryBuffer(3)
+	b.Hold(FlowWindow{FlowScore: 0.1})
+	b.Hold(FlowWindow{FlowScore: 0.2})
+	if b.Len() != 2 {
+		t.Fatalf("held windows must be buffered, len=%d", b.Len())
+	}
+
+	var posted []FlowWindow
+	poster := func(ctx context.Context, w FlowWindow) error {
+		posted = append(posted, w)
+		return nil
+	}
+	if err := b.Send(context.Background(), poster, FlowWindow{FlowScore: 0.3}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if len(posted) != 3 || posted[0].FlowScore != 0.1 || posted[2].FlowScore != 0.3 {
+		t.Fatalf("held windows must drain oldest-first before the current one: %+v", posted)
+	}
+}
+
+func TestRetryBufferHold_EvictsOldestPastTheCap(t *testing.T) {
+	b := NewRetryBuffer(2)
+	b.Hold(FlowWindow{FlowScore: 0.1})
+	b.Hold(FlowWindow{FlowScore: 0.2})
+	b.Hold(FlowWindow{FlowScore: 0.3})
+	if b.Len() != 2 {
+		t.Fatalf("cap must hold, len=%d", b.Len())
+	}
+	if b.pending[0].FlowScore != 0.2 {
+		t.Fatalf("the oldest window is the one evicted: %+v", b.pending)
+	}
+}

@@ -506,3 +506,39 @@ func probedDaemon(port int) daemonStatus {
 	d.UptimeSec, d.WindowsEmitted, d.WindowsDropped = probeOwnDaemonHealth(port)
 	return d
 }
+
+// --- the refusal in status ---
+
+func TestFormatStatusJSON_CarriesTheRefusalCode(t *testing.T) {
+	out, err := formatStatusJSON(statusReport{
+		Paired: true,
+		API: apiStatus{
+			URL:     "http://localhost:7999",
+			Error:   "timer-context failed (HTTP 403): This account is suspended. [ACCOUNT_SUSPENDED]",
+			Refused: "ACCOUNT_SUSPENDED",
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var decoded statusReport
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatalf("output should round-trip: %v", err)
+	}
+	if decoded.API.Refused != "ACCOUNT_SUSPENDED" {
+		t.Errorf("refused code lost: %+v", decoded.API)
+	}
+	if decoded.API.Reachable {
+		t.Errorf("a refused API is not reported reachable")
+	}
+}
+
+func TestFormatStatusJSON_OmitsRefusedWhenOpen(t *testing.T) {
+	out, err := formatStatusJSON(statusReport{Paired: true, API: apiStatus{URL: "u", Reachable: true}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(out, "refused") {
+		t.Errorf("an open gate must not add a refused key: %s", out)
+	}
+}
