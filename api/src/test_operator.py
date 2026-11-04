@@ -1,0 +1,461 @@
+"""The operator deployment's contract (roadmaps/backoffice.md step 2).
+
+The wall test matters most: a sentinel is planted in every stored thing the
+right-hand column of § *The line* names — a session's note and its day, a
+project's and a team's name, a tag, an absence note, a client's name and
+rate, a webhook URL's path, a coach message and a memory, an integration's
+token, a biometric value, an organisation audit entry's reason — and every
+operator response is searched for it. That is how "never user content" stops
+being a sentence in a roadmap and becomes something CI refuses.
+
+The isolation pins run in fresh interpreters: `operator_server` imports
+without `beats.settings` ever loading (the operator deployment never holds
+JWT_SECRET), and `server` imports no operator router.
+"""
+
+import os
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+
+import httpx
+import jwt
+import jwt.algorithms
+import pytest
+from bson import ObjectId
+
+# OperatorSettings is built when operator_server imports, so its environment
+# is set here, before the import below. pytest_configure (conftest.py) has
+# already started the Mongo container and set DB_DSN/DB_NAME.
+OPERATOR_SUB = "test-operator"
+VIEWER_SUB = "test-viewer"
+ORIGIN = "http://backoffice.test"
+os.environ["BEATS_OPERATOR_ENV_FILE"] = ".env.operator.does-not-exist"
+os.environ["BACKOFFICE_DEV_OPERATOR"] = OPERATOR_SUB
+os.environ["OPERATOR_ALLOWLIST"] = (
+    f'[{{"sub": "{OPERATOR_SUB}", "email": "op@example.test", "role": "operator"}},'
+    f' {{"sub": "{VIEWER_SUB}", "email": "viewer@example.test", "role": "viewer"}}]'
+)
+os.environ["OPERATOR_ORIGIN"] = ORIGIN
+os.environ["OPERATOR_DB_DSN"] = os.environ.get("DB_DSN", "mongodb://localhost:27017")
+os.environ["OPERATOR_DB_NAME"] = os.environ.get("DB_NAME", "beats_test")
+
+from operator_server import app as operator_app  # noqa: E402
+
+SENTINEL = "walltest-sentinel-7f3a9"
+# A number no count or size in a small test database can coincide with.
+RATE_SENTINEL = 86423911
+BIOMETRIC_SENTINEL = 77311733
+# A session planted years before the run, so no account's own dates match.
+OLD_DAY = "1999-04-12"
+
+
+@pytest.fixture(scope="class")
+def operator_client():
+    from starlette.testclient import TestClient
+
+    with TestClient(operator_app) as client:
+        yield client
+
+
+def _env_for_subprocess() -> dict[str, str]:
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parent)
+    return env
+
+
+class TestIsolation:
+    """The two invariants that make one codebase safe to deploy twice."""
+
+    def test_operator_server_never_loads_the_api_settings(self):
+        """Run in a fresh interpreter: this test process imported
+        beats.settings long ago, so asserting on its own sys.modules would
+        prove nothing. Unsetting JWT_SECRET would prove nothing either —
+        .env.test holds one."""
+        code = (
+            "import sys; import operator_server; "
+            "assert 'beats.settings' not in sys.modules, 'operator root loaded the API settings'; "
+            "assert 'beats.auth' not in sys.modules, 'operator root loaded beats.auth'"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=_env_for_subprocess(),
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parent),
+        )
+        assert result.returncode == 0, result.stderr
+
+    def test_the_public_app_imports_no_operator_route(self):
+        """Not reachable by construction — this pins it for the day somebody
+        adds the import."""
+        code = (
+            "import sys; import server; "
+            "assert 'beats.api.routers.operator' not in sys.modules, "
+            "'server.py imports the operator router'; "
+            "assert 'beats.operator' not in sys.modules, 'server.py imports beats.operator'"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=_env_for_subprocess(),
+            capture_output=True,
+            text=True,
+            cwd=str(Path(__file__).resolve().parent),
+        )
+        assert result.returncode == 0, result.stderr
+
+
+class TestOperatorAuth:
+    """The allowlist and the cross-site line."""
+
+    def test_me_names_the_operator(self, operator_client):
+        resp = operator_client.get("/api/operator/me")
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"sub": OPERATOR_SUB, "email": "op@example.test", "role": "operator"}
+
+    def test_a_write_without_this_apps_origin_is_refused(self, operator_client):
+        """IAP's cookie rides any request the browser makes, so a POST is
+        taken only from this app's own pages — the account lookup included,
+        though it reads. The typed confirmation of step 3 is no defence
+        here; a forging page sends it as easily as the operator types it."""
+        body = {"email": "a@example.test"}
+        no_origin = operator_client.post("/api/operator/accounts/lookup", json=body)
+        assert no_origin.status_code == 403
+        assert no_origin.json()["code"] == "OPERATOR_BAD_ORIGIN"
+
+        foreign = operator_client.post(
+            "/api/operator/accounts/lookup", json=body, headers={"Origin": "https://evil.test"}
+        )
+        assert foreign.status_code == 403
+
+        cross_site = operator_client.post(
+            "/api/operator/accounts/lookup",
+            json=body,
+            headers={"Origin": ORIGIN, "Sec-Fetch-Site": "cross-site"},
+        )
+        assert cross_site.status_code == 403
+
+        own = operator_client.post(
+            "/api/operator/accounts/lookup",
+            json=body,
+            headers={"Origin": ORIGIN, "Sec-Fetch-Site": "same-origin"},
+        )
+        assert own.status_code == 200, own.text
+
+    def test_reads_need_no_origin(self, operator_client):
+        assert operator_client.get("/api/operator/attention").status_code == 200
+
+
+@pytest.fixture(scope="class")
+def planted(mongo, operator_client):
+    user_id = str(ObjectId())
+    org_id = str(ObjectId())
+    now = datetime.now(UTC)
+    mongo.users.insert_one(
+        {
+            "_id": ObjectId(user_id),
+            "email": "wall@example.test",
+            "display_name": f"Name {SENTINEL}",
+            "created_at": now.isoformat(),
+            "identities": [{"provider": "idp", "issuer": "https://idp.test", "subject": "s-1"}],
+        }
+    )
+    mongo.projects.insert_one(
+        {"user_id": user_id, "name": f"Project {SENTINEL}", "archived": False}
+    )
+    mongo.projects.insert_one({"organisation_id": org_id, "name": f"Org project {SENTINEL}"})
+    mongo.timeLogs.insert_one(
+        {
+            "user_id": user_id,
+            "project_id": str(ObjectId()),
+            "start": datetime.fromisoformat(f"{OLD_DAY}T09:00:00+00:00"),
+            "end": datetime.fromisoformat(f"{OLD_DAY}T10:00:00+00:00"),
+            "note": f"note {SENTINEL}",
+            "tags": [f"tag-{SENTINEL}"],
+        }
+    )
+    mongo.absences.insert_one(
+        {
+            "user_id": user_id,
+            "project_id": str(ObjectId()),
+            "date": OLD_DAY,
+            "type": "vacation",
+            "note": f"absence {SENTINEL}",
+        }
+    )
+    mongo.clients.insert_one(
+        {
+            "user_id": user_id,
+            "name": f"Client {SENTINEL}",
+            "currency": "EUR",
+            "rates": [{"effective_from": "2026-01-01", "rate_minor": RATE_SENTINEL}],
+        }
+    )
+    mongo.webhooks.insert_one(
+        {
+            "user_id": user_id,
+            "url": f"https://hooks.example.test/{SENTINEL}",
+            "events": ["timer.start"],
+            "active": True,
+        }
+    )
+    mongo.coach_memory.insert_one({"user_id": user_id, "content": f"memory {SENTINEL}"})
+    mongo.coach_conversations.insert_one(
+        {"user_id": user_id, "messages": [{"role": "user", "content": f"chat {SENTINEL}"}]}
+    )
+    mongo.github_integrations.insert_one(
+        {"user_id": user_id, "access_token": f"token-{SENTINEL}", "github_username": SENTINEL}
+    )
+    mongo.biometric_days.insert_one(
+        {
+            "user_id": user_id,
+            "date": OLD_DAY,
+            "source": "fitbit",
+            "resting_heart_rate": BIOMETRIC_SENTINEL,
+        }
+    )
+    mongo.flow_windows.insert_one(
+        {
+            "user_id": user_id,
+            "window_start": now.isoformat(),
+            "window_end": now.isoformat(),
+            "flow_score": 0.5,
+            "editor_repo": f"/home/x/{SENTINEL}",
+            "dominant_bundle_id": f"com.{SENTINEL}",
+        }
+    )
+    mongo.report_links.insert_one(
+        {"user_id": user_id, "client_id": str(ObjectId()), "token": f"tok-{SENTINEL}"}
+    )
+    mongo.organisations.insert_one(
+        {
+            "_id": ObjectId(org_id),
+            "name": "Wall Org",
+            "created_by": user_id,
+            "created_at": now.isoformat(),
+        }
+    )
+    mongo.org_members.insert_one(
+        {
+            "organisation_id": org_id,
+            "user_id": user_id,
+            "role": "owner",
+            "name": "Wall Owner",
+            "email": "wall@example.test",
+            "joined_at": now.isoformat(),
+            "left_at": None,
+        }
+    )
+    mongo.org_teams.insert_one(
+        {"organisation_id": org_id, "name": f"Team {SENTINEL}", "member_ids": [user_id]}
+    )
+    mongo.org_audit.insert_one(
+        {
+            "organisation_id": org_id,
+            "at": now.isoformat(),
+            "actor_user_id": user_id,
+            "event": "timesheet.reopened",
+            "details": {"reason": f"reopened because {SENTINEL}"},
+        }
+    )
+    mongo.llm_usage.insert_one(
+        {
+            "user_id": user_id,
+            "model": "claude-sonnet-5-5",
+            "input_tokens": 10,
+            "output_tokens": 10,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cost_usd": 0.01,
+            "purpose": "chat",
+            "ts": now,
+        }
+    )
+    return {"user_id": user_id, "org_id": org_id}
+
+
+class TestOperatorWall:
+    """Plant the whole right-hand column, then read every page.
+
+    The database user reads every collection; the wall is in the code and in
+    this test, not the grant. The likeliest leaks sit beside reads the
+    control plane does make: a webhook's URL read for its domain, an
+    integration's document read for whether it exists, an audit event read
+    without its details.
+    """
+
+    def _every_page(self, operator_client, planted) -> list[tuple[str, str]]:
+        own = {"Origin": ORIGIN}
+        pages = [
+            ("GET", "/api/operator/me", None),
+            ("GET", "/api/operator/attention", None),
+            ("POST", "/api/operator/accounts/lookup", {"email": "wall@example.test"}),
+            ("GET", f"/api/operator/accounts/{planted['user_id']}", None),
+            ("GET", "/api/operator/organisations", None),
+            ("GET", f"/api/operator/organisations/{planted['org_id']}", None),
+            ("GET", f"/api/operator/organisations/{planted['org_id']}/audit", None),
+            ("GET", "/api/operator/abuse", None),
+            ("GET", "/api/operator/capacity", None),
+            ("GET", "/api/operator/audit", None),
+            ("GET", "/api/operator/jobs", None),
+        ]
+        bodies = []
+        for method, path, body in pages:
+            if method == "GET":
+                resp = operator_client.get(path)
+            else:
+                resp = operator_client.post(path, json=body, headers=own)
+            assert resp.status_code == 200, f"{path}: {resp.status_code} {resp.text}"
+            bodies.append((path, resp.text))
+        return bodies
+
+    def test_no_byte_of_user_content_in_any_operator_response(self, operator_client, planted):
+        for path, body in self._every_page(operator_client, planted):
+            assert SENTINEL not in body, f"user content leaked on {path}"
+            assert str(RATE_SENTINEL) not in body, f"a rate leaked on {path}"
+            assert str(BIOMETRIC_SENTINEL) not in body, f"a biometric value leaked on {path}"
+            # A session's time belongs to the person; the day last seen is a
+            # field of its own, so a planted session decades back must not
+            # surface its day anywhere.
+            assert OLD_DAY not in body, f"a session's day leaked on {path}"
+
+    def test_what_the_pages_do_show(self, operator_client, planted):
+        """The wall has two sides: the left-hand column must actually be
+        there, or the wall could pass by showing nothing at all."""
+        account = operator_client.get(f"/api/operator/accounts/{planted['user_id']}").json()
+        assert account["email"] == "wall@example.test"
+        assert account["projects"] == 2 or account["projects"] == 1  # own; the org's is its own
+        assert account["sessions"] == 1
+        assert account["biometric_rows"] == 1
+        assert account["storage_bytes"] > 0
+        assert account["sso_providers"] == ["idp"]
+        assert "github" in account["integrations"]
+        assert account["organisations"][0]["organisation_name"] == "Wall Org"
+
+        abuse = operator_client.get("/api/operator/abuse").json()
+        assert {"domain": "hooks.example.test", "value": 1} in [
+            dict(d) for d in abuse["webhook_domains"]
+        ]
+
+        audit = operator_client.get(f"/api/operator/organisations/{planted['org_id']}/audit").json()
+        assert audit[0]["event"] == "timesheet.reopened"
+        assert "details" not in audit[0]
+
+    def test_the_lookup_is_case_insensitive_and_exact(self, operator_client, planted):
+        own = {"Origin": ORIGIN}
+        upper = operator_client.post(
+            "/api/operator/accounts/lookup", json={"email": "WALL@EXAMPLE.TEST"}, headers=own
+        )
+        assert [m["id"] for m in upper.json()] == [planted["user_id"]]
+        prefix = operator_client.post(
+            "/api/operator/accounts/lookup", json={"email": "wall@"}, headers=own
+        )
+        assert prefix.json() == []
+
+
+# ── the IAP verifier ─────────────────────────────────────────────────
+
+
+AUDIENCE = "/projects/123/locations/europe-west1/services/beats-operator"
+
+
+def _es256_keypair():
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    jwk = jwt.algorithms.ECAlgorithm.to_jwk(key.public_key(), as_dict=True)
+    jwk["kid"] = "kid-1"
+    return key, jwk
+
+
+def _verifier(jwk, audience=AUDIENCE):
+    from beats.operator.iap import IAPVerifier
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"keys": [jwk]})
+
+    return IAPVerifier(audience, transport=httpx.MockTransport(handler))
+
+
+def _assertion(key, *, kid="kid-1", alg="ES256", **overrides) -> str:
+    now = int(time.time())
+    claims = {
+        "iss": "https://cloud.google.com/iap",
+        "aud": AUDIENCE,
+        "sub": "accounts.google.com:111",
+        "email": "op@example.test",
+        "iat": now,
+        "exp": now + 600,
+        **overrides,
+    }
+    return jwt.encode(claims, key, algorithm=alg, headers={"kid": kid})
+
+
+class TestIAPVerifier:
+    """Each check Google's signed-headers guide requires has a test that
+    fails it on purpose — the verifier is the whole production wall."""
+
+    async def test_a_good_assertion_yields_its_claims(self):
+        key, jwk = _es256_keypair()
+        claims = await _verifier(jwk).verify(_assertion(key))
+        assert claims["sub"] == "accounts.google.com:111"
+
+    async def test_wrong_audience_is_rejected(self):
+        from beats.operator.iap import IAPRejected
+
+        key, jwk = _es256_keypair()
+        with pytest.raises(IAPRejected):
+            await _verifier(jwk).verify(_assertion(key, aud="/projects/999/other"))
+
+    async def test_wrong_issuer_is_rejected(self):
+        from beats.operator.iap import IAPRejected
+
+        key, jwk = _es256_keypair()
+        with pytest.raises(IAPRejected):
+            await _verifier(jwk).verify(_assertion(key, iss="https://evil.test"))
+
+    async def test_an_expired_assertion_is_rejected(self):
+        from beats.operator.iap import IAPRejected
+
+        key, jwk = _es256_keypair()
+        now = int(time.time())
+        with pytest.raises(IAPRejected):
+            await _verifier(jwk).verify(_assertion(key, iat=now - 7200, exp=now - 3600))
+
+    async def test_an_unknown_key_is_rejected(self):
+        from beats.operator.iap import IAPRejected
+
+        key, jwk = _es256_keypair()
+        with pytest.raises(IAPRejected):
+            await _verifier(jwk).verify(_assertion(key, kid="kid-unknown"))
+
+    async def test_a_non_es256_algorithm_is_rejected_before_any_key_is_read(self):
+        """`alg` is attacker-controlled; pinning ES256 before key lookup is
+        what forecloses algorithm-confusion."""
+        from beats.operator.iap import IAPRejected
+
+        _key, jwk = _es256_keypair()
+        hs = jwt.encode(
+            {"iss": "https://cloud.google.com/iap", "aud": AUDIENCE, "sub": "x"},
+            "a-shared-secret-of-at-least-32-bytes!!",
+            algorithm="HS256",
+            headers={"kid": "kid-1"},
+        )
+        with pytest.raises(IAPRejected):
+            await _verifier(jwk).verify(hs)
+
+    async def test_an_unreachable_key_set_is_unavailable_not_rejected(self):
+        """Nothing is known about the caller either way — a 503, never a
+        401 that reads as 'you are not allowed'."""
+        from beats.operator.iap import IAPUnavailable, IAPVerifier
+
+        key, _ = _es256_keypair()
+
+        def down(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(502)
+
+        verifier = IAPVerifier(AUDIENCE, transport=httpx.MockTransport(down))
+        with pytest.raises(IAPUnavailable):
+            await verifier.verify(_assertion(key))
