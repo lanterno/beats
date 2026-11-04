@@ -70,3 +70,4 @@ terraform/tfplan
 terraform/*.tfplan
 
 .env
+.env.operator

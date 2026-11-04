@@ -27,6 +27,12 @@ lint:
 run-locally:
     cd src && uv run uvicorn server:app --reload --host 0.0.0.0 --port 7999 --no-proxy-headers
 
+# The operator app (roadmaps/backoffice.md), beside run-locally's :7999.
+# Needs BACKOFFICE_DEV_OPERATOR=<sub> (the local stand-in for IAP) and an
+# OPERATOR_ALLOWLIST naming it — .env.operator.example shows the shape.
+run-operator-locally:
+    cd src && uv run uvicorn operator_server:app --reload --host 0.0.0.0 --port 7998
+
 # Cloud Build targets
 
 trigger-build:
