@@ -208,3 +208,29 @@ variable "alert_email" {
   }
 }
 
+
+# ── The operator deployment (roadmaps/backoffice.md step 2) ─────────────────
+
+variable "operator_enabled" {
+  description = "Whether the operator deployment's resources exist. Off until the hand-made prerequisites do (the README's Operator deployment section): the custom OAuth client for IAP, the narrow Atlas database user, and the first version of beats-operator-dsn."
+  type        = bool
+  default     = false
+}
+
+variable "operator_service_name" {
+  description = "The operator Cloud Run service's name"
+  type        = string
+  default     = "beats-operator"
+}
+
+variable "operator_allowlist" {
+  description = "Who may use the control plane, as the OPERATOR_ALLOWLIST JSON (sub, email, role). IAP's IAM binding says who reaches the app; this says what they may do."
+  type        = string
+  default     = "[]"
+}
+
+variable "operator_origin" {
+  description = "The back office's own origin — the service's run.app URL, set after the first apply. Empty fails closed: every write answers 403."
+  type        = string
+  default     = ""
+}

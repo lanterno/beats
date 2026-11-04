@@ -400,3 +400,64 @@ The zone id is the `cloudflare_zone_id` output and the record id is
   was documented here and read by no `.tf` file (#376); turning proxying on is
   a change to `cloudflare.tf` and to what the API trusts, not a flag.
 
+
+## Operator Deployment (One-Time Setup)
+
+The control plane (`beats-operator`, [roadmaps/backoffice.md](../roadmaps/backoffice.md))
+is gated behind `operator_enabled = false` until three things exist that no
+API creates, each made once by hand. Until the flag flips, an apply changes
+nothing and the API's deploys stay green.
+
+1. **The database user**, in MongoDB Atlas (custom roles work on every tier,
+   M0 and Flex included; a change takes up to 30 seconds to apply):
+   - Create a custom role `beatsOperator` on the `beats` database: **find on
+     every collection**, plus the `collStats`, `dbStats` and
+     `listCollections` actions (the capacity page's counts need them), and
+     **insert/update/remove only on**: `users` (suspension,
+     `sessions_valid_after`), `account_limits`, `device_registrations`
+     (`revoked`), `organisations` (closing), `org_members`, `org_audit`,
+     `operator_audit`, `operator_jobs`. It creates no index. That list is the
+     grant — a command that needs another collection changes
+     roadmaps/backoffice.md first.
+   - Create a database user `beats-operator` with that role. Atlas's access
+     list already admits Cloud Run's addresses (the API connects with no VPC
+     connector); confirm the new service appears in the access logs after the
+     first boot.
+
+2. **IAP's OAuth client.** The project sits in no Google Cloud organisation,
+   so Google's managed client is unavailable and no API creates a custom one:
+   - In the console, configure the OAuth consent screen for **external**
+     users; it can stay in *Testing* with the operator as its only test user —
+     nobody else is meant to get through it.
+   - Create an OAuth **web** client, and attach it to the `beats-operator`
+     service's IAP settings in the console (check whether
+     `google_iap_settings` on `~> 8.8` carries a custom client for a Cloud
+     Run resource; if it does, move the id and secret into sensitive tfvars
+     and manage it there).
+   - Grant the operator's Google account the IAP-secured Web App User role on
+     the service. **IAP's IAM binding says who reaches the app; the
+     `operator_allowlist` tfvar says what they may do** — both name the same
+     people.
+
+3. **The secret's first version** (Terraform manages the container and the
+   binding only; the value never passes through it):
+
+   ```bash
+   printf 'mongodb+srv://beats-operator:...@.../beats' | \
+     gcloud secrets versions add beats-operator-dsn --data-file=- --project=beats-476914
+   ```
+
+Then, in `terraform.tfvars` — **added to the `beats-terraform-tfvars` secret
+before the change merges**, since Cloud Build copies that secret wholesale and
+a required variable it lacks fails every API deploy:
+
+```hcl
+operator_enabled   = true
+operator_allowlist = "[{\"sub\": \"accounts.google.com:<id>\", \"email\": \"you@...\", \"role\": \"operator\"}]"
+# After the first apply, read the run.app URL off the service and set:
+operator_origin = "https://beats-operator-....run.app"
+```
+
+The first apply creates the service with an empty origin, which fails closed
+(every write answers 403); the second, with the URL set, opens it. The
+hostname stays the `run.app` URL — no domain mapping, by decision.

@@ -88,7 +88,7 @@ resource "google_cloudbuild_trigger" "docker_build" {
     }
   }
 
-  included_files = ["api/**", "terraform/**"]
+  included_files = ["api/**", "terraform/**", "backoffice/**"]
   filename       = "api/cloudbuild.yaml"
 
   substitutions = {
