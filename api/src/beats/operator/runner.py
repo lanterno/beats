@@ -10,8 +10,7 @@ executes it rather than queueing it again.
 
 There is deliberately no OperatorService: this resolves, authorises, audits
 and delegates. If a rule ever starts living here or in a command, that is
-the signal it was put in the wrong place (docs/backoffice.md § Commands
-are objects).
+the signal it was put in the wrong place (docs/backoffice.md § Commands).
 """
 
 from typing import Any

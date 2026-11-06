@@ -17,7 +17,7 @@ A command with a `window` is destructive and enqueues instead of executing
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 from pymongo.asynchronous.database import AsyncDatabase
@@ -64,9 +64,10 @@ class AccountArgs(BaseModel):
 
 
 class SuspendArgs(AccountArgs):
-    # Erasure suspensions belong to the erasure job, never to this
-    # command: job.cancel lifts only that kind.
-    kind: SuspensionKind = SuspensionKind.ABUSE
+    # Erasure suspensions belong to the erasure job, never to this command:
+    # the erasure wording falsely promises a deletion date, and job.cancel
+    # lifts only that kind. Literal, so "erasure" is refused at validation.
+    kind: Literal[SuspensionKind.ABUSE, SuspensionKind.OTHER] = SuspensionKind.ABUSE
     reason: str = Field(min_length=1, max_length=2000)
 
 
@@ -313,6 +314,13 @@ class EraseAccount(_AccountCommand):
         return await _account_email(ctx, args.user_id)
 
     async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        # Only an account not already suspended: an abuse suspension must
+        # keep its kind, or cancelling the erasure (which lifts only the
+        # erasure's kind) would open the abuse door. The already-suspended
+        # person is refused either way; they just keep the stricter wording.
+        user = await ctx.accounts.find(args.user_id)
+        if user is not None and user.suspended:
+            return
         await ctx.accounts.suspend(
             args.user_id,
             kind=SuspensionKind.ERASURE,
