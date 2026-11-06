@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from beats.domain.contract_service import ContractService
 from beats.domain.models import ContractTerm, ScheduleType
 from beats.domain.ports import (
     CoachContractReader,
@@ -16,15 +17,16 @@ from beats.domain.ports import (
     FlowWindowReader,
     ProjectLister,
 )
-from beats.domain.services import ContractService
-from beats.infrastructure.database import Database
-from beats.infrastructure.repositories import (
+from beats.infrastructure.contract_repositories import (
     MongoAbsenceRepository,
     MongoAdjustmentRepository,
+)
+from beats.infrastructure.database import Database
+from beats.infrastructure.project_repositories import (
     MongoBeatRepository,
-    MongoFlowWindowRepository,
     project_repository_for,
 )
+from beats.infrastructure.signal_repositories import MongoFlowWindowRepository
 
 # Collection names — single source of truth for all coach Mongo collections.
 COACH_MEMORY_COLLECTION = "coach_memory"

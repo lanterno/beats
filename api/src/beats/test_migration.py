@@ -25,7 +25,7 @@ from beats.infrastructure.migrations import (
     date_pairing_codes,
     migrate_project_kinds,
 )
-from beats.infrastructure.repositories import MongoProjectRepository
+from beats.infrastructure.project_repositories import MongoProjectRepository
 
 USER = "user-1"
 

@@ -1,7 +1,7 @@
 """Infrastructure layer - external concerns like database access."""
 
 from .database import Database
-from .repositories import (
+from .project_repositories import (
     BeatRepository,
     MongoBeatRepository,
     MongoProjectRepository,

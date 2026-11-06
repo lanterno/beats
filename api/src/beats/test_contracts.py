@@ -44,7 +44,7 @@ from beats.domain.models import (
     ScheduleType,
 )
 from beats.domain.services import worked_by_local_day
-from beats.infrastructure.repositories import MongoAbsenceRepository
+from beats.infrastructure.contract_repositories import MongoAbsenceRepository
 
 # A week with nothing special about it. Monday 2 March 2026 through Friday 6 March.
 MON = date(2026, 3, 2)

@@ -1748,7 +1748,7 @@ def _fake_coach_repos(
     `contracts` defaults to the real ContractService over the same fakes, on a
     clock fixed at `CONTRACT_NOW`, so the contract section runs the project
     page's own assembly and passes on whatever day CI runs."""
-    from beats.domain.services import ContractService
+    from beats.domain.contract_service import ContractService
 
     project_repo = _FakeProjectRepoForTools(projects or [])
     beat_repo = _FakeBeatRepoForTools(beats or [])
@@ -2468,8 +2468,8 @@ class TestBuildUserContext:
         goal line, the contract week's label and get_projects all name the
         user's week's term, where UTC's Monday would have put next week's
         "full-time" beside this week's 33.6 h."""
+        from beats.domain.contract_service import ContractService
         from beats.domain.models import Contract, ContractTerm, Project, ProjectKind, ScheduleType
-        from beats.domain.services import ContractService
 
         los_angeles = ZoneInfo("America/Los_Angeles")
         instant = datetime(2026, 10, 19, 1, 0, tzinfo=UTC)
@@ -3494,7 +3494,7 @@ class TestBuildDayContext:
         expects 24 h, not 40, and 20.5 h of it is worked. The balance is
         1.6 opening − 2 h last week + 4.5 h this week, and the project page's
         week route says the same."""
-        from beats.domain.services import ContractService
+        from beats.domain.contract_service import ContractService
 
         job = self._job(opening=1.6)
         beats = self._week_beats()
@@ -3527,8 +3527,8 @@ class TestBuildDayContext:
         +1.1 h, and both by-Sunday figures with it, exactly as the project
         page's week route reads it. The adjustment's kind and note are not
         sent: only the balance it moved."""
+        from beats.domain.contract_service import ContractService
         from beats.domain.models import AdjustmentKind, BalanceAdjustment
-        from beats.domain.services import ContractService
 
         job = self._job(opening=1.6)
         beats = self._week_beats()
@@ -3583,7 +3583,7 @@ class TestBuildDayContext:
         and 31.4 h, which make 39.9 against 40.0. The coach says what the
         page says, not the 8.55 it read back off the other two, nor a 31.5
         that would add up."""
-        from beats.domain.services import ContractService
+        from beats.domain.contract_service import ContractService
 
         job = self._job(region=None)
         beats = [self._work(date(2026, 5, 26), 30762 / 3600)]
@@ -3901,8 +3901,8 @@ class TestPartTimePercentReadsAsThePage:
         assert mismatches == []
 
     async def test_the_contract_week_is_labelled_with_it(self):
+        from beats.domain.contract_service import ContractService
         from beats.domain.models import Contract, Project, ProjectKind
-        from beats.domain.services import ContractService
 
         job = Project(
             id="job",
@@ -3986,8 +3986,8 @@ class TestContractSectionReadsAsThePage:
         ],
     )
     async def test_every_figure_is_the_pages_tenth(self, week, seconds):
+        from beats.domain.contract_service import ContractService
         from beats.domain.models import Absence, AbsenceType, Beat, ContractTerm, ScheduleType
-        from beats.domain.services import ContractService
 
         starts = date(2026, 5, 18)
         term, absences = {

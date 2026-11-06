@@ -10,7 +10,8 @@ from pymongo.asynchronous.database import AsyncDatabase
 from beats.domain.accounts import AccountService
 from beats.domain.organisations import OrganisationService
 from beats.infrastructure.operator_store import MongoAccountLimitsStore
-from beats.infrastructure.organisations import MongoOrganisationRecords, MongoOrganisationStore
+from beats.infrastructure.organisation_records import MongoOrganisationRecords
+from beats.infrastructure.organisations import MongoOrganisationStore
 from beats.infrastructure.repositories import (
     MongoDeviceRegistrationRepository,
     MongoUserRepository,

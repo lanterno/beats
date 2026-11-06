@@ -12,67 +12,79 @@ from pydantic import AfterValidator
 from beats.domain.analytics import AnalyticsService
 from beats.domain.billing_service import BillingService
 from beats.domain.calendar import CalendarService
+from beats.domain.contract_service import ContractService
 from beats.domain.employment import EmploymentService
 from beats.domain.fitbit import FitbitService
 from beats.domain.github import GitHubService
 from beats.domain.intelligence import IntelligenceService
 from beats.domain.oura import OuraService
-from beats.domain.services import BeatService, ContractService, ProjectService, TimerService
-from beats.infrastructure.database import Database
-from beats.infrastructure.organisations import MongoOrganisationRecords, MongoOrganisationStore
-from beats.infrastructure.repositories import (
-    AbsenceRepository,
-    AdjustmentRepository,
-    BeatRepository,
+from beats.domain.services import BeatService, ProjectService, TimerService
+from beats.infrastructure.billing_repositories import (
     BillableOverrideRepository,
     BillingBudgetRepository,
-    BiometricDayRepository,
-    CalendarIntegrationRepository,
     ClientRepository,
-    DeviceRegistrationRepository,
-    FitbitIntegrationRepository,
-    FlowWindowRepository,
-    GitHubIntegrationRepository,
-    InsightsRepository,
-    MongoAbsenceRepository,
-    MongoAdjustmentRepository,
-    MongoBeatRepository,
     MongoBillableOverrideRepository,
     MongoBillingBudgetRepository,
-    MongoBiometricDayRepository,
-    MongoCalendarIntegrationRepository,
     MongoClientRepository,
+    MongoProjectBillingRepository,
+    MongoReportLinkLookup,
+    MongoReportLinkRepository,
+    ProjectBillingRepository,
+    ReportLinkLookup,
+    ReportLinkRepository,
+)
+from beats.infrastructure.contract_repositories import (
+    AbsenceRepository,
+    AdjustmentRepository,
+    MongoAbsenceRepository,
+    MongoAdjustmentRepository,
+)
+from beats.infrastructure.database import Database
+from beats.infrastructure.organisation_records import MongoOrganisationRecords
+from beats.infrastructure.organisations import MongoOrganisationStore
+from beats.infrastructure.project_repositories import (
+    BeatRepository,
+    MongoBeatRepository,
+    MongoPeriodLocks,
+    MongoProjectRepository,
+    ProjectRepository,
+)
+from beats.infrastructure.project_repositories import (
+    project_repository_for as _project_repository_for,
+)
+from beats.infrastructure.repositories import (
+    CalendarIntegrationRepository,
+    DeviceRegistrationRepository,
+    FitbitIntegrationRepository,
+    GitHubIntegrationRepository,
+    InsightsRepository,
+    MongoCalendarIntegrationRepository,
     MongoDeviceRegistrationRepository,
     MongoFitbitIntegrationRepository,
-    MongoFlowWindowRepository,
     MongoGitHubIntegrationRepository,
     MongoInsightsRepository,
     MongoOuraIntegrationRepository,
     MongoPairingCodeRepository,
-    MongoPendingSuggestionRepository,
-    MongoPeriodLocks,
-    MongoProjectBillingRepository,
-    MongoProjectRepository,
-    MongoReportLinkLookup,
-    MongoReportLinkRepository,
-    MongoSignalSummaryRepository,
     MongoUserRepository,
     MongoWebhookRepository,
     MongoWeeklyDigestRepository,
     MongoWeeklyPlanRepository,
     OuraIntegrationRepository,
     PairingCodeRepository,
-    PendingSuggestionRepository,
-    ProjectBillingRepository,
-    ProjectRepository,
-    ReportLinkLookup,
-    ReportLinkRepository,
-    SignalSummaryRepository,
     WebhookRepository,
     WeeklyDigestRepository,
     WeeklyPlanRepository,
 )
-from beats.infrastructure.repositories import project_repository_for as _project_repository_for
+from beats.infrastructure.signal_repositories import (
+    BiometricDayRepository,
+    FlowWindowRepository,
+    MongoBiometricDayRepository,
+    MongoFlowWindowRepository,
+    MongoPendingSuggestionRepository,
+    MongoSignalSummaryRepository,
+    PendingSuggestionRepository,
+    SignalSummaryRepository,
+)
 from beats.settings import Settings
 
 

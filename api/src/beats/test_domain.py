@@ -3391,7 +3391,7 @@ class TestTimerServiceStop:
         from pymongo import AsyncMongoClient
 
         from beats.domain.services import TimerService
-        from beats.infrastructure.repositories import (
+        from beats.infrastructure.project_repositories import (
             MongoBeatRepository,
             MongoProjectRepository,
         )
@@ -3841,7 +3841,7 @@ class TestContractServiceIndex:
     contract fields, not the whole list its response."""
 
     async def test_unknown_region_skips_that_project_only(self):
-        from beats.domain.services import ContractService
+        from beats.domain.contract_service import ContractService
 
         known = _day_job("p1")
         unknown = _day_job("p2", holiday_country="XX")
@@ -3872,7 +3872,7 @@ class TestContractServiceLedger:
 
     @staticmethod
     def _service(*, at: datetime, beats=(), absences=(), project=None):
-        from beats.domain.services import ContractService
+        from beats.domain.contract_service import ContractService
 
         return ContractService(
             project_repo=_FakeProjectRepoForServices([project or _day_job("p1")]),
@@ -4019,7 +4019,7 @@ class TestRecordAdjustment:
 
     @staticmethod
     def _service(repo: _FakeAdjustmentRepo):
-        from beats.domain.services import ContractService
+        from beats.domain.contract_service import ContractService
 
         at = datetime(2026, 3, 8, 23, 30, tzinfo=UTC)
         return ContractService(
@@ -4049,8 +4049,8 @@ class TestVacationYearDefault:
     in Zürich."""
 
     async def test_the_default_year_is_the_request_timezones(self):
+        from beats.domain.contract_service import ContractService
         from beats.domain.models import CarryOver, VacationEntitlement
-        from beats.domain.services import ContractService
 
         project = _day_job("p1")
         assert project.contract is not None

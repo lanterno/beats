@@ -14,7 +14,10 @@ from beats.auth.webauthn import WebAuthnManager
 from beats.domain.accounts import suspension_detail
 from beats.domain.models import User
 from beats.infrastructure.database import Database
-from beats.infrastructure.repositories import MongoUserRepository, UserRepository
+from beats.infrastructure.repositories import (
+    MongoUserRepository,
+    UserRepository,
+)
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)

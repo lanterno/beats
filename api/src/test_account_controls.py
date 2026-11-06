@@ -66,8 +66,15 @@ class TestAccountSuspensionAPI:
 
     @pytest.fixture(autouse=True)
     def _lift(self, mongo, auth_info):
-        """Every test leaves the class user acting again."""
+        """Every test leaves the class user acting again — unsuspended, and
+        with no sign-out cut, which would refuse the class token whenever a
+        second ticked between its minting and the cut."""
         yield
+        from bson import ObjectId
+
+        mongo.users.update_one(
+            {"_id": ObjectId(auth_info["user_id"])}, {"$unset": {"sessions_valid_after": ""}}
+        )
         self._unsuspend(mongo, auth_info["user_id"])
 
     def test_a_suspended_session_is_refused_everywhere_with_the_address(

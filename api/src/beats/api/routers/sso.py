@@ -47,7 +47,10 @@ from beats.auth.sso_accounts import (
 )
 from beats.domain.models import SSOFlow
 from beats.infrastructure.database import Database
-from beats.infrastructure.repositories import MongoSSOFlowRepository, SSOFlowRepository
+from beats.infrastructure.repositories import (
+    MongoSSOFlowRepository,
+    SSOFlowRepository,
+)
 from beats.settings import settings
 
 logger = logging.getLogger(__name__)

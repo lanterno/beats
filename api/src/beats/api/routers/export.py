@@ -51,9 +51,9 @@ from beats.domain.models import (
 )
 from beats.domain.services import refuse_locked
 from beats.domain.utils import normalize_tz
-from beats.infrastructure.repositories import (
+from beats.infrastructure.billing_repositories import ClientRepository
+from beats.infrastructure.project_repositories import (
     BeatRepository,
-    ClientRepository,
     ProjectRepository,
 )
 
