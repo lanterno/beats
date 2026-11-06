@@ -42,6 +42,16 @@ class InvalidCommandArgs(DomainException):
     code = "INVALID_COMMAND_ARGS"
 
 
+class JobAlreadyQueued(DomainException):
+    """One queued job per command and subject: a double-submitted erasure
+    would otherwise make two jobs behind one suspension, and cancelling
+    either would lift it while the other ran on schedule."""
+
+    status_code = 409
+    message = "This command is already queued for this subject"
+    code = "JOB_ALREADY_QUEUED"
+
+
 class ConfirmationMismatch(DomainException):
     """The typed confirmation is the operator proving they are acting on the
     thing they think they are — the account's email, the organisation's name
@@ -90,7 +100,10 @@ async def run_command(
         # Destructive work routes itself: it cannot accidentally run in a
         # request handler holding the wrong credential. A queued job is a
         # serialised command — one abstraction, not two mechanisms.
-        job = await MongoOperatorJobs(ctx.db).enqueue(
+        jobs = MongoOperatorJobs(ctx.db)
+        if await jobs.find_queued(command.name, command.subject_id(parsed)):
+            raise JobAlreadyQueued()
+        job = await jobs.enqueue(
             command=command.name,
             args=parsed.model_dump(mode="json"),
             subject_kind=command.subject_kind,
@@ -99,7 +112,16 @@ async def run_command(
             queued_by_email=ctx.operator.email,
             window=command.window,
         )
-        await command.on_queued(ctx, parsed)
+        try:
+            await command.on_queued(ctx, parsed)
+        except Exception:
+            # The queueing's side effect failed (an erasure that could not
+            # suspend). A job standing with no suspension would wait out an
+            # invisible window the person never sees, while the operator —
+            # who got an error — believes nothing was queued. On failure,
+            # nothing stands.
+            await jobs.cancel(job["id"])
+            raise
         return {"queued": True, "job": job}
 
     before = await command.describe(ctx, parsed)

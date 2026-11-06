@@ -52,7 +52,11 @@ async def run_due_jobs(db: AsyncDatabase) -> int:
             # ERROR is what the log-based alert in terraform/alerts.tf
             # watches: a silently failing erasure must page somebody.
             logger.error("operator job %s (%s) failed: %s", job["id"], job["command"], e)
-            await jobs.finish(job["id"], error=str(e))
+            # Classified and truncated, never str(e) raw: the error column is
+            # the one operator-page field whose text the control plane does
+            # not choose, and a future driver error echoing a document must
+            # not carry it across the wall whole.
+            await jobs.finish(job["id"], error=f"{type(e).__name__}: {e}"[:500])
     return handled
 
 

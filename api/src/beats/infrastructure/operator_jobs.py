@@ -67,6 +67,16 @@ class MongoOperatorJobs:
         doc["_id"] = result.inserted_id
         return _public(doc)
 
+    async def find_queued(self, command: str, subject_id: str) -> dict[str, Any] | None:
+        """The queued entry for a command and subject, if one waits. What the
+        runner's dedup and the unsuspend guard read: two queued erasures for
+        one account would let a cancel lift the suspension while the other
+        ran on schedule."""
+        doc = await self._col.find_one(
+            {"command": command, "subject_id": subject_id, "state": "queued"}
+        )
+        return _public(doc) if doc else None
+
     async def claim(self) -> dict[str, Any] | None:
         """One due entry, marked running — or None when nothing is due."""
         now = datetime.now(UTC)

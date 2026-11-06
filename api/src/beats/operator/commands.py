@@ -22,8 +22,8 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, Field
 from pymongo.asynchronous.database import AsyncDatabase
 
-from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountService
-from beats.domain.exceptions import DomainException
+from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
+from beats.domain.exceptions import DomainException, OrganisationNotFound
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
@@ -71,11 +71,17 @@ class SuspendArgs(AccountArgs):
     reason: str = Field(min_length=1, max_length=2000)
 
 
-async def _account_email(ctx: CommandContext, user_id: str) -> str | None:
+async def _account_email(ctx: CommandContext, user_id: str) -> str:
     """The typed confirmation for an account command. Compared, never
-    stored: operator_audit holds ids, and the audit outlives the account."""
+    stored: operator_audit holds ids, and the audit outlives the account.
+    A subject that doesn't resolve is a refusal here, at queue time — never
+    a waived confirmation: the check's whole purpose is proving the operator
+    is acting on the thing they think they are, and a mistyped id is the
+    case it exists for."""
     user = await ctx.accounts.find(user_id)
-    return user.email if user else None
+    if user is None:
+        raise AccountNotFound()
+    return user.email
 
 
 async def _suspension_state(ctx: CommandContext, user_id: str) -> dict[str, Any]:
@@ -126,10 +132,27 @@ class SuspendAccount(_AccountCommand):
         return await _suspension_state(ctx, args.user_id)
 
 
+class ErasureQueued(DomainException):
+    """An account with a queued erasure is unsuspended only by cancelling the
+    erasure (`job.cancel`, which lifts the suspension itself): unsuspending
+    around it would leave the account working normally, showing none of the
+    window's warning, and still erased on schedule. A control-plane rule, so
+    it lives with the control plane's own state rather than in
+    AccountService, which knows nothing of jobs."""
+
+    status_code = 409
+    message = "An erasure is queued for this account; cancel the job instead"
+    code = "ERASURE_QUEUED"
+
+
 class UnsuspendAccount(_AccountCommand):
     name = "account.unsuspend"
 
     async def execute(self, ctx: CommandContext, args: AccountArgs) -> dict[str, Any]:
+        from beats.infrastructure.operator_jobs import MongoOperatorJobs
+
+        if await MongoOperatorJobs(ctx.db).find_queued("account.erase", args.user_id):
+            raise ErasureQueued()
         await ctx.accounts.unsuspend(args.user_id)
         return await _suspension_state(ctx, args.user_id)
 
@@ -222,9 +245,13 @@ class OrganisationArgs(BaseModel):
     organisation_id: str = Field(min_length=1, max_length=64)
 
 
-async def _organisation_name(ctx: CommandContext, organisation_id: str) -> str | None:
+async def _organisation_name(ctx: CommandContext, organisation_id: str) -> str:
+    """Resolves or refuses, like _account_email: an unknown organisation is a
+    404 at queue time, never a waived confirmation."""
     org = await ctx.organisations.store.get_organisation(organisation_id)
-    return org.name if org else None
+    if org is None:
+        raise OrganisationNotFound()
+    return org.name
 
 
 async def _organisation_state(ctx: CommandContext, organisation_id: str) -> dict[str, Any]:

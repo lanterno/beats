@@ -92,9 +92,13 @@ WebAuthnDep = Annotated[WebAuthnManager, Depends(get_webauthn_manager)]
 def refuse_suspended(user: User | None) -> None:
     """403 ACCOUNT_SUSPENDED for a suspended account, at a sign-in door.
 
-    Called only after the ceremony or code exchange has succeeded, so only
-    someone who can actually sign in learns that the account is suspended.
-    The middleware never sees these doors — they are public paths.
+    The middleware never sees these doors — they are public paths. At login,
+    SSO complete and the pairing exchange it is called only after the
+    ceremony or code exchange has succeeded, so only someone who can
+    actually sign in learns that the account is suspended; registration
+    verify is the exception, where the check comes first — its ceremony
+    proves nothing about the account, and running it would persist the new
+    credential (see the call site).
     """
     if user is not None and user.suspended:
         raise HTTPException(
@@ -201,16 +205,20 @@ async def verify_registration(
             detail="User not found for pending registration",
         )
 
+    # A retried sign-up on an existing (abandoned) account can reach a
+    # suspended one — refused *before* the ceremony, unlike the other doors:
+    # completing a registration ceremony proves possession of a passkey the
+    # caller just created, not ownership of the account, so it gates nothing;
+    # and refusing after it would leave the new credential stored on the
+    # suspended account, a key that turns the day the suspension lifts.
+    refuse_suspended(user)
+
     try:
         result = await webauthn.verify_registration(
             credential=body.credential,
             user=user,
             device_name=body.device_name,
         )
-        # A retried sign-up on an existing (abandoned) account can reach a
-        # suspended one. The ceremony ran — the refusal tells the account
-        # holder, not a prober.
-        refuse_suspended(user)
         return RegistrationVerifyResponse(
             verified=result["verified"],
             token=result["token"],
