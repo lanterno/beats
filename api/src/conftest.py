@@ -21,6 +21,13 @@ _MONGO_NOFILE = 64000
 
 _mongo_container = None
 
+# The identity every operator-app request runs as in tests (the dev stand-in),
+# a viewer beside it, and the app's own origin for the write checks. Shared by
+# test_operator.py and test_operator_commands.py.
+OPERATOR_SUB = "test-operator"
+VIEWER_SUB = "test-viewer"
+OPERATOR_ORIGIN = "http://backoffice.test"
+
 
 def _dsn() -> str:
     return os.environ.get("DB_DSN", "mongodb://localhost:27017")
@@ -43,6 +50,18 @@ def pytest_configure(config):
     # Settings() at import time. .env.test is committed; a developer's .env is
     # not, so this is also what makes a fresh clone runnable.
     os.environ.setdefault("BEATS_ENV_FILE", ".env.test")
+    # The operator app's settings are built the same way when a test module
+    # imports operator_server, so its environment is set here too — before
+    # any module import, which is what lets more than one test file import it
+    # without racing over who sets the env first. The dev stand-in is the
+    # wall's local door (docs/backoffice.md § Authentication).
+    os.environ["BEATS_OPERATOR_ENV_FILE"] = ".env.operator.does-not-exist"
+    os.environ["BACKOFFICE_DEV_OPERATOR"] = OPERATOR_SUB
+    os.environ["OPERATOR_ALLOWLIST"] = (
+        f'[{{"sub": "{OPERATOR_SUB}", "email": "op@example.test", "role": "operator"}},'
+        f' {{"sub": "{VIEWER_SUB}", "email": "viewer@example.test", "role": "viewer"}}]'
+    )
+    os.environ["OPERATOR_ORIGIN"] = OPERATOR_ORIGIN
     # The suite never talks to Anthropic. A key exported in the developer's
     # shell would otherwise reach Settings() and let a test that forgot to
     # mock `complete` spend real money; with none, the coach answers 503
@@ -51,6 +70,8 @@ def pytest_configure(config):
     os.environ["ANTHROPIC_API_KEY"] = ""
 
     if os.getenv("BEATS_TEST_ENV") == "1":
+        os.environ.setdefault("OPERATOR_DB_DSN", os.environ.get("DB_DSN", ""))
+        os.environ.setdefault("OPERATOR_DB_NAME", os.environ.get("DB_NAME", "beats_test"))
         return
 
     from docker.types import Ulimit
@@ -63,6 +84,8 @@ def pytest_configure(config):
     )
     os.environ["DB_DSN"] = _mongo_container.get_connection_url()
     os.environ["DB_NAME"] = "beats_test"
+    os.environ["OPERATOR_DB_DSN"] = os.environ["DB_DSN"]
+    os.environ["OPERATOR_DB_NAME"] = os.environ["DB_NAME"]
 
 
 def pytest_unconfigure(config):
@@ -71,6 +94,14 @@ def pytest_unconfigure(config):
     if _mongo_container is not None:
         _mongo_container.stop()
         _mongo_container = None
+
+
+# The identity every operator-app request runs as in tests (the dev stand-in),
+# a viewer beside it, and the app's own origin for the write checks. Shared by
+# test_operator.py and test_operator_commands.py.
+OPERATOR_SUB = "test-operator"
+VIEWER_SUB = "test-viewer"
+OPERATOR_ORIGIN = "http://backoffice.test"
 
 
 @pytest.fixture(scope="session")
@@ -123,6 +154,27 @@ def _no_anthropic(monkeypatch):
 
     monkeypatch.setattr(anthropic, "AsyncAnthropic", refuse)
     monkeypatch.setattr(anthropic, "Anthropic", refuse)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset slowapi's process-global limiter store before each test.
+
+    Several tests legitimately call /api/device/pair/exchange and
+    /api/auth/* during setup; without a reset, the 5–10/min caps on
+    those routes accumulate across the run and 429 the back half of
+    the suite — and the per-account write buckets
+    (test_account_controls.py) carry over the same way. Tests that
+    *want* to exercise a limit consume the budget within a single
+    test and are unaffected by the per-test reset. Lived in
+    test_api.py until the account-control tests split out and needed
+    it too: an autouse fixture in a test module guards only that
+    module.
+    """
+    from beats.api.routers.auth import limiter
+
+    limiter.reset()
+    return
 
 
 @pytest.fixture(autouse=True)
@@ -228,3 +280,15 @@ def other_auth_headers(mongo) -> dict[str, str]:
     mongo.users.insert_one({"_id": ObjectId(user_id), "email": email, "display_name": None})
     token = SessionManager(settings.jwt_secret).create_session_token(user_id, email)
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="class")
+def operator_client():
+    """A TestClient over the operator app, lifespan and all. Class-scoped
+    like auth_info: the app's own Mongo client connects per class."""
+    from starlette.testclient import TestClient
+
+    from operator_server import app as operator_app
+
+    with TestClient(operator_app) as client:
+        yield client
