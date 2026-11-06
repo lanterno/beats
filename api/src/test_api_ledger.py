@@ -420,7 +420,7 @@ class TestTimesheetAPI:
 class TestVacationAPI:
     """GET /api/projects/{id}/vacation. The arithmetic is tested on fixed
     dates in `test_vacation.py`, and which year is the default in
-    `test_domain.py` at a fixed instant; this is the wire."""
+    `test_project_service.py` at a fixed instant; this is the wire."""
 
     @staticmethod
     def _vacation(client, headers, project_id: str, **params):
@@ -586,7 +586,7 @@ class TestAdjustmentsAPI:
     """/api/projects/{id}/adjustments — the write side of the ledger, and what
     the balance makes of it on the two reads. The arithmetic is tested on
     fixed dates in `test_contracts.py` and `test_ledger.py`, and whose today
-    the date rule reads in `test_domain.py`; this is the wire."""
+    the date rule reads in `test_project_service.py`; this is the wire."""
 
     @staticmethod
     def _last_monday() -> date:

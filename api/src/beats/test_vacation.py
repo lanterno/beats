@@ -5,7 +5,7 @@ in the set is `contract_holidays`'s, in `test_contracts.py`.
 
 What the constraints on `VacationEntitlement` refuse is Pydantic's to test;
 the one hand-written rule (a cap only with `capped`) and the leaf paths are
-pinned over HTTP in `test_api.py`.
+pinned over HTTP in `test_api_ledger.py`.
 """
 
 from datetime import date

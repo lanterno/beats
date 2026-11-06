@@ -316,7 +316,7 @@ what every route is given); retention in `domain/retention.py` and
 `infrastructure/retention.py`; the persistence in
 `infrastructure/organisations.py` (`MongoOrganisationStore`,
 `MongoOrganisationRecords`) and the approved-month lock in
-`infrastructure/repositories.py` (`MongoPeriodLocks`); the ports in
+`infrastructure/project_repositories.py` (`MongoPeriodLocks`); the ports in
 `domain/ports.py`; the routes in `api/routers/organisations.py` and
 `api/routers/employment.py`, both under `/api/organisations`.
 

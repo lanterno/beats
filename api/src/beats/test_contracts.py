@@ -14,7 +14,7 @@ it adds is ours: how the region's days, the ones the employer does not give
 and the company's own combine into the one set every figure reads.
 
 The region check is not here: it runs where a contract is written, so it is
-tested with `ProjectService` in `test_domain.py`.
+tested with `ProjectService` in `test_project_service.py`.
 """
 
 import os

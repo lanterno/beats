@@ -278,7 +278,7 @@ class TestIntelligenceAPI:
     the digest 404, the inbox severity sort. Heavy IntelligenceService
     computations (score, suggestions, focus-scores) are smoke-tested
     via the empty-data path — full-data scenarios belong to
-    test_domain.py once IntelligenceService gets unit tests of its
+    test_intelligence.py once IntelligenceService gets unit tests of its
     own."""
 
     @pytest.fixture(autouse=True)
@@ -655,7 +655,7 @@ class TestIntelligenceAPI:
     # These exercise the GET endpoints that the existing tests in
     # this class don't hit — pinning the URL/method mapping +
     # response shape on the empty-user path. The IntelligenceService
-    # logic itself is covered in test_domain.py; here we just want
+    # logic itself is covered in test_intelligence.py; here we just want
     # the route handlers to actually run.
 
     def test_generate_digest_default_week_returns_envelope(self, client, auth_headers):

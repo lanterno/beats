@@ -102,7 +102,7 @@ Pre-commit (parallel, fast — runs only on staged files for the relevant surfac
 - `flutter analyze` (Dart)
 
 Pre-push (sequential, full test suites):
-- `pytest src/` (API, with testcontainers Mongo — ~30s for 1535 tests)
+- `pytest src/` (API, with testcontainers Mongo — ~30s for 1539 tests)
 - `tsc` + `vitest` + `pnpm gen:types:check` (UI typecheck, unit tests, generated-API-types drift check; backoffice/ runs the same three against the operator API's schema)
 - `go test ./...` + `go vet ./...` + `staticcheck ./...` (daemon)
 - `flutter test` (companion)
@@ -137,10 +137,13 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
 ## Testing Strategy
 
 - **API integration tests** use testcontainers (auto-starts MongoDB). Just run `pytest` —
-  the full suite (1535 tests) takes about 30 seconds. `src/test_organisations.py` holds
+  the full suite (1539 tests) takes about 30 seconds. `src/test_organisations.py` holds
   the organisations contract, including the wall tests in the shape of 1c's: a sentinel
   planted on a personal project, a tag, a flow window and a biometric is in no byte the
   organisation can read.
+  The HTTP suites are one file per router area (`src/test_api*.py`) and the domain
+  and coach suites one per module under test; what they share lives in the
+  helper modules api/CLAUDE.md names, which are deliberately not `test_`-prefixed.
   Set `BEATS_TEST_ENV=1` to skip testcontainers and point the suite at an
   already-running MongoDB via `DB_DSN`/`DB_NAME` (CI does this with a service
   container; locally it is the fallback when Docker is unavailable):
@@ -223,7 +226,7 @@ editing tests to make them pass, the ones that matter stop being read.
   ranking, goal resolution, bundle labels. Boundaries, empty sets, DST,
   timezone conversion, the off-by-one. These are where bugs actually live, and
   they need no fixture beyond the arguments.
-- **The HTTP contract.** `test_api.py` drives real routes against real Mongo:
+- **The HTTP contract.** The `test_api*.py` suites drive real routes against real Mongo:
   status codes, the error envelope, auth boundaries, what a route accepts and
   returns. A client on the other end depends on those; a refactor must not move
   them silently.

@@ -745,7 +745,7 @@ class ProjectService:
     # calls these helpers directly, sharing the same in-memory list across
     # the three aggregations. A helper with a public method MUST stay
     # byte-for-byte equivalent to it — the `*_matches_public_method` tests
-    # in test_domain.py guard the drift. `_this_week_from_beats` has none:
+    # in test_project_aggregations.py guard the drift. `_this_week_from_beats` has none:
     # it is the index's alone.
     # ------------------------------------------------------------------ #
 

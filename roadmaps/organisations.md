@@ -94,7 +94,7 @@ Three consequences of those rules bind every item below, and each is a
 mistake already avoided once:
 
 - **Widen a collection boundary, never a serialiser.** `MongoStore._q`
-  (`api/src/beats/infrastructure/repositories.py`) stamps
+  (`api/src/beats/infrastructure/project_repositories.py`) stamps
   `{"user_id": self.user_id}` onto every query, and that one line is what
   enforces rule 3 mechanically across every repository built on it
   (decision 4). Stage 2 widened it for exactly one collection (`projects`)
