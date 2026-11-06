@@ -1,7 +1,7 @@
 /**
- * The account is suspended (403 ACCOUNT_SUSPENDED,
- * docs/account-controls.md), and the API said so in a sentence that names the address to write
- * to. This holds that sentence for the full-page notice in `app/App.tsx`.
+ * The account is suspended (403 ACCOUNT_SUSPENDED, docs/account-controls.md),
+ * and the API said so in a sentence that names the address to write to. This
+ * holds that sentence for the full-page notice in `app/App.tsx`.
  *
  * Recording it also ends the session, exactly as a sign-out would — a
  * suspended token buys nothing — but deliberately **without** the 401 path's

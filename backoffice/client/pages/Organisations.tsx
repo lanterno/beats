@@ -2,7 +2,7 @@
  * The organisations the platform runs for: rosters, states and the audit of
  * acts — settings and counts, never a figure from anyone's record. The
  * operator acts here only for an organisation with no owner, and only when
- * asked (step 3's commands; this page is the read).
+ * asked — each act refused server-side the moment an owner exists.
  */
 
 import { useQuery } from "@tanstack/react-query";

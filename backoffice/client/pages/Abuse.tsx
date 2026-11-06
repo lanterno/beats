@@ -1,7 +1,7 @@
 /**
  * Detection by outlier rather than by a guessed threshold: who is far from
  * the median on the axes a hostile or broken account shows on. The controls
- * (limits, suspension, revoking one device) arrive with step 3's commands.
+ * (limits, suspension, revoking one device) live on the account's page.
  */
 
 import { useQuery } from "@tanstack/react-query";
