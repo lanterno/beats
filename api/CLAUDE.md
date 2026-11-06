@@ -67,9 +67,12 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 ## Testing
 
-Sixteen test files cover different layers; the full run takes about 30 seconds, and the root CLAUDE.md carries the count:
+Twenty test files cover different layers; the full run takes about 30 seconds, and the root CLAUDE.md carries the count:
 
 - **`src/test_api.py`** — HTTP integration tests against real MongoDB (testcontainers). One class per router, including `TestReportLinksAPI` for phase 1c — the public read with no Authorization header, and the four assertions that a link cannot reach another client, a personal project, an internal id or a running timer.
+- **`src/test_account_controls.py`** — account controls over HTTP (docs/account-controls.md): suspension on both credential branches and at the pairing and report-link doors, sign-out everywhere against `auth_time`, the two last-seen stamps, and the per-account limits. Shares `test_api.py`'s harness and billing helpers; the SSO door's suspension test stays with `TestSSOAPI`.
+- **`src/test_operator.py`** — the operator deployment's contract (docs/backoffice.md): the fresh-interpreter isolation pins (no `beats.settings` in the operator root; no operator router in `server`), the allowlist and Origin lines, **the wall** (a sentinel in every right-column thing, grepped out of every page), and the IAP verifier with a test that fails each of Google's checks on purpose. The operator env and the `operator_client` fixture are `conftest.py`'s.
+- **`src/test_operator_commands.py`** — the commands and the job queue: the runner's gates (confirmation, role, 404 at queue time for a mistyped subject), the organisation acts behind `ORGANISATION_HAS_OWNER`, and the erasure window's consistency rules (one queued job per subject, no unsuspend around it, a failed queueing leaves nothing standing, the sweep spares the operator's own records).
 - **`src/test_organisations.py`** — the organisations contract (docs/organisations.md), same harness: the lifecycle, an organisation's project on a member's own routes, the record and the member's view of it, the wall (`TestOrganisationWall`), connecting from a day, leaving and removal with the archive, erasure, backups, the project index's plan — and employment (stages 3–4): managed contracts and the member's refused writes, absence requests end to end, timesheets (submit, approve-and-freeze, the lock on every write path, changes requested, reopen, the running-timer refusal), teams with manager scope, the viewer, the compliance CSV's breaks, the audit read and admin-entered time.
 - **`src/beats/test_domain.py`** — pure-Python domain tests. Models, validation, AnalyticsService helpers. Uses small in-memory fakes where a repo is needed, plus one timer stop against the real beat repository, for a write that lands while the stop reads the flow windows.
 - **`src/beats/test_contracts.py`** — the work-contract arithmetic on its interesting inputs, balance adjustments among them, plus one round trip through the absence repository.
@@ -81,7 +84,8 @@ Sixteen test files cover different layers; the full run takes about 30 seconds, 
 - **`src/beats/test_vacation.py`** — the vacation arithmetic on fixed dates: the opening on a contract started years before it, each carry-over rule, the end year's pro-rating and rounding, which days cost leave.
 - **`src/beats/test_migration.py`** — the startup passes: the one that gives every project a `kind` and derives a day job's contract from its goal history, the one that then clears the personal goal the contract replaced, the one that moves weekly plans stored under a Sunday to their Monday, and the one that gives pairing codes stored with string dates the BSON dates their TTL index expires.
 - **`src/beats/test_coach.py`** — coach gateway, chat loop, memory, and usage tracking against scripted Anthropic responses.
-- **`src/beats/test_auth.py`** — session manager, WebAuthn, and token revocation.
+- **`src/beats/test_auth.py`** — session manager (`auth_time` included), WebAuthn, and token revocation.
+- **`src/beats/test_accounts.py`** — the account auth-state cache's safety properties and the account service's rules, the erasure wording among them.
 - **`src/beats/test_sso.py`** — OpenID Connect sign-in against `src/fake_idp.py` (a scripted provider, real RS256 tokens) and the account rules.
 - **`src/beats/test_middleware.py`** — idempotency middleware, no DB.
 - **`src/beats/test_device_access.py`** — the device-verdict cache.
