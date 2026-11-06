@@ -56,8 +56,25 @@ async def run_due_jobs(db: AsyncDatabase) -> int:
     return handled
 
 
+def _configure_logging() -> None:
+    """INFO to stdout, ERROR and up to stderr — not basicConfig, which sends
+    everything to stderr. Cloud Run marks unstructured stderr lines as
+    severity ERROR, which is exactly what the failure alert's log filter
+    matches: with one stream, a successful job's INFO line would page."""
+    fmt = logging.Formatter("%(levelname)s %(name)s: %(message)s")
+    out = logging.StreamHandler(sys.stdout)
+    out.setFormatter(fmt)
+    out.addFilter(lambda record: record.levelno < logging.ERROR)
+    err = logging.StreamHandler(sys.stderr)
+    err.setFormatter(fmt)
+    err.setLevel(logging.ERROR)
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.handlers = [out, err]
+
+
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    _configure_logging()
     dsn = os.environ.get("OPERATOR_JOBS_DB_DSN", "")
     db_name = os.environ.get("OPERATOR_JOBS_DB_NAME", "")
     if not dsn or not db_name:
