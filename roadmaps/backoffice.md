@@ -70,5 +70,14 @@ What follows is what the control plane still owes.
   to write a small record first (a counter document, or a log-based metric
   the page links to instead), which is its own decision about what to keep,
   not a page to add.
+- **A job running past the one-hour stale-claim window is reclaimed and run
+  a second time, concurrently.** `claim()` cannot tell a dead run from a
+  slow one, and the documented re-run safety of `organisation.delete`
+  (#414) is sequential: two concurrent deletions could both read a
+  project's holders before either deletes the assignments, duplicating
+  hand-backs. No command comes within two orders of magnitude of an hour at
+  this platform's scale, so the bound is accepted; if a purge or deletion
+  ever approaches it, the runner needs a claim heartbeat (refresh
+  `claimed_at` while executing) before the window is widened.
 - **`subscriptions.md`** plans its seat reconciliation on the operator job
   runner; whatever that needs is its change to argue.

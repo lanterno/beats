@@ -197,7 +197,21 @@ has neither). The audit is written under the operator the command carries.
   erasure's own wording, which names the day the window ends — so an account
   holder whose address was impersonated in a deletion mail finds out the
   moment they next open the app, inside the week there is to stop it.
-  `job.cancel` lifts that suspension, and only that kind.
+  `job.cancel` lifts that suspension, and only that kind — an account already
+  suspended for abuse keeps its kind when an erasure is queued on top, so
+  cancelling the erasure never opens the abuse door. Three rules keep the
+  window one visible, cancellable thing: **one queued job per command and
+  subject** (409 `JOB_ALREADY_QUEUED` — two erasures behind one suspension
+  would let a cancel lift it while the other ran on schedule);
+  **`account.unsuspend` refuses while an erasure is queued** (409
+  `ERASURE_QUEUED` — unsuspending around it would leave the account working
+  normally, warned of nothing, and still erased on schedule; `job.cancel` is
+  the one way out, and it lifts the suspension itself); and **a failed
+  queueing side effect cancels the job it queued** — a job standing with no
+  suspension would wait out an invisible window while the operator, who got
+  an error, believes nothing was queued. A subject that doesn't resolve is a
+  404 at queue time, never a waived confirmation: the typed confirmation
+  exists precisely for the mistyped id.
 - **Erasure must not take the control plane's records with it.**
   `erase_account` ends by sweeping `{"user_id": …}` over every collection, so
   `operator_audit` and `operator_jobs` name their subject as `subject_id`,
