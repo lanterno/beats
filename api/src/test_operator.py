@@ -1,4 +1,4 @@
-"""The operator deployment's contract (docs/backoffice.md step 2).
+"""The operator deployment's contract (docs/backoffice.md).
 
 The wall test matters most: a sentinel is planted in every stored thing the
 right-hand column of § *The line* names — a session's note and its day, a
@@ -119,7 +119,7 @@ class TestOperatorAuth:
     def test_a_write_without_this_apps_origin_is_refused(self, operator_client):
         """IAP's cookie rides any request the browser makes, so a POST is
         taken only from this app's own pages — the account lookup included,
-        though it reads. The typed confirmation of step 3 is no defence
+        though it reads. The typed confirmation is no defence
         here; a forging page sends it as easily as the operator types it."""
         body = {"email": "a@example.test"}
         no_origin = operator_client.post("/api/operator/accounts/lookup", json=body)
@@ -572,6 +572,20 @@ class TestOperatorCommands:
         resp = self._run(operator_client, "account.sign_out_everywhere", {"user_id": user_id})
         assert resp.status_code == 200
         assert mongo.users.find_one({"_id": ObjectId(user_id)})["sessions_valid_after"]
+
+    def test_suspend_refuses_the_erasure_kind(self, operator_client, mongo):
+        """An erasure-kind suspension minted here would falsely promise a
+        deletion date with no job behind it; that kind belongs to the
+        erasure's own queueing."""
+        user_id = self._user(mongo, "no-fake-erasure@example.test")
+        resp = self._run(
+            operator_client,
+            "account.suspend",
+            {"user_id": user_id, "kind": "erasure", "reason": "r"},
+            confirmation="no-fake-erasure@example.test",
+        )
+        assert resp.status_code == 422
+        assert resp.json()["code"] == "INVALID_COMMAND_ARGS"
 
     def test_an_unknown_command_is_404_and_bad_args_422(self, operator_client):
         assert self._run(operator_client, "account.explode", {"user_id": "x"}).status_code == 404
