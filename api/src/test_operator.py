@@ -1000,3 +1000,89 @@ class TestOperatorJobs:
 
         remaining = list(mongo.operator_audit.find({}))
         assert [r["subject_id"] for r in remaining] == ["s2"]
+
+    def test_one_queued_erasure_per_account_and_no_unsuspend_around_it(
+        self, operator_client, mongo
+    ):
+        """The window must stay visible and cancellable as one thing: a
+        second queued erasure would let a cancel lift the suspension while
+        the other ran on schedule, and an unsuspend around a queued erasure
+        would leave the account working normally — showing none of the
+        warning — and still erased in seven days. job.cancel is the one way
+        out, and it lifts the suspension itself."""
+        user_id = self._user(mongo, "once@example.test")
+        first = self._run(
+            operator_client, "account.erase", {"user_id": user_id}, "once@example.test"
+        )
+        assert first.status_code == 200, first.text
+
+        again = self._run(
+            operator_client, "account.erase", {"user_id": user_id}, "once@example.test"
+        )
+        assert again.status_code == 409
+        assert again.json()["code"] == "JOB_ALREADY_QUEUED"
+
+        unsuspend = self._run(operator_client, "account.unsuspend", {"user_id": user_id})
+        assert unsuspend.status_code == 409
+        assert unsuspend.json()["code"] == "ERASURE_QUEUED"
+
+        job_id = first.json()["job"]["id"]
+        assert self._run(operator_client, "job.cancel", {"job_id": job_id}).status_code == 200
+        assert mongo.users.find_one({"_id": ObjectId(user_id)}).get("suspended_at") is None
+
+    def test_a_mistyped_subject_is_refused_at_queue_time_not_waived(self, operator_client, mongo):
+        """A subject that doesn't resolve must never read as 'no confirmation
+        required': the typed confirmation exists precisely for the mistyped
+        id."""
+        resp = self._run(operator_client, "account.erase", {"user_id": str(ObjectId())})
+        assert resp.status_code == 404
+        assert resp.json()["code"] == "ACCOUNT_NOT_FOUND"
+        assert mongo.operator_jobs.count_documents({}) == 0
+
+    def test_a_failed_queue_side_effect_leaves_no_job_standing(self, operator_client, mongo):
+        """If queueing's suspension fails, the job is cancelled and the error
+        surfaces: a job with no suspension would wait out an invisible window
+        while the operator, who saw an error, believes nothing was queued.
+        Driven at the runner with the real context, its suspend replaced by
+        the transient failure a Mongo hiccup would be."""
+        import asyncio
+
+        from pymongo import AsyncMongoClient
+
+        from beats.operator.context import build_command_context
+        from beats.operator.runner import run_command
+        from beats.operator.settings import OperatorIdentity
+
+        user_id = self._user(mongo, "half@example.test")
+
+        async def queue_with_failing_suspend() -> bool:
+            client = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                db = client[os.environ.get("DB_NAME", "beats_test")]
+                ctx = build_command_context(
+                    db,
+                    OperatorIdentity(sub=OPERATOR_SUB, email="op@example.test", role="operator"),
+                )
+
+                async def failing_suspend(*args, **kwargs):
+                    raise RuntimeError("transient write failure")
+
+                # ty flags replacing a bound method; a cast keeps the patch
+                # explicit without widening the service's own type.
+                from typing import cast
+
+                cast("Any", ctx.accounts).suspend = failing_suspend
+                try:
+                    await run_command(
+                        ctx, "account.erase", {"user_id": user_id}, "half@example.test"
+                    )
+                except RuntimeError:
+                    return True
+                return False
+            finally:
+                await client.close()
+
+        assert asyncio.run(queue_with_failing_suspend()) is True
+        job = mongo.operator_jobs.find_one({"subject_id": user_id})
+        assert job is not None
+        assert job["state"] == "cancelled"
