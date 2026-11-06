@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from test_api import _billed_march, _mint_link, _read_report
+from api_helpers import _billed_march, _mint_link, _read_report
 
 
 class TestAccountSuspensionAPI:
