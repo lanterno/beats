@@ -69,14 +69,8 @@ from beats.api.schemas import (
     RoleRequest,
 )
 from beats.domain.models import Organisation, OrganisationFields, OrgMembership
-from beats.domain.organisations import (
-    Archive,
-    Member,
-    ProjectMembers,
-    Record,
-    RecordEntry,
-    archive_csv,
-)
+from beats.domain.organisation_record import Archive, Record, RecordEntry, archive_csv
+from beats.domain.organisations import Member, ProjectMembers
 
 router = APIRouter(
     prefix="/api/organisations",

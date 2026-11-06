@@ -12,16 +12,13 @@ what makes the "what Acme can see" page honest: it is not a description of
 the read, it is the read.
 """
 
-import csv
-import io
 import secrets
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, NamedTuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from beats.domain.billing import utc_midnight, utc_range
-from beats.domain.contracts import balance_terms
+from beats.domain.billing import utc_midnight
 from beats.domain.exceptions import (
     AlreadyAMember,
     CloseNoticeTooShort,
@@ -46,17 +43,14 @@ from beats.domain.exceptions import (
     RequesterNotHighest,
     RetentionBelowFloor,
     ShareFromInFuture,
-    UnknownHolidayRegion,
     UnknownTimezone,
 )
-from beats.domain.holidays import check_region, contract_holidays
+from beats.domain.holidays import check_region
 from beats.domain.models import (
     PERSONAL_FIELDS,
     ActorKind,
-    Beat,
     JoinDecision,
     MembershipEnd,
-    MemberTotals,
     Organisation,
     OrganisationFields,
     OrgAssignment,
@@ -68,6 +62,13 @@ from beats.domain.models import (
     OrgRole,
     TimesheetStatus,
 )
+from beats.domain.organisation_record import (
+    Archive,
+    Record,
+    assemble_archive,
+    assemble_record,
+    organisation_zone,
+)
 from beats.domain.ports import (
     BillingPresence,
     OrganisationAbsenceReader,
@@ -78,13 +79,9 @@ from beats.domain.ports import (
     UserDirectory,
 )
 from beats.domain.retention import (
-    effective_retention_years,
-    retention_cutoff,
     retention_floor,
 )
-from beats.domain.services import worked_by_local_day
-from beats.domain.timesheet import month_end
-from beats.domain.utils import local_date, normalize_tz
+from beats.domain.utils import local_date
 
 INVITE_DAYS_MAX = 90
 
@@ -106,89 +103,6 @@ class OrgLabels(NamedTuple):
 
     projects: dict[str, str]
     members: dict[str, str]
-
-
-class RecordEntry(NamedTuple):
-    id: str
-    day: date
-    start: datetime
-    end: datetime
-    hours: float
-    note: str | None
-
-
-class RecordAbsence(NamedTuple):
-    date: date
-    type: str
-    half_day: bool
-
-
-class MemberBalance(NamedTuple):
-    as_of: date
-    balance: float
-    opening: float
-    worked: float
-    expected_through: float
-    adjusted: float
-
-
-class MemberRecord(NamedTuple):
-    """One member's slice of one project, as the organisation reads it."""
-
-    user_id: str
-    name: str
-    shared_from: datetime
-    active: bool
-    hours: float  # the month's
-    entries: list[RecordEntry]
-    absences: list[RecordAbsence]
-    has_contract: bool
-    balance: MemberBalance | None
-    totals: MemberTotals
-
-
-class ProjectRecord(NamedTuple):
-    project: OrgProject
-    members: list[MemberRecord]
-
-
-class Record(NamedTuple):
-    organisation: Organisation
-    month: date
-    first: date
-    last: date
-    projects: list[ProjectRecord]
-
-
-class ArchiveProject(NamedTuple):
-    project_id: str
-    name: str
-    color: str | None
-    hours: float
-    entries: list[RecordEntry]
-    absences: list[RecordAbsence]
-
-
-class Archive(NamedTuple):
-    organisation: Organisation
-    membership: OrgMembership
-    hours: float
-    projects: list[ArchiveProject]
-
-
-def _entry(beat: Beat, tz: ZoneInfo) -> RecordEntry:
-    """One finished beat as the record lists it. The readers hand over
-    finished beats only (`end` set), so a running one here is a bug."""
-    if beat.end is None or beat.id is None:
-        raise ValueError("the record lists finished, stored beats only")
-    return RecordEntry(
-        id=beat.id,
-        day=local_date(beat.start, tz),
-        start=normalize_tz(beat.start),
-        end=normalize_tz(beat.end),
-        hours=round(beat.duration.total_seconds() / 3600, 2),
-        note=beat.note,
-    )
 
 
 def _latest[T: (datetime, date)](left: T | None, right: T | None) -> T | None:
@@ -536,15 +450,9 @@ class OrganisationService:
 
     @staticmethod
     def _zone(organisation: Organisation) -> ZoneInfo:
-        """The organisation's timezone, UTC when the tz database dropped it.
-
-        Every reading of its record buckets days by this, never by the
-        caller's: the lock and the freeze already do, and a record two
-        deciders read differently is not a record (#415)."""
-        try:
-            return ZoneInfo(organisation.timezone)
-        except ZoneInfoNotFoundError, ValueError:
-            return ZoneInfo("UTC")
+        """The organisation's timezone — `organisation_zone`, which the
+        record's own assembly reads it by (#415)."""
+        return organisation_zone(organisation)
 
     def _today(self, organisation: Organisation) -> date:
         """Today where the organisation is: its own timezone decides when a
@@ -1123,144 +1031,23 @@ class OrganisationService:
         return with_members
 
     # --- the record --------------------------------------------------------------------
-
-    async def _balance(
-        self,
-        organisation_id: str,
-        assignment: OrgAssignment,
-        today: date,
-        tz: ZoneInfo,
-        expired_before: date,
-    ) -> MemberBalance | None:
-        contract = assignment.contract
-        if contract is None or assignment.project_id is None:
-            return None
-        # A balance sums every hour since the contract began. On a connected
-        # project with hours before the day the member chose to share from,
-        # that sum would carry what rule 4 keeps back — so it is withheld,
-        # and shown only when every entry and absence on the project is the
-        # organisation's, where it equals the member's own figure. Rows the
-        # retention purge unstamped are not withheld: they were shared once
-        # and have only expired (#409).
-        if await self.records.has_unshared(
-            organisation_id,
-            assignment.project_id,
-            assignment.user_id,
-            private_before=assignment.private_before,
-            private_before_day=assignment.private_before_day,
-            expired_before=expired_before,
-        ):
-            return None
-        start = contract.starts_on
-        beats = await self.records.beats_of_member(
-            organisation_id, assignment.project_id, assignment.user_id
-        )
-        absences = [
-            a
-            for _, a in await self.records.absences_between(
-                organisation_id, [assignment.project_id], start, today, user_id=assignment.user_id
-            )
-        ]
-        adjustments = await self.records.adjustments_of_member(
-            assignment.project_id, assignment.user_id, start, today
-        )
-        try:
-            holidays = set(contract_holidays(contract, start, today))
-        except UnknownHolidayRegion:
-            return None
-        terms = balance_terms(
-            contract, absences, holidays, worked_by_local_day(beats, tz), adjustments, today
-        )
-        return MemberBalance(
-            as_of=today,
-            balance=round(terms.balance, 2),
-            opening=round(terms.opening, 2),
-            worked=round(terms.worked, 2),
-            expected_through=round(terms.expected_through, 2),
-            adjusted=round(terms.adjusted, 2),
-        )
-
-    async def _record(
-        self,
-        organisation: Organisation,
-        projects: list[OrgProject],
-        month: date,
-        *,
-        user_id: str | None,
-    ) -> Record:
-        """One month of the organisation's record over `projects`: per
-        project, per member assigned (now or before), the finished entries
-        started in the month in the organisation's timezone, the absences,
-        the all-time totals and the balance of a contract if there is one.
-        With `user_id`, that member's slice alone — the same queries,
-        narrowed."""
-        if organisation.id is None:
-            raise ValueError("a stored organisation has an id")
-        organisation_id = organisation.id
-        tz = self._zone(organisation)
-        today = local_date(self._now(), tz)
-        # The day the organisation's own retention reaches back to: a row
-        # older than it has expired, which is why an unstamped one there
-        # does not withhold a balance (#409).
-        expired_before = retention_cutoff(
-            today,
-            effective_retention_years(organisation.retention_years, organisation.holiday_country),
-        )
-        first, last = month, month_end(month)
-        start, end = utc_range(first, last, tz)
-        project_ids = [p.id for p in projects]
-        assignments = await self.store.list_assignments(
-            organisation_id, user_id=user_id, active_only=False
-        )
-        members = {
-            m.user_id: m for m in await self.store.list_members(organisation_id, active_only=False)
-        }
-        beats = await self.records.beats_between(
-            organisation_id, project_ids, start, end, user_id=user_id
-        )
-        absences = await self.records.absences_between(
-            organisation_id, project_ids, first, last, user_id=user_id
-        )
-        totals = await self.records.totals(organisation_id, project_ids, user_id=user_id)
-
-        entries: dict[tuple[str, str], list[RecordEntry]] = {}
-        for uid, beat in beats:
-            entries.setdefault((beat.project_id, uid), []).append(_entry(beat, tz))
-        offs: dict[tuple[str, str], list[RecordAbsence]] = {}
-        for uid, absence in absences:
-            offs.setdefault((absence.project_id, uid), []).append(
-                RecordAbsence(date=absence.date, type=absence.type.value, half_day=absence.half_day)
-            )
-
-        out: list[ProjectRecord] = []
-        for project in projects:
-            member_records: list[MemberRecord] = []
-            for a in (x for x in assignments if x.project_id == project.id):
-                key = (project.id, a.user_id)
-                own = entries.get(key, [])
-                membership = members.get(a.user_id)
-                member_records.append(
-                    MemberRecord(
-                        user_id=a.user_id,
-                        name=membership.name if membership else "a former member",
-                        shared_from=a.shared_from,
-                        active=a.active,
-                        hours=round(sum(e.hours for e in own), 2),
-                        entries=own,
-                        absences=offs.get(key, []),
-                        has_contract=a.contract is not None,
-                        balance=await self._balance(organisation_id, a, today, tz, expired_before),
-                        totals=totals.get(key, MemberTotals()),
-                    )
-                )
-            out.append(ProjectRecord(project, member_records))
-        return Record(organisation, month, first, last, out)
+    #
+    # The assembly is `organisation_record.py`'s; what stays here is who may
+    # ask for it.
 
     async def record(self, organisation_id: str, actor: str, month: date) -> Record:
         """What the organisation sees: an admin's read of every project."""
         member = await self._member(organisation_id, actor, OrgRole.ADMIN)
         projects = await self.store.list_projects(organisation_id)
-        return await self._record(member.organisation, projects, month, user_id=None)
+        return await assemble_record(
+            self.store,
+            self.records,
+            self._now(),
+            member.organisation,
+            projects,
+            month,
+            user_id=None,
+        )
 
     async def visible(self, organisation_id: str, user_id: str, month: date) -> Record:
         """What the organisation sees of one member — `record` with the
@@ -1275,7 +1062,9 @@ class OrganisationService:
         )
         named = await self.store.project_names(organisation_id, (a.project_id for a in assignments))
         projects = sorted(named.values(), key=lambda p: p.name)
-        return await self._record(organisation, projects, month, user_id=user_id)
+        return await assemble_record(
+            self.store, self.records, self._now(), organisation, projects, month, user_id=user_id
+        )
 
     async def archive(
         self,
@@ -1293,68 +1082,6 @@ class OrganisationService:
         organisation = await self.store.get_organisation(organisation_id)
         if membership is None or organisation is None:
             raise OrganisationNotFound()
-        own = await beats.list_for_organisation(organisation_id)
-        days_off = await absences.list_for_organisation(organisation_id)
-        project_ids = {b.project_id for b in own} | {a.project_id for a in days_off}
-        names = await self.store.project_names(organisation_id, project_ids)
-        entries: dict[str, list[RecordEntry]] = {pid: [] for pid in project_ids}
-        offs: dict[str, list[RecordAbsence]] = {pid: [] for pid in project_ids}
-        for beat in own:
-            entries[beat.project_id].append(_entry(beat, tz))
-        for absence in days_off:
-            offs[absence.project_id].append(
-                RecordAbsence(date=absence.date, type=absence.type.value, half_day=absence.half_day)
-            )
-        projects = [
-            ArchiveProject(
-                project_id=pid,
-                name=names[pid].name if pid in names else "a project since removed",
-                color=names[pid].color if pid in names else None,
-                hours=round(sum(e.hours for e in entries[pid]), 2),
-                entries=entries[pid],
-                absences=offs[pid],
-            )
-            for pid in sorted(project_ids)
-        ]
-        return Archive(
-            organisation=organisation,
-            membership=membership,
-            hours=round(sum(p.hours for p in projects), 2),
-            projects=projects,
+        return await assemble_archive(
+            self.store, organisation, membership, organisation_id, user_id, beats, absences, tz
         )
-
-
-def archive_csv(archive: Archive) -> str:
-    """The archive as RFC 4180 CSV: a row per entry and per absence —
-    project, local day, kind (`entry`, or the absence's type), start, end,
-    hours and the note; an absence's start, end and hours are blank, and a
-    half day says so in the note's place."""
-    out = io.StringIO()
-    writer = csv.writer(out)
-    writer.writerow(["project", "day", "kind", "start", "end", "hours", "note"])
-    for project in archive.projects:
-        for e in project.entries:
-            writer.writerow(
-                [
-                    project.name,
-                    e.day.isoformat(),
-                    "entry",
-                    e.start.isoformat(),
-                    e.end.isoformat(),
-                    f"{e.hours:.2f}",
-                    e.note or "",
-                ]
-            )
-        for a in project.absences:
-            writer.writerow(
-                [
-                    project.name,
-                    a.date.isoformat(),
-                    a.type,
-                    "",
-                    "",
-                    "",
-                    "half day" if a.half_day else "",
-                ]
-            )
-    return out.getvalue()

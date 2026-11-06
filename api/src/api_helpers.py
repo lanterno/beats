@@ -230,3 +230,12 @@ def _without_ids(value):
         return {k: _without_ids(v) for k, v in value.items() if k != "id"}
     if isinstance(value, list | tuple):
         return [_without_ids(v) for v in value]
+
+
+def _pair_device(client, auth_headers):
+    """Pair a device and return (device_token, device_headers)."""
+    resp = client.post("/api/device/pair/code", headers=auth_headers)
+    code = resp.json()["code"]
+    resp = client.post("/api/device/pair/exchange", json={"code": code})
+    data = resp.json()
+    return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}

@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 from beats.domain.employment import MAX_DAILY_HOURS, compliance_warnings
 from beats.domain.models import MemberTotals, OrgProject
-from beats.domain.organisations import MemberRecord, ProjectRecord, RecordEntry
+from beats.domain.organisation_record import MemberRecord, ProjectRecord, RecordEntry
 
 
 def _at(day: int, hour: int, minute: int = 0) -> datetime:

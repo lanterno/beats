@@ -70,6 +70,7 @@ from beats.domain.models import (
     TimesheetEvent,
     TimesheetStatus,
 )
+from beats.domain.organisation_record import assemble_record, member_balance
 from beats.domain.organisations import Member, OrganisationService
 from beats.domain.ports import ContractAdjustments
 from beats.domain.retention import effective_retention_years, retention_cutoff
@@ -666,7 +667,9 @@ class EmploymentService(OrganisationService):
                         member.organisation.holiday_country,
                     ),
                 )
-                balance = await self._balance(organisation_id, assignment, last, tz, expired_before)
+                balance = await member_balance(
+                    self.records, organisation_id, assignment, last, tz, expired_before
+                )
                 balance_end = balance.balance if balance else None
         return FrozenMonth(
             worked=worked,
@@ -718,7 +721,9 @@ class EmploymentService(OrganisationService):
 
             raise OrganisationNotFound()
         projects = await self.store.list_projects(organisation_id)
-        record = await self._record(organisation, projects, month, user_id=None)
+        record = await assemble_record(
+            self.store, self.records, self._now(), organisation, projects, month, user_id=None
+        )
         if scope is None:
             return record
         return record._replace(
