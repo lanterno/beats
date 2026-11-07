@@ -13,7 +13,16 @@ work — are built, and their design moved where built things live:
   and the pages;
 - terraform/README.md § *Operator Deployment* — the hand-made prerequisites.
 
-What follows is what the control plane still owes.
+The two abuse signals that had no data source were settled on 2026-11-07:
+both are logged and counted, never stored, and their pages link to the
+query — the reasoning is in [docs/backoffice.md](../docs/backoffice.md)
+§ *The pages* under *Abuse*.
+
+What follows is what the control plane still owes. Nothing left is code
+waiting to be written: the first four need the owner — a console, a
+credential, or a figure only production has — the fifth is a bound
+accepted with the condition that would reopen it, and the last belongs to
+another plan.
 
 ## Work
 
@@ -63,13 +72,6 @@ What follows is what the control plane still owes.
   `beats/deploy.lock` alone as an object get under a `resource.name`
   condition (a condition cannot narrow a list, so the operator never lists
   the bucket) — granted to the `beats-operator` service account.
-- **Two abuse signals have no data source yet.** The design wanted "accounts
-  refused 429 on a write route in the last seven days" on the Attention page
-  and import sizes on the Abuse page; nothing records either — slowapi
-  counts in memory, and the import route keeps no size. Each needs the API
-  to write a small record first (a counter document, or a log-based metric
-  the page links to instead), which is its own decision about what to keep,
-  not a page to add.
 - **A job running past the one-hour stale-claim window is reclaimed and run
   a second time, concurrently.** `claim()` cannot tell a dead run from a
   slow one, and the documented re-run safety of `organisation.delete`

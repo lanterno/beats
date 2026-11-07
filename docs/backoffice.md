@@ -295,7 +295,10 @@ terraform/README.md's *Operator Deployment* section.
 
 ## The pages, by the job they serve
 
-- **Attention**, the landing page: organisations with no owner, and those
+- **Attention**, the landing page: a count per row, and one link — the
+  accounts a per-account write limit refused, which is a log query because
+  nothing stores a refusal (see *Abuse* below). The counts are
+  organisations with no owner, and those
   whose every owner is suspended (the operator doesn't act for the latter —
   they have an owner — but somebody should know); queued jobs inside their
   window and failed jobs; approvals superseded and never reopened for more
@@ -325,6 +328,25 @@ terraform/README.md's *Operator Deployment* section.
   our servers is ours to answer for), devices per account, signups per day.
   Abuse that shows in requests rather than accounts is already counted and
   alerted on in Cloud Monitoring.
+
+  Two of its signals are **logged and counted, never stored** (decided
+  2026-11-07). A per-account write limit's refusal
+  (`WRITE_LIMIT_REFUSED`, emitted from the one 429 handler in
+  `api/src/beats/api/errors.py`) and a restore's size (`IMPORT_RECEIVED`,
+  `api/src/beats/api/routers/export.py`) are facts about a request, not
+  about what an account holds; a stored count of a person's refusals would
+  be a history of what they did, which is the same thing the account page
+  refuses when it declines to keep which door a sign-in used. So each is a
+  line in the API's own log, a log-based metric in
+  `terraform/monitoring.tf` (`write_limit_refusals` by route,
+  `import_bytes` as a distribution), and a link from the page rather than a
+  row — the shape Capacity already uses for latency. The account is in the
+  line and in no metric label: per-account labels are unbounded
+  cardinality, and "which accounts, this week" is the log query the
+  Attention page links to. The address-keyed doors in `routers/auth.py` are
+  deliberately out of both: scanners exhaust them all day, and
+  `api_rejections` already counts them. Until a `WRITES_PER_MINUTE_*`
+  ceiling is set, the refusal signal counts nothing, which the page says.
 - **Capacity**: documents and storage per collection (`$collStats`), the
   coach's platform cost by day and model with the cache-read inputs. Latency,
   error rates and instance counts are Cloud Monitoring's — linked, not
