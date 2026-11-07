@@ -10,12 +10,25 @@ locals {
   # Cloud Run's own request log for the API: one entry per request, written
   # by Cloud Run, with httpRequest.status, .requestUrl, .latency and .remoteIp
   # (the caller's real address, which the API behind Cloud Run's proxy does
-  # not see). The log-based metrics below read it, so the API logs nothing
-  # extra for them.
+  # not see). Three of the four log-based metrics below read it, so the API
+  # logs nothing extra for them.
   api_request_log = chomp(<<-EOT
     resource.type="cloud_run_revision"
     AND resource.labels.service_name="${var.api_service_name}"
     AND log_id("run.googleapis.com/requests")
+  EOT
+  )
+
+  # The API's own stdout/stderr, where `logging.basicConfig` in
+  # api/src/server.py writes. Two signals the request log cannot carry are
+  # emitted here on purpose, each a line and nothing stored
+  # (docs/backoffice.md § *Abuse*): which account a write limit refused, and
+  # how big a restore was. The request log sees a 429 and a POST, not which
+  # of them.
+  api_app_log = chomp(<<-EOT
+    resource.type="cloud_run_revision"
+    AND resource.labels.service_name="${var.api_service_name}"
+    AND (log_id("run.googleapis.com/stderr") OR log_id("run.googleapis.com/stdout"))
   EOT
   )
 }
@@ -189,6 +202,82 @@ resource "google_logging_metric" "public_route_requests" {
       key         = "status"
       value_type  = "STRING"
       description = "The HTTP status of the response."
+    }
+  }
+
+  depends_on = [google_project_service.logging]
+}
+
+# Accounts a per-account write limit refused (`WRITE_LIMIT_REFUSED` in
+# api/src/beats/api/errors.py). The rejections metric above counts every 429
+# under /api/, which is mostly the address-keyed auth doors under a scanner;
+# this counts only the three write limits keyed on the account, which is the
+# signal the control plane's Abuse page reads (docs/backoffice.md).
+#
+# The route is a label, the account is not: a label per account would be
+# unbounded cardinality, and a count of one person's refusals kept for the
+# metric's retention is the behavioural history the control plane does not
+# keep. Which accounts, over a window, is the log query the page links to.
+resource "google_logging_metric" "write_limit_refusals" {
+  name        = "${var.api_service_name}/write_limit_refusals"
+  project     = var.project_id
+  description = "Writes refused by a per-account rate limit, by route."
+  filter = chomp(<<-EOT
+    ${local.api_app_log}
+    AND textPayload=~"WRITE_LIMIT_REFUSED"
+  EOT
+  )
+
+  label_extractors = {
+    route = "REGEXP_EXTRACT(textPayload, \"route=(\\S+)\")"
+  }
+
+  metric_descriptor {
+    display_name = "${var.api_service_name} write-limit refusals"
+    metric_kind  = "DELTA"
+    value_type   = "INT64"
+    unit         = "1"
+
+    labels {
+      key         = "route"
+      value_type  = "STRING"
+      description = "The write route that refused: /api/beats/, /api/signals/..., /api/export/import."
+    }
+  }
+
+  depends_on = [google_project_service.logging]
+}
+
+# How big the backups people restore are (`IMPORT_RECEIVED` in
+# api/src/beats/api/routers/export.py) — the Abuse page's import sizes. A
+# distribution rather than a count: one 400 MB restore is the thing to see,
+# and a mean over a month would hide it. The buckets are powers of two from
+# 1 KiB to about 1 GiB, which covers an empty account to one no backup
+# should reach.
+resource "google_logging_metric" "import_bytes" {
+  name        = "${var.api_service_name}/import_bytes"
+  project     = var.project_id
+  description = "The size of each backup posted to /api/export/import, in bytes."
+  filter = chomp(<<-EOT
+    ${local.api_app_log}
+    AND textPayload=~"IMPORT_RECEIVED"
+  EOT
+  )
+
+  value_extractor = "REGEXP_EXTRACT(textPayload, \"bytes=(\\d+)\")"
+
+  metric_descriptor {
+    display_name = "${var.api_service_name} import sizes"
+    metric_kind  = "DELTA"
+    value_type   = "DISTRIBUTION"
+    unit         = "By"
+  }
+
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 20
+      growth_factor      = 2
+      scale              = 1024
     }
   }
 
@@ -454,6 +543,74 @@ resource "google_monitoring_dashboard" "api" {
                 }
               }]
               yAxis = { label = "requests/s", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          yPos   = 71
+          width  = 24
+          height = 16
+          widget = {
+            title = "Writes refused by a per-account limit, by route"
+            xyChart = {
+              dataSets = [{
+                plotType       = "STACKED_BAR"
+                legendTemplate = "$${metric.labels.route}"
+                timeSeriesQuery = {
+                  timeSeriesFilter = {
+                    filter = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.write_limit_refusals.name}\""
+                    aggregation = {
+                      alignmentPeriod    = "60s"
+                      perSeriesAligner   = "ALIGN_RATE"
+                      crossSeriesReducer = "REDUCE_SUM"
+                      groupByFields      = ["metric.label.route"]
+                    }
+                  }
+                }
+              }]
+              yAxis = { label = "refusals/s", scale = "LINEAR" }
+            }
+          }
+        },
+        {
+          xPos   = 24
+          yPos   = 71
+          width  = 24
+          height = 16
+          widget = {
+            title = "Backup sizes posted to /api/export/import"
+            xyChart = {
+              dataSets = [
+                {
+                  plotType       = "LINE"
+                  legendTemplate = "p50"
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.import_bytes.name}\""
+                      aggregation = {
+                        alignmentPeriod    = "3600s"
+                        perSeriesAligner   = "ALIGN_PERCENTILE_50"
+                        crossSeriesReducer = "REDUCE_MAX"
+                      }
+                    }
+                  }
+                },
+                {
+                  plotType       = "LINE"
+                  legendTemplate = "p99"
+                  timeSeriesQuery = {
+                    timeSeriesFilter = {
+                      filter = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.import_bytes.name}\""
+                      aggregation = {
+                        alignmentPeriod    = "3600s"
+                        perSeriesAligner   = "ALIGN_PERCENTILE_99"
+                        crossSeriesReducer = "REDUCE_MAX"
+                      }
+                    }
+                  }
+                },
+              ]
+              yAxis = { label = "bytes", scale = "LOG10" }
             }
           }
         },
