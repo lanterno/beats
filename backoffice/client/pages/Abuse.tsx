@@ -8,7 +8,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import type { AbuseReport } from "@/shared/api/schema";
+import { API_LOG, logsQuery, metricChart } from "@/shared/lib/console";
 import { Failed, Loading, Section, Table } from "@/shared/ui";
+
+// Import sizes are the one axis on this page with no row: a restore's size
+// is a fact about a request, not about what an account holds, so it is
+// logged and counted and never stored (docs/backoffice.md § *Abuse*).
+const IMPORTS = logsQuery(`${API_LOG}\ntextPayload:"IMPORT_RECEIVED"`, 30);
+const IMPORT_SIZES = metricChart("beats-api/import_bytes");
 
 function AccountRows({
 	rows,
@@ -60,6 +67,18 @@ export function Abuse() {
 			</Section>
 			<Section title="Paired devices">
 				<AccountRows rows={data.devices_per_account} unit="Devices" />
+			</Section>
+			<Section title="Backup restores, by size">
+				<p className="p-3 text-sm text-neutral-500">
+					<a href={IMPORT_SIZES} className="underline">
+						The spread over time
+					</a>
+					, or{" "}
+					<a href={IMPORTS} className="underline">
+						each restore of the last 30 days
+					</a>{" "}
+					with the account that sent it. Neither is stored: a size is a fact about a request.
+				</p>
 			</Section>
 			<Section title="Signups per day, last 90 days">
 				<Table head={["Day", "Signups"]} rows={data.signups_per_day.map((d) => [d.day, d.value])} />
