@@ -14,6 +14,7 @@ intended to be the canonical way new clients route errors. ``fields``,
 when present, lists per-field validation problems with normalized paths.
 """
 
+import logging
 import math
 import time
 from typing import Any
@@ -22,6 +23,8 @@ from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+
+logger = logging.getLogger(__name__)
 
 # Default machine-readable code for each common status. Routers may override
 # by raising ``HTTPException(detail={"code": "PROJECT_NOT_ARCHIVED", "message": ...})``
@@ -99,10 +102,31 @@ async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded) 
     window of the limit that was hit resets, read from the limiter itself:
     slowapi records which limit that was, and under which key, on
     `request.state.view_rate_limit` before it raises.
+
+    A refusal on one of the per-account write limits is also the one record
+    kept of it: `WRITE_LIMIT_REFUSED` in the log, read by the control plane
+    (docs/backoffice.md § *Abuse*) through the `write_limit_refusals`
+    metric in `terraform/monitoring.tf`. Nothing is stored — a count of an
+    account's refusals is behaviour, and the control plane keeps operational
+    metadata rather than a history of what somebody did. The address-keyed
+    doors are left out: they are refused by the hundred and already counted
+    by `api_rejections`.
     """
     item, identifiers = request.state.view_rate_limit
     reset_at, _remaining = request.app.state.limiter.limiter.get_window_stats(item, *identifiers)
     retry_after = max(1, math.ceil(reset_at - time.time()))
+    # `account_key` in `api/rate_limits.py` sets the flag on every request
+    # to a route carrying one of the three per-account write limits, so this
+    # needs neither the list of those routes nor that module — which reads
+    # `beats.settings`, and this one is in the operator's composition root
+    # (the isolation pin in `test_operator.py`).
+    if getattr(request.state, "account_limited", False):
+        logger.warning(
+            "WRITE_LIMIT_REFUSED route=%s account=%s limit=%s",
+            request.url.path,
+            getattr(request.state, "user_id", "") or "-",
+            exc.detail,
+        )
     response = envelope(
         status_code=429,
         detail=f"Too many requests (the limit is {exc.detail}). "

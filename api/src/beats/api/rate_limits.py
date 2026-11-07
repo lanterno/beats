@@ -30,6 +30,13 @@ _UNLIMITED = 1_000_000
 
 
 def account_key(request: Request) -> str:
+    # slowapi calls the `key_func` on every request to a route that carries
+    # one of these limits, refused or not, so setting the flag here is how
+    # the 429 handler tells an account-keyed refusal from an address-keyed
+    # one — without repeating the list of routes, and without `api/errors.py`
+    # importing this module, which reads `beats.settings` and so may not be
+    # reached from the operator's composition root.
+    request.state.account_limited = True
     return getattr(request.state, "user_id", "")
 
 

@@ -3,6 +3,7 @@
 import csv
 import io
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -56,6 +57,8 @@ from beats.infrastructure.project_repositories import (
     BeatRepository,
     ProjectRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -397,8 +400,15 @@ async def import_full_json(
     left out and listed under `skipped` with the code its route would
     answer. Billing, budgets included, is never skipped: its rules ran
     before the first write."""
+    raw = await file.read()
+    # The one record kept of how big a restore was: the Abuse page reads the
+    # spread of these through the `import_bytes` metric in
+    # terraform/monitoring.tf (docs/backoffice.md § *Abuse*). The size is a
+    # fact about the request, not about the account, so it is logged and not
+    # stored — and the file's contents never are, logged or otherwise.
+    logger.info("IMPORT_RECEIVED bytes=%d account=%s", len(raw), account_key(request) or "-")
     try:
-        backup = _Backup.model_validate_json(await file.read())
+        backup = _Backup.model_validate_json(raw)
     except ValidationError as exc:
         raise RequestValidationError(exc.errors(include_url=False)) from None
 
