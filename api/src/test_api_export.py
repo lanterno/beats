@@ -8,6 +8,7 @@ import copy
 import csv
 import io
 import json
+import logging
 from datetime import timedelta
 
 from api_helpers import (
@@ -265,6 +266,21 @@ class TestBackupImport:
             files={"file": ("backup.json", json.dumps(backup), "application/json")},
             headers=headers,
         )
+
+    def test_the_size_of_an_import_is_logged_and_its_contents_are_not(
+        self, client, auth_headers, caplog
+    ):
+        """`IMPORT_RECEIVED` is the only record of how big a restore was —
+        the Abuse page reads the spread of them (docs/backoffice.md
+        § *Abuse*) — and a backup is the one request body made entirely of
+        a person's own content, so the line carries its length and nothing
+        out of it."""
+        backup = {"version": "1.3", "projects": [{"name": "Secret Garden"}]}
+        with caplog.at_level(logging.INFO, logger="beats.api.routers.export"):
+            assert self._import(client, auth_headers, backup).status_code == 200
+        [line] = [r.getMessage() for r in caplog.records if "IMPORT_RECEIVED" in r.getMessage()]
+        assert f"bytes={len(json.dumps(backup))}" in line
+        assert "Secret Garden" not in line
 
     @staticmethod
     def _standing(client, headers, project_id: str) -> tuple[dict, dict]:

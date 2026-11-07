@@ -5,6 +5,7 @@ stamps, and the per-account limits. Split out of test_api.py, whose harness
 door's suspension test stays with TestSSOAPI's harness there.
 """
 
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -315,6 +316,34 @@ class TestAccountLimitsAPI:
         refused = client.post("/api/signals/flow-windows", json=body, headers=device)
         assert refused.status_code == 429
         assert refused.json()["code"] == "RATE_LIMITED"
+
+    def test_a_refused_write_is_logged_and_an_auth_door_is_not(
+        self, client, auth_headers, auth_info, mongo, caplog
+    ):
+        """`WRITE_LIMIT_REFUSED` is the only record of a refusal — nothing is
+        stored — so the control plane's reading of it (docs/backoffice.md
+        § *Abuse*) is exactly as good as this line. The address-keyed doors
+        must stay out of it: scanners exhaust them all day, and a metric that
+        counted those would say nothing about any account.
+        """
+        project = self._project(client, auth_headers)
+        self._set_limits(mongo, auth_info["user_id"], writes_per_minute_beats=1)
+
+        with caplog.at_level(logging.WARNING, logger="beats.api.errors"):
+            assert self._post_beat(client, auth_headers, project).status_code == 201
+            assert self._post_beat(client, auth_headers, project).status_code == 429
+        refusals = [
+            r.getMessage() for r in caplog.records if "WRITE_LIMIT_REFUSED" in r.getMessage()
+        ]
+        assert len(refusals) == 1, refusals
+        assert "route=/api/beats/" in refusals[0]
+        assert f"account={auth_info['user_id']}" in refusals[0]
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING, logger="beats.api.errors"):
+            for _ in range(11):
+                client.get("/api/auth/login/options")
+        assert not [r for r in caplog.records if "WRITE_LIMIT_REFUSED" in r.getMessage()]
 
     def test_the_coach_budget_reads_the_accounts_ceiling_before_the_global(
         self, client, auth_headers, auth_info, mongo
