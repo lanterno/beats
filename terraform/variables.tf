@@ -229,6 +229,12 @@ variable "operator_allowlist" {
   default     = "[]"
 }
 
+variable "operator_domain" {
+  description = "The back office's hostname, mapped to the operator service and pointed at it in Cloudflare."
+  type        = string
+  default     = "backoffice.lifepete.com"
+}
+
 variable "operator_origin" {
   description = "The back office's own origin — the service's run.app URL, set after the first apply. Empty fails closed: every write answers 403."
   type        = string

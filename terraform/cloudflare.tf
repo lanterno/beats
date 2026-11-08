@@ -25,3 +25,15 @@ resource "cloudflare_dns_record" "api_cname" {
   # visitor behind one edge would share a rate-limit bucket.
   proxied = false
 }
+
+# The back office's hostname, DNS-only because the domain mapping terminates
+# TLS here too.
+resource "cloudflare_dns_record" "operator_cname" {
+  count   = var.operator_enabled && var.cloudflare_api_token != "" && var.cloudflare_api_token != "your-cloudflare-api-token" ? 1 : 0
+  zone_id = data.cloudflare_zone.zone[0].id
+  name    = var.operator_domain
+  type    = "CNAME"
+  content = "ghs.googlehosted.com"
+  ttl     = var.dns_ttl
+  proxied = false
+}

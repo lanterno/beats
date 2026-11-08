@@ -163,6 +163,29 @@ resource "google_cloud_run_v2_service_iam_member" "operator_iap_invoker" {
   member   = "serviceAccount:service-${data.google_project.project.number}@gcp-sa-iap.iam.gserviceaccount.com"
 }
 
+# The back office's hostname, as api.lifepete.com is the API's. Google lets only
+# a verified owner of the domain create a mapping, and every one in this project
+# was created by the owner's own account, so this one was too, then imported.
+resource "google_cloud_run_domain_mapping" "operator" {
+  count = var.operator_enabled ? 1 : 0
+
+  name     = var.operator_domain
+  location = var.region
+
+  metadata {
+    namespace = var.project_id
+  }
+
+  spec {
+    route_name = google_cloud_run_v2_service.beats_operator[0].name
+  }
+}
+
+import {
+  to = google_cloud_run_domain_mapping.operator[0]
+  id = "locations/${var.region}/namespaces/${var.project_id}/domainmappings/${var.operator_domain}"
+}
+
 # A 5xx alert in the shape of api_5xx (alerts.tf): the operator service is
 # opened rarely, so a broken revision would otherwise sit unnoticed.
 resource "google_monitoring_alert_policy" "operator_5xx" {
