@@ -143,7 +143,12 @@ resource "google_cloud_run_v2_service" "beats_operator" {
     }
   }
 
-  depends_on = [google_project_service.iap]
+  # The grant first: a revision whose account cannot read its secret fails to
+  # deploy, and nothing else orders the two.
+  depends_on = [
+    google_project_service.iap,
+    google_secret_manager_secret_iam_member.operator_dsn_reader,
+  ]
 }
 
 # IAP's service agent is the only invoker: no allUsers, and nothing reaches
@@ -302,6 +307,8 @@ resource "google_cloud_run_v2_job" "beats_operator_jobs" {
       }
     }
   }
+
+  depends_on = [google_secret_manager_secret_iam_member.jobs_dsn_reader]
 }
 
 resource "google_service_account" "beats_operator_scheduler" {
