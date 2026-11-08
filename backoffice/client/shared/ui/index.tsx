@@ -32,11 +32,11 @@ export function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
 				</tr>
 			</thead>
 			<tbody>
-				{/* Rows are read-only renderings of API lists with no stable id of
-				    their own; the index is the identity here. */}
 				{rows.map((cells, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: rows are read-only renderings of API lists with no stable id of their own
 					<tr key={i} className="border-b border-neutral-100 last:border-0">
 						{cells.map((cell, j) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: a cell's column is its identity
 							<td key={j} className="px-3 py-1.5 align-top">
 								{cell}
 							</td>
