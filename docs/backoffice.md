@@ -291,7 +291,8 @@ revisit if the back office ever needs to deploy apart from the API.
 The hand-made prerequisites — the Atlas users and roles, IAP's custom OAuth
 client (the project sits in no Google Cloud organisation, so no API creates
 one), the secrets' first versions, and the `operator_enabled` flip — are
-terraform/README.md's *Operator Deployment* section.
+terraform/README.md's *Operator Deployment* section; production's was turned
+on by them on 2026-11-08.
 
 ## The pages, by the job they serve
 

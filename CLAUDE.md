@@ -426,9 +426,9 @@ considered against that topology.
 A second deployment, `beats-operator`, runs the same image with the
 `operator_server:app` command behind Cloud Run's own IAP: the operator's
 control plane ([docs/backoffice.md](docs/backoffice.md)) — operational
-metadata, never user content, and never `JWT_SECRET`. It is gated off
-(`operator_enabled` in `terraform/`) until the hand-made prerequisites in
-terraform/README.md exist. Its job runner, `beats-operator-jobs`, drains the
+metadata, never user content, and never `JWT_SECRET`. It has been on since
+2026-11-08 (`operator_enabled`, set in the tfvars secret; terraform/README.md
+has the hand-made prerequisites). Its job runner, `beats-operator-jobs`, drains the
 queued irreversible work on a Cloud Scheduler tick.
 
 Anything else LifePete talks to — another identity provider, a service of
