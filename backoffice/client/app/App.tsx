@@ -6,13 +6,15 @@
 
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router";
-import { Abuse } from "@/pages/Abuse";
+import { BrowserRouter, Navigate, NavLink, Route, Routes } from "react-router";
 import { Account, Accounts } from "@/pages/Accounts";
 import { Attention } from "@/pages/Attention";
+import { Audit } from "@/pages/Audit";
 import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
+import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
+import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
 import type { OperatorMe } from "@/shared/api/schema";
 import { APP_NAME } from "@/shared/config/brand";
@@ -22,10 +24,12 @@ import {
 	BrandMark,
 	BuildingIcon,
 	ClipboardIcon,
+	ClockIcon,
 	DatabaseIcon,
 	MonitorIcon,
 	MoonIcon,
 	PersonIcon,
+	ScrollIcon,
 	ShieldIcon,
 	SunIcon,
 } from "@/shared/ui/icons";
@@ -38,8 +42,10 @@ const PLACES = [
 	{ to: "/", label: "Attention", Icon: BellIcon },
 	{ to: "/accounts", label: "Accounts", Icon: PersonIcon },
 	{ to: "/organisations", label: "Organisations", Icon: BuildingIcon },
-	{ to: "/abuse", label: "Abuse", Icon: ShieldIcon },
+	{ to: "/trust", label: "Trust and safety", Icon: ShieldIcon },
 	{ to: "/capacity", label: "Capacity", Icon: DatabaseIcon },
+	{ to: "/jobs", label: "Jobs", Icon: ClockIcon },
+	{ to: "/audit", label: "Audit", Icon: ScrollIcon },
 	{ to: "/compliance", label: "Compliance", Icon: ClipboardIcon },
 ] as const;
 
@@ -127,9 +133,13 @@ function Shell() {
 						<Route path="/accounts/:id" element={<Account />} />
 						<Route path="/organisations" element={<Organisations />} />
 						<Route path="/organisations/:id" element={<Organisation />} />
-						<Route path="/abuse" element={<Abuse />} />
+						<Route path="/trust" element={<Trust />} />
 						<Route path="/capacity" element={<Capacity />} />
+						<Route path="/jobs" element={<Jobs />} />
+						<Route path="/audit" element={<Audit />} />
 						<Route path="/compliance" element={<Compliance />} />
+						{/* The page's old address, for a bookmark made before it was renamed. */}
+						<Route path="/abuse" element={<Navigate to="/trust" replace />} />
 					</Routes>
 				</div>
 			</main>

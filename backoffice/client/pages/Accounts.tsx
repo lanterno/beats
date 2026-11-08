@@ -338,7 +338,7 @@ function AccountActions({ detail }: { detail: AccountDetail }) {
 					label="Queue erasure"
 					about="Waits out a 7-day window before it runs."
 					action="Queue this erasure"
-					done="Queued. Cancel it from Compliance inside the week."
+					done="Queued. Cancel it from Jobs inside the week."
 					args={{ user_id: detail.id }}
 					confirmHint="Type the account's email to confirm"
 					invalidates={["account", "operator-jobs", "attention"]}

@@ -56,15 +56,15 @@ const CHECKS: Check[] = [
 		says: (n) =>
 			n === 1 ? "job is queued inside its window" : "jobs are queued inside their window",
 		clear: "No job is waiting out its window",
-		to: "/compliance",
-		open: "Open the queue",
+		to: "/jobs",
+		open: "Open jobs",
 	},
 	{
 		count: "jobs_failed",
 		says: (n) => (n === 1 ? "job failed" : "jobs failed"),
 		clear: "No job has failed",
-		to: "/compliance",
-		open: "Open the queue",
+		to: "/jobs",
+		open: "Open jobs",
 	},
 	{
 		count: "approvals_superseded_over_30d",
@@ -93,8 +93,8 @@ const CHECKS: Check[] = [
 				? "account is at 80% of its coach cap or past it"
 				: "accounts are at 80% of their coach cap or past it",
 		clear: "No account is near its coach cap",
-		to: "/abuse",
-		open: "Open abuse",
+		to: "/trust",
+		open: "Open trust and safety",
 	},
 ];
 

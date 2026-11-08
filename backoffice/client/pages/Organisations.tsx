@@ -222,7 +222,7 @@ function OrganisationActs({ summary }: { summary: OrganisationSummary }) {
 				label="Queue deletion"
 				about="Waits out a 1-day window before it runs."
 				action="Queue the deletion"
-				done="Queued. Cancel it from Compliance inside the day."
+				done="Queued. Cancel it from Jobs inside the day."
 				args={{ organisation_id: summary.id }}
 				confirmHint={confirmHint}
 				invalidates={["organisation", "organisations", "operator-jobs"]}
@@ -232,7 +232,7 @@ function OrganisationActs({ summary }: { summary: OrganisationSummary }) {
 				label="Queue a retention purge"
 				about="Waits out a 1-day window before it runs."
 				action="Queue the purge"
-				done="Queued. Cancel it from Compliance inside the day."
+				done="Queued. Cancel it from Jobs inside the day."
 				args={{ organisation_id: summary.id }}
 				confirmHint={confirmHint}
 				invalidates={["operator-jobs"]}

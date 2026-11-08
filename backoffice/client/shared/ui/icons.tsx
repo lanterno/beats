@@ -1,7 +1,7 @@
 /**
  * The handful of icons the back office draws, and the app's mark. Written
  * out rather than pulled from an icon package: a privileged surface takes
- * on no dependency for twelve shapes. All decorative; the words beside them,
+ * on no dependency for fourteen shapes. All decorative; the words beside them,
  * or a button's `aria-label`, are the label.
  */
 
@@ -126,6 +126,28 @@ export function ArrowLeftIcon(props: IconProps) {
 }
 
 /** The day ring (`shared/brand/mark.svg`), as ui/'s BrandMark draws it. */
+/** A window being waited out: the job queue. */
+export function ClockIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<circle cx="12" cy="12" r="9" />
+			<path d="M12 7v5l3 2" />
+		</Icon>
+	);
+}
+
+/** A record read line by line: the audit. */
+export function ScrollIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<path d="M8 4h11a2 2 0 0 1 2 2v2h-4" />
+			<path d="M17 8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1h12" />
+			<path d="M8 4a2 2 0 0 0-2 2v11" />
+			<path d="M10 9h4M10 13h4" />
+		</Icon>
+	);
+}
+
 export function BrandMark({ className }: IconProps) {
 	return (
 		<svg viewBox="0 0 120 120" className={className} aria-hidden="true" focusable="false">
