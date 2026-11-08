@@ -404,9 +404,11 @@ The zone id is the `cloudflare_zone_id` output and the record id is
 ## Operator Deployment (One-Time Setup)
 
 The control plane (`beats-operator`, [docs/backoffice.md](../docs/backoffice.md))
-is gated behind `operator_enabled = false` until three things exist that no
-API creates, each made once by hand. Until the flag flips, an apply changes
-nothing and the API's deploys stay green.
+is gated behind `operator_enabled = false` until the things below exist, each
+made once by hand because no API creates them. Until the flag flips, an apply
+creates only the two empty secret containers and the API's deploys stay green.
+
+### Before the flag
 
 1. **The database user**, in MongoDB Atlas (custom roles work on every tier,
    M0 and Flex included; a change takes up to 30 seconds to apply):
@@ -429,15 +431,8 @@ nothing and the API's deploys stay green.
    - In the console, configure the OAuth consent screen for **external**
      users; it can stay in *Testing* with the operator as its only test user —
      nobody else is meant to get through it.
-   - Create an OAuth **web** client, and attach it to the `beats-operator`
-     service's IAP settings in the console (check whether
-     `google_iap_settings` on `~> 8.8` carries a custom client for a Cloud
-     Run resource; if it does, move the id and secret into sensitive tfvars
-     and manage it there).
-   - Grant the operator's Google account the IAP-secured Web App User role on
-     the service. **IAP's IAM binding says who reaches the app; the
-     `operator_allowlist` tfvar says what they may do** — both name the same
-     people.
+   - Create an OAuth **web** client. It is attached after the first apply,
+     once there is a service to attach it to.
 
 3. **The job runner's database user**, also in Atlas: a custom role
    `beatsOperatorJobs` that finds, inserts, updates and removes in **every**
@@ -446,8 +441,9 @@ nothing and the API's deploys stay green.
    dropping nothing. A user of its own, not the API's or the operator's, so
    each credential rotates alone.
 
-4. **The secrets' first versions** (Terraform manages the containers and the
-   bindings only; the values never pass through it):
+4. **The secrets' first versions** (Terraform manages the containers, which
+   stand outside the flag so that these have somewhere to go, and the
+   bindings; the values never pass through it):
 
    ```bash
    printf 'mongodb+srv://beats-operator:...@.../beats' | \
@@ -456,16 +452,48 @@ nothing and the API's deploys stay green.
      gcloud secrets versions add beats-jobs-dsn --data-file=- --project=beats-476914
    ```
 
-Then, in `terraform.tfvars` — **added to the `beats-terraform-tfvars` secret
-before the change merges**, since Cloud Build copies that secret wholesale and
-a required variable it lacks fails every API deploy:
+5. **IAP's service agent.** The first apply grants it `roles/run.invoker` in
+   the same run that enables the API, which may be too soon for the agent to
+   exist, and only the beta provider has a resource that creates one. Creating
+   it first is harmless if it is already there:
+
+   ```bash
+   gcloud services enable iap.googleapis.com --project=beats-476914
+   gcloud beta services identity create --service=iap.googleapis.com --project=beats-476914
+   ```
+
+### The flag
+
+The flag is set in `terraform.tfvars`, which means a new version of the
+`beats-terraform-tfvars` secret, since Cloud Build copies that secret wholesale
+on every build:
 
 ```hcl
 operator_enabled   = true
 operator_allowlist = "[{\"sub\": \"accounts.google.com:<id>\", \"email\": \"you@...\", \"role\": \"operator\"}]"
-# After the first apply, read the run.app URL off the service and set:
-operator_origin = "https://beats-operator-....run.app"
 ```
+
+Nothing needs merging: re-run the latest `beats-api-build`, because the deploy
+lock re-applies a commit that is already live. Watch it. A failed apply blocks
+every API deploy, and taking the flag back out of the secret is what unblocks
+them.
+
+### After the first apply
+
+1. Attach the OAuth client to the `beats-operator` service's IAP settings in
+   the console (check whether `google_iap_settings` on `~> 8.8` carries a
+   custom client for a Cloud Run resource; if it does, move the id and secret
+   into sensitive tfvars and manage it there).
+2. Grant the operator's Google account the IAP-secured Web App User role on
+   the service. **IAP's IAM binding says who reaches the app; the
+   `operator_allowlist` tfvar says what they may do** — both name the same
+   people.
+3. Read the `run.app` URL off the service, add it to the tfvars secret, and
+   run the build again:
+
+   ```hcl
+   operator_origin = "https://beats-operator-....run.app"
+   ```
 
 The first apply creates the service with an empty origin, which fails closed
 (every write answers 403); the second, with the URL set, opens it. The
