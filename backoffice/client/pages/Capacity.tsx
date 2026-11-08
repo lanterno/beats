@@ -7,47 +7,77 @@
 import { useQuery } from "@tanstack/react-query";
 import { get } from "@/shared/api/client";
 import type { CapacityReport } from "@/shared/api/schema";
-import { formatBytes } from "@/shared/lib/format";
-import { Failed, Loading, Section, Table } from "@/shared/ui";
+import { counted, dollars, formatBytes, whole } from "@/shared/lib/format";
+import { day, Empty, Failed, figure, Loading, Page, Panel, Prose, Table } from "@/shared/ui";
 
 const MONITORING = "https://console.cloud.google.com/monitoring/dashboards?project=beats-476914";
 
 export function Capacity() {
-	const { data, error } = useQuery({
+	const { data, error, refetch } = useQuery({
 		queryKey: ["capacity"],
 		queryFn: () => get<CapacityReport>("/api/operator/capacity"),
 	});
-	if (error) return <Failed error={error} />;
+	if (error) return <Failed error={error} onRetry={() => refetch()} />;
 	if (!data) return <Loading />;
 
+	const collections = [...data.collections].sort((a, b) => b.storage_bytes - a.storage_bytes);
+	const stored = collections.reduce((sum, c) => sum + c.storage_bytes, 0);
+	const largest = collections[0];
+	const spent = data.coach_cost.reduce((sum, c) => sum + c.cost_usd, 0);
+
 	return (
-		<>
-			<Section title="Collections">
+		<Page
+			title="Capacity"
+			lead={
+				largest
+					? `The database takes up ${formatBytes(stored)} across ${counted(collections.length, "collection", "collections")}. The largest is ${largest.name}, at ${formatBytes(largest.storage_bytes)}.`
+					: "The database has no collections yet."
+			}
+		>
+			<Panel raised title="Collections">
 				<Table
-					head={["Collection", "Documents", "Storage"]}
-					rows={data.collections.map((c) => [c.name, c.documents, formatBytes(c.storage_bytes)])}
+					head={["Collection", figure("Documents"), figure("Storage")]}
+					rows={collections.map((c) => [c.name, whole(c.documents), formatBytes(c.storage_bytes)])}
+					empty={<Empty title="No collections yet." />}
 				/>
-			</Section>
-			<Section title="Coach cost, by day and model">
+			</Panel>
+			<Panel
+				title="Coach cost"
+				note={
+					data.coach_cost.length > 0
+						? `${dollars(spent)} across the days below, by day and model.`
+						: undefined
+				}
+			>
 				<Table
-					head={["Day", "Model", "Cost", "Input tokens", "Cache-read tokens", "Calls"]}
+					head={[
+						day("Day"),
+						"Model",
+						figure("Cost"),
+						figure("Input tokens"),
+						figure("Cache-read tokens"),
+						figure("Calls"),
+					]}
 					rows={data.coach_cost.map((c) => [
 						c.day,
 						c.model,
 						`$${c.cost_usd.toFixed(4)}`,
-						c.input_tokens,
-						c.cache_read_tokens,
-						c.calls,
+						whole(c.input_tokens),
+						whole(c.cache_read_tokens),
+						whole(c.calls),
 					])}
+					empty={<Empty title="The coach hasn't cost anything yet." />}
 				/>
-			</Section>
-			<p className="text-sm text-neutral-500">
-				Latency, error rates and instances:{" "}
-				<a href={MONITORING} className="underline">
-					Cloud Monitoring
-				</a>
-				.
-			</p>
-		</>
+			</Panel>
+			<Panel title="Latency, error rates and instances">
+				<Prose>
+					These aren't rebuilt here.{" "}
+					<a href={MONITORING} className="link">
+						Open Cloud Monitoring
+					</a>
+					.
+				</Prose>
+			</Panel>
+		</Page>
 	);
 }

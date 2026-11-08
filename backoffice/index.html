@@ -4,7 +4,25 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="robots" content="noindex, nofollow" />
-		<title>%APP_NAME% — control plane</title>
+		<title>Back office · %APP_NAME%</title>
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			referrerpolicy="no-referrer"
+			href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Maru+Gothic:wght@400;500;700&display=swap"
+		/>
+		<script>
+			// Before first paint, so a stored hour does not flash the other one.
+			// The key is the one client/shared/lib/hour.ts keeps.
+			try {
+				var hour = localStorage.getItem("backoffice_hour");
+				if (hour === "afternoon" || hour === "dusk") {
+					document.documentElement.dataset.theme = hour;
+				}
+			} catch (e) {}
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

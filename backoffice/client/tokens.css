@@ -1,0 +1,133 @@
+/*
+  Bright design style — tokens. Afternoon is the default; dusk applies
+  under [data-theme="dusk"], or with the system's dark appearance unless
+  [data-theme="afternoon"] is set. Fonts:
+  https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&family=Zen+Maru+Gothic:wght@400;500;700&display=swap
+*/
+:root {
+  color-scheme: light;
+
+  --ink: #2b3a44;
+  --ink-muted: #5c6770;
+  --ink-on-sky: #3d5160;
+
+  --panel: rgb(255 253 247 / 0.94);
+  --panel-solid: #fffdf7;
+  --sidebar: rgb(255 253 247 / 0.72);
+
+  --sun: #f2b233;
+  --sun-ink: #8c5e12;
+  --on-sun: #2b3a44;
+
+  --wash: rgb(114 176 214 / 0.16);
+  --wash-strong: rgb(114 176 214 / 0.28);
+  --track: #d3e2ea;
+  --hairline: rgb(43 58 68 / 0.09);
+
+  --leaf: #3e8d53;
+  --leaf-ink: #2a6f3d;
+  --persimmon: #d2683f;
+  --persimmon-ink: #a84924;
+
+  --sky-1: #8cc1e2;
+  --sky-2: #bcddee;
+  --sky-3: #e4f0f1;
+  --sky-4: #e9f2e6;
+  --hill-far: #b9d9a8;
+  --hill-mid: #8ac07c;
+  --hill-near: #5c9f5e;
+
+  --data-blue: #4f8fd6;
+  --data-coral: #e07a5f;
+  --data-lavender: #8e7cc3;
+  --data-teal: #2e9c94;
+  --data-sun: #f2b233;
+  --data-orange: #fb923c;
+  --data-grey: #a7b4bd;
+
+  --font-display: "M PLUS Rounded 1c", "Zen Maru Gothic", system-ui, sans-serif;
+  --font-body: "Zen Maru Gothic", system-ui, sans-serif;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-panel: 28px;
+  --radius-card: 24px;
+  --radius-tile: 16px;
+  --radius-pill: 999px;
+
+  --shadow-hairline: 0 1px 2px rgb(43 58 68 / 0.06);
+  --shadow-raised: 0 1px 2px rgb(43 58 68 / 0.06), 0 12px 32px rgb(43 58 68 / 0.08);
+  --shadow-float: 0 30px 80px rgb(20 40 60 / 0.35);
+
+  --gutter: 32px;
+  --gap: 18px;
+  --content-max: 1040px;
+
+  --sky: linear-gradient(180deg, var(--sky-1) 0%, var(--sky-2) 34%, var(--sky-3) 78%, var(--sky-4) 100%);
+}
+
+/* Dusk, chosen explicitly … */
+:root[data-theme="dusk"] {
+  color-scheme: dark;
+  --ink: #eef2f7;
+  --ink-muted: #a9b4c2;
+  --ink-on-sky: #c9d3e0;
+  --panel: rgb(35 47 72 / 0.94);
+  --panel-solid: #232f48;
+  --sidebar: rgb(35 47 72 / 0.86);
+  --sun: #f5c45a;
+  --sun-ink: #f5c45a;
+  --wash: rgb(141 189 230 / 0.14);
+  --wash-strong: rgb(141 189 230 / 0.28);
+  --track: #3a4255;
+  --hairline: rgb(238 242 247 / 0.1);
+  --leaf: #8dd5a0;
+  --leaf-ink: #8dd5a0;
+  --persimmon: #f2a07e;
+  --persimmon-ink: #f2a07e;
+  --sky-1: #1a2446;
+  --sky-2: #2e3e6e;
+  --sky-3: #6a5a82;
+  --sky-4: #c98a63;
+  --hill-far: #3b5470;
+  --hill-mid: #2c4a44;
+  --hill-near: #1f3a31;
+}
+
+/* … or following the system, unless afternoon was chosen. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="afternoon"]):not([data-theme="dusk"]) {
+    color-scheme: dark;
+    --ink: #eef2f7;
+    --ink-muted: #a9b4c2;
+    --ink-on-sky: #c9d3e0;
+    --panel: rgb(35 47 72 / 0.94);
+    --panel-solid: #232f48;
+    --sidebar: rgb(35 47 72 / 0.86);
+    --sun: #f5c45a;
+    --sun-ink: #f5c45a;
+    --wash: rgb(141 189 230 / 0.14);
+    --wash-strong: rgb(141 189 230 / 0.28);
+    --track: #3a4255;
+    --hairline: rgb(238 242 247 / 0.1);
+    --leaf: #8dd5a0;
+    --leaf-ink: #8dd5a0;
+    --persimmon: #f2a07e;
+    --persimmon-ink: #f2a07e;
+    --sky-1: #1a2446;
+    --sky-2: #2e3e6e;
+    --sky-3: #6a5a82;
+    --sky-4: #c98a63;
+    --hill-far: #3b5470;
+    --hill-mid: #2c4a44;
+    --hill-near: #1f3a31;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--sky);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-body);
+}

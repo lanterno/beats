@@ -1,17 +1,64 @@
 @import "tailwindcss";
+@import "./tokens.css";
 
-/* Deliberately not the sky (roadmaps/backoffice.md § UI): the operator must
-   never be unsure which surface they are on. Dense, plain, one neutral
-   palette, system fonts. */
+/*
+  The sky, the panels and the two hours, as the app has them. tokens.css is
+  the design's own file, copied whole; ui/client/global.css holds the same
+  roles for the web app, so a colour changed there is changed here too.
+  What keeps this from being mistaken for the app is the "Back office" mark
+  on every page (app/App.tsx), not a different look.
+*/
 
-:root {
-	color-scheme: light;
+/* Zen Maru draws these four characters full-width, a gap in the middle of a
+   sentence; ui/client/global.css has the long version of why. */
+@font-face {
+	font-family: "Latin Dash";
+	src:
+		local("Helvetica Neue"), local("HelveticaNeue"), local("Segoe UI"), local("Roboto"),
+		local("Arial"), local("DejaVu Sans");
+	unicode-range: U+2013-2014, U+2026, U+2212;
 }
 
-body {
-	@apply bg-neutral-100 text-neutral-900 antialiased;
-	font-family:
-		ui-sans-serif,
-		system-ui,
-		sans-serif;
+:root {
+	--font-body: "Latin Dash", "Zen Maru Gothic", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+}
+
+@theme inline {
+	--color-ink: var(--ink);
+	--color-ink-muted: var(--ink-muted);
+	--color-panel: var(--panel);
+	--color-panel-solid: var(--panel-solid);
+	--color-sidebar: var(--sidebar);
+	--color-sun: var(--sun);
+	--color-on-sun: var(--on-sun);
+	--color-wash: var(--wash);
+	--color-wash-strong: var(--wash-strong);
+	--color-track: var(--track);
+	--color-hairline: var(--hairline);
+	--color-leaf: var(--leaf);
+	--color-leaf-ink: var(--leaf-ink);
+	--color-persimmon: var(--persimmon);
+	--color-persimmon-ink: var(--persimmon-ink);
+	--color-data: var(--data-blue);
+	--font-heading: var(--font-display);
+}
+
+@utility link {
+	text-decoration-line: underline;
+	text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+	text-underline-offset: 3px;
+
+	&:hover {
+		text-decoration-color: currentColor;
+	}
+}
+
+:focus-visible {
+	outline: 2px solid var(--ink);
+	outline-offset: 2px;
+}
+
+code {
+	font-family: var(--font-code);
+	font-size: 0.93em;
 }
