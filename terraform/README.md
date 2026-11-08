@@ -407,12 +407,16 @@ The control plane (`beats-operator`, [docs/backoffice.md](../docs/backoffice.md)
 is gated behind `operator_enabled = false` until the things below exist, each
 made once by hand because no API creates them. Until the flag flips, an apply
 creates only the two empty secret containers and the API's deploys stay green.
+Production's was turned on this way on 2026-11-08.
 
 ### Before the flag
 
+The database below is the one `mongodb_database_name` names: `ptc` in
+production, not `beats`.
+
 1. **The database user**, in MongoDB Atlas (custom roles work on every tier,
    M0 and Flex included; a change takes up to 30 seconds to apply):
-   - Create a custom role `beatsOperator` on the `beats` database: **find on
+   - Create a custom role `beatsOperator` on that database: **find on
      every collection**, plus the `collStats`, `dbStats` and
      `listCollections` actions (the capacity page's counts need them), and
      **insert/update/remove only on**: `users` (suspension,
@@ -427,28 +431,33 @@ creates only the two empty secret containers and the API's deploys stay green.
      first boot.
 
 2. **IAP's OAuth client.** The project sits in no Google Cloud organisation,
-   so Google's managed client is unavailable and no API creates a custom one:
-   - In the console, configure the OAuth consent screen for **external**
+   so Google's managed client is unavailable, IAP answers 502 without a custom
+   one, and since Google shut down the IAP OAuth Admin API only the console
+   creates it. It goes in before the flag, where every new service inherits it:
+   - Under Google Auth Platform, configure the consent screen for **external**
      users; it can stay in *Testing* with the operator as its only test user —
      nobody else is meant to get through it.
-   - Create an OAuth **web** client. It is attached after the first apply,
-     once there is a service to attach it to.
+   - On the Identity-Aware Proxy page, open the actions of the **All web
+     services** row, then *Settings*: choose *Custom OAuth*, *Auto Generate
+     Credentials*, *Save*. Nothing else needs the secret, which cannot be read
+     back. Leave the toggle on `beats-api` off: that service is public.
 
 3. **The job runner's database user**, also in Atlas: a custom role
    `beatsOperatorJobs` that finds, inserts, updates and removes in **every**
    collection of the database — erasure, an organisation's deletion and the
-   purge between them touch nearly all of them — creating no index and
-   dropping nothing. A user of its own, not the API's or the operator's, so
-   each credential rotates alone.
+   purge between them touch nearly all of them — plus `listCollections`, which
+   erasure's final sweep calls, creating no index and dropping nothing. A user
+   of its own, not the API's or the operator's, so each credential rotates
+   alone.
 
 4. **The secrets' first versions** (Terraform manages the containers, which
    stand outside the flag so that these have somewhere to go, and the
    bindings; the values never pass through it):
 
    ```bash
-   printf 'mongodb+srv://beats-operator:...@.../beats' | \
+   printf 'mongodb+srv://beats-operator:...@<cluster>/?appName=beats-operator' | \
      gcloud secrets versions add beats-operator-dsn --data-file=- --project=beats-476914
-   printf 'mongodb+srv://beats-operator-jobs:...@.../beats' | \
+   printf 'mongodb+srv://beats-operator-jobs:...@<cluster>/?appName=beats-operator-jobs' | \
      gcloud secrets versions add beats-jobs-dsn --data-file=- --project=beats-476914
    ```
 
@@ -471,7 +480,11 @@ on every build:
 ```hcl
 operator_enabled   = true
 operator_allowlist = "[{\"sub\": \"accounts.google.com:<id>\", \"email\": \"you@...\", \"role\": \"operator\"}]"
+# The API's run.app URL with the service name swapped; confirm it after the apply.
+operator_origin    = "https://beats-operator-....run.app"
 ```
+
+`<id>` is the `sub` claim of `gcloud auth print-identity-token` for that account.
 
 Nothing needs merging: re-run the latest `beats-api-build`, because the deploy
 lock re-applies a commit that is already live. Watch it. A failed apply blocks
@@ -480,21 +493,16 @@ them.
 
 ### After the first apply
 
-1. Attach the OAuth client to the `beats-operator` service's IAP settings in
-   the console (check whether `google_iap_settings` on `~> 8.8` carries a
-   custom client for a Cloud Run resource; if it does, move the id and secret
-   into sensitive tfvars and manage it there).
-2. Grant the operator's Google account the IAP-secured Web App User role on
-   the service. **IAP's IAM binding says who reaches the app; the
-   `operator_allowlist` tfvar says what they may do** — both name the same
-   people.
-3. Read the `run.app` URL off the service, add it to the tfvars secret, and
-   run the build again:
+Grant the operator's Google account access. **IAP's IAM binding says who
+reaches the app; the `operator_allowlist` tfvar says what they may do** — both
+name the same people.
 
-   ```hcl
-   operator_origin = "https://beats-operator-....run.app"
-   ```
+```bash
+gcloud iap web add-iam-policy-binding --project=beats-476914 \
+  --resource-type=cloud-run --service=beats-operator --region=europe-west1 \
+  --member=user:you@... --role=roles/iap.httpsResourceAccessor
+```
 
-The first apply creates the service with an empty origin, which fails closed
-(every write answers 403); the second, with the URL set, opens it. The
-hostname stays the `run.app` URL — no domain mapping, by decision.
+An anonymous request to the service answers 302 to `accounts.google.com`. An
+`operator_origin` that is empty or wrong fails closed (every write answers
+403). The hostname stays the `run.app` URL — no domain mapping, by decision.
