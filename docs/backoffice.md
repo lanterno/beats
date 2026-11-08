@@ -278,9 +278,14 @@ revisit if the back office ever needs to deploy apart from the API.
   runs — React 19, TypeScript 7, Vite, Tailwind, TanStack Query, Biome, its
   own `tools/openapi-types` on a TypeScript 5 — generated from
   `dump_openapi_operator.py` with a drift check in pre-push and CI
-  (`.github/workflows/backoffice.yml`, no deploy job). It is deliberately
-  **not the sky**: dense, plain, one neutral palette — an operator should
-  never be unsure which surface they are on. Vite builds into
+  (`.github/workflows/backoffice.yml`, no deploy job). It **wears the app's
+  look**: the sky, the panels and the two hours, with the tokens copied into
+  `client/tokens.css`. Until 2026-11-08 it was plain grey on purpose, so an
+  operator could never be unsure which surface they were on; that job now
+  falls to a "Back office" mark on every page at every width, and to the
+  tab's title. Its tables are tighter than the app's, being lists to scan.
+  The two typefaces come from Google Fonts, the one thing these pages load
+  from another origin. Vite builds into
   `api/src/beats/operator/static/` (gitignored), which Cloud Build fills in a
   step before the image build, so the Dockerfile's existing `COPY src/`
   carries it and `operator_server` serves it: one origin, one IAP session. A

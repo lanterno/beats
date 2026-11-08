@@ -6,8 +6,9 @@ operational metadata, never user content. Served by the operator deployment
 itself (`operator_server.py` mounts the build), behind Google Cloud IAP, so the
 browser has one origin and the credential is IAP's cookie.
 
-Deliberately **not the sky**: dense, plain, one neutral palette, system fonts.
-An operator should never be unsure which surface they are on.
+It wears the app's look (the sky, the panels, the two hours; tokens in
+`client/tokens.css`), with a "Back office" mark on every page so an operator is
+never unsure which surface they are on.
 
 ## Running
 
@@ -34,16 +35,17 @@ Feature-Sliced like `ui/`, as far as this app needs layers:
 
 ```
 client/
-├── app/App.tsx        the shell: flat nav, the /me badge, the routes
+├── app/App.tsx        the shell: sidebar, the mark, the /me badge, the routes
 ├── pages/             Attention, Accounts, Organisations, Abuse, Capacity,
 │                      Compliance — one file per operator job
 └── shared/
     ├── api/           same-origin fetch client (no token: IAP's cookie is the
     │                  credential), the command POST, generated types + schema
-    ├── lib/           the two renderings (bytes, days) — the only logic here
+    ├── lib/           renderings (bytes, days, counts), the hour, and what a
+    │                  failure says to the operator
     ├── config/        brand.ts, stamped by scripts/gen_brand.py
-    └── ui/            Section, Table, Facts, and CommandForm — one command as
-                       a small form with its typed confirmation
+    └── ui/            Page, Panel, Table, Facts, the icons, and CommandForm —
+                       one command as a row with its typed confirmation
 ```
 
 A workspace of its own: `ui/`'s workspace reaches only its `tools/*`, so this
