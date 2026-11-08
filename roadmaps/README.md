@@ -10,8 +10,9 @@ built, and why.
 | [account-emails.md](account-emails.md) | Several verified addresses on one account — what #341 waits on, and the one place decision 11's no-email rule gets revisited |
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
-| [backoffice.md](backoffice.md) | The operator's control plane (#424) shipped 2026-11-04 ([docs/backoffice.md](../docs/backoffice.md)); what it still owes: the owner's hand-made prerequisites and the flip, the Cloud Build IAM question, the limit defaults, and the two signals with no data source |
-| [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state reads wait on |
+| [backoffice.md](backoffice.md) | The operator's control plane (#424) shipped 2026-11-04 ([docs/backoffice.md](../docs/backoffice.md)); what it still owes: the redesign the owner chose on 2026-11-08, in stages another agent can start from (the pages, switches, the signup signal, live health, releases, a deploy freeze, the erasure log), what was postponed, what is undecided, and the smaller items |
+| [status-page.md](status-page.md) | Telling customers what is happening: a public page that still works when the API is down, written from the back office |
+| [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state row waits on |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [file-sizes.md](file-sizes.md) | The Python files past the 1000-line ceiling (stated 2026-11-06), and the seams to carve each at — mostly the four big test files |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
