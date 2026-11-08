@@ -229,7 +229,7 @@ resource "google_logging_metric" "write_limit_refusals" {
   )
 
   label_extractors = {
-    route = "REGEXP_EXTRACT(textPayload, \"route=(\\S+)\")"
+    route = "REGEXP_EXTRACT(textPayload, \"route=([^ ]+)\")"
   }
 
   metric_descriptor {
@@ -264,7 +264,7 @@ resource "google_logging_metric" "import_bytes" {
   EOT
   )
 
-  value_extractor = "REGEXP_EXTRACT(textPayload, \"bytes=(\\d+)\")"
+  value_extractor = "REGEXP_EXTRACT(textPayload, \"bytes=([0-9]+)\")"
 
   metric_descriptor {
     display_name = "${var.api_service_name} import sizes"
