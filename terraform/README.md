@@ -480,8 +480,6 @@ on every build:
 ```hcl
 operator_enabled   = true
 operator_allowlist = "[{\"sub\": \"accounts.google.com:<id>\", \"email\": \"you@...\", \"role\": \"operator\"}]"
-# The API's run.app URL with the service name swapped; confirm it after the apply.
-operator_origin    = "https://beats-operator-....run.app"
 ```
 
 `<id>` is the `sub` claim of `gcloud auth print-identity-token` for that account.
@@ -503,6 +501,26 @@ gcloud iap web add-iam-policy-binding --project=beats-476914 \
   --member=user:you@... --role=roles/iap.httpsResourceAccessor
 ```
 
-An anonymous request to the service answers 302 to `accounts.google.com`. An
-`operator_origin` that is empty or wrong fails closed (every write answers
-403). The hostname stays the `run.app` URL — no domain mapping, by decision.
+An anonymous request to the service answers 302 to `accounts.google.com`.
+
+### The hostname
+
+`backoffice.lifepete.com` (`operator_domain`) is a Cloud Run domain mapping and
+a DNS-only CNAME, both in Terraform. It is also the one origin writes are
+accepted from: the `run.app` URL stays up behind the same IAP, and a write from
+it answers 403.
+
+Google lets only a verified owner of the domain create a mapping, and every
+mapping in this project was created by the owner's account rather than the
+deployer's. Production's was made that way on 2026-11-08 and imported. If an
+apply ever has to create one and fails on it, do the same:
+
+```bash
+gcloud beta run domain-mappings create --project=beats-476914 \
+  --region=europe-west1 --service=beats-operator --domain=backoffice.lifepete.com
+terraform import 'google_cloud_run_domain_mapping.operator[0]' \
+  locations/europe-west1/namespaces/beats-476914/domainmappings/backoffice.lifepete.com
+```
+
+Google issues the certificate once the CNAME resolves; this one took about 40
+minutes.

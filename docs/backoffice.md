@@ -267,8 +267,13 @@ revisit if the back office ever needs to deploy apart from the API.
   from `beats-operator-dsn`; the job's is its own user, from `beats-jobs-dsn`
   — each credential rotates alone. The secret containers and bindings are
   Terraform's; the values are added by hand and never pass through it.
-- **The hostname is the `run.app` URL.** No domain mapping: a hostname of our
-  own would buy a nicer bookmark for one person.
+- **The hostname is `backoffice.lifepete.com`**: a Cloud Run domain mapping and
+  a DNS-only CNAME, the shape of `api.lifepete.com`, with no load balancer.
+  Google's IAP pages name only `run.app` URLs and load balancers, so IAP
+  covering a mapped hostname is something we observed rather than something
+  Google promises: on 2026-11-08 an anonymous request there went to Google's
+  sign-in. The `run.app` URL stays up behind the same IAP, but `OPERATOR_ORIGIN`
+  is the hostname, so a write from it answers 403.
 - **The UI** (`backoffice/`) is its own pnpm workspace on the toolchain `ui/`
   runs — React 19, TypeScript 7, Vite, Tailwind, TanStack Query, Biome, its
   own `tools/openapi-types` on a TypeScript 5 — generated from
