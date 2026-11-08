@@ -33,6 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "shared" / "brand"
 PUBLIC = ROOT / "ui" / "public"
+BACKOFFICE_PUBLIC = ROOT / "backoffice" / "public"
 COMPANION = ROOT / "companion"
 APPICON = COMPANION / "macos" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
 IOS_APPICON = COMPANION / "ios" / "Runner" / "Assets.xcassets" / "AppIcon.appiconset"
@@ -85,6 +86,7 @@ def main() -> int:
         return 1
 
     shutil.copyfile(SOURCE / "favicon.svg", PUBLIC / "favicon.svg")
+    shutil.copyfile(SOURCE / "favicon.svg", BACKOFFICE_PUBLIC / "favicon.svg")
     (PUBLIC / "pwa-192.svg").write_text(sized(SOURCE / "mark.svg", 192))
     (PUBLIC / "pwa-512.svg").write_text(sized(SOURCE / "mark.svg", 512))
     (PUBLIC / "pwa-maskable-512.svg").write_text(sized(SOURCE / "maskable.svg", 512))
