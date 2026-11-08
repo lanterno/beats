@@ -7,11 +7,10 @@ service and its revisions, and can't until this lands. Nothing else waits on it.
 It is still worth doing first, control plane or not: today anyone who can
 describe the Cloud Run service can read every user's session key.
 
-**What blocks it:** one question for the owner. The apply creates secrets, a
-service account and IAM bindings, and nothing in the repo says Cloud Build's
-account may. [backoffice.md](backoffice.md)'s Cloud Build question asks it, with
-what to do for each answer; the control plane needs the same answer. A failed
-apply blocks every API deploy, so it is answered before the first merge.
+**What blocks it:** nothing, since 2026-11-08. The apply creates secrets, a
+service account and IAM bindings, and Cloud Build's account may: it holds
+`roles/owner` ([backoffice.md](backoffice.md)'s deployer item). A failed apply
+still blocks every API deploy, so the first build is watched.
 
 Written 2026-11-04, from the control plane's review.
 

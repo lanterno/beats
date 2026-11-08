@@ -18,44 +18,38 @@ both are logged and counted, never stored, and their pages link to the
 query — the reasoning is in [docs/backoffice.md](../docs/backoffice.md)
 § *The pages* under *Abuse*.
 
-What follows is what the control plane still owes. Nothing left is code
-waiting to be written: the first four need the owner — a console, a
-credential, or a figure only production has — the fifth is a bound
+What follows is what the control plane still owes. The first three need
+the owner — a console, a decision, or a figure only production has — the
+fourth waits on [secret-manager.md](secret-manager.md), the fifth is a bound
 accepted with the condition that would reopen it, and the last belongs to
 another plan.
 
 ## Work
 
-- **The owner turns it on.** Everything in `terraform/operator.tf` is gated
-  on `operator_enabled = false` until the hand-made prerequisites exist —
-  the two Atlas users and their roles, IAP's custom OAuth client and consent
-  screen, the secrets' first versions, the IAM grant on the service — each
-  written out in terraform/README.md. The tfvars secret
-  (`beats-terraform-tfvars`) must gain the new variables **before** the flip
-  merges, and the service's `run.app` URL goes into `operator_origin` after
-  the first apply. PRIVACY.md's "I … am the only operator" sentence names a
-  second person before any `viewer` is added to the allowlist, and the DPA's
-  confidentiality term ([legal/dpa.md](legal/dpa.md)) says who else sees an
-  organisation's members.
-- **What Cloud Build's service account really holds.** `cloudbuild.tf`
-  grants it `run.admin`, `iam.serviceAccountUser`, `logging.logWriter`, the
-  tfvars secret, the state bucket and `artifactregistry.writer` — not enough
-  to create service accounts, secrets, IAM bindings, enabled APIs, IAP
-  settings or a scheduler job, yet the monitoring and IAM resources that
-  already apply suggest more was granted by hand. Run:
-
-  ```
-  gcloud projects get-iam-policy beats-476914 \
-    --flatten="bindings[].members" \
-    --filter="bindings.members:cloudbuild" \
-    --format="table(bindings.role)"
-  ```
-
-  If it holds `roles/editor` or more, CI applies the operator resources as it
-  applies everything else; if not, the owner runs the first apply from a
-  machine holding Owner, and CI's steady-state applies only refresh them —
-  granting CI IAM-admin roles for a one-time creation would leave it holding
-  them.
+- **The owner turns it on.** All of `terraform/operator.tf` but the two
+  empty secret containers is gated on `operator_enabled = false` until the
+  hand-made prerequisites exist — the two Atlas users and their roles, IAP's
+  custom OAuth client and consent screen, the secrets' first versions, IAP's
+  service agent — each written out in terraform/README.md, with what follows
+  the first apply: the client attached, the IAM grant on the service, the
+  `run.app` URL in `operator_origin`. The first apply has never been
+  rehearsed, and neither `validate` nor `plan` can show whether Google accepts
+  `iap_enabled` on a service with no OAuth client attached yet, so the build
+  is watched, and if it fails the flag comes back out of the tfvars secret.
+  PRIVACY.md's "I … am the only operator" sentence names a second person
+  before any `viewer` is added to the allowlist, and the DPA's confidentiality
+  term ([legal/dpa.md](legal/dpa.md)) says who else sees an organisation's
+  members.
+- **Whether the deployer keeps what it was given by hand.** Cloud Build's
+  account, `cloudbuild-beats-api`, holds `roles/owner`,
+  `resourcemanager.projectIamAdmin` and `serviceUsageAdmin` (read off the
+  project's IAM policy on 2026-11-08), and `cloudbuild.tf` grants none of
+  them. So CI applies the operator resources as it applies everything else,
+  and no first apply from another machine is needed. Every push touching
+  `api/**`, `terraform/**` or `backoffice/**` runs as that account, though,
+  and steady-state applies only refresh what exists: once the operator's and
+  [secret-manager.md](secret-manager.md)'s resources are created, how much of
+  this it keeps is the owner's call.
 - **Turning the write-limit defaults on.** `WRITES_PER_MINUTE_BEATS`,
   `WRITES_PER_MINUTE_SIGNALS` and `IMPORTS_PER_HOUR` ship unset (no limit).
   Before one is set, check it against the per-account rate those routes
@@ -63,6 +57,8 @@ another plan.
   route, and a default that refuses a real client is a 429 storm in the
   SPA's sync engine, which retries 429. Recommended starting values (120, 60
   a minute, 10 an hour) are the comment in `api/src/beats/settings.py`.
+  `terraform/cloudrun.tf` does not pass them to the service yet, so the first
+  one set is also a Terraform change.
 - **The landing page's deploy-state row** waits on
   [secret-manager.md](secret-manager.md): the API's Cloud Run spec carries
   `JWT_SECRET` and the DSN as plain environment values, so reading the
