@@ -3,8 +3,10 @@
 **What is blocked:** the control plane's deploy-state row
 ([docs/backoffice.md](../docs/backoffice.md) § *The pages*, and the open
 row in [backoffice.md](backoffice.md)). That row reads the API's
-service and its revisions, and can't until this lands. Nothing else waits on it.
-It is still worth doing first, control plane or not: today anyone who can
+service and its revisions, and can't until this lands. Nothing else waits on it:
+the live health figures and the release history planned there (stages 4 and 5)
+read Cloud Monitoring, Cloud Build and Firebase, none of which show the API's
+spec. It is still worth doing first, control plane or not: today anyone who can
 describe the Cloud Run service can read every user's session key.
 
 **What blocks it:** nothing, since 2026-11-08. The apply creates secrets, a
