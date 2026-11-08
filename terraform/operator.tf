@@ -126,12 +126,12 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         value = var.operator_allowlist
       }
 
-      # The run.app URL, known only after the first apply: create, read the
-      # URL off the service, set the tfvar, apply again. Until then every
-      # write answers 403 OPERATOR_BAD_ORIGIN, which fails closed.
+      # The one origin writes are accepted from: its own hostname. The run.app
+      # URL stays up behind the same IAP, and a write from it answers 403
+      # OPERATOR_BAD_ORIGIN.
       env {
         name  = "OPERATOR_ORIGIN"
-        value = var.operator_origin
+        value = "https://${var.operator_domain}"
       }
 
       # Mirrors the API's setting so the landing page's "near the cap" and
