@@ -13,7 +13,7 @@ from. No stage has started.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 1 | The pages, reorganised around the work, on today's data | The redesign itself | Nothing | Nothing |
+| 1 | The pages, reorganised around the work, on today's data (the frame shipped 2026-11-09) | The redesign itself | Nothing | Nothing |
 | 2 | Switches: pause the coach, webhooks, imports or signups; the global write limits | Build | Nothing | One collection on an Atlas role; the limit values |
 | 3 | Signups from one network | Keep, and improve | Its action needs stage 2; the signal does not | The PRIVACY.md sentence; one new secret |
 | 4 | Live health from Cloud Monitoring | Build | Nothing | The availability target |
@@ -45,9 +45,9 @@ organisation in it is invented.
 | `Accounts`, `Account` | `pages/Accounts.tsx` | 1 |
 | `Review` (review before acting) | `shared/ui/CommandForm.tsx`, inline | 1 |
 | `Orgs`, `Org` | `pages/Organisations.tsx` | 1 |
-| `Trust` | `pages/Abuse.tsx` | 1, then 3 and 4 add to it |
+| `Trust` | `pages/Trust.tsx` (renamed from Abuse 2026-11-09) | 1, then 3 and 4 add to it |
 | `Capacity` | `pages/Capacity.tsx` | 1, then 4 adds to it |
-| `Jobs`, `Audit`, `Compliance` | `pages/Compliance.tsx`, split in three | 1, then 8 adds to it |
+| `Jobs`, `Audit`, `Compliance` | `pages/Jobs.tsx`, `pages/Audit.tsx`, `pages/Compliance.tsx` (split 2026-11-09) | 1, then 8 adds to it |
 | `Access` (access and controls) | Nothing | 2 |
 | `Releases` | Nothing | 5 and 6 |
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
@@ -111,33 +111,34 @@ source, no new collection, no Terraform.
 
 One PR per item, in this order. Frontend only unless it says otherwise.
 
-1. **The frame.** The mock's `Sidebar` and `Topbar` in
-   `backoffice/client/app/App.tsx`, and `pages/Compliance.tsx` split into Jobs,
-   Audit and Compliance. `Abuse` becomes Trust and safety.
-2. **One account.** `Accounts` and `Account`, over `POST /accounts/lookup` and
+The frame — the sidebar and topbar (`backoffice/client/app/`), Compliance
+split into Jobs, Audit and Compliance, Abuse renamed Trust and safety —
+shipped on 2026-11-09. What remains, in order:
+
+1. **One account.** `Accounts` and `Account`, over `POST /accounts/lookup` and
    `GET /accounts/{user_id}` (`AccountDetail`, `api/src/beats/operator/reads.py`).
    Two small reads are new (backend, its own commit): coach spend per day for
    one account, and `audit_log` filtered by `subject_id` (it takes only a
    `limit` today) for "What has been done to this account". "You opened
    recently" is ids only, in `localStorage`, cleared after a week.
-3. **Review before acting.** Replaces the inline `CommandForm`. "What will
+2. **Review before acting.** Replaces the inline `CommandForm`. "What will
    change" needs a backend route, `POST /commands/{name}/preview`, which
    validates the args and answers what `describe()` returns and whether a
    typed confirmation will be asked for. It calls neither `execute()` nor
    `on_queued()`, and writes nothing. "Who notices" and "Can you undo it" are
    fixed text per command. Windowed commands say when they run.
-4. **The queue.** A new read returns the rows behind the Attention counts, ids
+3. **The queue.** A new read returns the rows behind the Attention counts, ids
    and dates only, each with a due date from the constants already in
    `reads.py`. A row leaves when its condition clears, because nothing stores
    that it was handled. Superseded approvals and absence requests stay per
    organisation, with no member named.
-5. **Today.** `Main` without the incident and release panels: one sentence
+4. **Today.** `Main` without the incident and release panels: one sentence
    saying what matters, what is due next, jobs waiting out a window, the last
    few audit rows, and storage and coach spend.
-6. **The palette.** Goes to pages, opens a command's review, and finds one
+5. **The palette.** Goes to pages, opens a command's review, and finds one
    account by exact address or id through the same POST. A command never runs
    from it.
-7. **Runbooks.** Static pages in the bundle, each with a `reviewed_on`, marked
+6. **Runbooks.** Static pages in the bundle, each with a `reviewed_on`, marked
    stale after six months, and linked from the queue rows they fit. Start from
    the `documentation` blocks in `terraform/alerts.tf`. A bad release's
    runbook says to revert on `main`.

@@ -1,7 +1,8 @@
 # Back office
 
 The operator's control plane UI ([docs/backoffice.md](../docs/backoffice.md)):
-what needs attention, accounts, organisations, abuse, capacity and compliance —
+what needs attention, accounts, organisations, trust and safety, capacity, and
+the records only the control plane keeps (jobs, audit, compliance) —
 operational metadata, never user content. Served by the operator deployment
 itself (`operator_server.py` mounts the build), behind Google Cloud IAP, so the
 browser has one origin and the credential is IAP's cookie.
@@ -35,14 +36,16 @@ Feature-Sliced like `ui/`, as far as this app needs layers:
 
 ```
 client/
-├── app/App.tsx        the shell: sidebar, the mark, the /me badge, the routes
-├── pages/             Attention, Accounts, Organisations, Abuse, Capacity,
-│                      Compliance — one file per operator job
+├── app/               App.tsx (the routes), places.ts (where the back office
+│                      goes, grouped by job), Sidebar.tsx and Topbar.tsx (the
+│                      mark, who is signed in, the hour)
+├── pages/             Attention, Accounts, Organisations, Trust, Capacity,
+│                      Jobs, Audit, Compliance — one file per operator job
 └── shared/
     ├── api/           same-origin fetch client (no token: IAP's cookie is the
     │                  credential), the command POST, generated types + schema
-    ├── lib/           renderings (bytes, days, counts), the hour, and what a
-    │                  failure says to the operator
+    ├── lib/           renderings (bytes, days, counts), what an audit row
+    │                  changed, the hour, and what a failure says to the operator
     ├── config/        brand.ts, stamped by scripts/gen_brand.py
     └── ui/            Page, Panel, Table, Facts, the icons, and CommandForm —
                        one command as a row with its typed confirmation

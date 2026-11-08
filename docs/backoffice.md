@@ -333,7 +333,7 @@ on by them on 2026-11-08.
 - **Organisations**: rosters, states, timesheet counts, and the audit without
   each event's `details`; the three acts, offered only while no owner is
   left.
-- **Abuse**: outliers rather than guessed thresholds — coach spend, flow
+- **Trust and safety** (`/trust`; named Abuse until 2026-11-09): outliers rather than guessed thresholds — coach spend, flow
   windows today, sessions created, report links minted (the only public path
   serving a user's data), webhook destinations by domain (outbound HTTP from
   our servers is ours to answer for), devices per account, signups per day.
@@ -362,6 +362,15 @@ on by them on 2026-11-08.
   coach's platform cost by day and model with the cache-read inputs. Latency,
   error rates and instance counts are Cloud Monitoring's — linked, not
   rebuilt.
-- **Compliance**: the job queue with cancel, the platform-wide retention
-  purge behind the typed word `all`, and the operator audit — readable,
-  filterable, editable by nobody, kept four years.
+- **Jobs**, **Audit** and **Compliance** (one page, Compliance, until
+  2026-11-09): the job queue with cancel; the operator audit — readable,
+  editable by nobody, kept four years, each row saying what the command
+  changed, read off its before and after; and the platform-wide retention
+  purge behind the typed word `all`, alone on its page, since the dangerous
+  act must not sit beside a list the operator scans.
+
+The pages are reached from a sidebar grouped by job — today; look up; the
+platform; records (`backoffice/client/app/places.ts`) — under a topbar that
+carries the "Back office" mark at every width, who is signed in and what
+their role lets them do. Stage 1 of roadmaps/backoffice.md is reorganising
+them further; this list follows as each item lands.
