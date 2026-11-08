@@ -181,11 +181,6 @@ resource "google_cloud_run_domain_mapping" "operator" {
   }
 }
 
-import {
-  to = google_cloud_run_domain_mapping.operator[0]
-  id = "locations/${var.region}/namespaces/${var.project_id}/domainmappings/${var.operator_domain}"
-}
-
 # A 5xx alert in the shape of api_5xx (alerts.tf): the operator service is
 # opened rarely, so a broken revision would otherwise sit unnoticed.
 resource "google_monitoring_alert_policy" "operator_5xx" {
