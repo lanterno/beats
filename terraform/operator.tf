@@ -2,12 +2,15 @@
 # running `operator_server:app`, behind Cloud Run's own IAP — no load
 # balancer, by decision (about $18 a month standing buys one person nothing).
 #
-# Everything here is gated on var.operator_enabled, default false, because the
-# service cannot become ready before three things are made **by hand** (the
-# README's "Operator deployment" section): the custom OAuth client IAP needs
-# in a project with no organisation, the narrow Atlas database user, and the
-# secret's first version. Flip the variable after those exist; until then an
-# apply changes nothing and the API's deploy stays green.
+# Everything here but the two secret containers is gated on
+# var.operator_enabled, default false, because the service cannot become ready
+# before its prerequisites are made **by hand** (the README's "Operator
+# Deployment" section): the custom OAuth client IAP needs in a project with no
+# organisation, the two Atlas database users, and each secret's first version.
+# The containers stand outside the flag because a first version needs a
+# container to go in, and an empty one costs nothing and opens nothing. Flip
+# the variable after the versions exist; until then an apply changes nothing
+# else and the API's deploy stays green.
 
 resource "google_service_account" "beats_operator" {
   count = var.operator_enabled ? 1 : 0
@@ -23,8 +26,6 @@ resource "google_service_account" "beats_operator" {
 # manages the container and the binding only (roadmaps/secret-manager.md
 # § The shape, for the same reason).
 resource "google_secret_manager_secret" "beats_operator_dsn" {
-  count = var.operator_enabled ? 1 : 0
-
   project   = var.project_id
   secret_id = "beats-operator-dsn"
 
@@ -39,7 +40,7 @@ resource "google_secret_manager_secret_iam_member" "operator_dsn_reader" {
   count = var.operator_enabled ? 1 : 0
 
   project   = var.project_id
-  secret_id = google_secret_manager_secret.beats_operator_dsn[0].secret_id
+  secret_id = google_secret_manager_secret.beats_operator_dsn.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.beats_operator[0].email}"
 }
@@ -103,7 +104,7 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         name = "OPERATOR_DB_DSN"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.beats_operator_dsn[0].secret_id
+            secret  = google_secret_manager_secret.beats_operator_dsn.secret_id
             version = "latest"
           }
         }
@@ -230,8 +231,6 @@ resource "google_service_account" "beats_operator_jobs" {
 }
 
 resource "google_secret_manager_secret" "beats_jobs_dsn" {
-  count = var.operator_enabled ? 1 : 0
-
   project   = var.project_id
   secret_id = "beats-jobs-dsn"
 
@@ -246,7 +245,7 @@ resource "google_secret_manager_secret_iam_member" "jobs_dsn_reader" {
   count = var.operator_enabled ? 1 : 0
 
   project   = var.project_id
-  secret_id = google_secret_manager_secret.beats_jobs_dsn[0].secret_id
+  secret_id = google_secret_manager_secret.beats_jobs_dsn.secret_id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.beats_operator_jobs[0].email}"
 }
@@ -290,7 +289,7 @@ resource "google_cloud_run_v2_job" "beats_operator_jobs" {
           name = "OPERATOR_JOBS_DB_DSN"
           value_source {
             secret_key_ref {
-              secret  = google_secret_manager_secret.beats_jobs_dsn[0].secret_id
+              secret  = google_secret_manager_secret.beats_jobs_dsn.secret_id
               version = "latest"
             }
           }
