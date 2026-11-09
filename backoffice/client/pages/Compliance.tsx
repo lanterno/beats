@@ -1,79 +1,40 @@
 /**
- * The operator's own records: the audit (editable by nobody, kept four
- * years) and the job queue, erasures first — where every command the runner
- * executed shows, and where a queued window is waited out or cancelled.
+ * Privacy and compliance: what was promised about other people's data, and
+ * the one control that keeps the promise — the platform-wide retention
+ * purge, never scheduled, because PRIVACY.md and the DPA say an operator
+ * runs it.
+ *
+ * The line itself is on this page because it is a promise and not a
+ * feature: an operator reading it should be able to tell, before opening
+ * any other page, which questions this surface will refuse to answer.
+ *
+ * What the mock shows and this does not: an erasure request log (its own
+ * stage, roadmaps/backoffice.md § 8), backup and restore-drill dates, and a
+ * documents checklist. No route answers any of them, and a date with no
+ * source is worse here than on any other page.
  */
 
-import { useQuery } from "@tanstack/react-query";
-import { get } from "@/shared/api/client";
-import { minuteOf } from "@/shared/lib/format";
-import { Chip, day, Empty, Failed, Id, Loading, Page, Panel, Table } from "@/shared/ui";
+import { Page, Pair, Panel, Prose } from "@/shared/ui";
 import { CommandForm } from "@/shared/ui/CommandForm";
 
-type Row = Record<string, unknown>;
-
-const text = (value: unknown): string =>
-	value === undefined || value === null ? "—" : String(value);
-
-function JobState({ state }: { state: unknown }) {
-	if (state === "failed") return <Chip tone="owed">Failed</Chip>;
-	if (state === "done") return <Chip tone="good">Done</Chip>;
-	const name = text(state);
-	return <Chip>{name.charAt(0).toUpperCase() + name.slice(1)}</Chip>;
-}
+/** docs/backoffice.md § The line, as the operator reads it. */
+const LINE: Array<[sees: string, never: string]> = [
+	["Account id, address, created, the day last seen, state", "Sessions, their times, their notes"],
+	["Counts of projects, sessions, devices and organisations", "Project names, tags, absence notes"],
+	["Which integrations are connected", "Any integration's token or what it fetched"],
+	["Webhook destinations, by domain", "A webhook's full URL, or what was sent to it"],
+	["Coach spend, tokens and model", "Any coach conversation or memory"],
+	["Organisation name, settings, members, roles", "Clients, rates, amounts, report contents"],
+	["An organisation's audit: what, by whom, to whom, when", "The details of one of its events"],
+	["How many biometric rows exist", "Any biometric value"],
+];
 
 export function Compliance() {
-	const audit = useQuery({
-		queryKey: ["operator-audit"],
-		queryFn: () => get<Row[]>("/api/operator/audit"),
-	});
-	const jobs = useQuery({
-		queryKey: ["operator-jobs"],
-		queryFn: () => get<Row[]>("/api/operator/jobs"),
-	});
-
 	return (
 		<Page
-			title="Compliance"
-			lead="Your own records: the work waiting out its window, and everything the back office has run. Times are UTC."
+			title="Privacy and compliance"
+			lead="What was promised about other people's data, and the one act that keeps it."
 		>
-			<Panel
-				raised
-				title="Jobs"
-				note="Each one waits out its window, and can be cancelled until it ends."
-			>
-				{jobs.error ? <Failed bare error={jobs.error} onRetry={() => jobs.refetch()} /> : null}
-				{jobs.data ? (
-					<Table
-						head={[day("Queued"), "Command", "Subject", day("Runs after"), "State", ""]}
-						rows={jobs.data.map((r) => [
-							minuteOf(r.queued_at),
-							text(r.command),
-							<Id key="subject">{text(r.subject_id)}</Id>,
-							minuteOf(r.run_after),
-							<JobState key="state" state={r.state} />,
-							r.state === "queued" ? (
-								<CommandForm
-									key={`cancel-${r.id}`}
-									inline
-									name="job.cancel"
-									label={`Cancel ${text(r.command)} for ${text(r.subject_id)}`}
-									action="Cancel"
-									args={{ job_id: r.id }}
-									invalidates={["operator-jobs", "attention"]}
-								/>
-							) : null,
-						])}
-						empty={
-							<Empty title="Nothing is queued.">
-								An erasure or a deletion waits here until its window ends.
-							</Empty>
-						}
-					/>
-				) : jobs.error ? null : (
-					<Loading />
-				)}
-			</Panel>
 			<Panel
 				danger
 				title="Retention purge, platform-wide"
@@ -82,34 +43,56 @@ export function Compliance() {
 				<CommandForm
 					name="retention.purge"
 					label="Purge every organisation"
-					about="It also trims the operator audit at its four-year retention."
+					about="Every organisation's records past its own retention period, and this back office's audit past four years."
 					action="Queue the purge"
-					done="Queued. Cancel it from the jobs above."
+					done="Queued. Cancel it from Jobs and windows until its window ends."
 					args={{ organisation_id: null }}
 					confirmHint='Type "all" to confirm'
-					invalidates={["operator-jobs"]}
+					invalidates={["operator-jobs", "attention"]}
 				/>
 			</Panel>
 			<Panel
-				title="Operator audit"
-				note="Every command the back office has run. Nobody can edit it."
+				title="What this back office may see"
+				note="The line between running the service and reading someone's life. It is held by construction and by a test that plants a sentinel in every right-hand thing and greps every page for it."
 			>
-				{audit.error ? <Failed bare error={audit.error} onRetry={() => audit.refetch()} /> : null}
-				{audit.data ? (
-					<Table
-						head={[day("When"), "Command", "Operator", "Subject"]}
-						rows={audit.data.map((r) => [
-							minuteOf(r.at),
-							text(r.command),
-							<Id key="operator">{text(r.operator_sub)}</Id>,
-							<Id key="subject">{text(r.subject_id)}</Id>,
-						])}
-						empty={<Empty title="No commands have been run yet." />}
-					/>
-				) : audit.error ? null : (
-					<Loading />
-				)}
+				<div className="overflow-x-auto pb-3">
+					<table className="w-full text-[14px]">
+						<thead>
+							<tr className="text-left text-[13px]">
+								<th scope="col" className="px-2.5 py-1.5 pl-6 font-medium text-leaf-ink">
+									It sees
+								</th>
+								<th scope="col" className="px-2.5 py-1.5 pr-6 font-medium text-persimmon-ink">
+									It never sees
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{LINE.map(([sees, never]) => (
+								<tr key={sees} className="border-t border-hairline">
+									<td className="w-1/2 px-2.5 py-[7px] pl-6 align-top">{sees}</td>
+									<td className="w-1/2 px-2.5 py-[7px] pr-6 align-top">{never}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
 			</Panel>
+			<Pair>
+				<Panel title="Erasure requests">
+					<Prose>
+						They arrive by email at the address in PRIVACY.md, and there is no log of them here yet.
+						An erasure you have queued is on Jobs and windows, where its seven-day window is
+						running.
+					</Prose>
+				</Panel>
+				<Panel title="Reading a document in the database">
+					<Prose>
+						Nothing above stops it, and PRIVACY.md says so rather than pretending otherwise. The
+						point of these pages is that the question is answered here instead.
+					</Prose>
+				</Panel>
+			</Pair>
 		</Page>
 	);
 }

@@ -9,8 +9,10 @@ import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router";
 import { Account, Accounts } from "@/pages/Accounts";
 import { Attention } from "@/pages/Attention";
+import { Audit } from "@/pages/Audit";
 import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
+import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
 import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
@@ -21,8 +23,10 @@ import {
 	BellIcon,
 	BrandMark,
 	BuildingIcon,
-	ClipboardIcon,
+	ClockIcon,
 	DatabaseIcon,
+	LinesIcon,
+	LockIcon,
 	MonitorIcon,
 	MoonIcon,
 	PersonIcon,
@@ -40,7 +44,9 @@ const PLACES = [
 	{ to: "/organisations", label: "Organisations", Icon: BuildingIcon },
 	{ to: "/trust", label: "Trust and safety", Icon: ShieldIcon },
 	{ to: "/capacity", label: "Capacity", Icon: DatabaseIcon },
-	{ to: "/compliance", label: "Compliance", Icon: ClipboardIcon },
+	{ to: "/jobs", label: "Jobs and windows", Icon: ClockIcon },
+	{ to: "/compliance", label: "Privacy and compliance", Icon: LockIcon },
+	{ to: "/audit", label: "Audit log", Icon: LinesIcon },
 ] as const;
 
 const HOURS = [
@@ -129,7 +135,9 @@ function Shell() {
 						<Route path="/organisations/:id" element={<Organisation />} />
 						<Route path="/trust" element={<Trust />} />
 						<Route path="/capacity" element={<Capacity />} />
+						<Route path="/jobs" element={<Jobs />} />
 						<Route path="/compliance" element={<Compliance />} />
+						<Route path="/audit" element={<Audit />} />
 					</Routes>
 				</div>
 			</main>

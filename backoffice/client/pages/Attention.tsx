@@ -56,14 +56,14 @@ const CHECKS: Check[] = [
 		says: (n) =>
 			n === 1 ? "job is queued inside its window" : "jobs are queued inside their window",
 		clear: "No job is waiting out its window",
-		to: "/compliance",
+		to: "/jobs",
 		open: "Open the queue",
 	},
 	{
 		count: "jobs_failed",
 		says: (n) => (n === 1 ? "job failed" : "jobs failed"),
 		clear: "No job has failed",
-		to: "/compliance",
+		to: "/jobs",
 		open: "Open the queue",
 	},
 	{
