@@ -11,6 +11,7 @@ built, and why.
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
 | [backoffice.md](backoffice.md) | The operator's control plane (#424) shipped 2026-11-04 ([docs/backoffice.md](../docs/backoffice.md)); what it still owes: the redesign the owner chose on 2026-11-08, in stages another agent can start from (the pages, switches, the signup signal, live health, releases, a deploy freeze, the erasure log), what was postponed, what is undecided, and the smaller items |
+| [backoffice-mock/](backoffice-mock/) | The redesign [backoffice.md](backoffice.md) builds: a picture and the source of every screen, readable without Claude |
 | [status-page.md](status-page.md) | Telling customers what is happening: a public page that still works when the API is down, written from the back office |
 | [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state row waits on |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |

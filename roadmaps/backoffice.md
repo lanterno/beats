@@ -30,11 +30,9 @@ end of *Work*.
 
 ## The design
 
-**The mock** is at <https://claude.ai/artifact/SqiuodztBSFVZBrspexva2>, private
-to the owner's account. An agent on that account reads it with the Artifact
-tool (`read`, then `path` for one screen's source, such as
-`project/Review.dc.html`). Anyone else asks the owner. Every figure, person and
-organisation in it is invented.
+**The mock** is in [backoffice-mock/](backoffice-mock/): a picture and the source
+of every screen, and how to read them, with no Claude account needed. Every
+figure, person and organisation in it is invented.
 
 | Mock screen | Replaces | Stage |
 |---|---|---|
