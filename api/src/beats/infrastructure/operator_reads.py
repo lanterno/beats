@@ -21,6 +21,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
+    ACCOUNT_COACH_SPEND_DAYS,
     COACH_CAP_ATTENTION_FRACTION,
     SUPERSEDED_ATTENTION_DAYS,
     AbuseReport,
@@ -200,19 +201,26 @@ class MongoOperatorReads:
 
     # ── the operator's own records ──────────────────────────────────
 
-    async def _own_rows(self, collection: str, sort_field: str, limit: int) -> list[dict]:
+    async def _own_rows(
+        self, collection: str, sort_field: str, limit: int, where: dict | None = None
+    ) -> list[dict]:
         """operator_audit / operator_jobs, newest first. Only the control
         plane writes them, and it writes ids, never addresses or content
         (§ Jobs), so returning the documents whole is inside the line."""
-        cursor = self._db[collection].find({}).sort(sort_field, -1).limit(limit)
+        cursor = self._db[collection].find(where or {}).sort(sort_field, -1).limit(limit)
         out = []
         async for doc in cursor:
             doc["id"] = str(doc.pop("_id"))
             out.append(doc)
         return out
 
-    async def audit_log(self, limit: int = 200) -> list[dict]:
-        return await self._own_rows("operator_audit", "at", limit)
+    async def audit_log(self, limit: int = 200, subject_id: str | None = None) -> list[dict]:
+        """Every command the runner carried out, newest first, or only those
+        against one subject — what the account and organisation pages ask
+        for. `subject_id` is matched whole: it is an id the operator already
+        holds, and a prefix match here would be a way to browse."""
+        where = {} if subject_id is None else {"subject_id": subject_id}
+        return await self._own_rows("operator_audit", "at", limit, where)
 
     async def jobs(self, limit: int = 200) -> list[dict]:
         return await self._own_rows("operator_jobs", "queued_at", limit)
@@ -240,6 +248,33 @@ class MongoOperatorReads:
             )
             async for doc in cursor
         ]
+
+    async def account_coach_spend(
+        self, user_id: str, days: int = ACCOUNT_COACH_SPEND_DAYS
+    ) -> list[DayFigure]:
+        """One account's coach cost a day, oldest first, for the page's bars.
+
+        Only the days it spent something: a gap is a day with no call, and
+        the page draws the calendar. The money is the platform's cost, which
+        is operational metadata — what was said to the coach is not here and
+        is not in `llm_usage` to begin with."""
+        try:
+            ObjectId(user_id)
+        except InvalidId:
+            return []
+        since = datetime.now(UTC) - timedelta(days=days)
+        pipeline = [
+            {"$match": {"user_id": user_id, "ts": {"$gte": since}}},
+            {
+                "$group": {
+                    "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$ts"}},
+                    "total": {"$sum": "$cost_usd"},
+                }
+            },
+            {"$sort": {"_id": 1}},
+        ]
+        cursor = await self._db.llm_usage.aggregate(pipeline)
+        return [DayFigure(day=d["_id"], value=round(float(d["total"]), 4)) async for d in cursor]
 
     async def account(self, user_id: str) -> AccountDetail | None:
         try:

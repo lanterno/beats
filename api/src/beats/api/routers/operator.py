@@ -23,6 +23,7 @@ from beats.operator.reads import (
     AccountMatch,
     AttentionCounts,
     CapacityReport,
+    DayFigure,
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
@@ -100,6 +101,28 @@ async def account(
     if detail is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
     return detail
+
+
+@router.get("/accounts/{user_id}/coach", response_model=list[DayFigure])
+async def account_coach_spend(
+    user_id: str, operator: CurrentOperator, reads: OperatorReadsDep
+) -> list[DayFigure]:
+    """One account's coach cost a day, for the shape of a month running
+    away. The cost of the calls, never a word of what was in them."""
+    return await reads.account_coach_spend(user_id)
+
+
+@router.get("/accounts/{user_id}/audit")
+async def account_audit(
+    user_id: str,
+    operator: CurrentOperator,
+    reads: OperatorReadsDep,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[dict]:
+    """What the back office has done to this account. The operator's own
+    audit filtered to one subject, so the account page does not read the
+    whole log to find three rows."""
+    return await reads.audit_log(limit, subject_id=user_id)
 
 
 @router.get("/organisations", response_model=list[OrganisationSummary])
