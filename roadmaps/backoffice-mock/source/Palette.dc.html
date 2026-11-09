@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Find anything</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div style="min-height: 900px; background: var(--veil); padding: 96px 16px 48px; box-sizing: border-box">
+    <div role="dialog" aria-label="Find anything" style="max-width: 640px; margin: 0 auto; background: var(--panel-solid); border-radius: 28px; box-shadow: var(--shadow-float); overflow: hidden">
+      <div style="padding: 10px 22px 0; display: flex; align-items: center; gap: 12px">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="width: 22px; height: 22px"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4"></path></svg>
+        <input aria-label="Exact address, account id, organisation, command or runbook" value="{{q}}" onChange="{{onQ}}" placeholder="An exact address, an id, or what you want to do" style="flex: 1 1 auto; min-width: 0; height: 62px; border: 0; background: none; font: 700 21px var(--display); color: var(--ink); outline: none">
+      </div>
+
+      <div style="margin: 6px 16px 12px; padding: 12px 16px; border-radius: 16px; background: {{previewBg}}">
+        <div style="font-weight: 700; color: {{previewInk}}">{{previewTitle}}</div>
+        <div style="font-size: 13.5px; margin-top: 2px">{{previewNote}}</div>
+      </div>
+
+      <div style="padding: 0 10px 8px; max-height: 420px; overflow-y: auto">
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+          <p class="nav-l" style="display: block">{{g.label}}</p>
+          <sc-for list="{{g.items}}" as="i" hint-placeholder-count="3">
+            <a href="{{i.href}}" class="nav {{i.on}}" style="border-radius: 14px; padding: 6px 12px; min-height: 44px">
+              <span style="min-width: 0">{{i.title}}</span>
+              <span class="cap" style="margin-left: auto; text-align: right">{{i.hint}}</span>
+            </a>
+          </sc-for>
+        </sc-for>
+        <sc-if value="{{nothing}}" hint-placeholder-val="{{false}}">
+          <div style="padding: 22px 16px; text-align: center">
+            <p style="font-weight: 700; margin: 0">Nothing goes by that name.</p>
+            <p class="cap" style="margin: 2px 0 0; font-size: 14px">People are found only by a whole address or an id, so a fragment finds nobody.</p>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 22px; background: var(--wash); font-size: 12.5px">
+        <span><span class="k">↑</span> <span class="k">↓</span> move</span>
+        <span><span class="k">↩</span> do it</span>
+        <span><span class="k">esc</span> close</span>
+        <span style="margin-left: auto">Commands still ask for a review before they run.</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  state = { q: 'maya@example.com' };
+  renderVals() {
+    const q = this.state.q.trim();
+    const low = q.toLowerCase();
+    const email = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(q);
+    const partEmail = q.includes('@') && !email;
+    const id = /^u_[0-9a-f]{6}$/.test(low);
+    const partId = low.startsWith('u_') && !id;
+    const it = (title, hint, href) => ({ title, hint, href });
+    const lists = [
+      ['Go to', [it('Today', 'Page', 'Main.dc.html'), it('Work queue', '6 waiting', 'Queue.dc.html'), it('Incident room', '1 open', 'IncidentRoom.dc.html'), it('Jobs and windows', '3 queued or failed', 'Jobs.dc.html')]],
+      ['Organisations', [it('Harbour & Co', 'No owner', 'Org.dc.html'), it('Tern Labs', 'Deleting in 18 h', 'Orgs.dc.html'), it('Alder Works', '42 members', 'Orgs.dc.html')]],
+      ['Commands', [it('Suspend an account', 'Asks for an account first', 'Accounts.dc.html'), it('Erase an account', 'Waits 7 days', 'Accounts.dc.html'), it('Set limits on an account', 'Asks for an account first', 'Accounts.dc.html'), it('Revoke a device', 'Asks for an account first', 'Accounts.dc.html'), it('Run a retention purge', 'Waits 1 day', 'Jobs.dc.html'), it('Declare an incident', 'Opens a room', 'IncidentRoom.dc.html')]],
+      ['Runbooks', [it('A job failed three times', 'Runbook', 'Runbooks.dc.html'), it('API errors after a release', 'Runbook', 'Runbooks.dc.html'), it('An organisation lost its owner', 'Runbook', 'Runbooks.dc.html'), it('Someone asks for erasure', 'Runbook', 'Runbooks.dc.html')]]
+    ];
+    let p = { title: 'Return opens Today.', note: 'Type an address, an id, an organisation, or what you want to do.', bg: 'var(--wash)', ink: 'var(--ink)' };
+    let groups = [];
+    if (email) {
+      p = { title: 'Return looks up this exact address.', note: 'It travels in the request body and never appears in a link or a log. The lookup is recorded in the audit.', bg: 'var(--wash)', ink: 'var(--ink)' };
+      groups = [{ label: 'Account', items: [it('Look up ' + q, 'Exact match', 'Account.dc.html')] }];
+    } else if (partEmail) {
+      p = { title: 'Return does nothing yet. Type the whole address.', note: 'Fragments are refused on purpose: nobody can browse people from here.', bg: 'var(--persimmon-tint)', ink: 'var(--persimmon-ink)' };
+    } else if (id) {
+      p = { title: 'Return opens account ' + low + '.', note: 'You will see operational facts only, and the visit is recorded in the audit.', bg: 'var(--wash)', ink: 'var(--ink)' };
+      groups = [{ label: 'Account', items: [it('Open ' + low, 'Exact id', 'Account.dc.html')] }];
+    } else if (partId) {
+      p = { title: 'Return does nothing yet. Type the whole id.', note: 'Account ids are matched exactly, like addresses.', bg: 'var(--persimmon-tint)', ink: 'var(--persimmon-ink)' };
+    } else {
+      groups = lists.map(([label, items]) => ({ label, items: items.filter((i) => !low || i.title.toLowerCase().includes(low)) })).filter((g) => g.items.length);
+      if (!low) groups = groups.slice(0, 3).map((g) => ({ ...g, items: g.items.slice(0, 3) }));
+      const first = groups.length ? groups[0].items[0] : null;
+      if (first && low) {
+        const isCommand = groups[0].label === 'Commands';
+        p = { title: 'Return ' + (isCommand ? 'starts “' + first.title + '”.' : 'opens ' + first.title + '.'), note: isCommand ? 'You will review what changes before anything runs.' : first.hint, bg: 'var(--wash)', ink: 'var(--ink)' };
+      } else if (!first) {
+        p = { title: 'Return does nothing.', note: 'Nothing matches what you typed.', bg: 'var(--persimmon-tint)', ink: 'var(--persimmon-ink)' };
+      }
+    }
+    let marked = false;
+    groups = groups.map((g) => ({ ...g, items: g.items.map((i) => { const on = !marked ? 'on' : ''; marked = true; return { ...i, on }; }) }));
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      q: this.state.q,
+      onQ: (e) => this.setState({ q: e.target.value }),
+      previewTitle: p.title, previewNote: p.note, previewBg: p.bg, previewInk: p.ink,
+      groups,
+      nothing: groups.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>

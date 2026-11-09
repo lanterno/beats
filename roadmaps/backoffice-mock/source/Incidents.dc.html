@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Incidents</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="incidents" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">One incident is open, and 40% of the error budget is left.</h1>
+          <p class="lead">LifePete promises 99.9% over 30 days, which allows about 43 minutes of trouble. This month has used 26 of them.</p>
+        </div>
+        <a class="btn" href="IncidentRoom.dc.html">Declare an incident</a>
+      </header>
+
+      <div class="stack">
+        <section class="p up" aria-label="Open incident">
+          <div style="padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+            <div style="flex: 1 1 420px; min-width: 0">
+              <div class="bar-row" style="margin-bottom: 4px"><span class="chip owed">Urgent</span><span class="chip">Investigating</span><span class="cap">31 minutes old</span></div>
+              <h2 style="font: 800 19px/1.3 var(--display); margin: 0">Writes are failing on the beats route</h2>
+            </div>
+            <a class="btn sun" href="IncidentRoom.dc.html">Open the incident room</a>
+          </div>
+        </section>
+
+        <section class="tiles" aria-label="How the last 30 days went">
+          <div class="p" style="padding: 13px 16px"><div class="cap">Incidents, 30 days</div><div class="fig">3</div><div class="cap">Down from 5 the month before</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Time to notice</div><div class="fig">6m</div><div class="cap">Median, alert to acknowledged</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Time to fix</div><div class="fig">34m</div><div class="cap">Median, alert to resolved</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Follow-ups open</div><div class="fig">2</div><div class="cap">Oldest is 11 days</div></div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Error budget</h2><span class="cap">Minutes left of 43, last 30 days</span></div>
+          <div style="padding: 0 20px 14px">
+            <svg class="chart" viewBox="0 0 760 150" role="img" aria-label="The budget fell in three steps, from 43 minutes to 17 minutes left.">
+              <line class="rule" x1="8" x2="752" y1="120" y2="120"></line>
+              <polyline class="ln" points="{{budget}}"></polyline>
+              <circle class="dot" cx="752" cy="78" r="4"></circle>
+              <text class="ax i e" x="745" y="68">17 minutes left</text>
+              <text class="ax" x="8" y="142">10 October</text>
+              <text class="ax e" x="752" y="142">Today</text>
+            </svg>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Alerts</h2><p class="p-n">Each one says what to do. An alert that fires often and asks for nothing should be fixed or removed.</p></div>
+          <div class="tb">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Alert</div><div role="columnheader" class="th">State</div><div role="columnheader" class="th">Last fired</div><div role="columnheader" class="th" style="text-align: right">30 days</div><div role="columnheader" class="th">Runbook</div><div role="columnheader" class="th"><span style="position: absolute; left: -9999px">Silence</span></div></div></div>
+              <div class="tg" role="rowgroup">
+                <sc-for list="{{alerts}}" as="a" hint-placeholder-count="8">
+                  <div role="row" class="tr row">
+                    <div role="cell" class="td b">{{a.name}}</div>
+                    <div role="cell" class="td"><span class="chip {{a.tone}}">{{a.state}}</span></div>
+                    <div role="cell" class="td d">{{a.last}}</div>
+                    <div role="cell" class="td n">{{a.count}}</div>
+                    <div role="cell" class="td"><a class="lk" href="Runbooks.dc.html">{{a.book}}</a></div>
+                    <div role="cell" class="td" style="text-align: right"><button type="button" class="lkb lk" onClick="{{a.toggle}}">{{a.action}}</button></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Past incidents</h2><a class="lk cap" href="Runbooks.dc.html">How write-ups work</a></div>
+          <div class="tb">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">When</div><div role="columnheader" class="th">What happened</div><div role="columnheader" class="th">Cause</div><div role="columnheader" class="th" style="text-align: right">Lasted</div><div role="columnheader" class="th">Write-up</div></div></div>
+              <div class="tg" role="rowgroup">
+                <sc-for list="{{past}}" as="p" hint-placeholder-count="3">
+                  <div role="row" class="tr row">
+                    <div role="cell" class="td d">{{p.when}}</div>
+                    <div role="cell" class="td b">{{p.what}}</div>
+                    <div role="cell" class="td cap">{{p.cause}}</div>
+                    <div role="cell" class="td n">{{p.took}}</div>
+                    <div role="cell" class="td"><span class="chip {{p.tone}}">{{p.write}}</span></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1200}}'>
+class Component extends DCLogic {
+  state = { silenced: {} };
+  renderVals() {
+    const a = (id, name, state, tone, last, count, book) => ({ id, name, state, tone, last, count, book });
+    const list = [
+      a('api_5xx', 'API answering 5xx above 1%', 'Firing', 'owed', 'Today 08:41', 3, 'API errors after a release'),
+      a('api_latency', 'API slower than 800 ms at p95', 'Quiet', 'good', '27 October', 1, 'API errors after a release'),
+      a('uptime', 'The API or the web app unreachable', 'Quiet', 'good', '18 July', 0, 'The API is down'),
+      a('instances', 'API at its instance ceiling', 'Quiet', 'good', '2 September', 0, 'The API is down'),
+      a('public', 'Public routes failing', 'Quiet', 'good', '14 October', 1, 'API errors after a release'),
+      a('rejections', 'Requests rejected above normal', 'Quiet', 'good', '4 November', 2, 'A signup spike'),
+      a('operator_5xx', 'Back office answering 5xx', 'Quiet', 'good', 'Never', 0, 'The API is down'),
+      a('jobs', 'A job failed three times', 'Quiet', 'good', 'Today 07:04', 2, 'A job failed three times')
+    ];
+    const pts = [[0,43],[8,43],[8.2,36],[17,36],[17.2,27],[29,27],[29.2,17],[30,17]];
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      budget: pts.map(([d, m]) => (8 + d / 30 * 744).toFixed(1) + ',' + (120 - m / 43 * 106).toFixed(1)).join(' '),
+      alerts: list.map((al) => {
+        const off = !!this.state.silenced[al.id];
+        return { ...al, state: off ? 'Silenced to 10:12' : al.state, tone: off ? '' : al.tone, action: off ? 'Undo' : 'Silence 1 h', toggle: () => this.setState({ silenced: { ...this.state.silenced, [al.id]: !off } }) };
+      }),
+      past: [
+        { when: '27 October', what: 'Slow responses on the analytics routes', cause: 'An index missing after a migration', took: '42m', write: 'Done', tone: 'good' },
+        { when: '19 October', what: 'Coach answers timing out', cause: 'A provider slowdown', took: '26m', write: 'Done', tone: 'good' },
+        { when: '2 September', what: 'Instance ceiling reached during a large import', cause: 'One account importing a large file', took: '18m', write: 'Done', tone: 'good' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

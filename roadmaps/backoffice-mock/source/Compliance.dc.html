@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Privacy and compliance</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="privacy" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">One purge has failed. Everything else is inside its date.</h1>
+          <p class="lead">What the law and your own privacy text ask of you, and when each thing falls due.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <section class="p up">
+          <div class="p-h" style="padding-top: 18px">
+            <h2>Erasure requests</h2>
+            <button type="button" class="btn sun" onClick="{{toggleForm}}">{{formLabel}}</button>
+            <p class="p-n">They arrive by email at the privacy address. The month runs from the day it arrived.</p>
+          </div>
+          <sc-if value="{{showForm}}" hint-placeholder-val="{{false}}">
+            <form onSubmit="{{log}}" style="margin: 4px 20px 14px; padding: 14px; border-radius: 16px; background: var(--wash); display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end">
+              <label class="lab" style="flex: 1 1 180px">Account id<input class="in" value="{{id}}" onChange="{{onId}}" placeholder="u_6f1c9a" style="background: var(--panel-solid)"></label>
+              <label class="lab" style="flex: 1 1 180px">The day it arrived<input class="in" value="{{day}}" onChange="{{onDay}}" style="background: var(--panel-solid)"></label>
+              <button type="submit" class="btn dark">Start the clock</button>
+            </form>
+          </sc-if>
+          <div class="tb">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th">Arrived</div><div role="columnheader" class="th">Where it is</div><div role="columnheader" class="th">Due</div><div role="columnheader" class="th"><span style="position: absolute; left: -9999px">Action</span></div></div></div>
+              <div class="tg" role="rowgroup">
+                <sc-for list="{{requests}}" as="r" hint-placeholder-count="3">
+                  <div role="row" class="tr row">
+                    <div role="cell" class="td id">{{r.id}}</div>
+                    <div role="cell" class="td d">{{r.arrived}}</div>
+                    <div role="cell" class="td">{{r.where}}</div>
+                    <div role="cell" class="td"><span class="chip {{r.tone}}">{{r.due}}</span></div>
+                    <div role="cell" class="td" style="text-align: right"><a class="lk" href="{{r.href}}">{{r.action}}</a></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Is anything kept longer than promised?</h2><a class="lk cap" href="Jobs.dc.html">Open the jobs</a></div>
+          <div class="tb">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">What</div><div role="columnheader" class="th">The promise</div><div role="columnheader" class="th">Oldest past its date</div><div role="columnheader" class="th">State</div></div></div>
+              <div class="tg" role="rowgroup">
+                <div role="row" class="tr row"><div role="cell" class="td b">Expired organisation records</div><div role="cell" class="td">Each organisation's own period</div><div role="cell" class="td d">3 days</div><div role="cell" class="td"><a class="chip owed" href="Jobs.dc.html">Purge failed</a></div></div>
+                <div role="row" class="tr row"><div role="cell" class="td b">Sign-in flows</div><div role="cell" class="td">10 minutes</div><div role="cell" class="td d">None</div><div role="cell" class="td"><span class="chip good">On time</span></div></div>
+                <div role="row" class="tr row"><div role="cell" class="td b">Request logs</div><div role="cell" class="td">30 days</div><div role="cell" class="td d">None</div><div role="cell" class="td"><span class="chip good">On time</span></div></div>
+                <div role="row" class="tr row"><div role="cell" class="td b">Database snapshots</div><div role="cell" class="td">[YOUR PERIOD]</div><div role="cell" class="td d">None</div><div role="cell" class="td"><span class="chip good">On time</span></div></div>
+                <div role="row" class="tr row"><div role="cell" class="td b">This back office's audit</div><div role="cell" class="td">4 years</div><div role="cell" class="td d">None</div><div role="cell" class="td"><span class="chip good">On time</span></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div class="split">
+          <section class="p">
+            <div class="p-h"><h2>Backups</h2><p class="p-n">A backup nobody has restored is only a hope.</p></div>
+            <div class="p-b">
+              <div class="fact"><span>Last snapshot</span><span>Today, 03:00</span></div>
+              <div class="fact"><span>You would lose at most</span><span>1 day</span></div>
+              <div class="fact"><span>Last restore drill</span><span>12 August, 41 minutes</span></div>
+              <div class="fact"><span>Next drill</span><span><span class="chip warn">Due in 3 days</span></span></div>
+              <a class="btn" href="Runbooks.dc.html" style="margin-top: 12px">Read the drill</a>
+            </div>
+          </section>
+          <section class="p">
+            <div class="p-h"><h2>Documents</h2></div>
+            <div class="p-b">
+              <div class="fact"><span>Privacy text names the operator</span><span><span class="chip good">Yes</span></span></div>
+              <div class="fact"><span>Subprocessors reviewed</span><span>2 October</span></div>
+              <div class="fact"><span>Data breaches logged</span><span>None</span></div>
+              <div class="fact"><span>Requests declined, this year</span><span>0</span></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="p">
+          <div class="p-h"><h2>What this back office may see</h2><p class="p-n">The line between running the service and reading someone's life.</p></div>
+          <div class="p-b split">
+            <div>
+              <div class="b" style="margin-bottom: 4px; color: var(--leaf-ink)">It sees</div>
+              <sc-for list="{{sees}}" as="s" hint-placeholder-count="6"><div class="fact"><span style="color: var(--ink)">{{s}}</span></div></sc-for>
+            </div>
+            <div>
+              <div class="b" style="margin-bottom: 4px; color: var(--persimmon-ink)">It never sees</div>
+              <sc-for list="{{nevers}}" as="s" hint-placeholder-count="6"><div class="fact"><span style="color: var(--ink)">{{s}}</span></div></sc-for>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  state = { form: false, id: '', day: '9 November', added: [] };
+  renderVals() {
+    const s = this.state;
+    const base = [
+      { id: 'u_77aa10', arrived: '28 October', where: 'Queued, runs 13 November', due: '18 days left', tone: '', href: 'Jobs.dc.html', action: 'Open the job' },
+      { id: 'u_2a91f0', arrived: '20 October', where: 'Erased 3 November, person told', due: 'Done', tone: 'good', href: 'Audit.dc.html', action: 'See the audit' }
+    ];
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      showForm: s.form,
+      toggleForm: () => this.setState({ form: !s.form }),
+      formLabel: s.form ? 'Close this form' : 'Log a request',
+      id: s.id, onId: (e) => this.setState({ id: e.target.value }),
+      day: s.day, onDay: (e) => this.setState({ day: e.target.value }),
+      log: (e) => {
+        e.preventDefault();
+        if (!s.id.trim()) return;
+        this.setState({ form: false, id: '', added: [{ id: s.id.trim(), arrived: s.day, where: 'Logged, identity not yet checked', due: '30 days left', tone: 'warn', href: 'Review.dc.html', action: 'Review the erasure' }, ...s.added] });
+      },
+      requests: [...s.added, ...base],
+      sees: ['Account id, address, created, day last seen, state', 'Counts of projects, sessions, devices and organisations', 'Which integrations are connected', 'Webhook destinations, by domain', 'Coach spend, tokens and model', 'Organisation settings, members and roles', 'Audit events: what, by whom, to whom, when', 'How many biometric rows exist'],
+      nevers: ['Sessions, times or notes', 'Project names, tags or absence notes', 'Integration tokens or what they fetch', 'Full webhook addresses or payloads', 'Coach conversations or memory', 'Clients, rates, amounts or reports', 'The details of an audit event', 'Biometric values']
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Edge states</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}" style="width: 1280px; height: 860px; min-height: 0; padding: 28px; box-sizing: border-box">
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 14px; height: 100%">
+
+    <section class="p up" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip good" style="align-self: flex-start">Nothing to do</span>
+      <h2 style="font: 800 20px/1.25 var(--display); margin: 0">Nothing needs you today.</h2>
+      <p class="p-t">No incidents, no failed jobs, nothing due. The last incident closed 12 days ago.</p>
+      <a class="lk" href="Capacity.dc.html" style="margin-top: auto; font-size: 13.5px">Use the time to look at capacity</a>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 10px" aria-busy="true">
+      <span class="chip" style="align-self: flex-start">Loading</span>
+      <div style="height: 16px; width: 70%; border-radius: 99px; background: var(--track)"></div>
+      <div style="height: 12px; width: 92%; border-radius: 99px; background: var(--wash-strong)"></div>
+      <div style="height: 12px; width: 84%; border-radius: 99px; background: var(--wash-strong)"></div>
+      <div style="height: 12px; width: 60%; border-radius: 99px; background: var(--wash-strong)"></div>
+      <p class="cap" style="margin: auto 0 0">Reading the job queue. Live figures keep their last value until this finishes.</p>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip warn" style="align-self: flex-start">Old figures</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">These numbers are 12 minutes old.</h2>
+      <p class="p-t">The back office could not reach the API. What you see was true at 09:00. Commands are off until it comes back.</p>
+      <div class="bar-row" style="margin-top: auto"><button type="button" class="btn dark">Try again now</button><a class="btn" href="Incidents.dc.html">Open Cloud Monitoring</a></div>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip" style="align-self: flex-start">Viewer</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">You can read this, but not change it.</h2>
+      <p class="p-t">Suspending an account needs the operator role. Nothing has happened to this account.</p>
+      <div class="bar-row" style="margin-top: auto"><button type="button" class="btn" disabled="{{true}}">Suspend this account</button><a class="lk" href="Access.dc.html" style="font-size: 13.5px">Who is an operator?</a></div>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip warn" style="align-self: flex-start">Already queued</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">This job is already waiting.</h2>
+      <p class="p-t">An erasure for <span class="id">u_77aa10</span> runs on 13 November. There can only be one at a time for the same account.</p>
+      <div class="bar-row" style="margin-top: auto"><a class="btn dark" href="Jobs.dc.html">Open the waiting job</a></div>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip owed" style="align-self: flex-start">Refused</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">Alder Works has an owner.</h2>
+      <p class="p-t">Only its owner can change it, even a suspended one. Reply to the person who asked and point them there.</p>
+      <div class="bar-row" style="margin-top: auto"><a class="btn" href="Runbooks.dc.html">Read the runbook</a></div>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip owed" style="align-self: flex-start">Refused</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">This suspension is for an erasure.</h2>
+      <p class="p-t">Lifting it here would let the account back in while it is about to be deleted. Cancel the erasure instead.</p>
+      <div class="bar-row" style="margin-top: auto"><a class="btn dark" href="Jobs.dc.html">Go to the erasure</a></div>
+    </section>
+
+    <section class="p danger" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip owed" style="align-self: flex-start">Job runner stopped</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">The job runner has not ticked for 40 minutes.</h2>
+      <p class="p-t">Queued jobs are safe, but nothing will run or fail until it comes back, and windows are not moving.</p>
+      <div class="bar-row" style="margin-top: auto"><a class="btn" href="Runbooks.dc.html">Read the runbook</a></div>
+    </section>
+
+    <section class="p" style="padding: 18px; display: flex; flex-direction: column; gap: 8px">
+      <span class="chip" style="align-self: flex-start">Signed out</span>
+      <h2 style="font: 700 17px/1.3 var(--display); margin: 0">Your Google sign-in has run out.</h2>
+      <p class="p-t">Nothing you were reviewing has run. Sign in again and pick up where you were.</p>
+      <div class="bar-row" style="margin-top: auto"><button type="button" class="btn dark">Sign in with Google</button></div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1280,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { hour: this.props.hour ?? 'afternoon' };
+  }
+}
+</script>
+</body>
+</html>

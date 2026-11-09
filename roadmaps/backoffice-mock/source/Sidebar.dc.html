@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Back office sidebar</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 8px; font-family: var(--body); color: var(--ink); font-size: 14px; box-sizing: border-box">
+  <div style="display: flex; align-items: center; gap: 10px; padding: 0 6px 8px">
+    <svg viewBox="0 0 120 120" width="40" height="40" aria-hidden="true" focusable="false" style="flex: none">
+      <rect width="120" height="120" rx="27" fill="#1A2446"></rect>
+      <circle cx="60" cy="60" r="34" fill="none" stroke="#2E3E6E" style="stroke-width: 8"></circle>
+      <path d="M60 26A34 34 0 1 1 30.56 77" fill="none" stroke="#F5C35E" style="stroke-width: 8; stroke-linecap: round"></path>
+      <circle cx="30.56" cy="77" r="9" fill="#F5C35E"></circle>
+    </svg>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 3px">
+      <span style="font: 800 17px/1 var(--display)">LifePete</span>
+      <span class="chip dark" style="font-size: 12px; padding: 1px 8px">Back office</span>
+    </div>
+  </div>
+  <nav aria-label="Back office">
+    <sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+      <p class="nav-l">{{g.label}}</p>
+      <div class="nav-g">
+        <sc-for list="{{g.items}}" as="item" hint-placeholder-count="3">
+          <a href="{{item.href}}" class="nav {{item.on}}">
+            <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="{{item.d}}"></path></svg>
+            {{item.label}}
+            <sc-if value="{{item.count}}" hint-placeholder-val="{{false}}"><span class="ct">{{item.count}}</span></sc-if>
+          </a>
+        </sc-for>
+      </div>
+    </sc-for>
+  </nav>
+  <div style="display: flex; align-items: center; gap: 10px; padding: 12px 8px 0; margin-top: 4px">
+    <span style="width: 32px; height: 32px; border-radius: 50%; background: var(--wash-strong); display: inline-flex; align-items: center; justify-content: center; font: 700 13px var(--display); flex: none">O</span>
+    <span style="min-width: 0; font-size: 13px; line-height: 1.3">
+      <span style="display: block; font-weight: 700">operator@example.com</span>
+      <span style="color: var(--ink-muted)">Operator, signed in with Google</span>
+    </span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":null,"default":"today"},"$preview":{"width":236,"height":860}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const active = this.props.active ?? 'today';
+    const icons = {
+      today: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+      queue: 'M4 13l2.5-8h11L20 13v6H4zM4 13h5l1.5 2.5h3L15 13h5',
+      accounts: 'M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM4 21a8 8 0 0 1 16 0',
+      orgs: 'M6 3h12a2 2 0 0 1 2 2v16H4V5a2 2 0 0 1 2-2zM9 8h.01M15 8h.01M9 12h.01M15 12h.01M10 21v-4h4v4',
+      trust: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z',
+      incidents: 'M12 3L2 20h20zM12 10v4M12 17h.01',
+      releases: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
+      jobs: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
+      capacity: 'M4 5c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+      privacy: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+      audit: 'M5 3h14v18H5zM9 8h6M9 12h6M9 16h3',
+      access: 'M14.5 3a6.5 6.5 0 0 0-6.3 8.2L3 16.5V21h4.5v-2.5H10V16l2.8-2.8A6.5 6.5 0 1 0 14.5 3zM16.5 7.5h.01',
+      runbooks: 'M5 4a2 2 0 0 1 2-2h12v18H7a2 2 0 0 0-2 2zM5 20V4'
+    };
+    const item = (id, label, href, count) => ({ label, href, count: count || '', d: icons[id], on: active === id ? 'on' : '' });
+    return {
+      groups: [
+        { label: 'Now', items: [item('today', 'Today', 'Main.dc.html'), item('queue', 'Work queue', 'Queue.dc.html', '6')] },
+        { label: 'People', items: [item('accounts', 'Accounts', 'Accounts.dc.html'), item('orgs', 'Organisations', 'Orgs.dc.html'), item('trust', 'Trust and safety', 'Trust.dc.html')] },
+        { label: 'Platform', items: [item('incidents', 'Incidents', 'Incidents.dc.html', '1'), item('releases', 'Releases', 'Releases.dc.html'), item('jobs', 'Jobs and windows', 'Jobs.dc.html', '3'), item('capacity', 'Capacity and cost', 'Capacity.dc.html')] },
+        { label: 'Governance', items: [item('privacy', 'Privacy and compliance', 'Compliance.dc.html'), item('audit', 'Audit log', 'Audit.dc.html'), item('access', 'Access and controls', 'Access.dc.html'), item('runbooks', 'Runbooks', 'Runbooks.dc.html')] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

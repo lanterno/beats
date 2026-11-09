@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Organisation with no owner</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="orgs" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph" style="margin-top: 10px">
+        <div class="ph-t">
+          <a class="back" href="Orgs.dc.html"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 6l-6 6 6 6"></path></svg>All organisations</a>
+          <h1 class="h1">{{title}}</h1>
+          <p class="lead">{{lead}}</p>
+        </div>
+      </header>
+
+      <div class="lean">
+        <div class="wide stack">
+          <section class="p up">
+            <div class="p-h" style="padding-top: 18px"><h2>Who asked?</h2><p class="p-n">Only the person who asked can be made owner, and only if nobody active outranks them.</p></div>
+            <div class="tb">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th"><span style="position: absolute; left: -9999px">Choose</span></div><div role="columnheader" class="th">Member</div><div role="columnheader" class="th">Role</div><div role="columnheader" class="th">State</div><div role="columnheader" class="th">Joined</div></div></div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{members}}" as="m" hint-placeholder-count="5">
+                    <div role="row" class="tr row {{m.sel}}">
+                      <div role="cell" class="td" style="width: 44px"><input type="radio" name="requester" aria-label="{{m.aria}}" checked="{{m.checked}}" onChange="{{m.pick}}" style="width: 18px; height: 18px; accent-color: var(--leaf-ink)"></div>
+                      <div role="cell" class="td">{{m.who}}</div>
+                      <div role="cell" class="td"><span class="chip">{{m.role}}</span></div>
+                      <div role="cell" class="td cap">{{m.state}}</div>
+                      <div role="cell" class="td d">{{m.joined}}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <div class="p-b">
+              <sc-if value="{{refused}}" hint-placeholder-val="{{false}}">
+                <div style="padding: 12px 14px; border-radius: 14px; background: var(--persimmon-tint)">
+                  <span class="b" style="color: var(--persimmon-ink)">This person cannot be made owner.</span>
+                  <span style="display: block; font-size: 13.5px">{{refusal}}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{allowed}}" hint-placeholder-val="{{true}}">
+                <div class="stack" style="gap: 12px">
+                  <div style="display: flex; flex-wrap: wrap; gap: 10px">
+                    <label class="lab" style="flex: 1 1 220px">Reference for their request<input class="in" value="{{ref}}" onChange="{{onRef}}"></label>
+                    <label class="lab" style="flex: 1 1 220px">Type Harbour &amp; Co to confirm<input class="in" autocomplete="off" spellcheck="false" value="{{typed}}" onChange="{{onTyped}}"></label>
+                  </div>
+                  <p class="p-t" style="font-size: 13.5px">Once they are owner, the back office can no longer act on this organisation. Anything after that is theirs to do.</p>
+                  <div class="bar-row">
+                    <button type="button" class="btn sun" style="min-height: 48px" disabled="{{blocked}}" onClick="{{grant}}">{{grantLabel}}</button>
+                    <span class="cap">{{note}}</span>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>Their audit log</h2><span class="cap">What, by whom, to whom and when. Reasons and project names are left out.</span></div>
+            <div class="p-b">
+              <div class="tl">
+                <sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+                  <div class="tl-t">Now</div><div class="tl-r ok"></div><div class="tl-b"><span class="b">Owner granted by the operator</span> <span class="cap">to {{picked.who}}, ref {{ref}}</span></div>
+                </sc-if>
+                <div class="tl-t">7 Nov</div><div class="tl-r"></div><div class="tl-b"><span class="b">Timesheet reopened</span> <span class="cap">by an admin, for a member</span></div>
+                <div class="tl-t">3 Nov</div><div class="tl-r hot"></div><div class="tl-b"><span class="b">Owner's account erased</span> <span class="cap">by the operator, at their request</span></div>
+                <div class="tl-t">28 Oct</div><div class="tl-r"></div><div class="tl-b"><span class="b">Member invited</span> <span class="cap">by the owner</span></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="narrow stack">
+          <section class="p">
+            <div class="p-h"><h2>This organisation</h2></div>
+            <div class="p-b">
+              <div class="fact"><span>Members</span><span>14 active</span></div>
+              <div class="fact"><span>Highest active role</span><span>Admin, 2 people</span></div>
+              <div class="fact"><span>Keeps records for</span><span>3 years</span></div>
+              <div class="fact"><span>Timesheets</span><span>3 open, 5 submitted, 120 approved</span></div>
+              <div class="fact"><span>Closing</span><span>Not closing</span></div>
+              <div class="fact"><span>Created</span><span>14 February 2025</span></div>
+            </div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>If nobody takes it on</h2><p class="p-n">Only while it has no owner, and only if someone asked.</p></div>
+            <div class="p-b stack" style="gap: 8px">
+              <p class="p-t">Start closing gives members at least 30 days to take their projects with them.</p>
+              <a class="btn" href="Review.dc.html">Start closing</a>
+            </div>
+          </section>
+
+          <section class="p danger">
+            <div class="p-h"><h2>Delete this organisation</h2></div>
+            <div class="p-b">
+              <p class="p-t">Removes the organisation and its audit log, one day after you queue it. The back office keeps its own record that this happened.</p>
+              <a class="btn danger" href="Review.dc.html" style="width: 100%; margin-top: 12px">Review the deletion</a>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  state = { pick: 'priya', ref: 'SUP-198', typed: '', done: false };
+  renderVals() {
+    const s = this.state;
+    const list = [
+      { id: 'priya', who: 'priya@example.org', role: 'Admin', state: 'Active', joined: '14 Feb 2025', ok: true },
+      { id: 'tom', who: 'tom@example.org', role: 'Admin', state: 'Active', joined: '2 Mar 2025', ok: true },
+      { id: 'lena', who: 'lena@example.org', role: 'Manager', state: 'Active', joined: '18 May 2025', ok: false, why: 'Two admins are active, and a manager ranks below them. Ask one of the admins to make the request.' },
+      { id: 'jo', who: 'jo@example.org', role: 'Admin', state: 'Suspended', joined: '9 Jan 2026', ok: false, why: 'A suspended member cannot take ownership. Lift the suspension first, or take the request from someone else.' },
+      { id: 'sam', who: 'sam@example.org', role: 'Member', state: 'Active', joined: '3 Jul 2026', ok: false, why: 'Two admins are active, and a member ranks below them. Ask one of the admins to make the request.' }
+    ];
+    const picked = list.find((m) => m.id === s.pick);
+    const matches = s.typed.trim() === 'Harbour & Co';
+    let note = '';
+    if (!s.ref.trim()) note = 'Add the reference first.';
+    else if (!matches) note = 'Type the name to confirm.';
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      title: s.done ? 'Harbour & Co has an owner again.' : 'Harbour & Co has no owner.',
+      lead: s.done
+        ? picked.who + ' now owns it, and it has gone back to running itself.'
+        : 'Its only owner erased their account on 3 November, and an admin wrote in two days ago asking to take over. Nobody can manage members or settings until someone does.',
+      members: list.map((m) => ({ ...m, aria: 'Choose ' + m.who, checked: m.id === s.pick, sel: m.id === s.pick ? 'sel' : '', pick: () => this.setState({ pick: m.id, typed: '' }) })),
+      picked,
+      refused: !picked.ok,
+      refusal: picked.why || '',
+      allowed: picked.ok,
+      ref: s.ref, onRef: (e) => this.setState({ ref: e.target.value }),
+      typed: s.typed, onTyped: (e) => this.setState({ typed: e.target.value }),
+      blocked: !!note || s.done,
+      note: s.done ? 'Recorded in the audit on both sides.' : note,
+      done: s.done,
+      grantLabel: s.done ? 'Owner granted' : 'Make ' + picked.who.split('@')[0] + ' the owner',
+      grant: () => this.setState({ done: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

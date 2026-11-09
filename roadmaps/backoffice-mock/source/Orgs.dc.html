@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Organisations</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="orgs" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">One organisation is waiting for you.</h1>
+          <p class="lead">The rest are running themselves. You step in only where nobody is left to act and someone there has asked.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <div class="bar-row">
+          <div class="seg" role="group" aria-label="Filter organisations">
+            <sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+              <button type="button" class="{{f.on}}" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button>
+            </sc-for>
+          </div>
+          <label class="lab push" style="flex: 0 1 280px">
+            <span style="position: absolute; left: -9999px">Find an organisation by name</span>
+            <input class="in" value="{{q}}" onChange="{{onQ}}" placeholder="Find an organisation by name" style="background: var(--panel); box-shadow: var(--shadow)">
+          </label>
+        </div>
+
+        <section class="p" aria-label="Organisations">
+          <sc-if value="{{hasRows}}" hint-placeholder-val="{{true}}">
+            <div class="tb" style="padding-top: 8px">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Organisation</div><div role="columnheader" class="th" style="text-align: right">Members</div><div role="columnheader" class="th">Ownership</div><div role="columnheader" class="th">Keeps records for</div><div role="columnheader" class="th">State</div></div></div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+                    <div role="row" class="tr row">
+                      <div role="cell" class="td"><a class="lk b" href="{{r.href}}">{{r.name}}</a></div>
+                      <div role="cell" class="td n">{{r.members}}</div>
+                      <div role="cell" class="td"><span class="chip {{r.ownerTone}}">{{r.owner}}</span></div>
+                      <div role="cell" class="td cap">{{r.keep}}</div>
+                      <div role="cell" class="td"><span class="chip {{r.stateTone}}">{{r.state}}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{noRows}}" hint-placeholder-val="{{false}}">
+            <div style="padding: 40px 24px; text-align: center">
+              <p style="font: 700 17px var(--display); margin: 0">No organisation matches.</p>
+              <p class="cap" style="margin: 4px 0 0; font-size: 14px">Clear the filter, or check how the name is spelled.</p>
+            </div>
+          </sc-if>
+        </section>
+
+        <div class="split">
+          <section class="p">
+            <div class="p-h"><h2>Slow decisions, for them to make</h2><p class="p-n">You cannot decide these and you should not. Watch them only to spot a workflow that has stopped.</p></div>
+            <div class="p-b">
+              <div class="fact"><span>Approvals superseded over 30 days ago</span><span>2</span></div>
+              <div class="fact"><span>Absence requests pending over 14 days</span><span>4</span></div>
+              <div class="fact"><span>Timesheets waiting for a decision</span><span>37</span></div>
+            </div>
+          </section>
+          <section class="p">
+            <div class="p-h"><h2>Rules that apply here</h2></div>
+            <div class="p-b">
+              <p class="p-t">While an organisation has an owner, nothing here can change it. A suspended owner still counts.</p>
+              <p class="p-t" style="margin-top: 8px">Project names, team names, clients and the reasons in their audit stay out of this page.</p>
+              <a class="lk" href="Runbooks.dc.html" style="display: inline-block; margin-top: 10px; font-size: 13.5px">Read the runbook</a>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1060}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', q: '' };
+  renderVals() {
+    const o = (name, members, owner, ownerTone, keep, state, stateTone, group, href) => ({ name, members, owner, ownerTone, keep, state, stateTone, group, href: href || 'Org.dc.html' });
+    const all = [
+      o('Harbour & Co', 14, 'No owner', 'owed', '3 years', 'Needs you', 'owed', 'needs'),
+      o('Moss & Stone', 23, 'Every owner suspended', 'warn', '5 years', 'Watching', 'warn', 'needs'),
+      o('Tern Labs', 6, 'No owner', '', '1 year', 'Deleting in 18 h', 'warn', 'leaving'),
+      o('Birch Row Studio', 5, 'Has an owner', '', '2 years', 'Closing 30 November', '', 'leaving'),
+      o('Kestrel Surveying', 17, 'Has an owner', '', '7 years', 'Closing 12 December', '', 'leaving'),
+      o('Alder Works', 42, 'Has an owner', '', '7 years', 'Active', 'good', 'active'),
+      o('Linden Partners', 61, 'Has an owner', '', '10 years', 'Active', 'good', 'active'),
+      o('Quay Collective', 9, 'Has an owner', '', '2 years', 'Active', 'good', 'active'),
+      o('Wren Analytics', 12, 'Has an owner', '', '3 years', 'Active', 'good', 'active')
+    ];
+    const { filter, q } = this.state;
+    const low = q.trim().toLowerCase();
+    const n = (g) => all.filter((x) => x.group === g).length;
+    const opts = [['all', 'All', all.length], ['needs', 'Needs you', n('needs')], ['leaving', 'Closing or deleting', n('leaving')], ['active', 'Active', n('active')]];
+    const rows = all.filter((x) => (filter === 'all' || x.group === filter) && (!low || x.name.toLowerCase().includes(low)));
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      q, onQ: (e) => this.setState({ q: e.target.value }),
+      filters: opts.map(([id, label, c]) => ({ label: label + ' ' + c, on: filter === id ? 'on' : '', pressed: filter === id ? 'true' : 'false', pick: () => this.setState({ filter: id }) })),
+      rows, hasRows: rows.length > 0, noRows: rows.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>

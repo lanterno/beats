@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>One account</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="accounts" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph" style="margin-top: 10px">
+        <div class="ph-t">
+          <a class="back" href="Accounts.dc.html"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 6l-6 6 6 6"></path></svg>Find another account</a>
+          <h1 class="h1">This account reaches its coach cap tomorrow.</h1>
+          <p class="lead">It has spent about $5.10 a day since 1 November, against a usual $0.60. Nothing else about it looks unusual, and it has no limits or requests open.</p>
+          <div class="bar-row" style="margin-top: 10px">
+            <span class="chip solid b id">u_6f1c9a</span>
+            <span class="chip solid">maya@example.com</span>
+            <span class="chip good solid">Active</span>
+            <span class="chip solid">Created 3 March</span>
+            <span class="chip solid">Last seen today</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="lean">
+        <div class="wide stack">
+          <section class="p">
+            <div class="p-h"><h2>Coach spend</h2><span class="cap">Dollars a day, last 14 days</span></div>
+            <div style="padding: 0 20px 6px">
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 6px">
+                <span class="fig">$46.10</span><span class="cap" style="font-size: 14px">of a $50.00 cap this month</span>
+              </div>
+              <div class="bar" role="img" aria-label="92 percent of the cap used"><i class="hot" style="width: 92%"></i></div>
+              <svg class="chart" viewBox="0 0 760 190" role="img" aria-label="Daily coach spend was about 60 cents until 1 November, then rose to between 3 and 6 dollars a day." style="margin-top: 12px">
+                <line class="rule" x1="8" x2="752" y1="160" y2="160"></line>
+                <line class="lim" x1="8" x2="752" y1="148.9" y2="148.9"></line>
+                <text class="ax e" x="752" y="141">Usual, $0.60</text>
+                <sc-for list="{{bars}}" as="b" hint-placeholder-count="14">
+                  <rect class="vb" x="{{b.x}}" y="{{b.y}}" width="38" height="{{b.h}}" rx="4"><title>{{b.t}}</title></rect>
+                </sc-for>
+                <text class="ax" x="8" y="182">27 Oct</text>
+                <text class="ax" x="278" y="182">1 Nov</text>
+                <text class="ax e" x="752" y="182">Today</text>
+              </svg>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px 20px; padding: 6px 0 14px; font-size: 13.5px">
+                <span><span class="cap">Mostly on</span> claude-sonnet-5-5</span>
+                <span><span class="cap">Tokens</span> 1.9 M</span>
+                <span><span class="cap">Read from cache</span> 62%</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="tiles" aria-label="Counts">
+            <div class="p" style="padding: 13px 16px"><div class="cap">Projects</div><div class="fig">6</div></div>
+            <div class="p" style="padding: 13px 16px"><div class="cap">Sessions</div><div class="fig">1,284</div></div>
+            <div class="p" style="padding: 13px 16px"><div class="cap">Devices</div><div class="fig">3</div></div>
+            <div class="p" style="padding: 13px 16px"><div class="cap">Stored, estimated</div><div class="fig">4.1 MB</div></div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>Devices</h2><span class="cap">Revoking asks the device to pair again</span></div>
+            <div class="tb">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Kind</div><div role="columnheader" class="th">Id</div><div role="columnheader" class="th">Paired</div><div role="columnheader" class="th">Last seen</div><div role="columnheader" class="th"><span style="position: absolute; left: -9999px">Action</span></div></div></div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{devices}}" as="d" hint-placeholder-count="3">
+                    <div role="row" class="tr row">
+                      <div role="cell" class="td b">{{d.kind}}</div>
+                      <div role="cell" class="td id">{{d.id}}</div>
+                      <div role="cell" class="td d">{{d.paired}}</div>
+                      <div role="cell" class="td d">{{d.seen}}</div>
+                      <div role="cell" class="td" style="text-align: right"><a class="lk" href="Review.dc.html">Revoke</a></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="split">
+            <section class="p">
+              <div class="p-h"><h2>Connected</h2><p class="p-n">Which services, never what they hold.</p></div>
+              <div class="p-b">
+                <div class="fact"><span>Integrations</span><span>GitHub, Google Calendar</span></div>
+                <div class="fact"><span>Webhooks to</span><span>hooks.example.net</span></div>
+                <div class="fact"><span>Passkeys</span><span>2</span></div>
+                <div class="fact"><span>Single sign-on</span><span>Google</span></div>
+              </div>
+            </section>
+            <section class="p">
+              <div class="p-h"><h2>Organisations</h2><a class="lk cap" href="Orgs.dc.html">Open organisations</a></div>
+              <div class="p-b">
+                <div class="fact"><span>Alder Works</span><span>Member</span></div>
+                <div class="fact"><span>Quay Collective</span><span>Admin</span></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="p">
+            <div class="p-h"><h2>What has been done to this account</h2><a class="lk cap" href="Audit.dc.html">Open in the audit</a></div>
+            <div class="p-b">
+              <div class="tl">
+                <div class="tl-t">Today</div><div class="tl-r"></div><div class="tl-b"><span class="b">Looked up</span> <span class="cap">by you, reason: coach cap alert</span></div>
+                <div class="tl-t">12 Oct</div><div class="tl-r"></div><div class="tl-b"><span class="b">Coach cap raised from $25 to $50</span> <span class="cap">by you, ref SUP-177</span></div>
+                <div class="tl-t">3 Mar</div><div class="tl-r ok"></div><div class="tl-b"><span class="b">Account created</span></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="narrow stack">
+          <section class="p up">
+            <div class="p-h" style="padding-top: 18px"><h2>Suggested next step</h2></div>
+            <div class="p-b">
+              <p class="p-t">Leave the cap and coach stops tomorrow until 1 December. If that is wrong for this person, set a new one first.</p>
+              <a href="Review.dc.html" class="btn sun" style="width: 100%; margin-top: 12px">Change the coach cap</a>
+            </div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>Contain</h2><p class="p-n">Each one shows you what will change before it runs.</p></div>
+            <div class="p-b stack" style="gap: 8px">
+              <a href="Review.dc.html" class="btn" style="justify-content: flex-start">Set limits on writes or webhooks</a>
+              <a href="Review.dc.html" class="btn" style="justify-content: flex-start">Sign out everywhere</a>
+              <a href="Review.dc.html" class="btn" style="justify-content: flex-start">Suspend this account</a>
+            </div>
+          </section>
+
+          <section class="p danger">
+            <div class="p-h"><h2>Erase this account</h2></div>
+            <div class="p-b">
+              <p class="p-t">Deletes everything they have, seven days after you queue it, and only when they asked for it. It suspends the account while it waits.</p>
+              <a href="Review.dc.html" class="btn danger" style="width: 100%; margin-top: 12px">Review the erasure</a>
+            </div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>Out of reach here</h2></div>
+            <div class="p-b">
+              <p class="p-t">Sessions, project names, notes, coach conversations and integration tokens. There is no way to view the app as this person.</p>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const v = [.5,.7,.4,.6,.8,3.2,4.9,4.3,5.6,5.5,4.7,5.8,6.3,5.8];
+    const days = ['27 Oct','28 Oct','29 Oct','30 Oct','31 Oct','1 Nov','2 Nov','3 Nov','4 Nov','5 Nov','6 Nov','7 Nov','8 Nov','Today'];
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      bars: v.map((d, i) => {
+        const h = d / 7 * 148;
+        return { x: (8 + i * (706 / 13)).toFixed(1), y: (160 - h).toFixed(1), h: h.toFixed(1), t: days[i] + ': $' + d.toFixed(2) };
+      }),
+      devices: [
+        { kind: 'Daemon, Mac', id: 'd_4e1c', paired: '3 Mar', seen: 'Today' },
+        { kind: 'Companion, Mac', id: 'd_91a7', paired: '3 Mar', seen: 'Today' },
+        { kind: 'Wall clock', id: 'd_07fb', paired: '20 Jun', seen: '2 November' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

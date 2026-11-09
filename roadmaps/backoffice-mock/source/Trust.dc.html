@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trust and safety</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="trust" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">One signal needs a look. The rest are ordinary.</h1>
+          <p class="lead">Who is using far more than everyone else, judged from counts alone. An outlier is a question, not a verdict.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <section class="p up">
+          <div class="p-h" style="padding-top: 18px"><h2>84 signups since 07:00, usually about 14</h2><span class="cap">Signups an hour, last 24 hours</span></div>
+          <div style="padding: 0 20px">
+            <svg class="chart" viewBox="0 0 760 180" role="img" aria-label="Signups stayed between 3 and 14 an hour, then reached 46 at 07:00 and 38 at 08:00.">
+              <line class="rule" x1="8" x2="752" y1="150" y2="150"></line>
+              <sc-for list="{{hours}}" as="b" hint-placeholder-count="24">
+                <rect class="vb {{b.tone}}" x="{{b.x}}" y="{{b.y}}" width="24" height="{{b.h}}" rx="4"><title>{{b.t}}</title></rect>
+              </sc-for>
+              <text class="ax" x="8" y="172">Yesterday 09:00</text>
+              <text class="ax e" x="752" y="172">Now</text>
+            </svg>
+          </div>
+          <div style="padding: 8px 20px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+            <p class="p-t" style="flex: 1 1 420px">71 of them came from one network, and only 3 have written anything. There is time to look before they cost anything.</p>
+            <a class="btn sun" href="Access.dc.html">Tighten the signup limit</a>
+            <button type="button" class="btn" onClick="{{dismiss}}">{{dismissLabel}}</button>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Far above everyone else</h2><span class="cap">{{tabNote}}</span></div>
+          <div style="padding: 2px 20px 10px">
+            <div class="seg" role="group" aria-label="Choose an outlier list">
+              <sc-for list="{{tabs}}" as="t" hint-placeholder-count="6">
+                <button type="button" class="{{t.on}}" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}">{{t.label}}</button>
+              </sc-for>
+            </div>
+          </div>
+          <div class="tb">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th" style="text-align: right">{{figureHead}}</div><div role="columnheader" class="th" style="text-align: right">Against the median</div><div role="columnheader" class="th">State</div><div role="columnheader" class="th"><span style="position: absolute; left: -9999px">Action</span></div></div></div>
+              <div class="tg" role="rowgroup">
+                <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
+                  <div role="row" class="tr row">
+                    <div role="cell" class="td"><a class="lk id" href="Account.dc.html">{{r.id}}</a></div>
+                    <div role="cell" class="td n">{{r.figure}}</div>
+                    <div role="cell" class="td n">{{r.vs}}</div>
+                    <div role="cell" class="td"><span class="chip {{r.tone}}">{{r.state}}</span></div>
+                    <div role="cell" class="td" style="text-align: right"><sc-if value="{{r.action}}" hint-placeholder-val="{{true}}"><button type="button" class="lkb lk" onClick="{{r.toggle}}">{{r.action}}</button></sc-if></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Restrictions in force</h2><p class="p-n">Everything you have limited or suspended, so nothing stays that way by accident.</p></div>
+          <div class="tb">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th">Restriction</div><div role="columnheader" class="th">Set</div><div role="columnheader" class="th">Look again</div><div role="columnheader" class="th">Reference</div></div></div>
+              <div class="tg" role="rowgroup">
+                <sc-for list="{{limits}}" as="l" hint-placeholder-count="3">
+                  <div role="row" class="tr row">
+                    <div role="cell" class="td"><a class="lk id" href="Account.dc.html">{{l.id}}</a></div>
+                    <div role="cell" class="td">{{l.what}}</div>
+                    <div role="cell" class="td d">{{l.set}}</div>
+                    <div role="cell" class="td"><span class="chip {{l.tone}}">{{l.next}}</span></div>
+                    <div role="cell" class="td cap">{{l.ref}}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Writes refused by the limits</h2><p class="p-n">Last 7 days. Counted by route and kept in the logs, never stored against an account.</p></div>
+          <div class="p-b">
+            <div class="fact"><span class="id">POST /api/beats</span><span>1,204</span></div>
+            <div class="fact"><span class="id">POST /api/signals</span><span>380</span></div>
+            <div class="fact"><span class="id">POST /api/export/import</span><span>12</span></div>
+            <div class="bar-row" style="margin-top: 12px">
+              <a class="btn" href="Audit.dc.html">Open the query in Cloud Logging</a>
+              <a class="btn" href="Capacity.dc.html">See restores by size</a>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  state = { tab: 'coach', reviewed: {}, dismissed: false };
+  renderVals() {
+    const v = [6,5,4,3,4,5,6,8,9,11,12,13,14,13,12,11,10,8,7,6,5,4,46,38];
+    const r = (id, figure, vs, state, tone) => ({ id, figure, vs, state, tone: tone || '' });
+    const data = {
+      coach: { label: 'Coach spend', head: 'This month', note: 'Top 4 this month', rows: [r('u_6f1c9a', '$46.10', '14×', 'New', 'warn'), r('u_1bd2c0', '$31.40', '9×', 'New', 'warn'), r('u_e5a901', '$27.85', '8×', 'Reviewed 3 Nov'), r('u_c2e491', '$22.10', '6×', 'Reviewed 3 Nov')] },
+      flow: { label: 'Flow windows', head: 'Today', note: 'Top 3 today', rows: [r('u_a0b7f3', '4,210', '130×', 'Limits set'), r('u_18d06e', '980', '30×', 'New', 'warn'), r('u_9c0d44', '640', '20×', 'Reviewed 1 Nov')] },
+      sessions: { label: 'Sessions', head: 'Last 7 days', note: 'Top 3 in the last 7 days', rows: [r('u_a0b7f3', '1,840', '95×', 'Limits set'), r('u_33fe12', '410', '21×', 'New', 'warn'), r('u_18d06e', '295', '15×', 'Reviewed 1 Nov')] },
+      reports: { label: 'Report links', head: 'Open links', note: 'Top 3 by open links', rows: [r('u_33fe12', '64', '32×', 'New', 'warn'), r('u_e5a901', '18', '9×', 'Reviewed 3 Nov')] },
+      webhooks: { label: 'Webhook domains', head: 'Domains', note: 'Accounts sending to the most domains', rows: [r('u_9c0d44', '27', '27×', 'New', 'warn'), r('u_a0b7f3', '6', '6×', 'Limits set')] },
+      devices: { label: 'Devices', head: 'Paired', note: 'Most devices paired', rows: [r('u_9c0d44', '41', '20×', 'New', 'warn'), r('u_1bd2c0', '9', '4×', 'Reviewed 2 Nov')] }
+    };
+    const current = data[this.state.tab];
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      hours: v.map((d, i) => { const h = d / 46 * 132; return { x: (8 + i * 31).toFixed(1), y: (150 - h).toFixed(1), h: h.toFixed(1), tone: i >= 22 ? 'hot' : '', t: (i >= 22 ? 'This morning: ' : 'Earlier: ') + d + ' signups' }; }),
+      dismiss: () => this.setState({ dismissed: !this.state.dismissed }),
+      dismissLabel: this.state.dismissed ? 'Marked as looked at. Undo' : 'Mark as looked at',
+      tabNote: current.note,
+      figureHead: current.head,
+      tabs: Object.keys(data).map((k) => ({ label: data[k].label, on: k === this.state.tab ? 'on' : '', pressed: k === this.state.tab ? 'true' : 'false', pick: () => this.setState({ tab: k }) })),
+      rows: current.rows.map((row) => {
+        const key = this.state.tab + row.id;
+        const done = !!this.state.reviewed[key];
+        const isNew = row.state === 'New';
+        return { ...row, state: done ? 'Reviewed today' : row.state, tone: done ? '' : row.tone, action: isNew ? (done ? 'Undo' : 'Mark as reviewed') : '', toggle: () => this.setState({ reviewed: { ...this.state.reviewed, [key]: !done } }) };
+      }),
+      limits: [
+        { id: 'u_a0b7f3', what: 'Beat writes 20 a minute, webhooks off', set: 'Today', next: '16 November', tone: '', ref: 'SUP-204' },
+        { id: 'u_77aa10', what: 'Suspended while erasure waits', set: '6 November', next: 'Ends 13 November', tone: '', ref: 'SUP-199' },
+        { id: 'u_4db720', what: 'Suspended for abuse', set: '19 October', next: 'Overdue 3 days', tone: 'owed', ref: 'SUP-183' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

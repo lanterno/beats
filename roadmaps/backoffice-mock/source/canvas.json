@@ -1,0 +1,49 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-11-08T21:30:00Z" },
+  "title": "LifePete Back Office",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1440, "h": 1300, "title": "Today", "expand": "fill", "is_interactive": true },
+    "Queue.dc.html": { "x": 1520, "y": 0, "w": 1440, "h": 1060, "title": "Work queue", "expand": "fill", "is_interactive": true },
+    "Palette.dc.html": { "x": 3040, "y": 0, "w": 1440, "h": 900, "title": "Find anything", "expand": "fill", "is_interactive": true },
+    "Runbooks.dc.html": { "x": 4560, "y": 0, "w": 1440, "h": 1020, "title": "Runbooks", "expand": "fill", "is_interactive": true },
+    "Accounts.dc.html": { "x": 0, "y": 1720, "w": 1440, "h": 900, "title": "Find an account", "expand": "fill", "is_interactive": true },
+    "Account.dc.html": { "x": 1520, "y": 1720, "w": 1440, "h": 1560, "title": "One account", "expand": "fill", "is_interactive": true },
+    "Review.dc.html": { "x": 3040, "y": 1720, "w": 1440, "h": 1220, "title": "Review before acting", "expand": "fill", "is_interactive": true },
+    "Trust.dc.html": { "x": 4560, "y": 1720, "w": 1440, "h": 1560, "title": "Trust and safety", "expand": "fill", "is_interactive": true },
+    "Orgs.dc.html": { "x": 0, "y": 3700, "w": 1440, "h": 1060, "title": "Organisations", "expand": "fill", "is_interactive": true },
+    "Org.dc.html": { "x": 1520, "y": 3700, "w": 1440, "h": 1500, "title": "Organisation with no owner", "expand": "fill", "is_interactive": true },
+    "Incidents.dc.html": { "x": 0, "y": 5620, "w": 1440, "h": 1200, "title": "Incidents", "expand": "fill", "is_interactive": true },
+    "IncidentRoom.dc.html": { "x": 1520, "y": 5620, "w": 1440, "h": 1340, "title": "Incident room", "expand": "fill", "is_interactive": true },
+    "Releases.dc.html": { "x": 3040, "y": 5620, "w": 1440, "h": 1240, "title": "Releases", "expand": "fill", "is_interactive": true },
+    "Jobs.dc.html": { "x": 4560, "y": 5620, "w": 1440, "h": 1080, "title": "Jobs and windows", "expand": "fill", "is_interactive": true },
+    "Capacity.dc.html": { "x": 6080, "y": 5620, "w": 1440, "h": 1360, "title": "Capacity and cost", "expand": "fill", "is_interactive": true },
+    "Compliance.dc.html": { "x": 0, "y": 7400, "w": 1440, "h": 1240, "title": "Privacy and compliance", "expand": "fill", "is_interactive": true },
+    "Audit.dc.html": { "x": 1520, "y": 7400, "w": 1440, "h": 1040, "title": "Audit log", "expand": "fill", "is_interactive": true },
+    "Access.dc.html": { "x": 3040, "y": 7400, "w": 1440, "h": 1420, "title": "Access and controls", "expand": "fill", "is_interactive": true },
+    "Phone.dc.html": { "x": 0, "y": 9240, "w": 390, "h": 844, "title": "On call, phone", "is_interactive": true },
+    "States.dc.html": { "x": 470, "y": 9240, "w": 1280, "h": 860, "title": "Edge states" },
+    "Dusk.dc.html": { "x": 1830, "y": 9240, "w": 1440, "h": 1300, "title": "Today at dusk", "expand": "fill", "is_interactive": true },
+    "Sidebar.dc.html": { "x": 3350, "y": 9240, "w": 236, "h": 860, "title": "Shared: sidebar", "is_interactive": true },
+    "Topbar.dc.html": { "x": 3666, "y": 9240, "w": 1148, "h": 64, "title": "Shared: top bar", "is_interactive": true }
+  },
+  "order": [
+    "Main.dc.html", "Queue.dc.html", "Palette.dc.html", "Runbooks.dc.html",
+    "Accounts.dc.html", "Account.dc.html", "Review.dc.html", "Trust.dc.html",
+    "Orgs.dc.html", "Org.dc.html",
+    "Incidents.dc.html", "IncidentRoom.dc.html", "Releases.dc.html", "Jobs.dc.html", "Capacity.dc.html",
+    "Compliance.dc.html", "Audit.dc.html", "Access.dc.html",
+    "Phone.dc.html", "States.dc.html", "Dusk.dc.html", "Sidebar.dc.html", "Topbar.dc.html"
+  ],
+  "notes": {
+    "rowA": { "x": 0, "y": -300, "text": "Run the day", "kind": "title1", "maxW": 6000 },
+    "rowB": { "x": 0, "y": 1420, "text": "People", "kind": "title1", "maxW": 6000 },
+    "rowC": { "x": 0, "y": 3400, "text": "Organisations", "kind": "title1", "maxW": 2960 },
+    "rowD": { "x": 0, "y": 5320, "text": "Keep production healthy", "kind": "title1", "maxW": 7520 },
+    "rowE": { "x": 0, "y": 7100, "text": "Prove it and govern it", "kind": "title1", "maxW": 4480 },
+    "rowF": { "x": 0, "y": 8940, "text": "On call, edge states and shared parts", "kind": "title1", "maxW": 4814 }
+  },
+  "designSystems": []
+}

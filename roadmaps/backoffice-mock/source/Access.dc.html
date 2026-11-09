@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Access and controls</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="access" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">One person can reach this, and the review is due this month.</h1>
+          <p class="lead">Who can get in, what they can do, and the switches that change how the whole product behaves.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <div class="split">
+          <section class="p up">
+            <div class="p-h" style="padding-top: 18px"><h2>Access review</h2><span class="cap">Last done 12 August</span></div>
+            <div class="p-b">
+              <sc-if value="{{reviewOpen}}" hint-placeholder-val="{{true}}">
+                <sc-for list="{{checks}}" as="c" hint-placeholder-count="3">
+                  <label class="check" style="padding: 5px 0"><input type="checkbox" checked="{{c.done}}" onChange="{{c.toggle}}"><span>{{c.label}}</span></label>
+                </sc-for>
+                <button type="button" class="btn sun" style="margin-top: 10px; min-height: 48px" disabled="{{cannotRecord}}" onClick="{{record}}">Record this review</button>
+              </sc-if>
+              <sc-if value="{{reviewDone}}" hint-placeholder-val="{{false}}">
+                <p class="p-t"><span class="b">Reviewed today, nothing changed.</span> The next one is due on 9 February.</p>
+                <button type="button" class="lkb lk" style="margin-top: 8px" onClick="{{reopen}}">Undo</button>
+              </sc-if>
+            </div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>Who can get in</h2></div>
+            <div class="tb">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup">
+                  <div role="row" class="tr"><div role="columnheader" class="th">Person</div><div role="columnheader" class="th">Role</div><div role="columnheader" class="th">Last in</div></div>
+                </div>
+                <div class="tg" role="rowgroup">
+                  <div role="row" class="tr row"><div role="cell" class="td b">operator@example.com</div><div role="cell" class="td"><span class="chip">Operator</span></div><div role="cell" class="td d">Today 08:02</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="p-b">
+              <button type="button" class="btn" disabled="{{true}}">Add a person</button>
+              <p class="cap" style="margin: 8px 0 0">The privacy text names one operator. It has to name anyone else before they are added.</p>
+            </div>
+          </section>
+        </div>
+
+        <section class="p">
+          <div class="p-h"><h2>Switches that affect everyone</h2><p class="p-n">Each takes effect at once and is recorded in the audit. Use them when something is on fire.</p></div>
+          <div class="p-b">
+            <sc-for list="{{controls}}" as="c" hint-placeholder-count="7">
+              <div class="li" style="padding: 11px 0">
+                <div class="li-m">
+                  <div class="b">{{c.title}}</div>
+                  <div class="cap" style="font-size: 13px">{{c.note}}</div>
+                </div>
+                <span class="chip {{c.tone}}">{{c.state}}</span>
+                <button type="button" role="switch" aria-checked="{{c.pressed}}" aria-label="{{c.title}}" onClick="{{c.flip}}" style="border: 0; background: none; padding: 0; min-width: 48px; min-height: 40px; cursor: pointer; display: inline-flex; align-items: center">
+                  <span style="width: 46px; height: 26px; border-radius: 99px; background: {{c.track}}; display: inline-flex; align-items: center; padding: 3px; box-sizing: border-box; justify-content: {{c.justify}}">
+                    <span style="width: 20px; height: 20px; border-radius: 50%; background: var(--panel-solid)"></span>
+                  </span>
+                </button>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+        <sc-if value="{{snack}}" hint-placeholder-val="{{false}}">
+          <div class="snack" role="status" style="align-self: flex-start">{{snack}} <button type="button" onClick="{{undo}}">Undo</button></div>
+        </sc-if>
+
+        <div class="split">
+          <section class="p">
+            <div class="p-h"><h2>What each role can do</h2></div>
+            <div class="tb">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup">
+                  <div role="row" class="tr"><div role="columnheader" class="th">Can they</div><div role="columnheader" class="th">Viewer</div><div role="columnheader" class="th">Operator</div></div>
+                </div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{roles}}" as="r" hint-placeholder-count="5">
+                    <div role="row" class="tr row"><div role="cell" class="td">{{r.what}}</div><div role="cell" class="td"><span class="chip {{r.viewerTone}}">{{r.viewer}}</span></div><div role="cell" class="td"><span class="chip {{r.operatorTone}}">{{r.operator}}</span></div></div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="p">
+            <div class="p-h"><h2>How the door works</h2></div>
+            <div class="p-b">
+              <div class="fact"><span>Sign-in</span><span>Google, in front of the whole site</span></div>
+              <div class="fact"><span>Allowed by</span><span>Google account id, on a list here</span></div>
+              <div class="fact"><span>Deployment</span><span>Separate from the product</span></div>
+              <div class="fact"><span>Can sign in as a user</span><span>No, it holds no session key</span></div>
+              <div class="fact"><span>Second approver</span><span>Available once a second operator exists</span></div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1420}}'>
+class Component extends DCLogic {
+  state = { checks: {}, reviewed: false, flips: {}, last: null };
+  renderVals() {
+    const s = this.state;
+    const defs = [
+      { id: 'beats', title: 'Limit beat writes per account', note: 'Suggested: 120 a minute. A refusal asks the device to retry.', on: false, onText: '120 a minute', offText: 'No limit' },
+      { id: 'signals', title: 'Limit signal writes per account', note: 'Suggested: 60 a minute.', on: false, onText: '60 a minute', offText: 'No limit' },
+      { id: 'imports', title: 'Limit imports per account', note: 'Suggested: 10 an hour.', on: false, onText: '10 an hour', offText: 'No limit' },
+      { id: 'signups', title: 'Slow signups from one network', note: 'Turns itself off after 24 hours.', on: false, onText: '20 an hour, to tomorrow', offText: 'Normal' },
+      { id: 'coach', title: 'Coach', note: 'Off stops every new coach request, for everyone.', on: true, onText: 'Running', offText: 'Paused for everyone' },
+      { id: 'webhooks', title: 'Webhook delivery', note: 'Off holds deliveries and sends them when it comes back on.', on: true, onText: 'Running', offText: 'Held' },
+      { id: 'importing', title: 'Imports', note: 'Off refuses new imports. Exports keep working.', on: true, onText: 'Running', offText: 'Refused' }
+    ];
+    const checks = [['list', 'Everyone listed still needs access'], ['audit', 'I read the audit since the last review and nothing is unexplained'], ['text', 'The privacy text still names the right people']];
+    const flip = (d) => { const now = s.flips[d.id] ?? d.on; this.setState({ flips: { ...s.flips, [d.id]: !now }, last: d.id }); };
+    const lastDef = defs.find((d) => d.id === s.last);
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      reviewOpen: !s.reviewed,
+      reviewDone: s.reviewed,
+      checks: checks.map(([id, label]) => ({ label, done: !!s.checks[id], toggle: () => this.setState({ checks: { ...s.checks, [id]: !s.checks[id] } }) })),
+      cannotRecord: !checks.every(([id]) => s.checks[id]),
+      record: () => this.setState({ reviewed: true }),
+      reopen: () => this.setState({ reviewed: false }),
+      controls: defs.map((d) => {
+        const on = s.flips[d.id] ?? d.on;
+        const danger = !on && d.on;
+        return { ...d, state: on ? d.onText : d.offText, tone: danger ? 'owed' : on ? 'good' : '', pressed: on ? 'true' : 'false', track: on ? 'var(--leaf-ink)' : 'var(--track)', justify: on ? 'flex-end' : 'flex-start', flip: () => flip(d) };
+      }),
+      snack: lastDef ? lastDef.title + ' changed.' : null,
+      undo: () => { const f = { ...s.flips }; delete f[s.last]; this.setState({ flips: f, last: null }); },
+      roles: [
+        { what: 'Read every page here', viewer: 'Yes', viewerTone: 'good', operator: 'Yes', operatorTone: 'good' },
+        { what: 'Look up one account', viewer: 'Yes', viewerTone: 'good', operator: 'Yes', operatorTone: 'good' },
+        { what: 'Run any command', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' },
+        { what: 'Cancel or retry a job', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' },
+        { what: 'Change the switches above', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

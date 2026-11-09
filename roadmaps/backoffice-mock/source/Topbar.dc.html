@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Back office top bar</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-family: var(--body); color: var(--ink); font-size: 14px">
+  <a href="Palette.dc.html" class="btn" style="flex: 1 1 300px; justify-content: flex-start; background: var(--panel); box-shadow: var(--shadow); font-weight: 400">
+    <svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4"></path></svg>
+    Find an exact address, an organisation or a command
+    <span class="k" style="margin-left: auto">⌘K</span>
+  </a>
+  <a href="IncidentRoom.dc.html" class="chip owed solid" style="min-height: 32px; padding: 0 12px">1 incident open</a>
+  <span class="chip dark" style="min-height: 32px; padding: 0 12px">Production</span>
+  <span style="font-size: 12.5px">Updated 40 s ago</span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1148,"height":64}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

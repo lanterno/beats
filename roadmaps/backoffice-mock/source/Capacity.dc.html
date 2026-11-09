@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Capacity and cost</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="capacity" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">Storage lasts about seven months. Coach is on budget.</h1>
+          <p class="lead">At the current rate the database reaches its 5 GB plan in June, and flow windows are growing fastest. Decide in March, while there is still room to choose.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <section class="tiles" aria-label="Where things stand">
+          <div class="p" style="padding: 13px 16px"><div class="cap">Database</div><div class="fig">3.05 GB</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 61%"></i></div><div class="cap">61% of the 5 GB plan</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Coach this month</div><div class="fig">$412</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 27%"></i></div><div class="cap">Heading for $1,373 of $1,500</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Peak instances today</div><div class="fig">6</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 60%"></i></div><div class="cap">Of a ceiling of 10</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Database connections</div><div class="fig">84</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 17%"></i></div><div class="cap">Of 500 allowed</div></div>
+        </section>
+
+        <section class="p up">
+          <div class="p-h" style="padding-top: 18px"><h2>Database size</h2><span class="cap">GB, with the current pace carried forward</span></div>
+          <div style="padding: 0 20px 14px">
+            <svg class="chart" viewBox="0 0 760 186" role="img" aria-label="The database grew from 2.2 to 3.05 gigabytes since August. At that pace it reaches the 5 gigabyte plan in June 2027.">
+              <line class="rule" x1="8" x2="752" y1="150" y2="150"></line>
+              <line class="lim" x1="8" x2="752" y1="31.8" y2="31.8"></line>
+              <text class="ax" x="8" y="24">Plan limit, 5 GB</text>
+              <polyline class="ln" points="{{actual}}"></polyline>
+              <polyline class="ln proj" points="{{future}}"></polyline>
+              <circle class="dot" cx="684.4" cy="31.8" r="4"></circle>
+              <text class="ax i e" x="676" y="52">Reached in June</text>
+              <text class="ax i" x="218" y="70">3.05 GB now</text>
+              <text class="ax" x="8" y="172">Aug 2026</text>
+              <text class="ax" x="211" y="172">Nov</text>
+              <text class="ax e" x="752" y="172">Jul 2027</text>
+            </svg>
+          </div>
+        </section>
+
+        <section class="p">
+          <div class="p-h"><h2>Coach cost</h2><span class="cap">{{caption}}</span></div>
+          <div style="padding: 0 20px 14px">
+            <div class="bar-row" style="margin-bottom: 8px">
+              <div class="seg" role="group" aria-label="Choose a range">
+                <sc-for list="{{ranges}}" as="r" hint-placeholder-count="2">
+                  <button type="button" class="{{r.on}}" aria-pressed="{{r.pressed}}" onClick="{{r.pick}}">{{r.label}}</button>
+                </sc-for>
+              </div>
+              <span style="display: inline-flex; gap: 14px; font-size: 13px; margin-left: 8px">
+                <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 50%; background: var(--blue)"></span>Sonnet</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #2e9c94"></span>Haiku</span>
+              </span>
+            </div>
+            <svg class="chart" viewBox="0 0 760 164" role="img" aria-label="Coach cost per day by model, mostly Sonnet, rising slowly to about 45 dollars a day.">
+              <line class="rule" x1="8" x2="752" y1="140" y2="140"></line>
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="30">
+                <rect class="vb" x="{{b.x}}" y="{{b.y1}}" width="{{b.w}}" height="{{b.h1}}" rx="3"><title>{{b.t}}</title></rect>
+                <rect x="{{b.x}}" y="{{b.y2}}" width="{{b.w}}" height="{{b.h2}}" rx="2" style="fill: #2e9c94"><title>{{b.t}}</title></rect>
+              </sc-for>
+              <text class="ax" x="8" y="160">{{first}}</text>
+              <text class="ax e" x="752" y="160">Today</text>
+            </svg>
+            <p class="p-t" style="margin-top: 8px">62% of input came from the cache this month, which is about $290 saved. Sonnet is 94% of the bill.</p>
+          </div>
+        </section>
+
+        <div class="lean">
+          <section class="p wide">
+            <div class="p-h"><h2>What takes up the room</h2><span class="cap">Largest first</span></div>
+            <div class="tb">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Collection</div><div role="columnheader" class="th" style="text-align: right">Size</div><div role="columnheader" class="th" style="text-align: right">Documents</div><div role="columnheader" class="th" style="text-align: right">Indexes</div><div role="columnheader" class="th" style="text-align: right">Growth a month</div></div></div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{tables}}" as="t" hint-placeholder-count="6">
+                    <div role="row" class="tr row"><div role="cell" class="td id">{{t.name}}</div><div role="cell" class="td n">{{t.size}}</div><div role="cell" class="td n">{{t.docs}}</div><div role="cell" class="td n">{{t.idx}}</div><div role="cell" class="td n">{{t.growth}}</div></div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside class="narrow stack">
+            <section class="p">
+              <div class="p-h"><h2>Restores</h2><p class="p-n">Counted in the logs, by size only.</p></div>
+              <div class="p-b">
+                <div class="fact"><span>This month</span><span>4</span></div>
+                <div class="fact"><span>Largest</span><span>38 MB</span></div>
+              </div>
+            </section>
+            <section class="p">
+              <div class="p-h"><h2>Look closer</h2></div>
+              <div class="p-b stack" style="gap: 4px">
+                <a class="lk" href="Incidents.dc.html">The API dashboard in Cloud Monitoring</a>
+                <a class="lk" href="Incidents.dc.html">The cluster in MongoDB Atlas</a>
+                <a class="lk" href="Incidents.dc.html">Billing in Google Cloud</a>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1360}}'>
+class Component extends DCLogic {
+  state = { days: 30 };
+  renderVals() {
+    const x = (i) => (8 + i / 11 * 744).toFixed(1);
+    const y = (v) => (150 - v / 5.5 * 130).toFixed(1);
+    const seen = [2.2, 2.5, 2.8, 3.05];
+    const ahead = [3.05, 3.33, 3.61, 3.89, 4.17, 4.45, 4.73, 5.0];
+    const son = [30,32,28,33,35,31,29,34,36,33,30,38,35,33,37,39,34,36,40,38,37,41,43,44,46,40,42,47,43,41];
+    const hai = [3,2,3,2,3,3,2,3,2,3,3,2,3,3,2,3,3,2,3,3,2,3,3,2,3,3,2,3,3,3];
+    const n = this.state.days;
+    const pitch = 744 / n;
+    const width = Math.max(10, pitch - 6);
+    const first = n === 30 ? '10 October' : '3 November';
+    const rows = son.slice(-n).map((s, i) => {
+      const h = hai.slice(-n)[i];
+      const h1 = s / 60 * 124;
+      const h2 = Math.max(3, h / 60 * 124);
+      const y1 = 140 - h1;
+      const y2 = y1 - h2 - 2;
+      return { x: (8 + i * pitch).toFixed(1), w: width.toFixed(1), y1: y1.toFixed(1), h1: h1.toFixed(1), y2: y2.toFixed(1), h2: h2.toFixed(1), t: 'Sonnet $' + s + ', Haiku $' + h };
+    });
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      actual: seen.map((v, i) => x(i) + ',' + y(v)).join(' '),
+      future: ahead.map((v, i) => x(i + 3) + ',' + y(v)).join(' '),
+      caption: 'Dollars a day, last ' + n + ' days',
+      first,
+      bars: rows,
+      ranges: [[7, '7 days'], [30, '30 days']].map(([d, label]) => ({ label, on: d === n ? 'on' : '', pressed: d === n ? 'true' : 'false', pick: () => this.setState({ days: d }) })),
+      tables: [
+        { name: 'beats', size: '1.12 GB', docs: '2.1 M', idx: '240 MB', growth: '+5%' },
+        { name: 'flow_windows', size: '0.84 GB', docs: '5.8 M', idx: '190 MB', growth: '+11%' },
+        { name: 'coach_messages', size: '0.46 GB', docs: '310 k', idx: '32 MB', growth: '+7%' },
+        { name: 'biometrics', size: '0.28 GB', docs: '420 k', idx: '41 MB', growth: '+3%' },
+        { name: 'operator_audit', size: '12 MB', docs: '4.1 k', idx: '2 MB', growth: '+2%' },
+        { name: 'org_members', size: '4 MB', docs: '2.3 k', idx: '1 MB', growth: '+4%' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
