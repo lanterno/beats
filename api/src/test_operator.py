@@ -20,8 +20,9 @@ import os
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import httpx
 import jwt
@@ -29,6 +30,7 @@ import jwt.algorithms
 import pytest
 from bson import ObjectId
 
+from beats.operator.reads import ACCOUNT_COACH_SPEND_DAYS
 from conftest import OPERATOR_ORIGIN as ORIGIN
 from conftest import OPERATOR_SUB
 
@@ -273,6 +275,8 @@ class TestOperatorWall:
             ("GET", "/api/operator/attention", None),
             ("POST", "/api/operator/accounts/lookup", {"email": "wall@example.test"}),
             ("GET", f"/api/operator/accounts/{planted['user_id']}", None),
+            ("GET", f"/api/operator/accounts/{planted['user_id']}/coach", None),
+            ("GET", f"/api/operator/accounts/{planted['user_id']}/audit", None),
             ("GET", "/api/operator/organisations", None),
             ("GET", f"/api/operator/organisations/{planted['org_id']}", None),
             ("GET", f"/api/operator/organisations/{planted['org_id']}/audit", None),
@@ -439,3 +443,92 @@ class TestIAPVerifier:
         verifier = IAPVerifier(AUDIENCE, transport=httpx.MockTransport(down))
         with pytest.raises(IAPUnavailable):
             await verifier.verify(_assertion(key))
+
+
+class TestOneAccountsReads:
+    """The two reads behind the account page (roadmaps/backoffice.md, stage
+    1): what the back office has done to this account, and where its coach
+    money went. Both answer about one account and must not widen into a way
+    to read the platform."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        mongo.operator_audit.delete_many({})
+        mongo.llm_usage.delete_many({})
+
+    def _audit(self, mongo, subject_id: str, command: str, at: datetime):
+        mongo.operator_audit.insert_one(
+            {
+                "at": at.isoformat(),
+                "command": command,
+                "operator_sub": "test-operator",
+                "operator_email": "op@example.test",
+                "subject_kind": "account",
+                "subject_id": subject_id,
+                "before": {},
+                "after": {},
+            }
+        )
+
+    def test_the_audit_answers_one_subject_newest_first(self, operator_client, mongo):
+        now = datetime.now(UTC)
+        mine, theirs = str(ObjectId()), str(ObjectId())
+        self._audit(mongo, mine, "account.suspend", now - timedelta(days=2))
+        self._audit(mongo, mine, "account.unsuspend", now - timedelta(hours=1))
+        self._audit(mongo, theirs, "device.revoke", now)
+
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/audit").json()
+        assert [r["command"] for r in rows] == ["account.unsuspend", "account.suspend"]
+        assert {r["subject_id"] for r in rows} == {mine}
+
+    def test_the_audit_matches_a_whole_subject_and_not_a_prefix(self, operator_client, mongo):
+        """A prefix match would turn the account page into a way to sweep
+        the audit for ids nobody typed."""
+        subject = str(ObjectId())
+        self._audit(mongo, subject, "account.suspend", datetime.now(UTC))
+        assert operator_client.get(f"/api/operator/accounts/{subject[:12]}/audit").json() == []
+
+    def test_an_account_nothing_was_done_to_reads_empty(self, operator_client, mongo):
+        self._audit(mongo, str(ObjectId()), "account.suspend", datetime.now(UTC))
+        assert operator_client.get(f"/api/operator/accounts/{ObjectId()}/audit").json() == []
+
+    def _usage(self, mongo, user_id: str, ts: datetime, cost: float):
+        mongo.llm_usage.insert_one({"user_id": user_id, "ts": ts, "cost_usd": cost})
+
+    def test_coach_spend_is_summed_a_day_oldest_first(self, operator_client, mongo):
+        now = datetime.now(UTC)
+        mine = str(ObjectId())
+        self._usage(mongo, mine, now - timedelta(days=2, hours=1), 1.5)
+        self._usage(mongo, mine, now - timedelta(days=2, hours=2), 0.25)
+        self._usage(mongo, mine, now - timedelta(hours=1), 4.0)
+
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
+        assert [r["value"] for r in rows] == [1.75, 4.0]
+        assert rows[0]["day"] < rows[1]["day"]
+
+    def test_coach_spend_is_one_accounts_only(self, operator_client, mongo):
+        now = datetime.now(UTC)
+        mine, theirs = str(ObjectId()), str(ObjectId())
+        self._usage(mongo, mine, now - timedelta(hours=1), 2.0)
+        self._usage(mongo, theirs, now - timedelta(hours=1), 99.0)
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
+        assert [r["value"] for r in rows] == [2.0]
+
+    def test_coach_spend_stops_at_the_window(self, operator_client, mongo):
+        """Older calls are the platform's history, on Capacity. This read is
+        the shape of a month that is running away."""
+        now = datetime.now(UTC)
+        mine = str(ObjectId())
+        self._usage(mongo, mine, now - timedelta(days=ACCOUNT_COACH_SPEND_DAYS + 1), 50.0)
+        self._usage(mongo, mine, now - timedelta(hours=2), 1.0)
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
+        assert [r["value"] for r in rows] == [1.0]
+
+    def test_an_id_that_is_not_an_id_reads_empty_rather_than_erroring(self, operator_client, mongo):
+        """A mistyped id reaches these the same way it reaches the account
+        itself, and neither should answer 500."""
+        assert operator_client.get("/api/operator/accounts/not-an-id/coach").json() == []
+        assert operator_client.get("/api/operator/accounts/not-an-id/audit").json() == []
