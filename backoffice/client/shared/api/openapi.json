@@ -954,6 +954,113 @@
         ]
       }
     },
+    "/api/operator/accounts/{user_id}/audit": {
+      "get": {
+        "description": "What the back office has done to this account. The operator's own\naudit filtered to one subject, so the account page does not read the\nwhole log to find three rows.",
+        "operationId": "account_audit_api_operator_accounts__user_id__audit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Account Audit Api Operator Accounts  User Id  Audit Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Audit",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/accounts/{user_id}/coach": {
+      "get": {
+        "description": "One account's coach cost a day, for the shape of a month running\naway. The cost of the calls, never a word of what was in them.",
+        "operationId": "account_coach_spend_api_operator_accounts__user_id__coach_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DayFigure"
+                  },
+                  "title": "Response Account Coach Spend Api Operator Accounts  User Id  Coach Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Coach Spend",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
     "/api/operator/attention": {
       "get": {
         "description": "The landing page's counts: the reason to open the control plane.",
