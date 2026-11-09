@@ -45,36 +45,19 @@
             <div class="p-b">
               <p class="p-t">{{causeNote}}</p>
 
-              <sc-if value="{{showStart}}" hint-placeholder-val="{{true}}">
-                <div class="bar-row" style="margin-top: 14px">
-                  <button type="button" class="btn sun" style="min-height: 48px" onClick="{{beginRollback}}">Roll back to 00163</button>
-                  <a class="btn" href="Releases.dc.html" style="min-height: 48px">See what 00164 changed</a>
-                </div>
-              </sc-if>
+              <div class="bar-row" style="margin-top: 14px">
+                <a class="btn sun" href="Runbooks.dc.html" style="min-height: 48px">Runbook: revert it on main</a>
+                <a class="btn" href="Releases.dc.html" style="min-height: 48px">See what 00164 changed</a>
+              </div>
 
-              <sc-if value="{{showConfirm}}" hint-placeholder-val="{{false}}">
-                <div style="margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--wash)">
-                  <div class="b">Moving traffic to 00163 will:</div>
-                  <ul style="margin: 6px 0 12px; padding-left: 18px; font-size: 13.5px; line-height: 1.7">
-                    <li>send every request to the last good revision within a minute</li>
-                    <li>leave 00164 deployed with no traffic, so you can look at it</li>
-                    <li>not touch the database. Neither release ran a migration</li>
-                    <li>last only until the next deploy, so revert the change on main too</li>
-                  </ul>
-                  <div class="bar-row">
-                    <button type="button" class="btn dark" style="min-height: 48px" onClick="{{confirmRollback}}">Move traffic to 00163</button>
-                    <button type="button" class="btn" style="min-height: 48px" onClick="{{cancelRollback}}">Keep 00164 for now</button>
-                  </div>
-                </div>
-              </sc-if>
-
-              <sc-if value="{{rolled}}" hint-placeholder-val="{{false}}">
-                <div class="bar-row" style="margin-top: 14px">
-                  <span class="chip good">Traffic on 00163</span>
-                  <button type="button" class="lkb lk" onClick="{{undoRollback}}">Move traffic back to 00164</button>
-                  <a class="lk" href="Releases.dc.html" style="font-size: 13.5px">Now revert the change on main</a>
-                </div>
-              </sc-if>
+              <div style="margin-top: 14px; padding: 14px 16px; border-radius: 16px; background: var(--wash)">
+                <div class="b">There is no button here that moves traffic.</div>
+                <ul style="margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.7">
+                  <li>Revert the change on main. The deploy that follows is the way back, and it is the only one</li>
+                  <li>Re-running 00163's build does nothing: a build the live release already contains succeeds without deploying</li>
+                  <li>Neither release ran a migration, so the database is not in the way</li>
+                </ul>
+              </div>
             </div>
           </section>
 
@@ -84,7 +67,6 @@
               <div class="fact"><span>Route</span><span class="id">POST /api/beats</span></div>
               <div class="fact"><span>Share of those requests failing</span><span>{{fail}}</span></div>
               <div class="fact"><span>Accounts seen failing</span><span>About 120, counted from the logs</span></div>
-              <div class="fact"><span>Devices</span><span>Retry on their own for 24 hours</span></div>
               <div class="fact"><span>Everything else</span><span>Reads and sign-in are normal</span></div>
             </div>
           </section>
@@ -145,7 +127,7 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1340}}'>
 class Component extends DCLogic {
-  state = { phase: 0, rollback: 'idle', draft: '', notes: [], copied: false, close: {} };
+  state = { phase: 0, draft: '', notes: [], copied: false, close: {} };
   renderVals() {
     const s = this.state;
     const labels = ['Investigating', 'Cause found', 'Fixing', 'Watching', 'Resolved'];
@@ -155,31 +137,20 @@ class Component extends DCLogic {
       { at: '08:41', what: 'Alert fired: 5xx above 1%', who: 'Cloud Monitoring', tone: 'hot' },
       { at: '08:38', what: 'Release 00164 reached production', who: 'build 7be41f02', tone: '' }
     ];
-    const rolled = s.rollback === 'done';
-    const moved = rolled ? [{ at: '09:12', what: 'Traffic moved to 00163', who: 'you, recorded in the audit', tone: 'ok' }] : [];
     const added = s.notes.map((n) => ({ at: '09:12', what: n, who: 'you', tone: '' }));
-    const copyFor = rolled
-      ? 'Some time entries could not be saved between 08:38 and 09:12 UTC. This is fixed. Your devices retry on their own, so you should not need to do anything.'
-      : 'Some time entries are failing to save. Your devices retry on their own, so nothing should be lost. We are working on it and will update you by 09:30 UTC.';
+    const copyFor = 'Some time entries are failing to save. We are working on it and will update you by 09:30 UTC.';
     return {
       hour: this.props.hour ?? 'afternoon',
-      title: rolled ? 'Traffic is back on 00163. Watch the errors.' : 'Writes are failing on the beats route.',
-      lead: rolled ? 'Errors should fall within two minutes. Stay in this room until they have, then revert the change on main.' : 'Started 31 minutes ago. Reads and sign-in are fine, so this is about saving new sessions.',
+      title: 'Writes are failing on the beats route.',
+      lead: 'Started 31 minutes ago. Reads and sign-in are fine, so this is about saving new sessions.',
       phases: labels.map((l, i) => ({ label: l, on: i === s.phase ? 'on' : '', pressed: i === s.phase ? 'true' : 'false', pick: () => this.setState({ phase: i }) })),
-      causeTitle: rolled ? 'Rolled back from 00164' : 'Most likely cause: release 00164',
-      causeNote: rolled ? 'The last good revision is taking every request. 00164 is still deployed, with no traffic, so you can read its logs.' : 'Errors began three minutes after it reached production, and all of them are on a route that release changed.',
-      showStart: s.rollback === 'idle',
-      showConfirm: s.rollback === 'confirm',
-      rolled,
-      beginRollback: () => this.setState({ rollback: 'confirm' }),
-      cancelRollback: () => this.setState({ rollback: 'idle' }),
-      confirmRollback: () => this.setState({ rollback: 'done', phase: 3 }),
-      undoRollback: () => this.setState({ rollback: 'idle', phase: 0 }),
-      fail: rolled ? 'Falling, was 3.8% of all requests' : 'About 4%, and 3.8% of all requests',
+      causeTitle: 'Most likely cause: release 00164',
+      causeNote: 'Errors began three minutes after it reached production, and all of them are on a route that release changed.',
+      fail: 'About 4%, and 3.8% of all requests',
       draft: s.draft,
       onDraft: (e) => this.setState({ draft: e.target.value }),
       addNote: (e) => { e.preventDefault(); if (s.draft.trim()) this.setState({ notes: [s.draft.trim(), ...s.notes], draft: '' }); },
-      notes: [...added, ...moved, ...base],
+      notes: [...added, ...base],
       update: s.edited ?? copyFor,
       onUpdate: (e) => this.setState({ edited: e.target.value }),
       copy: () => this.setState({ copied: !s.copied }),

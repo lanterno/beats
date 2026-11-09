@@ -54,10 +54,7 @@
               </sc-if>
               <sc-if value="{{allowed}}" hint-placeholder-val="{{true}}">
                 <div class="stack" style="gap: 12px">
-                  <div style="display: flex; flex-wrap: wrap; gap: 10px">
-                    <label class="lab" style="flex: 1 1 220px">Reference for their request<input class="in" value="{{ref}}" onChange="{{onRef}}"></label>
-                    <label class="lab" style="flex: 1 1 220px">Type Harbour &amp; Co to confirm<input class="in" autocomplete="off" spellcheck="false" value="{{typed}}" onChange="{{onTyped}}"></label>
-                  </div>
+                  <label class="lab" style="max-width: 360px">Type Harbour &amp; Co to confirm<input class="in" autocomplete="off" spellcheck="false" value="{{typed}}" onChange="{{onTyped}}"></label>
                   <p class="p-t" style="font-size: 13.5px">Once they are owner, the back office can no longer act on this organisation. Anything after that is theirs to do.</p>
                   <div class="bar-row">
                     <button type="button" class="btn sun" style="min-height: 48px" disabled="{{blocked}}" onClick="{{grant}}">{{grantLabel}}</button>
@@ -73,7 +70,7 @@
             <div class="p-b">
               <div class="tl">
                 <sc-if value="{{done}}" hint-placeholder-val="{{false}}">
-                  <div class="tl-t">Now</div><div class="tl-r ok"></div><div class="tl-b"><span class="b">Owner granted by the operator</span> <span class="cap">to {{picked.who}}, ref {{ref}}</span></div>
+                  <div class="tl-t">Now</div><div class="tl-r ok"></div><div class="tl-b"><span class="b">Owner granted by the operator</span> <span class="cap">to {{picked.who}}</span></div>
                 </sc-if>
                 <div class="tl-t">7 Nov</div><div class="tl-r"></div><div class="tl-b"><span class="b">Timesheet reopened</span> <span class="cap">by an admin, for a member</span></div>
                 <div class="tl-t">3 Nov</div><div class="tl-r hot"></div><div class="tl-b"><span class="b">Owner's account erased</span> <span class="cap">by the operator, at their request</span></div>
@@ -119,7 +116,7 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1500}}'>
 class Component extends DCLogic {
-  state = { pick: 'priya', ref: 'SUP-198', typed: '', done: false };
+  state = { pick: 'priya', typed: '', done: false };
   renderVals() {
     const s = this.state;
     const list = [
@@ -132,8 +129,7 @@ class Component extends DCLogic {
     const picked = list.find((m) => m.id === s.pick);
     const matches = s.typed.trim() === 'Harbour & Co';
     let note = '';
-    if (!s.ref.trim()) note = 'Add the reference first.';
-    else if (!matches) note = 'Type the name to confirm.';
+    if (!matches) note = 'Type the name to confirm.';
     return {
       hour: this.props.hour ?? 'afternoon',
       title: s.done ? 'Harbour & Co has an owner again.' : 'Harbour & Co has no owner.',
@@ -145,7 +141,6 @@ class Component extends DCLogic {
       refused: !picked.ok,
       refusal: picked.why || '',
       allowed: picked.ok,
-      ref: s.ref, onRef: (e) => this.setState({ ref: e.target.value }),
       typed: s.typed, onTyped: (e) => this.setState({ typed: e.target.value }),
       blocked: !!note || s.done,
       note: s.done ? 'Recorded in the audit on both sides.' : note,

@@ -30,9 +30,6 @@
             <button type="button" class="{{f.on}}" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button>
           </sc-for>
         </div>
-        <sc-if value="{{snack}}" hint-placeholder-val="{{false}}">
-          <div class="snack push" role="status">{{snack}} <button type="button" onClick="{{undo}}">Undo</button></div>
-        </sc-if>
       </div>
 
       <div class="lean">
@@ -81,10 +78,7 @@
               <div class="stack" style="gap: 8px">
                 <a href="{{sel.href}}" class="btn sun">{{sel.next}}</a>
                 <a href="Runbooks.dc.html" class="btn">Read the runbook: {{sel.runbook}}</a>
-                <div class="bar-row">
-                  <button type="button" class="btn" style="flex: 1 1 120px" onClick="{{snooze}}">Snooze until tomorrow</button>
-                  <button type="button" class="btn" style="flex: 1 1 120px" onClick="{{finish}}">Mark done</button>
-                </div>
+                <p class="cap" style="margin: 2px 0 0; line-height: 1.6">There is nothing here to tick off. A row is the condition, not a note about it, so it leaves this list when the thing itself is dealt with — and comes back if it returns.</p>
               </div>
             </div>
           </aside>
@@ -96,7 +90,7 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1060}}'>
 class Component extends DCLogic {
-  state = { filter: 'all', picked: 'purge', gone: [], last: null };
+  state = { filter: 'all', picked: 'purge' };
   renderVals() {
     const f = (k, v) => ({ k, v });
     const all = [
@@ -106,15 +100,15 @@ class Component extends DCLogic {
         next: 'Open the failed job', href: 'Jobs.dc.html', runbook: 'a job failed' },
       { id: 'harbour', title: 'Harbour & Co has no owner', kind: 'Organisation', source: 'Asked by an admin', due: 'Overdue 2 d', tone: 'owed', bucket: 'overdue',
         why: 'Its only owner closed their account, so nobody can manage members or billing. You can step in only because the organisation asked.',
-        facts: [f('Members', '14 active'), f('Highest active role', 'Admin, 2 people'), f('Request', 'SUP-198, from an admin')],
+        facts: [f('Members', '14 active'), f('Highest active role', 'Admin, 2 people'), f('Request', 'By email, from an admin on the account')],
         next: 'Review the handover', href: 'Org.dc.html', runbook: 'an organisation lost its owner' },
       { id: 'coach', title: 'u_6f1c9a is at 92% of its coach cap', kind: 'Cost', source: 'Cost monitor', due: 'Today', tone: 'warn', bucket: 'today',
         why: 'At this pace the account hits its cap tomorrow. Coach stops for them when it does. Decide whether that is what you want.',
         facts: [f('Spend', '$46.10 of $50.00 this month'), f('Pace', '$5.10 a day'), f('Usual for this account', '$0.60 a day')],
         next: 'Open the account', href: 'Account.dc.html', runbook: 'a coach cap is close' },
       { id: 'signups', title: 'Signups ran at 6× the usual rate', kind: 'Abuse', source: 'Abuse signals', due: 'Today', tone: 'warn', bucket: 'today',
-        why: 'Most of them arrived from one network between 07:00 and 08:00. None has done much yet, so there is time to look before they do.',
-        facts: [f('Signups', '84 since 07:00, usually about 14'), f('Sharing one network', '71 of them'), f('Accounts with any writes', '3')],
+        why: 'The largest network is most of them. No account is joined to a network anywhere, so this is a shape in the hour, not a list of people — an office or a company onboarding its staff looks the same.',
+        facts: [f('Signups', '84 since 07:00, usually about 14'), f('Largest network’s share', '71 of the 84'), f('Of all 84, with any writes', '3')],
         next: 'Open the signal', href: 'Trust.dc.html', runbook: 'a signup spike' },
       { id: 'erasure', title: 'Erasure request, day 12 of 30', kind: 'Privacy', source: 'Logged by you', due: '18 days left', tone: '', bucket: 'later',
         why: 'The law gives one month from the day the request arrived. The clock runs from the email, not from when the job was queued.',
@@ -125,7 +119,7 @@ class Component extends DCLogic {
         facts: [f('People with access', '1 operator'), f('Last reviewed', '12 August'), f('Changes since', 'None')],
         next: 'Start the review', href: 'Access.dc.html', runbook: 'the quarterly access review' }
     ];
-    const live = all.filter((i) => !this.state.gone.includes(i.id));
+    const live = all;
     const count = (b) => live.filter((i) => i.bucket === b).length;
     const filter = this.state.filter;
     const shown = live.filter((i) => filter === 'all' || i.bucket === filter);
@@ -133,10 +127,6 @@ class Component extends DCLogic {
     const opts = [['all', 'All', live.length], ['overdue', 'Overdue', count('overdue')], ['today', 'Today', count('today')], ['later', 'Later', count('later')]];
     const words = ['Nothing is', 'One thing is', 'Two things are', 'Three things are', 'Four things are', 'Five things are', 'Six things are'];
     const over = count('overdue');
-    const remove = (verb) => {
-      if (!pickedRow) return;
-      this.setState({ gone: [...this.state.gone, pickedRow.id], last: verb + ' ' + pickedRow.title.charAt(0).toLowerCase() + pickedRow.title.slice(1) + '.' });
-    };
     return {
       hour: this.props.hour ?? 'afternoon',
       headline: words[live.length] + ' waiting.' + (over ? ' ' + (over === 1 ? 'One is' : 'Two are') + ' overdue.' : ''),
@@ -144,11 +134,7 @@ class Component extends DCLogic {
       rows: shown.map((i) => ({ ...i, sel: pickedRow && pickedRow.id === i.id ? 'sel' : '', pick: () => this.setState({ picked: i.id }) })),
       hasRows: shown.length > 0,
       noRows: shown.length === 0,
-      sel: pickedRow,
-      snack: this.state.last,
-      snooze: () => remove('Snoozed'),
-      finish: () => remove('Closed'),
-      undo: () => this.setState({ gone: this.state.gone.slice(0, -1), last: null })
+      sel: pickedRow
     };
   }
 }

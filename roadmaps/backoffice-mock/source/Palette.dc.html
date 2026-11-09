@@ -73,12 +73,12 @@ class Component extends DCLogic {
     let p = { title: 'Return opens Today.', note: 'Type an address, an id, an organisation, or what you want to do.', bg: 'var(--wash)', ink: 'var(--ink)' };
     let groups = [];
     if (email) {
-      p = { title: 'Return looks up this exact address.', note: 'It travels in the request body and never appears in a link or a log. The lookup is recorded in the audit.', bg: 'var(--wash)', ink: 'var(--ink)' };
+      p = { title: 'Return looks up this exact address.', note: 'It travels in the request body and never appears in a link or a log.', bg: 'var(--wash)', ink: 'var(--ink)' };
       groups = [{ label: 'Account', items: [it('Look up ' + q, 'Exact match', 'Account.dc.html')] }];
     } else if (partEmail) {
       p = { title: 'Return does nothing yet. Type the whole address.', note: 'Fragments are refused on purpose: nobody can browse people from here.', bg: 'var(--persimmon-tint)', ink: 'var(--persimmon-ink)' };
     } else if (id) {
-      p = { title: 'Return opens account ' + low + '.', note: 'You will see operational facts only, and the visit is recorded in the audit.', bg: 'var(--wash)', ink: 'var(--ink)' };
+      p = { title: 'Return opens account ' + low + '.', note: 'You will see operational facts only.', bg: 'var(--wash)', ink: 'var(--ink)' };
       groups = [{ label: 'Account', items: [it('Open ' + low, 'Exact id', 'Account.dc.html')] }];
     } else if (partId) {
       p = { title: 'Return does nothing yet. Type the whole id.', note: 'Account ids are matched exactly, like addresses.', bg: 'var(--persimmon-tint)', ink: 'var(--persimmon-ink)' };

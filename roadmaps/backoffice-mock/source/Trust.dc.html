@@ -38,9 +38,8 @@
             </svg>
           </div>
           <div style="padding: 8px 20px 18px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
-            <p class="p-t" style="flex: 1 1 420px">71 of them came from one network, and only 3 have written anything. There is time to look before they cost anything.</p>
+            <p class="p-t" style="flex: 1 1 420px">The largest network is 71 of this window’s signups. Of all 84 accounts created in it, 3 have written anything — which of those are the network’s is not recorded, and will not be. Offices, universities, carrier networks and an organisation onboarding its staff all look like this.</p>
             <a class="btn sun" href="Access.dc.html">Tighten the signup limit</a>
-            <button type="button" class="btn" onClick="{{dismiss}}">{{dismissLabel}}</button>
           </div>
         </section>
 
@@ -55,15 +54,14 @@
           </div>
           <div class="tb">
             <div class="t" role="table">
-              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th" style="text-align: right">{{figureHead}}</div><div role="columnheader" class="th" style="text-align: right">Against the median</div><div role="columnheader" class="th">State</div><div role="columnheader" class="th"><span style="position: absolute; left: -9999px">Action</span></div></div></div>
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th" style="text-align: right">{{figureHead}}</div><div role="columnheader" class="th" style="text-align: right">Against the median</div><div role="columnheader" class="th">Already restricted</div></div></div>
               <div class="tg" role="rowgroup">
                 <sc-for list="{{rows}}" as="r" hint-placeholder-count="4">
                   <div role="row" class="tr row">
                     <div role="cell" class="td"><a class="lk id" href="Account.dc.html">{{r.id}}</a></div>
                     <div role="cell" class="td n">{{r.figure}}</div>
                     <div role="cell" class="td n">{{r.vs}}</div>
-                    <div role="cell" class="td"><span class="chip {{r.tone}}">{{r.state}}</span></div>
-                    <div role="cell" class="td" style="text-align: right"><sc-if value="{{r.action}}" hint-placeholder-val="{{true}}"><button type="button" class="lkb lk" onClick="{{r.toggle}}">{{r.action}}</button></sc-if></div>
+                    <div role="cell" class="td"><sc-if value="{{r.state}}" hint-placeholder-val="{{true}}"><span class="chip {{r.tone}}">{{r.state}}</span></sc-if></div>
                   </div>
                 </sc-for>
               </div>
@@ -72,18 +70,16 @@
         </section>
 
         <section class="p">
-          <div class="p-h"><h2>Restrictions in force</h2><p class="p-n">Everything you have limited or suspended, so nothing stays that way by accident.</p></div>
+          <div class="p-h"><h2>Restrictions in force</h2><p class="p-n">Read off the accounts themselves, so it cannot drift. Nothing here records why, or when to look again: a restriction stands until somebody lifts it.</p></div>
           <div class="tb">
             <div class="t" role="table">
-              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th">Restriction</div><div role="columnheader" class="th">Set</div><div role="columnheader" class="th">Look again</div><div role="columnheader" class="th">Reference</div></div></div>
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Account</div><div role="columnheader" class="th">Restriction</div><div role="columnheader" class="th">Set</div></div></div>
               <div class="tg" role="rowgroup">
                 <sc-for list="{{limits}}" as="l" hint-placeholder-count="3">
                   <div role="row" class="tr row">
                     <div role="cell" class="td"><a class="lk id" href="Account.dc.html">{{l.id}}</a></div>
                     <div role="cell" class="td">{{l.what}}</div>
                     <div role="cell" class="td d">{{l.set}}</div>
-                    <div role="cell" class="td"><span class="chip {{l.tone}}">{{l.next}}</span></div>
-                    <div role="cell" class="td cap">{{l.ref}}</div>
                   </div>
                 </sc-for>
               </div>
@@ -110,37 +106,30 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1560}}'>
 class Component extends DCLogic {
-  state = { tab: 'coach', reviewed: {}, dismissed: false };
+  state = { tab: 'coach' };
   renderVals() {
     const v = [6,5,4,3,4,5,6,8,9,11,12,13,14,13,12,11,10,8,7,6,5,4,46,38];
     const r = (id, figure, vs, state, tone) => ({ id, figure, vs, state, tone: tone || '' });
     const data = {
-      coach: { label: 'Coach spend', head: 'This month', note: 'Top 4 this month', rows: [r('u_6f1c9a', '$46.10', '14×', 'New', 'warn'), r('u_1bd2c0', '$31.40', '9×', 'New', 'warn'), r('u_e5a901', '$27.85', '8×', 'Reviewed 3 Nov'), r('u_c2e491', '$22.10', '6×', 'Reviewed 3 Nov')] },
-      flow: { label: 'Flow windows', head: 'Today', note: 'Top 3 today', rows: [r('u_a0b7f3', '4,210', '130×', 'Limits set'), r('u_18d06e', '980', '30×', 'New', 'warn'), r('u_9c0d44', '640', '20×', 'Reviewed 1 Nov')] },
-      sessions: { label: 'Sessions', head: 'Last 7 days', note: 'Top 3 in the last 7 days', rows: [r('u_a0b7f3', '1,840', '95×', 'Limits set'), r('u_33fe12', '410', '21×', 'New', 'warn'), r('u_18d06e', '295', '15×', 'Reviewed 1 Nov')] },
-      reports: { label: 'Report links', head: 'Open links', note: 'Top 3 by open links', rows: [r('u_33fe12', '64', '32×', 'New', 'warn'), r('u_e5a901', '18', '9×', 'Reviewed 3 Nov')] },
-      webhooks: { label: 'Webhook domains', head: 'Domains', note: 'Accounts sending to the most domains', rows: [r('u_9c0d44', '27', '27×', 'New', 'warn'), r('u_a0b7f3', '6', '6×', 'Limits set')] },
-      devices: { label: 'Devices', head: 'Paired', note: 'Most devices paired', rows: [r('u_9c0d44', '41', '20×', 'New', 'warn'), r('u_1bd2c0', '9', '4×', 'Reviewed 2 Nov')] }
+      coach: { label: 'Coach spend', head: 'This month', note: 'Top 4 this month', rows: [r('u_6f1c9a', '$46.10', '14×', ''), r('u_1bd2c0', '$31.40', '9×', ''), r('u_e5a901', '$27.85', '8×', ''), r('u_c2e491', '$22.10', '6×', '')] },
+      flow: { label: 'Flow windows', head: 'Today', note: 'Top 3 today', rows: [r('u_a0b7f3', '4,210', '130×', 'Limits set', 'owed'), r('u_18d06e', '980', '30×', ''), r('u_9c0d44', '640', '20×', '')] },
+      sessions: { label: 'Sessions', head: 'Last 7 days', note: 'Top 3 in the last 7 days', rows: [r('u_a0b7f3', '1,840', '95×', 'Limits set', 'owed'), r('u_33fe12', '410', '21×', ''), r('u_18d06e', '295', '15×', '')] },
+      reports: { label: 'Report links', head: 'Open links', note: 'Top 3 by open links', rows: [r('u_33fe12', '64', '32×', ''), r('u_e5a901', '18', '9×', '')] },
+      webhooks: { label: 'Webhook domains', head: 'Domains', note: 'Accounts sending to the most domains', rows: [r('u_9c0d44', '27', '27×', ''), r('u_a0b7f3', '6', '6×', 'Limits set', 'owed')] },
+      devices: { label: 'Devices', head: 'Paired', note: 'Most devices paired', rows: [r('u_9c0d44', '41', '20×', ''), r('u_1bd2c0', '9', '4×', '')] }
     };
     const current = data[this.state.tab];
     return {
       hour: this.props.hour ?? 'afternoon',
       hours: v.map((d, i) => { const h = d / 46 * 132; return { x: (8 + i * 31).toFixed(1), y: (150 - h).toFixed(1), h: h.toFixed(1), tone: i >= 22 ? 'hot' : '', t: (i >= 22 ? 'This morning: ' : 'Earlier: ') + d + ' signups' }; }),
-      dismiss: () => this.setState({ dismissed: !this.state.dismissed }),
-      dismissLabel: this.state.dismissed ? 'Marked as looked at. Undo' : 'Mark as looked at',
       tabNote: current.note,
       figureHead: current.head,
       tabs: Object.keys(data).map((k) => ({ label: data[k].label, on: k === this.state.tab ? 'on' : '', pressed: k === this.state.tab ? 'true' : 'false', pick: () => this.setState({ tab: k }) })),
-      rows: current.rows.map((row) => {
-        const key = this.state.tab + row.id;
-        const done = !!this.state.reviewed[key];
-        const isNew = row.state === 'New';
-        return { ...row, state: done ? 'Reviewed today' : row.state, tone: done ? '' : row.tone, action: isNew ? (done ? 'Undo' : 'Mark as reviewed') : '', toggle: () => this.setState({ reviewed: { ...this.state.reviewed, [key]: !done } }) };
-      }),
+      rows: current.rows,
       limits: [
-        { id: 'u_a0b7f3', what: 'Beat writes 20 a minute, webhooks off', set: 'Today', next: '16 November', tone: '', ref: 'SUP-204' },
-        { id: 'u_77aa10', what: 'Suspended while erasure waits', set: '6 November', next: 'Ends 13 November', tone: '', ref: 'SUP-199' },
-        { id: 'u_4db720', what: 'Suspended for abuse', set: '19 October', next: 'Overdue 3 days', tone: 'owed', ref: 'SUP-183' }
+        { id: 'u_a0b7f3', what: 'Beat writes 20 a minute, webhooks off', set: 'Today' },
+        { id: 'u_77aa10', what: 'Suspended while erasure waits', set: '6 November' },
+        { id: 'u_4db720', what: 'Suspended for abuse', set: '19 October' }
       ]
     };
   }

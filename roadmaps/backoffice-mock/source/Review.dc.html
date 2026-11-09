@@ -64,23 +64,6 @@
             </div>
           </section>
 
-          <section class="p">
-            <div class="p-h"><h2>Why are you doing it?</h2><p class="p-n">Goes in the audit. Someone will read it in a year and need to understand.</p></div>
-            <div class="p-b" style="display: flex; flex-wrap: wrap; gap: 10px">
-              <label class="lab" style="flex: 1 1 200px">Reason
-                <select class="in" value="{{reason}}" onChange="{{onReason}}">
-                  <option value="">Choose one</option>
-                  <option value="asked">The person asked</option>
-                  <option value="cost">Unusual cost</option>
-                  <option value="abuse">Abuse</option>
-                  <option value="incident">An incident</option>
-                  <option value="legal">A legal duty</option>
-                </select>
-              </label>
-              <label class="lab" style="flex: 1 1 200px">Reference, such as a support number<input class="in" value="{{ref}}" onChange="{{onRef}}"></label>
-            </div>
-          </section>
-
           <section class="p up">
             <div class="p-h" style="padding-top: 18px"><h2>Do it</h2></div>
             <div class="p-b">
@@ -114,7 +97,7 @@
             <div class="fact"><span>When</span><span>{{c.when}}</span></div>
             <div class="fact"><span>Who notices</span><span>{{c.notices}}</span></div>
             <div class="fact"><span>Can you undo it</span><span>{{c.undo}}</span></div>
-            <div class="fact"><span>On the record</span><span>You, the reason, the reference, before and after</span></div>
+            <div class="fact"><span>On the record</span><span>You, the command, the subject, before and after</span></div>
           </div>
         </aside>
       </div>
@@ -124,7 +107,7 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1220}}'>
 class Component extends DCLogic {
-  state = { cmd: 'erase', cap: '75', reason: 'asked', ref: 'SUP-211', typed: '', asked: false, ran: false };
+  state = { cmd: 'erase', cap: '75', typed: '', asked: false, ran: false };
   renderVals() {
     const s = this.state;
     const x = (what, now, after) => ({ what, now, after });
@@ -150,9 +133,7 @@ class Component extends DCLogic {
     const c = defs[s.cmd];
     const matches = s.typed.trim().toLowerCase() === 'maya@example.com';
     let blockNote = '';
-    if (!s.reason) blockNote = 'Choose a reason first.';
-    else if (!s.ref.trim()) blockNote = 'Add a reference first.';
-    else if (s.cmd === 'erase' && !s.asked) blockNote = 'Confirm they asked for this first.';
+    if (s.cmd === 'erase' && !s.asked) blockNote = 'Confirm they asked for this first.';
     else if (c.typed && !matches) blockNote = 'Type the address to confirm.';
     const blocked = !!blockNote || s.ran;
     return {
@@ -164,8 +145,6 @@ class Component extends DCLogic {
       isErase: s.cmd === 'erase',
       cap: s.cap, onCap: (e) => this.setState({ cap: e.target.value.replace(/[^0-9]/g, '') }),
       asked: s.asked, onAsked: () => this.setState({ asked: !s.asked }),
-      reason: s.reason, onReason: (e) => this.setState({ reason: e.target.value }),
-      ref: s.ref, onRef: (e) => this.setState({ ref: e.target.value }),
       typed: s.typed, onTyped: (e) => this.setState({ typed: e.target.value }),
       blocked, blockNote,
       runLabel: s.ran ? 'Done' : c.run,

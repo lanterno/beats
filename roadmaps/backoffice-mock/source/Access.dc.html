@@ -19,7 +19,7 @@
       <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
       <header class="ph">
         <div class="ph-t">
-          <h1 class="h1">One person can reach this, and the review is due this month.</h1>
+          <h1 class="h1">One person can reach this.</h1>
           <p class="lead">Who can get in, what they can do, and the switches that change how the whole product behaves.</p>
         </div>
       </header>
@@ -27,18 +27,11 @@
       <div class="stack">
         <div class="split">
           <section class="p up">
-            <div class="p-h" style="padding-top: 18px"><h2>Access review</h2><span class="cap">Last done 12 August</span></div>
+            <div class="p-h" style="padding-top: 18px"><h2>Access review</h2><p class="p-n">A checklist to read down, not a record: nothing here remembers that you did it, and ticking a box stores nothing.</p></div>
             <div class="p-b">
-              <sc-if value="{{reviewOpen}}" hint-placeholder-val="{{true}}">
-                <sc-for list="{{checks}}" as="c" hint-placeholder-count="3">
-                  <label class="check" style="padding: 5px 0"><input type="checkbox" checked="{{c.done}}" onChange="{{c.toggle}}"><span>{{c.label}}</span></label>
-                </sc-for>
-                <button type="button" class="btn sun" style="margin-top: 10px; min-height: 48px" disabled="{{cannotRecord}}" onClick="{{record}}">Record this review</button>
-              </sc-if>
-              <sc-if value="{{reviewDone}}" hint-placeholder-val="{{false}}">
-                <p class="p-t"><span class="b">Reviewed today, nothing changed.</span> The next one is due on 9 February.</p>
-                <button type="button" class="lkb lk" style="margin-top: 8px" onClick="{{reopen}}">Undo</button>
-              </sc-if>
+              <sc-for list="{{checks}}" as="c" hint-placeholder-count="3">
+                <label class="check" style="padding: 5px 0"><input type="checkbox" checked="{{c.done}}" onChange="{{c.toggle}}"><span>{{c.label}}</span></label>
+              </sc-for>
             </div>
           </section>
 
@@ -108,7 +101,7 @@
               <div class="fact"><span>Allowed by</span><span>Google account id, on a list here</span></div>
               <div class="fact"><span>Deployment</span><span>Separate from the product</span></div>
               <div class="fact"><span>Can sign in as a user</span><span>No, it holds no session key</span></div>
-              <div class="fact"><span>Second approver</span><span>Available once a second operator exists</span></div>
+              <div class="fact"><span>Second approver</span><span>None. One operator acts alone, and the audit is the check</span></div>
             </div>
           </section>
         </div>
@@ -119,16 +112,16 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1420}}'>
 class Component extends DCLogic {
-  state = { checks: {}, reviewed: false, flips: {}, last: null };
+  state = { checks: {}, flips: {}, last: null };
   renderVals() {
     const s = this.state;
     const defs = [
       { id: 'beats', title: 'Limit beat writes per account', note: 'Suggested: 120 a minute. A refusal asks the device to retry.', on: false, onText: '120 a minute', offText: 'No limit' },
       { id: 'signals', title: 'Limit signal writes per account', note: 'Suggested: 60 a minute.', on: false, onText: '60 a minute', offText: 'No limit' },
       { id: 'imports', title: 'Limit imports per account', note: 'Suggested: 10 an hour.', on: false, onText: '10 an hour', offText: 'No limit' },
-      { id: 'signups', title: 'Slow signups from one network', note: 'Turns itself off after 24 hours.', on: false, onText: '20 an hour, to tomorrow', offText: 'Normal' },
+      { id: 'signups', title: 'Slow signups from one network', note: 'Stops at UTC midnight at the latest: the network key is derived for the day and stops matching.', on: false, onText: '20 an hour, to tomorrow', offText: 'Normal' },
       { id: 'coach', title: 'Coach', note: 'Off stops every new coach request, for everyone.', on: true, onText: 'Running', offText: 'Paused for everyone' },
-      { id: 'webhooks', title: 'Webhook delivery', note: 'Off holds deliveries and sends them when it comes back on.', on: true, onText: 'Running', offText: 'Held' },
+      { id: 'webhooks', title: 'Webhook delivery', note: 'Off drops what would have been sent. There is no queue behind this, so nothing catches up when it comes back on.', on: true, onText: 'Running', offText: 'Dropping' },
       { id: 'importing', title: 'Imports', note: 'Off refuses new imports. Exports keep working.', on: true, onText: 'Running', offText: 'Refused' }
     ];
     const checks = [['list', 'Everyone listed still needs access'], ['audit', 'I read the audit since the last review and nothing is unexplained'], ['text', 'The privacy text still names the right people']];
@@ -136,12 +129,7 @@ class Component extends DCLogic {
     const lastDef = defs.find((d) => d.id === s.last);
     return {
       hour: this.props.hour ?? 'afternoon',
-      reviewOpen: !s.reviewed,
-      reviewDone: s.reviewed,
       checks: checks.map(([id, label]) => ({ label, done: !!s.checks[id], toggle: () => this.setState({ checks: { ...s.checks, [id]: !s.checks[id] } }) })),
-      cannotRecord: !checks.every(([id]) => s.checks[id]),
-      record: () => this.setState({ reviewed: true }),
-      reopen: () => this.setState({ reviewed: false }),
       controls: defs.map((d) => {
         const on = s.flips[d.id] ?? d.on;
         const danger = !on && d.on;
@@ -153,7 +141,7 @@ class Component extends DCLogic {
         { what: 'Read every page here', viewer: 'Yes', viewerTone: 'good', operator: 'Yes', operatorTone: 'good' },
         { what: 'Look up one account', viewer: 'Yes', viewerTone: 'good', operator: 'Yes', operatorTone: 'good' },
         { what: 'Run any command', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' },
-        { what: 'Cancel or retry a job', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' },
+        { what: 'Cancel a queued job', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' },
         { what: 'Change the switches above', viewer: 'No', viewerTone: '', operator: 'Yes', operatorTone: 'good' }
       ]
     };

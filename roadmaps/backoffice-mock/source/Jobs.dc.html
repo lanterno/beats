@@ -64,25 +64,20 @@
               <p class="p-t">{{sel.say}}</p>
               <div style="margin: 12px 0">
                 <div class="fact"><span>Queued by</span><span>{{sel.by}}</span></div>
-                <div class="fact"><span>Reference</span><span>{{sel.ref}}</span></div>
                 <div class="fact"><span>Waiting period</span><span>{{sel.wait}}</span></div>
               </div>
-              <sc-if value="{{sel.hasTries}}" hint-placeholder-val="{{false}}">
-                <p class="cap" style="margin: 0 0 4px">What happened</p>
-                <div class="tl">
-                  <div class="tl-t">07:00</div><div class="tl-r hot"></div><div class="tl-b"><span class="b">Third try timed out</span> <span class="cap">after 30 s, 12,400 of about 31,000 rows removed</span></div>
-                  <div class="tl-t">06:45</div><div class="tl-r hot"></div><div class="tl-b"><span class="b">Second try timed out</span> <span class="cap">after 30 s</span></div>
-                  <div class="tl-t">06:30</div><div class="tl-r hot"></div><div class="tl-b"><span class="b">First try timed out</span> <span class="cap">after 30 s</span></div>
-                </div>
+              <sc-if value="{{sel.error}}" hint-placeholder-val="{{false}}">
+                <p class="cap" style="margin: 0 0 4px">The error it stopped on</p>
+                <p class="id" style="margin: 0 0 12px; font-size: 13px; line-height: 1.6">{{sel.error}}</p>
               </sc-if>
               <div class="stack" style="gap: 8px">
-                <sc-if value="{{sel.canRetry}}" hint-placeholder-val="{{true}}">
-                  <button type="button" class="btn sun" onClick="{{retry}}">Try this job again at 09:15</button>
-                </sc-if>
                 <sc-if value="{{sel.canCancel}}" hint-placeholder-val="{{true}}">
                   <button type="button" class="btn" onClick="{{cancel}}">Cancel this job</button>
                 </sc-if>
-                <a class="btn" href="Runbooks.dc.html">Read the runbook</a>
+                <a class="btn {{sel.bookTone}}" href="Runbooks.dc.html">Read the runbook</a>
+                <sc-if value="{{sel.stuck}}" hint-placeholder-val="{{true}}">
+                  <p class="cap" style="margin: 2px 0 0; line-height: 1.6">Nothing re-runs a failed job, and it can no longer be cancelled. Once you know why it stopped, queue the command again: the new job goes through the same runner and waits out the same window.</p>
+                </sc-if>
               </div>
             </div>
           </aside>
@@ -98,12 +93,12 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state;
     const base = [
-      { id: 'purge', name: 'Retention purge', on: 'all', status: 'failed', state: 'Failed', tone: 'owed', runs: 'Stopped 07:04', tries: '3 of 3', say: 'It stopped after three tries and removed 12,400 rows on the way. Running it again is safe, because it picks up what is left.', by: 'You, 7 November', ref: 'Scheduled', wait: '1 day', hasTries: true },
-      { id: 'tern', name: 'Delete organisation', on: 'Tern Labs', status: 'waiting', state: 'Waiting', tone: 'warn', runs: '10 Nov, 03:15', tries: '0 of 3', say: 'Runs in 18 hours, unless someone becomes its owner first. Then the job refuses by itself.', by: 'You, today', ref: 'SUP-207', wait: '1 day', hasTries: false },
-      { id: 'erase', name: 'Erase account', on: 'u_77aa10', status: 'waiting', state: 'Waiting', tone: 'warn', runs: '13 Nov, 20:15', tries: '0 of 3', say: 'Runs in 4 days and 11 hours. The account stays suspended until then. Cancelling lifts only that suspension.', by: 'You, 6 November', ref: 'SUP-199', wait: '7 days', hasTries: false },
-      { id: 'done1', name: 'Erase account', on: 'u_2a91f0', status: 'done', state: 'Done', tone: 'good', runs: '3 Nov, 12:00', tries: '1 of 3', say: 'Finished at the first try. The audit keeps the id and never the address.', by: 'You, 27 October', ref: 'SUP-188', wait: '7 days', hasTries: false },
-      { id: 'done2', name: 'Retention purge', on: 'Quay Collective', status: 'done', state: 'Done', tone: 'good', runs: '1 Nov, 04:00', tries: '1 of 3', say: 'Finished at the first try.', by: 'You, 31 October', ref: 'Scheduled', wait: '1 day', hasTries: false },
-      { id: 'gone', name: 'Delete organisation', on: 'Wren Analytics', status: 'cancelled', state: 'Cancelled', tone: '', runs: '20 Oct, 09:00', tries: '0 of 3', say: 'Cancelled before it ran, because the organisation found a new owner.', by: 'You, 19 October', ref: 'SUP-172', wait: '1 day', hasTries: false }
+      { id: 'purge', name: 'Retention purge', on: 'all', status: 'failed', state: 'Failed', tone: 'owed', runs: 'Stopped 07:04', tries: '3 of 3', say: 'It stopped after three tries, having removed 12,400 rows on the way. Queueing it again is safe: the purge picks up whatever is left.', by: 'You, 7 November', wait: '1 day', error: 'ServerSelectionTimeoutError: timed out after 30s' },
+      { id: 'tern', name: 'Delete organisation', on: 'Tern Labs', status: 'waiting', state: 'Waiting', tone: 'warn', runs: '10 Nov, 03:15', tries: '0 of 3', say: 'Runs in 18 hours, unless someone becomes its owner first. Then the job refuses by itself.', by: 'You, today', wait: '1 day', error: '' },
+      { id: 'erase', name: 'Erase account', on: 'u_77aa10', status: 'waiting', state: 'Waiting', tone: 'warn', runs: '13 Nov, 20:15', tries: '0 of 3', say: 'Runs in 4 days and 11 hours. The account stays suspended until then. Cancelling lifts only that suspension.', by: 'You, 6 November', wait: '7 days', error: '' },
+      { id: 'done1', name: 'Erase account', on: 'u_2a91f0', status: 'done', state: 'Done', tone: 'good', runs: '3 Nov, 12:00', tries: '1 of 3', say: 'Finished at the first try. The audit keeps the id and never the address.', by: 'You, 27 October', wait: '7 days', error: '' },
+      { id: 'done2', name: 'Retention purge', on: 'Quay Collective', status: 'done', state: 'Done', tone: 'good', runs: '1 Nov, 04:00', tries: '1 of 3', say: 'Finished at the first try.', by: 'You, 31 October', wait: '1 day', error: '' },
+      { id: 'gone', name: 'Delete organisation', on: 'Wren Analytics', status: 'cancelled', state: 'Cancelled', tone: '', runs: '20 Oct, 09:00', tries: '0 of 3', say: 'Cancelled before it ran, because the organisation found a new owner.', by: 'You, 19 October', wait: '1 day', error: '' }
     ];
     const jobs = base.map((j) => ({ ...j, ...(s.over[j.id] || {}) }));
     const n = (st) => jobs.filter((j) => j.status === st).length;
@@ -119,9 +114,8 @@ class Component extends DCLogic {
       title: (failedCount ? number[failedCount] + ' job has failed and needs you. ' : 'Nothing has failed. ') + number[waitingCount] + (waitingCount === 1 ? ' is' : ' are') + ' waiting out a window.',
       filters: opts.map(([id, label, c]) => ({ label: label + ' ' + c, on: s.filter === id ? 'on' : '', pressed: s.filter === id ? 'true' : 'false', pick: () => this.setState({ filter: id }) })),
       rows: shown.map((j) => ({ ...j, sel: j.id === sel.id ? 'sel' : '', pick: () => this.setState({ sel: j.id }) })),
-      sel: { ...sel, canRetry: sel.status === 'failed', canCancel: sel.status === 'waiting' || sel.status === 'failed' },
-      retry: () => apply({ status: 'waiting', state: 'Waiting', tone: 'warn', runs: 'Today 09:15', tries: '0 of 3', say: 'Queued again for the next tick. It goes through the same runner and is audited like the first run.', hasTries: false }, 'Queued for 09:15.'),
-      cancel: () => apply({ status: 'cancelled', state: 'Cancelled', tone: '', tries: '0 of 3', say: 'Cancelled before it ran.', hasTries: false }, 'Job cancelled.'),
+      sel: { ...sel, canCancel: sel.status === 'waiting', stuck: sel.status === 'failed', bookTone: sel.status === 'failed' ? 'sun' : '' },
+      cancel: () => apply({ status: 'cancelled', state: 'Cancelled', tone: '', tries: '0 of 3', say: 'Cancelled before it ran.', error: '' }, 'Job cancelled.'),
       snack: s.snack,
       undo: () => { const o = { ...s.over }; delete o[s.lastId]; this.setState({ over: o, lastId: null, snack: null }); }
     };

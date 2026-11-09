@@ -20,9 +20,8 @@
       <header class="ph">
         <div class="ph-t">
           <h1 class="h1">Everything done from here, and who did it.</h1>
-          <p class="lead">Written before each command runs and again after. It stores ids rather than addresses, it is kept for four years, and nobody can edit it, including you.</p>
+          <p class="lead">The runner writes a row around every command it carries out, so nothing it ran is missing. It names whoever was touched by id and never by address, it is kept four years, and nobody can edit it, including you.</p>
         </div>
-        <button type="button" class="btn" onClick="{{exportIt}}">{{exportLabel}}</button>
       </header>
 
       <div class="stack">
@@ -42,7 +41,7 @@
           <sc-if value="{{hasRows}}" hint-placeholder-val="{{true}}">
             <div class="tb" style="padding-top: 8px">
               <div class="t" role="table">
-                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">When</div><div role="columnheader" class="th">Who</div><div role="columnheader" class="th">What</div><div role="columnheader" class="th">On</div><div role="columnheader" class="th">Why</div><div role="columnheader" class="th">Result</div></div></div>
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">When</div><div role="columnheader" class="th">Operator</div><div role="columnheader" class="th">Command</div><div role="columnheader" class="th">Subject</div><div role="columnheader" class="th">Result</div></div></div>
                 <div class="tg" role="rowgroup">
                   <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
                     <div role="row" class="tr row {{r.sel}}">
@@ -50,7 +49,6 @@
                       <div role="cell" class="td">{{r.who}}</div>
                       <div role="cell" class="td"><button type="button" class="lkb lk b" aria-expanded="{{r.expanded}}" onClick="{{r.toggle}}">{{r.what}}</button></div>
                       <div role="cell" class="td id">{{r.on}}</div>
-                      <div role="cell" class="td cap">{{r.why}}</div>
                       <div role="cell" class="td"><span class="chip {{r.tone}}">{{r.result}}</span></div>
                     </div>
                   </sc-for>
@@ -63,11 +61,10 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
                   <div><div class="cap">Before</div><div>{{openRow.before}}</div></div>
                   <div><div class="cap">After</div><div class="b">{{openRow.after}}</div></div>
-                  <div><div class="cap">Reference</div><div>{{openRow.ref}}</div></div>
-                  <div><div class="cap">Request id</div><div class="id">{{openRow.req}}</div></div>
                 </div>
               </div>
             </sc-if>
+            <p class="cap" style="padding: 0 20px 16px; line-height: 1.6">A refused command leaves no row: the runner writes this after a command has run, so what is here is what happened. A job that fails after it was queued shows on Jobs and windows.</p>
           </sc-if>
           <sc-if value="{{noRows}}" hint-placeholder-val="{{false}}">
             <div style="padding: 40px 24px; text-align: center">
@@ -83,30 +80,27 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1040}}'>
 class Component extends DCLogic {
-  state = { filter: 'all', subject: '', open: 'limits', exported: false };
+  state = { filter: 'all', subject: '', open: 'limits' };
   renderVals() {
     const s = this.state;
-    const e = (id, when, what, on, why, result, tone, kind, before, after, ref, req) => ({ id, when, who: 'You', what, on, why, result, tone, kind, before, after, ref, req });
+    const e = (id, when, what, on, result, tone, kind, before, after) => ({ id, when, who: 'you@example.com', what, on, result, tone, kind, before, after });
     const all = [
-      e('roll', 'Today 09:02', 'Looked up', 'u_6f1c9a', 'Coach cap alert', 'Done', 'good', 'look', 'None', 'Account opened', 'None', 'req_81fa02'),
-      e('limits', 'Today 08:10', 'Set limits', 'u_a0b7f3', 'Abuse', 'Done', 'good', 'change', 'No limits', 'Beat writes 20 a minute, webhooks off', 'SUP-204', 'req_77c1e9'),
-      e('tern', 'Today 03:12', 'Queued deletion', 'Tern Labs', 'They asked', 'Waiting', 'warn', 'change', 'Active, no owner', 'Deletes on 10 November, 03:15', 'SUP-207', 'req_3ab90c'),
-      e('refused', '8 Nov 16:40', 'Grant owner', 'Alder Works', 'They asked', 'Refused', 'owed', 'refused', 'Has an owner', 'No change: the organisation has an owner', 'SUP-205', 'req_0f44d1'),
-      e('purge', '7 Nov 11:05', 'Queued retention purge', 'all', 'Scheduled', 'Failed', 'owed', 'change', 'About 31,000 rows expired', 'Stopped after 12,400 rows', 'Scheduled', 'req_c93e77'),
-      e('erase', '6 Nov 20:15', 'Queued erasure', 'u_77aa10', 'They asked', 'Waiting', 'warn', 'change', 'Active', 'Suspended, erases on 13 November', 'SUP-199', 'req_a17b30'),
-      e('device', '5 Nov 10:22', 'Revoked a device', 'u_c2e491', 'They asked', 'Done', 'good', 'change', '4 devices', '3 devices', 'SUP-201', 'req_6de052'),
-      e('look2', '4 Nov 15:01', 'Looked up', 'u_18d06e', 'Abuse signal', 'Done', 'good', 'look', 'None', 'Account opened', 'None', 'req_912cbe')
+      e('limits', 'Today 08:10', 'account.set_limits', 'u_a0b7f3', 'Done', 'good', 'account', 'No limits', 'Beat writes 20 a minute, webhooks off'),
+      e('tern', 'Today 03:12', 'organisation.delete', 'Tern Labs', 'Queued', 'warn', 'organisation', 'Active, no owner', 'Deletes on 10 November, 03:15'),
+      e('owner', '8 Nov 16:40', 'organisation.grant_owner', 'Harbour & Co', 'Done', 'good', 'organisation', 'No owner', 'ana@example.com is the owner'),
+      e('purge', '7 Nov 11:05', 'retention.purge', 'all', 'Queued', 'warn', 'organisation', 'About 31,000 rows expired', 'Runs after 8 November, 11:05'),
+      e('erase', '6 Nov 20:15', 'account.erase', 'u_77aa10', 'Queued', 'warn', 'account', 'Active', 'Suspended, erases on 13 November'),
+      e('device', '5 Nov 10:22', 'device.revoke', 'u_c2e491', 'Done', 'good', 'account', '4 devices', '3 devices'),
+      e('cancel', '2 Nov 09:40', 'job.cancel', 'job_5f0a12', 'Done', 'good', 'job', 'Erasure queued for 9 November', 'Cancelled, the suspension lifted')
     ];
     const n = (k) => all.filter((r) => r.kind === k).length;
-    const opts = [['all', 'All', all.length], ['change', 'Changes', n('change')], ['look', 'Lookups', n('look')], ['refused', 'Refused', n('refused')]];
+    const opts = [['all', 'All', all.length], ['account', 'Accounts', n('account')], ['organisation', 'Organisations', n('organisation')], ['job', 'Jobs', n('job')]];
     const subject = s.subject.trim().toLowerCase();
     const rows = all.filter((r) => (s.filter === 'all' || r.kind === s.filter) && (!subject || r.on.toLowerCase() === subject));
     return {
       hour: this.props.hour ?? 'afternoon',
       subject: s.subject,
       onSubject: (ev) => this.setState({ subject: ev.target.value }),
-      exportIt: () => this.setState({ exported: !s.exported }),
-      exportLabel: s.exported ? 'Export recorded. Download again' : 'Export this view as CSV',
       filters: opts.map(([id, label, c]) => ({ label: label + ' ' + c, on: s.filter === id ? 'on' : '', pressed: s.filter === id ? 'true' : 'false', pick: () => this.setState({ filter: id }) })),
       rows: rows.map((r) => ({ ...r, isOpen: s.open === r.id, sel: s.open === r.id ? 'sel' : '', expanded: s.open === r.id ? 'true' : 'false', toggle: () => this.setState({ open: s.open === r.id ? null : r.id }) })),
       openRow: rows.find((r) => r.id === s.open) || null,

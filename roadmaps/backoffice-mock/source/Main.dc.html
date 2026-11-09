@@ -112,8 +112,8 @@
               <div class="p-b">
                 <div class="fact"><span>Job runner</span><span>Ticked 09:00, next 09:15</span></div>
                 <div class="fact"><span>Deploy lock</span><span>Free</span></div>
-                <div class="fact"><span>Database storage</span><span>61% of the plan</span></div>
-                <div class="fact"><span>Coach this month</span><span>$412 of $1,500</span></div>
+                <div class="fact"><span>Database storage</span><span>3.05 GB</span></div>
+                <div class="fact"><span>Coach this month</span><span>$412</span></div>
                 <div class="fact"><span>Web app against API</span><span>In step</span></div>
               </div>
             </section>
@@ -138,7 +138,7 @@ class Component extends DCLogic {
       hour: this.props.hour ?? 'afternoon',
       errPoints,
       tiles: [
-        tile('Availability, 30 days', '99.94%', 'Target 99.9%. 40% of the error budget left.', [99.99,99.99,99.98,99.98,99.97,99.97,99.96,99.95,99.94], 'hot', 'Availability drifting down to 99.94 percent'),
+        tile('Availability, 30 days', '99.94%', 'No target has been set yet.', [99.99,99.99,99.98,99.98,99.97,99.97,99.96,99.95,99.94], 'hot', 'Availability drifting down to 99.94 percent'),
         tile('Errors', '3.8%', 'Normally under 0.2%', [.1,.1,.2,.1,.1,.2,2.9,3.6,3.8], 'hot', 'Errors jumped in the last half hour'),
         tile('Latency, p95', '412 ms', 'Normally about 210 ms', [205,212,208,215,210,214,330,396,412], 'hot', 'Latency rising to 412 milliseconds'),
         tile('Traffic', '38 req/s', 'As usual for a Monday', [22,24,28,31,33,36,37,39,38], '', 'Traffic climbing as usual'),
@@ -148,7 +148,7 @@ class Component extends DCLogic {
         { at: '08:49', what: 'Incident acknowledged', who: 'by you', tone: 'hot' },
         { at: '08:41', what: 'Alert fired: 5xx above 1%', who: 'Cloud Monitoring', tone: 'hot' },
         { at: '08:38', what: 'Release 00164 reached production', who: 'build 7be41f02', tone: '' },
-        { at: '08:10', what: 'Limits set on u_a0b7f3', who: 'by you, ref SUP-204', tone: '' },
+        { at: '08:10', what: 'Limits set on u_a0b7f3', who: 'by you', tone: '' },
         { at: '07:04', what: 'Retention purge failed for the third time', who: 'job runner', tone: 'hot' },
         { at: '03:00', what: 'Database snapshot taken', who: 'Atlas', tone: 'ok' }
       ],

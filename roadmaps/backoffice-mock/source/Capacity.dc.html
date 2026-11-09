@@ -19,30 +19,27 @@
       <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
       <header class="ph">
         <div class="ph-t">
-          <h1 class="h1">Storage lasts about seven months. Coach is on budget.</h1>
-          <p class="lead">At the current rate the database reaches its 5 GB plan in June, and flow windows are growing fastest. Decide in March, while there is still room to choose.</p>
+          <h1 class="h1">The database grows about 0.19 GB a month.</h1>
+          <p class="lead">Flow windows grow fastest. The cluster is sized by hand, so there is no ceiling to measure against: watch the pace rather than a percentage.</p>
         </div>
       </header>
 
       <div class="stack">
         <section class="tiles" aria-label="Where things stand">
-          <div class="p" style="padding: 13px 16px"><div class="cap">Database</div><div class="fig">3.05 GB</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 61%"></i></div><div class="cap">61% of the 5 GB plan</div></div>
-          <div class="p" style="padding: 13px 16px"><div class="cap">Coach this month</div><div class="fig">$412</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 27%"></i></div><div class="cap">Heading for $1,373 of $1,500</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Database</div><div class="fig">3.05 GB</div><svg viewBox="0 0 84 24" width="84" height="24" style="margin: 6px 0 2px" role="img" aria-label="Growing steadily since August"><polyline class="ln" points="{{dbSpark}}"></polyline></svg><div class="cap">Up 0.19 GB this month</div></div>
+          <div class="p" style="padding: 13px 16px"><div class="cap">Coach this month</div><div class="fig">$412</div><svg viewBox="0 0 84 24" width="84" height="24" style="margin: 6px 0 2px" role="img" aria-label="Spend rising through the month"><polyline class="ln" points="{{coachSpark}}"></polyline></svg><div class="cap">Heading for about $1,373</div></div>
           <div class="p" style="padding: 13px 16px"><div class="cap">Peak instances today</div><div class="fig">6</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 60%"></i></div><div class="cap">Of a ceiling of 10</div></div>
           <div class="p" style="padding: 13px 16px"><div class="cap">Database connections</div><div class="fig">84</div><div class="bar" style="margin: 8px 0 6px"><i style="width: 17%"></i></div><div class="cap">Of 500 allowed</div></div>
         </section>
 
         <section class="p up">
-          <div class="p-h" style="padding-top: 18px"><h2>Database size</h2><span class="cap">GB, with the current pace carried forward</span></div>
+          <div class="p-h" style="padding-top: 18px"><h2>Database size</h2><span class="cap">GB, with the current pace carried forward. There is no ceiling to draw: the cluster is sized by hand.</span></div>
           <div style="padding: 0 20px 14px">
-            <svg class="chart" viewBox="0 0 760 186" role="img" aria-label="The database grew from 2.2 to 3.05 gigabytes since August. At that pace it reaches the 5 gigabyte plan in June 2027.">
+            <svg class="chart" viewBox="0 0 760 186" role="img" aria-label="The database grew from 2.2 to 3.05 gigabytes since August, and carries on at about 0.28 a month.">
               <line class="rule" x1="8" x2="752" y1="150" y2="150"></line>
-              <line class="lim" x1="8" x2="752" y1="31.8" y2="31.8"></line>
-              <text class="ax" x="8" y="24">Plan limit, 5 GB</text>
+              
               <polyline class="ln" points="{{actual}}"></polyline>
               <polyline class="ln proj" points="{{future}}"></polyline>
-              <circle class="dot" cx="684.4" cy="31.8" r="4"></circle>
-              <text class="ax i e" x="676" y="52">Reached in June</text>
               <text class="ax i" x="218" y="70">3.05 GB now</text>
               <text class="ax" x="8" y="172">Aug 2026</text>
               <text class="ax" x="211" y="172">Nov</text>
@@ -119,9 +116,13 @@
 <script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1360}}'>
 class Component extends DCLogic {
   state = { days: 30 };
+  spark(v) {
+    const min = Math.min(...v), max = Math.max(...v), r = max - min || 1;
+    return v.map((n, i) => (i / (v.length - 1) * 84).toFixed(1) + ',' + (22 - (n - min) / r * 20).toFixed(1)).join(' ');
+  }
   renderVals() {
     const x = (i) => (8 + i / 11 * 744).toFixed(1);
-    const y = (v) => (150 - v / 5.5 * 130).toFixed(1);
+    const y = (v) => (150 - (v - 2.0) / 3.3 * 130).toFixed(1);
     const seen = [2.2, 2.5, 2.8, 3.05];
     const ahead = [3.05, 3.33, 3.61, 3.89, 4.17, 4.45, 4.73, 5.0];
     const son = [30,32,28,33,35,31,29,34,36,33,30,38,35,33,37,39,34,36,40,38,37,41,43,44,46,40,42,47,43,41];
@@ -141,6 +142,8 @@ class Component extends DCLogic {
     return {
       hour: this.props.hour ?? 'afternoon',
       actual: seen.map((v, i) => x(i) + ',' + y(v)).join(' '),
+      dbSpark: this.spark([2.2, 2.42, 2.5, 2.68, 2.8, 2.92, 3.05]),
+      coachSpark: this.spark([38, 96, 155, 214, 268, 330, 377, 412]),
       future: ahead.map((v, i) => x(i + 3) + ',' + y(v)).join(' '),
       caption: 'Dollars a day, last ' + n + ' days',
       first,

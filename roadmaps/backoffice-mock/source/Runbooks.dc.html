@@ -41,7 +41,6 @@
           </div>
           <div class="p-b">
             <div class="bar-row" style="margin-bottom: 14px">
-              <span class="chip">Last used {{open.used}}</span>
               <span class="chip {{open.reviewTone}}">Reviewed {{open.reviewed}}</span>
               <span class="cap push">{{progress}}</span>
             </div>
@@ -82,8 +81,7 @@ class Component extends DCLogic {
         steps: [
           s('Compare the start of the errors with the last release', 'If errors began before the release, this is the wrong runbook.', 'Releases.dc.html', 'Open the releases'),
           s('Name the blast radius', 'Which routes, what share of requests, roughly how many accounts.', 'IncidentRoom.dc.html', 'Open the incident room'),
-          s('Move traffic back to the last good revision', 'This takes effect in under a minute. It does not undo a database migration.', 'Releases.dc.html', 'Roll back from the releases page'),
-          s('Revert the change on main', 'Otherwise the next deploy brings the failure back.'),
+          s('Revert the change on main', 'This is the way back: there is no control here that moves traffic. The deploy that follows is the fix, so watch the build.', 'Releases.dc.html', 'Open the releases'),
           s('Check the two halves still agree', 'The web app and the API ship separately. An old web app against a new API is a real state.'),
           s('Tell people, then write it up', 'A customer update if writes were lost, a post-incident note within five days.')
         ] },

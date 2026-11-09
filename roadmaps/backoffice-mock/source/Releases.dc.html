@@ -59,7 +59,7 @@
 
         <div class="lean">
           <section class="p wide">
-            <div class="p-h"><h2>Recent releases</h2><span class="cap">An old build does not roll back. Move traffic, then revert on main.</span></div>
+            <div class="p-h"><h2>Recent releases</h2><span class="cap">An old build does not roll back: re-running it succeeds without deploying. Revert on main.</span></div>
             <div class="tb">
               <div class="t" role="table">
                 <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Release</div><div role="columnheader" class="th">When</div><div role="columnheader" class="th">What changed</div><div role="columnheader" class="th" style="text-align: right">Took</div><div role="columnheader" class="th">Result</div></div></div>
@@ -92,8 +92,8 @@
                   <span class="chip good">{{s}}</span>
                 </sc-for>
               </div>
-              <sc-if value="{{sel.canTarget}}" hint-placeholder-val="{{true}}">
-                <a class="btn sun" href="IncidentRoom.dc.html" style="width: 100%; margin-top: 14px">Roll back to this release</a>
+              <sc-if value="{{sel.bad}}" hint-placeholder-val="{{true}}">
+                <a class="btn sun" href="Runbooks.dc.html" style="width: 100%; margin-top: 14px">Runbook: revert it on main</a>
               </sc-if>
             </div>
           </aside>
@@ -108,11 +108,11 @@ class Component extends DCLogic {
   state = { sel: '00163', frozen: false };
   renderVals() {
     const list = [
-      { id: '00164', when: 'Today 08:38', what: 'Bulk save on the beats route', took: '9m', result: 'Likely cause', tone: 'owed', commit: 'a91c3e7', build: '7be41f02', db: 'No', infra: 'No', shape: 'No', canTarget: false },
-      { id: '00163', when: '6 November', what: 'Two abuse signals in the log', took: '8m', result: 'Good', tone: 'good', commit: '07921fa', build: 'c1d0e88b', db: 'No', infra: 'Yes, two log metrics', shape: 'No', canTarget: true },
-      { id: '00162', when: '5 November', what: 'Back office look', took: '8m', result: 'Good', tone: 'good', commit: 'd02064b', build: '5ea90c1d', db: 'No', infra: 'No', shape: 'No', canTarget: true },
-      { id: '00161', when: '4 November', what: 'Operator jobs and audit', took: '11m', result: 'Good', tone: 'good', commit: '4be31a0', build: '02ff71ac', db: 'New collection', infra: 'Yes, job runner', shape: 'Yes, added only', canTarget: true },
-      { id: '00160', when: '31 October', what: 'Rate limits on public routes', took: '8m', result: 'Superseded', tone: '', commit: '1ca773e', build: 'e7714ba2', db: 'No', infra: 'No', shape: 'No', canTarget: false }
+      { id: '00164', when: 'Today 08:38', what: 'Bulk save on the beats route', took: '9m', result: 'Likely cause', tone: 'owed', commit: 'a91c3e7', build: '7be41f02', db: 'No', infra: 'No', shape: 'No', bad: true },
+      { id: '00163', when: '6 November', what: 'Two abuse signals in the log', took: '8m', result: 'Good', tone: 'good', commit: '07921fa', build: 'c1d0e88b', db: 'No', infra: 'Yes, two log metrics', shape: 'No', bad: false },
+      { id: '00162', when: '5 November', what: 'Back office look', took: '8m', result: 'Good', tone: 'good', commit: 'd02064b', build: '5ea90c1d', db: 'No', infra: 'No', shape: 'No', bad: false },
+      { id: '00161', when: '4 November', what: 'Operator jobs and audit', took: '11m', result: 'Good', tone: 'good', commit: '4be31a0', build: '02ff71ac', db: 'New collection', infra: 'Yes, job runner', shape: 'Yes, added only', bad: false },
+      { id: '00160', when: '31 October', what: 'Rate limits on public routes', took: '8m', result: 'Superseded', tone: '', commit: '1ca773e', build: 'e7714ba2', db: 'No', infra: 'No', shape: 'No', bad: false }
     ];
     const sel = list.find((r) => r.id === this.state.sel);
     return {
