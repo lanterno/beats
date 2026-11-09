@@ -1,10 +1,13 @@
 # The back office mock
 
 The redesign of the operator's back office, as the owner reviewed it on
-2026-11-08. [backoffice.md](../backoffice.md) is the plan that builds it, and its
-§ *The design* says **what this mock gets wrong**. Read that list before building
-from a picture: some controls here are postponed, and some promise what the
-product cannot do.
+2026-11-08. [backoffice.md](../backoffice.md) is the plan that builds it.
+
+**It can be built as drawn.** On 2026-11-09 every control that promised what
+the product cannot do was corrected here, so there is no list of exceptions to
+hold in your head — if a screen shows it, the API can serve it or the screen
+says why it cannot. backoffice.md § *The design* records what changed. Keep it
+true: adding a control the API cannot serve is the same bug here as in the code.
 
 Every figure, person and organisation in it is invented. Nothing here needs
 Claude or anything installed.
@@ -13,15 +16,37 @@ Claude or anything installed.
   (the phone 390, the states sheet 1280).
 - **`source/`** shows what each screen is made of: its markup, sample rows and
   behaviour, with the shared colours, type and spacing in `backoffice.css`.
+- **`render.mjs`** draws the first from the second.
 
 Build in `backoffice/client`, with its own tokens and components. These files are
 a reference: do not port the `.dc.html` format or import `backoffice.css`.
 
+## Redrawing the pictures
+
+```bash
+node roadmaps/backoffice-mock/render.mjs            # every screen
+node roadmaps/backoffice-mock/render.mjs Jobs Audit # just these
+```
+
+Edit a source, run it, commit what it wrote. Playwright comes from `ui/`'s
+install, so `pnpm install` there first; this folder has none of its own.
+
+Like `scripts/gen_icons.py` it has no `--check`: that would have to compare
+bytes, and text rasterization differs enough between machines to fail a picture
+nobody touched. Its output is identical run to run on one machine, and it
+reproduces 15 of the 21 original screens byte for byte — the rest differ by
+about a tenth of a percent of pixels, all of it antialiasing.
+
+Sizes come from `source/canvas.json`, the design tool's own board list, so a
+board resized there resizes the picture here.
+
 ## Reading a source file
 
-The files are written for a design tool, and they are meant to be read here, not
-run. Each names a `./support.js`, which is that tool's renderer. It is Anthropic's
-code and not this project's to publish, so it was deliberately not copied.
+The files were written for a design tool. Each names a `./support.js`, which is
+that tool's renderer — Anthropic's code, and not this project's to publish, so it
+was deliberately not copied. `render.mjs` stands in for it, which is what lets the
+pictures be redrawn here; the sources are unchanged in shape, and still read well
+without running anything.
 
 - The markup is inside `<x-dc>`. A `{{name}}` is filled from `renderVals()` in
   the `<script type="text/x-dc">` at the bottom of the file.
@@ -63,8 +88,12 @@ code and not this project's to publish, so it was deliberately not copied.
 
 Copied on 2026-11-09 from version `1794174489-564c` of
 <https://claude.ai/artifact/SqiuodztBSFVZBrspexva2>, where it is interactive. That
-page is private to the owner's Claude account. If the mock is revised there, copy
-it here again so the two agree.
+page is private to the owner's Claude account.
+
+**This copy has since moved ahead of it.** The corrections of 2026-11-09 were made
+here, not there, so the artifact still shows rollback controls, recorded lookups
+and the invented figures. This folder is the one that matches the plan: treat it as
+the source, and re-copy from the artifact only by hand, correction by correction.
 
 When a stage ships, delete the screens it built, as
 [../README.md](../README.md) § *When something ships* says.

@@ -51,22 +51,41 @@ figure, person and organisation in it is invented.
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
 | `Phone`, `States`, `Dusk` | Not screens to build: narrow width, empty and error states, and the dusk hour, in every stage | All |
 
-**What the mock gets wrong.** Build from this list, not from the picture:
+**The mock can be built as drawn.** On 2026-11-09 the twelve places where it
+promised what the product cannot do were corrected in the files themselves,
+so there is no longer a list to read before looking at a picture. What was
+changed, and why, is in the commit that changed it; the short version:
 
-- **Rollback is out.** The controls in `IncidentRoom`, `Releases` and `Phone`,
-  and the Runbooks step "Move traffic back", are the postponed feature.
-- **"Off holds deliveries and sends them when it comes back on"** (`Access`) is
-  impossible. Webhooks are fire-and-forget with no queue, so off means dropped.
-  The page says that.
-- **"71 of them came from one network, and only 3 have written anything"**
-  (`Trust`) joins accounts to a network, which stage 3 forbids. The honest
-  sentence is about all the accounts created in that window.
-- **"Every lookup is recorded"**, the "Looked up" row on `Account`, the reason
-  and reference fields on `Review`, and "Snooze" and "Mark done" on `Queue`
-  depend on records nobody has decided to keep.
-- **These figures are made up:** instances out of a maximum (the real one is
-  `var.max_instances`), the 5 GB plan, the $1,500 coach budget, the 99.9%
-  target, "Devices retry for 24 hours". A figure with no source is left off.
+- **Rollback is gone from every screen.** `IncidentRoom`, `Releases` and
+  `Phone` now point at the runbook for reverting on `main`, and the Runbooks
+  step that moved traffic is that revert. See *[Postponed](#postponed-rolling-a-release-back)*.
+- **Webhooks off drops**, on `Access`, because there is no queue to hold them.
+- **No screen joins an account to a network.** `Trust` and `Queue` say the
+  largest network's share of a window, and count writes across every account
+  created in it.
+- **Nothing assumes a record nobody has decided to keep** (*[Not decided](#not-decided-the-new-records)*):
+  no recorded lookups on `Accounts`, `Account`, `Audit` or `Palette`; no
+  reason or reference on `Review`, `Org`, `Jobs` or an audit row; no snooze
+  or mark-done on `Queue`; no review state on `Trust`; no recorded access
+  review on `Access`; no "last used" on a runbook.
+- **Two more the product cannot do**, found while building stage 1: `Jobs`
+  offered to re-run a failed job and to cancel one, and showed a line per
+  attempt. Three attempts is terminal, `cancel` only reaches a job that is
+  still queued, and the document keeps a count and the last error. `Audit`
+  offered a CSV export, and showed refused and failed commands — the runner
+  writes the row after a command succeeds, so neither is in there.
+- **Figures with no source are gone:** the 5 GB plan, the $1,500 coach
+  budget, the 99.9% target, "Devices retry for 24 hours", a stored "last
+  done" on the access review. Instances still show against a ceiling,
+  which is `var.max_instances`.
+
+Keep it that way: a control added to the mock that the API cannot serve is
+the same bug as one added to the code.
+
+**Redrawing it.** `roadmaps/backoffice-mock/render.mjs` draws `source/*.dc.html`
+into `screens/*.png` over Playwright from ui/'s install. Edit a source, run it,
+commit what it wrote — the convention `scripts/gen_icons.py` uses, and for the
+same reason it has no `--check`.
 
 ## Start here
 
@@ -504,13 +523,17 @@ that moves traffic.
 ## Not decided: the new records
 
 The owner gave no answer on 2026-11-08, so **none of this is scheduled**, and no
-stage may build it in passing. Each is a new thing to keep, and the screens that
-assume it are listed so they can be left out cleanly.
+stage may build it in passing. Each is a new thing to keep.
 
-| Record | What it would take | Screens that assume it |
+Since 2026-11-09 **no screen assumes any of it**: the mock was corrected rather
+than left carrying controls a builder had to know to drop (§ *The design*). The
+last column says what each screen does instead, which is also the thing the
+decision would replace.
+
+| Record | What it would take | What the screens do instead |
 |---|---|---|
-| A required reason and reference on every command | `MongoOperatorAudit.record` has no such field; only `SuspendArgs` has a reason. Add them to the `POST /commands/{name}` body rather than to each command's `args_model`, and let the runner write them | `Review`, `Audit` |
-| Incidents and write-ups | A new collection, its commands, and the Atlas grant | `Incidents`, `IncidentRoom`, the hero on `Main` |
-| Restrictions in force | The list can be derived from `users.suspended_at` and `account_limits`, ids only. "Look again on" and the reference are new, so check it against docs/backoffice.md's refusal of a browsable account list | `Trust` |
-| An audit of each lookup | A write on a read path, which the audit does not do today, and which a required reason would make slower to use. Needs a retention figure | `Accounts`, `Account`, `Audit` |
-| Snoozing or finishing a queue item | Stored state per row, so a row can no longer simply leave when its condition clears | `Queue` |
+| A required reason and reference on every command | `MongoOperatorAudit.record` has no such field; only `SuspendArgs` has a reason. Add them to the `POST /commands/{name}` body rather than to each command's `args_model`, and let the runner write them | `Review` asks for the typed confirmation alone and says the record is you, the command, the subject and the two sides; `Audit` shows before and after |
+| Incidents and write-ups | A new collection, its commands, and the Atlas grant | `Incidents` and `IncidentRoom` are drawn and unscheduled; stage 7 stands without them, and `Main`'s hero is the first thing on the queue |
+| Restrictions in force | The list itself is derivable from `users.suspended_at` and `account_limits`, ids only, and `Trust` now shows exactly that. "Look again on" and the reference are the new part — check either against docs/backoffice.md's refusal of a browsable account list | `Trust` lists what is in force and says nothing records why, or when to look again |
+| An audit of each lookup | A write on a read path, which the audit does not do today, and which a required reason would make slower to use. Needs a retention figure | `Accounts` says plainly that opening an account is a read and reads are not recorded; the recent list is ids in `localStorage`, visible to nobody else |
+| Snoozing or finishing a queue item | Stored state per row, so a row can no longer simply leave when its condition clears | `Queue` says there is nothing to tick off: a row is the condition, and it leaves when the condition does |
