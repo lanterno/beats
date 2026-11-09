@@ -1,7 +1,9 @@
 /**
- * Detection by outlier rather than by a guessed threshold: who is far from
- * the median on the axes a hostile or broken account shows on. The controls
- * (limits, suspension, revoking one device) live on the account's page.
+ * Trust and safety: detection by outlier rather than by a guessed
+ * threshold — who is far from the median on the axes a hostile or broken
+ * account shows on. The controls (limits, suspension, revoking one device)
+ * live on the account's page, so the dangerous act is never a click away
+ * from a list of suspects.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -60,7 +62,7 @@ function AccountRows({
 	);
 }
 
-export function Abuse() {
+export function Trust() {
 	const { data, error, refetch } = useQuery({
 		queryKey: ["abuse"],
 		queryFn: () => get<AbuseReport>("/api/operator/abuse"),
@@ -78,8 +80,8 @@ export function Abuse() {
 
 	return (
 		<Page
-			title="Abuse"
-			lead="Who sits far from the median on the axes a hostile or broken account shows on. The controls are on each account's page."
+			title="Trust and safety"
+			lead="Who sits far from the median on the axes a hostile or broken account shows on. An outlier is a question, not a verdict: offices, teams and heavy users sit out here too. The controls are on each account's page."
 		>
 			<Panel raised title="Signups" note={said}>
 				{signups > 0 ? <DayBars days={days} said={said} /> : <div className="pb-5" />}

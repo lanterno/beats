@@ -7,12 +7,12 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router";
-import { Abuse } from "@/pages/Abuse";
 import { Account, Accounts } from "@/pages/Accounts";
 import { Attention } from "@/pages/Attention";
 import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
 import { Organisation, Organisations } from "@/pages/Organisations";
+import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
 import type { OperatorMe } from "@/shared/api/schema";
 import { APP_NAME } from "@/shared/config/brand";
@@ -38,7 +38,7 @@ const PLACES = [
 	{ to: "/", label: "Attention", Icon: BellIcon },
 	{ to: "/accounts", label: "Accounts", Icon: PersonIcon },
 	{ to: "/organisations", label: "Organisations", Icon: BuildingIcon },
-	{ to: "/abuse", label: "Abuse", Icon: ShieldIcon },
+	{ to: "/trust", label: "Trust and safety", Icon: ShieldIcon },
 	{ to: "/capacity", label: "Capacity", Icon: DatabaseIcon },
 	{ to: "/compliance", label: "Compliance", Icon: ClipboardIcon },
 ] as const;
@@ -127,7 +127,7 @@ function Shell() {
 						<Route path="/accounts/:id" element={<Account />} />
 						<Route path="/organisations" element={<Organisations />} />
 						<Route path="/organisations/:id" element={<Organisation />} />
-						<Route path="/abuse" element={<Abuse />} />
+						<Route path="/trust" element={<Trust />} />
 						<Route path="/capacity" element={<Capacity />} />
 						<Route path="/compliance" element={<Compliance />} />
 					</Routes>

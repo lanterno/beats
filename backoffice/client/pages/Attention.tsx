@@ -93,8 +93,8 @@ const CHECKS: Check[] = [
 				? "account is at 80% of its coach cap or past it"
 				: "accounts are at 80% of their coach cap or past it",
 		clear: "No account is near its coach cap",
-		to: "/abuse",
-		open: "Open abuse",
+		to: "/trust",
+		open: "Open trust and safety",
 	},
 ];
 
