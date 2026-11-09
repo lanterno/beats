@@ -13,5 +13,7 @@ export type OrganisationSummary = components["schemas"]["OrganisationSummary"];
 export type OrganisationDetail = components["schemas"]["OrganisationDetail"];
 export type OrgAuditRow = components["schemas"]["OrgAuditRow"];
 export type AbuseReport = components["schemas"]["AbuseReport"];
+/** A day and a figure: signups a day, one account's coach cost a day. */
+export type DayFigure = components["schemas"]["DayFigure"];
 export type CapacityReport = components["schemas"]["CapacityReport"];
 export type OperatorMe = components["schemas"]["OperatorMe"];

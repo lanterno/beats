@@ -84,7 +84,11 @@ export function Trust() {
 			lead="Who sits far from the median on the axes a hostile or broken account shows on. An outlier is a question, not a verdict: offices, teams and heavy users sit out here too. The controls are on each account's page."
 		>
 			<Panel raised title="Signups" note={said}>
-				{signups > 0 ? <DayBars days={days} said={said} /> : <div className="pb-5" />}
+				{signups > 0 ? (
+					<DayBars days={days} said={said} unit="Signups" />
+				) : (
+					<div className="pb-5" />
+				)}
 			</Panel>
 			<Pair>
 				<AccountRows

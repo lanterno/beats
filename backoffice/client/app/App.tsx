@@ -14,7 +14,8 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router";
-import { Account, Accounts } from "@/pages/Accounts";
+import { Account } from "@/pages/Account";
+import { Accounts } from "@/pages/Accounts";
 import { Attention } from "@/pages/Attention";
 import { Audit } from "@/pages/Audit";
 import { Capacity } from "@/pages/Capacity";

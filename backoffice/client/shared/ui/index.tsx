@@ -273,9 +273,15 @@ export function Meter({ value, max, label }: { value: number; max: number; label
 export function DayBars({
 	days,
 	said,
+	unit = "Count",
+	show = String,
 }: {
 	days: Array<{ day: string; value: number }>;
 	said: string;
+	/** What the figures are, for the table's column. */
+	unit?: string;
+	/** How one reads, where a bare number is not it. */
+	show?: (value: number) => string;
 }) {
 	const [hovered, setHovered] = useState<number | null>(null);
 	const peak = Math.max(...days.map((d) => d.value), 1);
@@ -322,8 +328,8 @@ export function DayBars({
 					</summary>
 					<div className="-mx-6 mt-1 max-h-72 overflow-y-auto">
 						<Table
-							head={[day("Day"), figure("Signups")]}
-							rows={dated.map((d) => [d.day, d.value])}
+							head={[day("Day"), figure(unit)]}
+							rows={dated.map((d) => [d.day, show(d.value)])}
 							empty={null}
 						/>
 					</div>

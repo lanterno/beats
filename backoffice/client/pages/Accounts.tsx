@@ -1,26 +1,28 @@
 /**
- * Found by exact email or id, never browsed: the common entry is a support
- * or erasure mail carrying a full address, and exact match is useless for
+ * Found by exact address or id, never browsed: the common entry is a support
+ * or erasure mail carrying a full address, and an exact match is useless for
  * fishing. The address travels in the POST body, never a URL a request log
- * keeps.
+ * keeps for thirty days.
+ *
+ * Opening an account is a read, and reads are not recorded — the page says
+ * so, because the absence is a decision and not an oversight. "You opened
+ * recently" is this browser's own list of ids (shared/lib/recent.ts).
  */
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
-import { Link, useParams } from "react-router";
-import { get, post } from "@/shared/api/client";
-import type { AccountDetail, AccountMatch } from "@/shared/api/schema";
-import { dayOf, dollars, formatBytes, whole } from "@/shared/lib/format";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { post } from "@/shared/api/client";
+import type { AccountMatch } from "@/shared/api/schema";
+import { dayOf } from "@/shared/lib/format";
+import { type Opened, RECENT_DAYS, readRecent } from "@/shared/lib/recent";
 import {
 	buttonClass,
 	Chip,
 	day,
 	Empty,
-	Facts,
 	Failed,
 	Id,
-	Loading,
-	Meter,
 	Page,
 	Pair,
 	Panel,
@@ -28,329 +30,122 @@ import {
 	Table,
 	TextField,
 } from "@/shared/ui";
-import { CommandForm } from "@/shared/ui/CommandForm";
+
+/** A Mongo id, typed straight in. Anything else is treated as an address. */
+const IDENTIFIER = /^[0-9a-f]{24}$/i;
+
+/** What the operator typed: an id opens a page, an address needs the lookup. */
+export function looksLikeId(typed: string): boolean {
+	return IDENTIFIER.test(typed.trim());
+}
+
+function Recent({ entries }: { entries: Opened[] }) {
+	return (
+		<Panel
+			title="You opened recently"
+			note={`Ids only, kept in this browser, cleared after ${RECENT_DAYS} days. It is not a record of anything: only you can see it.`}
+		>
+			<Table
+				head={["Account", day("Opened")]}
+				rows={entries.map((e) => [
+					<Link key={e.id} to={`/accounts/${e.id}`} className="link">
+						<Id>{e.id}</Id>
+					</Link>,
+					e.day,
+				])}
+				empty={<Empty title="Nothing yet.">An account you open shows up here for a week.</Empty>}
+			/>
+		</Panel>
+	);
+}
 
 export function Accounts() {
-	const [email, setEmail] = useState("");
+	const [typed, setTyped] = useState("");
+	const navigate = useNavigate();
+	// Read once per mount: it changes when you open an account, and opening
+	// one leaves this page.
+	const [recent] = useState(() => readRecent());
 	const lookup = useMutation({
 		mutationFn: (address: string) =>
 			post<AccountMatch[]>("/api/operator/accounts/lookup", { email: address }),
 	});
 
+	const submit = (e: React.FormEvent) => {
+		e.preventDefault();
+		const wanted = typed.trim();
+		if (!wanted) return;
+		if (looksLikeId(wanted)) {
+			navigate(`/accounts/${wanted}`);
+			return;
+		}
+		lookup.mutate(wanted);
+	};
+
 	return (
 		<Page
-			title="Find an account"
-			lead="By its exact address, as the mail carries it. Accounts can't be browsed from here, and the address never goes in a URL."
+			title="Who are you looking for?"
+			lead="You need the whole address or the account id. There is no list of people here and no search over what they wrote, so you only ever open the account you came for."
 		>
 			<Panel raised>
-				<form
-					className="flex flex-wrap items-end gap-3 p-6"
-					onSubmit={(e) => {
-						e.preventDefault();
-						if (email.trim()) lookup.mutate(email.trim());
-					}}
-				>
+				<form className="flex flex-wrap items-end gap-3 px-6 pt-5 pb-4" onSubmit={submit}>
 					<TextField
-						label="Email address"
-						type="email"
-						value={email}
-						onChange={(e) => setEmail(e.target.value)}
-						className="min-w-[15rem] flex-1"
+						label="Exact address or account id"
+						value={typed}
+						onChange={(e) => setTyped(e.target.value)}
+						placeholder="maya@example.com"
+						autoComplete="off"
+						spellCheck={false}
+						className="min-w-[18rem] flex-1"
 					/>
 					<button type="submit" disabled={lookup.isPending} className={buttonClass("primary")}>
 						{lookup.isPending ? "Looking…" : "Find this account"}
 					</button>
 				</form>
-			</Panel>
-			{lookup.error ? <Failed error={lookup.error} /> : null}
-			{lookup.data ? (
-				<Panel title={lookup.data.length > 0 ? "What came back" : undefined}>
-					<div className={lookup.data.length > 0 ? "" : "pt-4"}>
+				{lookup.error ? <Failed bare error={lookup.error} /> : null}
+				{lookup.data ? (
+					<div className="border-t border-hairline pt-2">
 						<Table
-							head={["Account", day("Created"), day("Last seen"), "State"]}
+							head={["Account", day("Created"), day("Last seen"), "State", ""]}
 							rows={lookup.data.map((m) => [
-								<Link key={m.id} to={`/accounts/${m.id}`} className="link">
+								<span key="who" className="break-all">
 									{m.email}
-								</Link>,
+								</span>,
 								dayOf(m.created_at),
 								dayOf(m.last_seen_on),
 								<Chip key="state" tone={m.suspended ? "owed" : "good"}>
 									{m.suspended ? "Suspended" : "Active"}
 								</Chip>,
+								<Link key="open" to={`/accounts/${m.id}`} className={buttonClass("secondary")}>
+									Open this account
+								</Link>,
 							])}
 							empty={
 								<Empty title="No account has that address.">
-									It has to match exactly, so check it against the mail it came in.
+									It has to match exactly, so check it against the mail it came in. The same address
+									spelled with different capitals can be two accounts, and both would show here.
 								</Empty>
 							}
 						/>
 					</div>
-				</Panel>
-			) : null}
-		</Page>
-	);
-}
-
-function seen(detail: AccountDetail): string {
-	const joined = detail.created_at ? `Joined ${dayOf(detail.created_at)}. ` : "";
-	return `${joined}${detail.last_seen_on ? `Last seen ${dayOf(detail.last_seen_on)}.` : "Not seen since."}`;
-}
-
-export function Account() {
-	const { id } = useParams();
-	const { data, error, refetch } = useQuery({
-		queryKey: ["account", id],
-		queryFn: () => get<AccountDetail>(`/api/operator/accounts/${id}`),
-	});
-	if (error) return <Failed error={error} onRetry={() => refetch()} />;
-	if (!data) return <Loading />;
-
-	const budget = data.coach_budget_usd;
-	const spend = data.coach_spend_usd ?? 0;
-
-	return (
-		<Page
-			title={data.email}
-			back={{ to: "/accounts", label: "Find another account" }}
-			lead={
-				data.suspended_at
-					? `Suspended${data.suspended_kind ? ` for ${data.suspended_kind}` : ""} since ${dayOf(data.suspended_at)}.`
-					: seen(data)
-			}
-			aside={
-				<div className="mt-2.5 rounded-full bg-panel-solid">
-					{data.suspended_at ? <Chip tone="owed">Suspended</Chip> : <Chip tone="good">Active</Chip>}
-				</div>
-			}
-		>
+				) : null}
+			</Panel>
 			<Pair>
-				<Panel title="The account">
-					<Facts
-						items={[
-							["Created", dayOf(data.created_at)],
-							["Last seen", dayOf(data.last_seen_on)],
-							...(data.suspended_at
-								? ([
-										["Suspended by", <Id key="by">{data.suspended_by ?? "not recorded"}</Id>],
-									] as Array<[string, ReactNode]>)
-								: []),
-							["Signed out everywhere", dayOf(data.sessions_valid_after)],
-							["Passkeys", data.passkeys],
-							["Sign-in providers", data.sso_providers?.join(", ") || "None"],
-							["Integrations", data.integrations?.join(", ") || "None"],
-							["Limits overridden", data.limits_overridden ? "Yes" : "No"],
-						]}
-					/>
-				</Panel>
-				<Panel title="What it stores" note="How big, never what.">
-					<Facts
-						items={[
-							["Projects", whole(data.projects)],
-							["Sessions", whole(data.sessions)],
-							["Biometric rows", whole(data.biometric_rows)],
-							["Storage estimate", formatBytes(data.storage_bytes ?? 0)],
-							[
-								"Coach spend this month",
-								budget ? (
-									<div key="coach" className="w-40">
-										<p className="mb-1">
-											{dollars(spend)} of {dollars(budget)}
-										</p>
-										<Meter value={spend} max={budget} label="Coach spend against the monthly cap" />
-									</div>
-								) : (
-									`${dollars(spend)}, no cap set`
-								),
-							],
-						]}
-					/>
+				<Recent entries={recent} />
+				<Panel title="What you will see">
+					<Prose>
+						State, dates, counts, spend, connected services, devices and memberships. Enough to fix
+						what is wrong.
+					</Prose>
+					<Prose>
+						Not sessions, projects, notes, or coach conversations. Those belong to the person, and
+						nothing here can open them.
+					</Prose>
+					<p className="px-6 pb-5 text-[14px] text-ink-muted">
+						Opening an account is a read, and reads are not recorded. The audit holds what was{" "}
+						<em>done</em>.
+					</p>
 				</Panel>
 			</Pair>
-			<Panel title="Devices">
-				<Table
-					head={["Device", day("Created"), day("Last seen"), "State", ""]}
-					rows={(data.devices ?? []).map((d) => [
-						<Id key={d.device_id}>{d.device_id}</Id>,
-						dayOf(d.created_at),
-						dayOf(d.last_seen),
-						<Chip key="state" tone={d.revoked ? "quiet" : "good"}>
-							{d.revoked ? "Revoked" : "Paired"}
-						</Chip>,
-						d.revoked ? null : (
-							<CommandForm
-								key={`revoke-${d.device_id}`}
-								inline
-								name="device.revoke"
-								label={`Revoke device ${d.device_id}`}
-								action="Revoke"
-								args={{ user_id: data.id, device_id: d.device_id }}
-								invalidates={["account"]}
-							/>
-						),
-					])}
-					empty={
-						<Empty title="No devices are paired.">
-							A paired wall clock or daemon shows up here.
-						</Empty>
-					}
-				/>
-			</Panel>
-			<AccountActions detail={data} />
-			<Panel title="Organisations">
-				<Table
-					head={["Organisation", "Role", "Membership"]}
-					rows={(data.organisations ?? []).map((m) => [
-						<Link
-							key={m.organisation_id}
-							to={`/organisations/${m.organisation_id}`}
-							className="link"
-						>
-							{m.organisation_name || m.organisation_id}
-						</Link>,
-						m.role,
-						<Chip key="state" tone={m.active ? "good" : "quiet"}>
-							{m.active ? "Active" : "Ended"}
-						</Chip>,
-					])}
-					empty={<Empty title="Not a member of any organisation." />}
-				/>
-			</Panel>
 		</Page>
-	);
-}
-
-/**
- * The account commands, each through the one runner. Suspension and erasure
- * demand the account's email typed back — proof the operator is acting on
- * the thing they think they are, never a cross-site defence (the Origin
- * check holds that line). Suspend and unsuspend each show only in the state
- * they apply to.
- */
-function AccountActions({ detail }: { detail: AccountDetail }) {
-	const [reason, setReason] = useState("");
-	const [limits, setLimits] = useState({
-		coach: "",
-		beats: "",
-		signals: "",
-		imports: "",
-		webhooksOff: false,
-	});
-
-	const limitArgs: Record<string, unknown> = {
-		user_id: detail.id,
-		coach_monthly_budget_usd: limits.coach ? Number(limits.coach) : null,
-		writes_per_minute_beats: limits.beats ? Number(limits.beats) : null,
-		writes_per_minute_signals: limits.signals ? Number(limits.signals) : null,
-		imports_per_hour: limits.imports ? Number(limits.imports) : null,
-		webhooks_disabled: limits.webhooksOff,
-	};
-
-	const numberField = (key: "coach" | "beats" | "signals" | "imports", label: string) => (
-		<TextField
-			key={key}
-			label={label}
-			value={limits[key]}
-			onChange={(e) => setLimits({ ...limits, [key]: e.target.value })}
-			inputMode="numeric"
-			className="w-32"
-		/>
-	);
-
-	return (
-		<>
-			<Panel title="Controls">
-				{detail.suspended_at ? (
-					<CommandForm
-						name="account.unsuspend"
-						label="Unsuspend"
-						action="Unsuspend this account"
-						args={{ user_id: detail.id }}
-						invalidates={["account", "attention"]}
-					/>
-				) : null}
-				<CommandForm
-					name="account.sign_out_everywhere"
-					label="Sign out everywhere"
-					about="Every session it has open stops working."
-					action="Sign this account out"
-					args={{ user_id: detail.id }}
-					invalidates={["account"]}
-				/>
-				<CommandForm
-					name="account.set_limits"
-					label="Set limits"
-					about="An empty box means the platform's default."
-					action="Save these limits"
-					args={limitArgs}
-					invalidates={["account"]}
-					fields={
-						<>
-							{numberField("coach", "Coach $ a month")}
-							{numberField("beats", "Beat writes a minute")}
-							{numberField("signals", "Signal writes a minute")}
-							{numberField("imports", "Imports an hour")}
-							<label className="flex h-10 items-center gap-2 text-[14px]">
-								<input
-									type="checkbox"
-									checked={limits.webhooksOff}
-									onChange={(e) => setLimits({ ...limits, webhooksOff: e.target.checked })}
-									className="size-4 accent-[var(--leaf)]"
-								/>
-								Webhooks off
-							</label>
-						</>
-					}
-				/>
-				<CommandForm
-					name="account.clear_limits"
-					label="Clear limits"
-					about="Back to the platform's defaults."
-					action="Clear all limits"
-					args={{ user_id: detail.id }}
-					invalidates={["account"]}
-				/>
-			</Panel>
-			<Panel
-				danger
-				title="Suspend or erase"
-				note="Each one asks for the account's email, so you know it's the account you mean."
-			>
-				{detail.suspended_at ? null : (
-					<CommandForm
-						name="account.suspend"
-						label="Suspend for abuse"
-						action="Suspend this account"
-						args={{ user_id: detail.id, kind: "abuse", reason }}
-						confirmHint="Type the account's email to confirm"
-						invalidates={["account", "attention"]}
-						fields={
-							<TextField
-								label="Reason, for the record (never shown)"
-								value={reason}
-								onChange={(e) => setReason(e.target.value)}
-								className="min-w-[15rem] flex-1"
-							/>
-						}
-					/>
-				)}
-				<CommandForm
-					name="account.erase"
-					label="Queue erasure"
-					about="Waits out a 7-day window before it runs."
-					action="Queue this erasure"
-					done="Queued. Cancel it from Compliance inside the week."
-					args={{ user_id: detail.id }}
-					confirmHint="Type the account's email to confirm"
-					invalidates={["account", "operator-jobs", "attention"]}
-				/>
-				<div className="border-t border-hairline pt-4">
-					<Prose>
-						Queueing an erasure suspends the account with the erasure's own wording, which names the
-						day the window ends. The deletion keeps each organisation's working-time record under a
-						tombstone, as PRIVACY.md promises.
-					</Prose>
-				</div>
-			</Panel>
-		</>
 	);
 }
