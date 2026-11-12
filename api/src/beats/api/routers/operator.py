@@ -28,7 +28,7 @@ from beats.operator.reads import (
     OrganisationSummary,
     OrgAuditRow,
 )
-from beats.operator.runner import run_command
+from beats.operator.runner import CommandPreview, preview_command, run_command
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
 
@@ -184,6 +184,24 @@ class CommandRequest(BaseModel):
     # What the operator typed back — the account's email, the organisation's
     # name — compared by the runner against the subject, never stored.
     confirmation: str | None = None
+
+
+class PreviewRequest(BaseModel):
+    args: dict = Field(default_factory=dict)
+
+
+@router.post("/commands/{name}/preview", response_model=CommandPreview)
+async def preview(name: str, body: PreviewRequest, ctx: CommandContextDep) -> CommandPreview:
+    """What the command would do, before it does any of it.
+
+    A POST because it carries the same arguments the act does, an account's
+    id among them, and because the operator's credential is IAP's cookie:
+    every state-changing shape is a POST with an Origin the app checks, and
+    this one is shaped like the act it previews. It writes nothing, queues
+    nothing, and takes the same role — a `viewer` gets the same 403 here as
+    on the act, because a preview it could read would be a way to probe
+    whether an id exists."""
+    return await preview_command(ctx, name, body.args)
 
 
 @router.post("/commands/{name}")
