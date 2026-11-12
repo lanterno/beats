@@ -184,6 +184,11 @@ export function Review() {
 	}
 
 	const before = (preview.data?.before ?? {}) as Record<string, unknown>;
+	// `describe()` answers {exists: false} for an account that is not there.
+	// A command that asks for the email never gets this far — looking the
+	// address up is what 404s — but one that asks for nothing would, and the
+	// change table would read the absence as a live, active account.
+	const missing = before.exists === false;
 	const done = act.data;
 	// A windowed command answers {queued, job}; an inline one answers its
 	// audit row. Both mean it worked, and they are read differently.
@@ -244,6 +249,16 @@ export function Review() {
 									</Link>
 								</div>
 							</>
+						) : missing ? (
+							<div className="px-6 pb-5">
+								<p className="text-[15px] font-bold">There is no account with that id.</p>
+								<p className="mt-1 text-[14px] text-ink-muted">
+									Nothing here will act on it. Check the id against the mail it came from.
+								</p>
+								<Link to="/accounts" className={`${buttonClass("secondary")} mt-3`}>
+									Find an account
+								</Link>
+							</div>
 						) : blocked ? (
 							<div className="px-6 pb-5">
 								<p className="text-[15px] font-bold">This is already queued for this account.</p>
@@ -301,42 +316,48 @@ export function Review() {
 				</div>
 
 				<Panel raised title={done ? "What it changed" : "What will change"}>
-					<Table
-						head={["What", "Now", "After"]}
-						rows={spec.changes(before, args).map((row) => [
-							row.what,
-							<span key="now" className="text-ink-muted">
-								{row.now}
-							</span>,
-							<span key="after" className="font-bold">
-								{row.after}
-							</span>,
-						])}
-						empty={<Empty title="Nothing to show." />}
-					/>
-					<Facts
-						items={[
-							[
-								"When",
-								preview.data?.runs_after
-									? `Runs from ${minute(preview.data.runs_after)} UTC`
-									: "At once",
-							],
-							...(preview.data?.window_days
-								? ([["You can stop it for", `${preview.data.window_days} days`]] as Array<
-										[string, string]
-									>)
-								: []),
-							["Who notices", spec.notices],
-							["Can you undo it", spec.undo],
-							["On the record", ON_THE_RECORD],
-						]}
-					/>
-					{spec.grave ? (
-						<div className="px-6 pb-5">
-							<Chip tone="owed">This one is hard to take back</Chip>
-						</div>
-					) : null}
+					{missing ? (
+						<Empty title="Nothing to show.">The subject does not resolve.</Empty>
+					) : (
+						<>
+							<Table
+								head={["What", "Now", "After"]}
+								rows={spec.changes(before, args).map((row) => [
+									row.what,
+									<span key="now" className="text-ink-muted">
+										{row.now}
+									</span>,
+									<span key="after" className="font-bold">
+										{row.after}
+									</span>,
+								])}
+								empty={<Empty title="Nothing to show." />}
+							/>
+							<Facts
+								items={[
+									[
+										"When",
+										preview.data?.runs_after
+											? `Runs from ${minute(preview.data.runs_after)} UTC`
+											: "At once",
+									],
+									...(preview.data?.window_days
+										? ([["You can stop it for", `${preview.data.window_days} days`]] as Array<
+												[string, string]
+											>)
+										: []),
+									["Who notices", spec.notices],
+									["Can you undo it", spec.undo],
+									["On the record", ON_THE_RECORD],
+								]}
+							/>
+							{spec.grave ? (
+								<div className="px-6 pb-5">
+									<Chip tone="owed">This one is hard to take back</Chip>
+								</div>
+							) : null}
+						</>
+					)}
 				</Panel>
 			</div>
 		</Page>
