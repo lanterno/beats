@@ -199,6 +199,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/commands/{name}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview
+         * @description What the command would do, before it does any of it.
+         *
+         *     A POST because it carries the same arguments the act does, an account's
+         *     id among them, and because the operator's credential is IAP's cookie:
+         *     every state-changing shape is a POST with an Origin the app checks, and
+         *     this one is shaped like the act it previews. It writes nothing, queues
+         *     nothing, and takes the same role — a `viewer` gets the same 403 here as
+         *     on the act, because a preview it could read would be a way to probe
+         *     whether an id exists.
+         */
+        post: operations["preview_api_operator_commands__name__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/jobs": {
         parameters: {
             query?: never;
@@ -472,6 +500,35 @@ export interface components {
             /** Storage Bytes */
             storage_bytes: number;
         };
+        /**
+         * CommandPreview
+         * @description What a command would do, answered without doing any of it.
+         *
+         *     The operator sees this before the act (docs/backoffice.md § Commands:
+         *     the dangerous act must not be the easiest thing on the page). It calls
+         *     `describe()` — a read — and never `execute()` or `on_queued()`, so
+         *     nothing is written and nothing is queued by asking.
+         */
+        CommandPreview: {
+            /** Already Queued */
+            already_queued: boolean;
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** Command */
+            command: string;
+            /** Confirmation Required */
+            confirmation_required: boolean;
+            /** Runs After */
+            runs_after: string | null;
+            /** Subject Id */
+            subject_id: string;
+            /** Subject Kind */
+            subject_kind: string;
+            /** Window Days */
+            window_days: number | null;
+        };
         /** CommandRequest */
         CommandRequest: {
             /** Args */
@@ -592,6 +649,13 @@ export interface components {
             owners: number;
             /** Retention Years */
             retention_years: number | null;
+        };
+        /** PreviewRequest */
+        PreviewRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
         };
         /** ValidationError */
         ValidationError: {
@@ -862,6 +926,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_operator_commands__name__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandPreview"];
                 };
             };
             /** @description Validation Error */

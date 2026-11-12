@@ -450,6 +450,71 @@
         "title": "CollectionSize",
         "type": "object"
       },
+      "CommandPreview": {
+        "description": "What a command would do, answered without doing any of it.\n\nThe operator sees this before the act (docs/backoffice.md \u00a7 Commands:\nthe dangerous act must not be the easiest thing on the page). It calls\n`describe()` \u2014 a read \u2014 and never `execute()` or `on_queued()`, so\nnothing is written and nothing is queued by asking.",
+        "properties": {
+          "already_queued": {
+            "title": "Already Queued",
+            "type": "boolean"
+          },
+          "before": {
+            "additionalProperties": true,
+            "title": "Before",
+            "type": "object"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "confirmation_required": {
+            "title": "Confirmation Required",
+            "type": "boolean"
+          },
+          "runs_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs After"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_kind": {
+            "title": "Subject Kind",
+            "type": "string"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Days"
+          }
+        },
+        "required": [
+          "command",
+          "subject_kind",
+          "subject_id",
+          "before",
+          "confirmation_required",
+          "window_days",
+          "runs_after",
+          "already_queued"
+        ],
+        "title": "CommandPreview",
+        "type": "object"
+      },
       "CommandRequest": {
         "properties": {
           "args": {
@@ -792,6 +857,17 @@
           "all_owners_suspended"
         ],
         "title": "OrganisationSummary",
+        "type": "object"
+      },
+      "PreviewRequest": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          }
+        },
+        "title": "PreviewRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -1206,6 +1282,59 @@
           }
         },
         "summary": "Run",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/commands/{name}/preview": {
+      "post": {
+        "description": "What the command would do, before it does any of it.\n\nA POST because it carries the same arguments the act does, an account's\nid among them, and because the operator's credential is IAP's cookie:\nevery state-changing shape is a POST with an Origin the app checks, and\nthis one is shaped like the act it previews. It writes nothing, queues\nnothing, and takes the same role \u2014 a `viewer` gets the same 403 here as\non the act, because a preview it could read would be a way to probe\nwhether an id exists.",
+        "operationId": "preview_api_operator_commands__name__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview",
         "tags": [
           "operator"
         ]
