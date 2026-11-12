@@ -498,32 +498,43 @@ class TestOneAccountsReads:
     def _usage(self, mongo, user_id: str, ts: datetime, cost: float):
         mongo.llm_usage.insert_one({"user_id": user_id, "ts": ts, "cost_usd": cost})
 
+    @staticmethod
+    def _midday() -> datetime:
+        """Noon UTC today, to hang the calls off.
+
+        Two calls an hour either side of `now` are the same day only if the
+        suite is not running near midnight; grouping is by UTC day, so the
+        fixture has to be anchored inside one rather than measured back from
+        the clock.
+        """
+        return datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+
     def test_coach_spend_is_summed_a_day_oldest_first(self, operator_client, mongo):
-        now = datetime.now(UTC)
+        midday = self._midday()
         mine = str(ObjectId())
-        self._usage(mongo, mine, now - timedelta(days=2, hours=1), 1.5)
-        self._usage(mongo, mine, now - timedelta(days=2, hours=2), 0.25)
-        self._usage(mongo, mine, now - timedelta(hours=1), 4.0)
+        self._usage(mongo, mine, midday - timedelta(days=2), 1.5)
+        self._usage(mongo, mine, midday - timedelta(days=2, hours=1), 0.25)
+        self._usage(mongo, mine, midday, 4.0)
 
         rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
         assert [r["value"] for r in rows] == [1.75, 4.0]
         assert rows[0]["day"] < rows[1]["day"]
 
     def test_coach_spend_is_one_accounts_only(self, operator_client, mongo):
-        now = datetime.now(UTC)
+        midday = self._midday()
         mine, theirs = str(ObjectId()), str(ObjectId())
-        self._usage(mongo, mine, now - timedelta(hours=1), 2.0)
-        self._usage(mongo, theirs, now - timedelta(hours=1), 99.0)
+        self._usage(mongo, mine, midday, 2.0)
+        self._usage(mongo, theirs, midday, 99.0)
         rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
         assert [r["value"] for r in rows] == [2.0]
 
     def test_coach_spend_stops_at_the_window(self, operator_client, mongo):
         """Older calls are the platform's history, on Capacity. This read is
         the shape of a month that is running away."""
-        now = datetime.now(UTC)
+        midday = self._midday()
         mine = str(ObjectId())
-        self._usage(mongo, mine, now - timedelta(days=ACCOUNT_COACH_SPEND_DAYS + 1), 50.0)
-        self._usage(mongo, mine, now - timedelta(hours=2), 1.0)
+        self._usage(mongo, mine, midday - timedelta(days=ACCOUNT_COACH_SPEND_DAYS + 1), 50.0)
+        self._usage(mongo, mine, midday, 1.0)
         rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
         assert [r["value"] for r in rows] == [1.0]
 
