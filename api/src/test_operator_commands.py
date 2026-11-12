@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 import pytest
 from bson import ObjectId
 
+from beats.domain.accounts import ERASURE_WINDOW_DAYS
 from conftest import OPERATOR_ORIGIN as ORIGIN
 from conftest import OPERATOR_SUB, VIEWER_SUB
 
@@ -640,3 +641,147 @@ class TestOperatorJobs:
         job = mongo.operator_jobs.find_one({"subject_id": user_id})
         assert job is not None
         assert job["state"] == "cancelled"
+
+
+class TestCommandPreview:
+    """POST /commands/{name}/preview: what the act would do, answered
+    without doing any of it. The review a page shows comes from here, so it
+    has to pass the same gates as the act and change nothing on the way."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        mongo.operator_audit.delete_many({})
+        mongo.operator_jobs.delete_many({})
+        mongo.users.delete_many({})
+
+    def _user(self, mongo, email="preview@example.test") -> str:
+        user_id = str(ObjectId())
+        mongo.users.insert_one(
+            {"_id": ObjectId(user_id), "email": email, "created_at": datetime.now(UTC)}
+        )
+        return user_id
+
+    def _preview(self, operator_client, name, args):
+        return operator_client.post(
+            f"/api/operator/commands/{name}/preview", json={"args": args}, headers=self.OWN
+        )
+
+    def test_an_inline_command_answers_its_subject_and_no_window(self, operator_client, mongo):
+        user_id = self._user(mongo)
+        body = self._preview(
+            operator_client, "account.sign_out_everywhere", {"user_id": user_id}
+        ).json()
+        assert body["command"] == "account.sign_out_everywhere"
+        assert body["subject_kind"] == "account"
+        assert body["subject_id"] == user_id
+        assert body["confirmation_required"] is False
+        assert body["window_days"] is None
+        assert body["runs_after"] is None
+        assert body["already_queued"] is False
+        # describe()'s own answer, which the audit will keep as `before`.
+        assert body["before"]["suspended"] is False
+
+    def test_a_command_that_asks_for_the_subject_says_so_without_naming_it(
+        self, operator_client, mongo
+    ):
+        """The operator types the address because they know it. A preview
+        that handed it back could be autofilled, and the typing would stop
+        proving anything."""
+        user_id = self._user(mongo, email="typed@example.test")
+        response = self._preview(
+            operator_client, "account.suspend", {"user_id": user_id, "reason": "scraping"}
+        )
+        assert response.json()["confirmation_required"] is True
+        assert "typed@example.test" not in response.text
+
+    def test_a_windowed_command_says_when_it_would_run(self, operator_client, mongo):
+        user_id = self._user(mongo)
+        body = self._preview(operator_client, "account.erase", {"user_id": user_id}).json()
+        assert body["window_days"] == ERASURE_WINDOW_DAYS
+        runs_after = datetime.fromisoformat(body["runs_after"])
+        expected = datetime.now(UTC) + timedelta(days=ERASURE_WINDOW_DAYS)
+        assert abs((runs_after - expected).total_seconds()) < 60
+
+    def test_previewing_changes_nothing(self, operator_client, mongo):
+        """The whole point: it is a read of what the act would do. Every
+        command is previewed, including the ones that suspend, erase and
+        delete, and nothing moves."""
+        user_id = self._user(mongo)
+        before = mongo.users.find_one({"_id": ObjectId(user_id)})
+        for name, args in (
+            ("account.suspend", {"user_id": user_id, "reason": "scraping"}),
+            ("account.unsuspend", {"user_id": user_id}),
+            ("account.sign_out_everywhere", {"user_id": user_id}),
+            ("account.clear_limits", {"user_id": user_id}),
+            ("account.erase", {"user_id": user_id}),
+        ):
+            assert self._preview(operator_client, name, args).status_code == 200
+
+        assert mongo.users.find_one({"_id": ObjectId(user_id)}) == before
+        assert mongo.operator_audit.count_documents({}) == 0
+        assert mongo.operator_jobs.count_documents({}) == 0
+
+    def test_an_unknown_command_and_bad_arguments_refuse_as_the_act_does(
+        self, operator_client, mongo
+    ):
+        unknown = self._preview(operator_client, "account.explode", {"user_id": "x"})
+        assert unknown.status_code == 404
+        bad = self._preview(operator_client, "account.suspend", {"user_id": ""})
+        assert bad.status_code == 422
+        assert bad.json()["code"] == "INVALID_COMMAND_ARGS"
+
+    def test_a_subject_that_does_not_resolve_refuses_before_anything_is_typed(
+        self, operator_client, mongo
+    ):
+        """A mistyped id is the case the typed confirmation exists for, and
+        the review is where the operator should learn of it."""
+        missing = self._preview(
+            operator_client, "account.suspend", {"user_id": str(ObjectId()), "reason": "x"}
+        )
+        assert missing.status_code == 404
+
+    def test_a_queued_window_is_named_before_the_second_attempt(self, operator_client, mongo):
+        user_id = self._user(mongo, email="queued@example.test")
+        assert (
+            self._preview(operator_client, "account.erase", {"user_id": user_id}).json()[
+                "already_queued"
+            ]
+            is False
+        )
+
+        queued = operator_client.post(
+            "/api/operator/commands/account.erase",
+            json={"args": {"user_id": user_id}, "confirmation": "queued@example.test"},
+            headers=self.OWN,
+        )
+        assert queued.status_code == 200
+
+        assert (
+            self._preview(operator_client, "account.erase", {"user_id": user_id}).json()[
+                "already_queued"
+            ]
+            is True
+        )
+
+    async def test_a_viewer_previews_nothing(self):
+        """Same gate as the act, at the runner for the same reason: a
+        preview a viewer could read would say whether an id exists."""
+        from typing import cast
+
+        from beats.operator.commands import CommandContext
+        from beats.operator.runner import ViewerCannotAct, preview_command
+        from beats.operator.settings import OperatorIdentity
+
+        absent = cast("Any", None)
+        ctx = CommandContext(
+            operator=OperatorIdentity(sub=VIEWER_SUB, email="v@example.test", role="viewer"),
+            db=absent,
+            accounts=absent,
+            organisations=absent,
+            devices=absent,
+        )
+        with pytest.raises(ViewerCannotAct):
+            await preview_command(ctx, "account.unsuspend", {"user_id": "u"})
