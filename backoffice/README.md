@@ -21,6 +21,17 @@ cd ../api && just run-operator-locally   # the operator API (needs .env.operator
                                          # copy api/.env.operator.example)
 ```
 
+Both ports are overridable, for a second checkout on the same machine:
+
+```bash
+BACKOFFICE_PORT=8085 BACKOFFICE_OPERATOR_API=http://localhost:7995 pnpm dev
+```
+
+The port is strict rather than stepping to the next free one, and
+`OPERATOR_ORIGIN` in `api/.env.operator` has to name whichever port you chose:
+the operator API refuses a write whose `Origin` is not its own, so a dev
+server that quietly moved reads every page and cannot run a command.
+
 ```bash
 pnpm test            # Vitest (node env — the pages are tables over API figures)
 pnpm lint            # biome check .
