@@ -22,6 +22,7 @@ import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
 import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
+import { Review } from "@/pages/Review";
 import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
 import type { AttentionCounts, OperatorMe } from "@/shared/api/schema";
@@ -223,6 +224,7 @@ function Shell() {
 						<Route path="/" element={<Attention />} />
 						<Route path="/accounts" element={<Accounts />} />
 						<Route path="/accounts/:id" element={<Account />} />
+						<Route path="/review/:command/:subject" element={<Review />} />
 						<Route path="/organisations" element={<Organisations />} />
 						<Route path="/organisations/:id" element={<Organisation />} />
 						<Route path="/trust" element={<Trust />} />

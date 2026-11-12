@@ -10,10 +10,11 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { get } from "@/shared/api/client";
 import type { AccountDetail, DayFigure } from "@/shared/api/schema";
+import { ACCOUNT_COMMANDS } from "@/shared/commands";
 import { dayOf, dollars, everyDay, formatBytes, whole } from "@/shared/lib/format";
 import { rememberOpened } from "@/shared/lib/recent";
 import {
@@ -31,7 +32,6 @@ import {
 	Panel,
 	Prose,
 	Table,
-	TextField,
 } from "@/shared/ui";
 import { CommandForm } from "@/shared/ui/CommandForm";
 
@@ -259,7 +259,7 @@ export function Account() {
 					/>
 				</Panel>
 			</Pair>
-			<AccountActions detail={data} />
+			<Acts detail={data} />
 			<History id={id} />
 			<Panel title="Out of reach here">
 				<Prose>
@@ -273,140 +273,51 @@ export function Account() {
 }
 
 /**
- * The account commands, each through the one runner. They sit in the main
- * column rather than the mock's right rail because each is still a form
- * with its fields: the rail's one-line buttons arrive with the review step,
- * which is what they will open.
- * Suspension and erasure
- * demand the account's email typed back — proof the operator is acting on
- * the thing they think they are, never a cross-site defence (the Origin
- * check holds that line). Suspend and unsuspend each show only in the state
- * they apply to.
+ * The acts, each a link to its review rather than a form here: the operator
+ * reads what will change, who notices and whether it can be taken back
+ * before anything is typed (docs/backoffice.md § Commands — the dangerous
+ * act must not be the easiest thing on the page).
+ *
+ * Which acts are offered is this page's to decide, from the state it already
+ * has; what each one does is the runner's, and the review asks it.
  */
-function AccountActions({ detail }: { detail: AccountDetail }) {
-	const [reason, setReason] = useState("");
-	const [limits, setLimits] = useState({
-		coach: "",
-		beats: "",
-		signals: "",
-		imports: "",
-		webhooksOff: false,
-	});
-
-	const limitArgs: Record<string, unknown> = {
-		user_id: detail.id,
-		coach_monthly_budget_usd: limits.coach ? Number(limits.coach) : null,
-		writes_per_minute_beats: limits.beats ? Number(limits.beats) : null,
-		writes_per_minute_signals: limits.signals ? Number(limits.signals) : null,
-		imports_per_hour: limits.imports ? Number(limits.imports) : null,
-		webhooks_disabled: limits.webhooksOff,
-	};
-
-	const numberField = (key: "coach" | "beats" | "signals" | "imports", label: string) => (
-		<TextField
-			key={key}
-			label={label}
-			value={limits[key]}
-			onChange={(e) => setLimits({ ...limits, [key]: e.target.value })}
-			inputMode="numeric"
-			className="w-32"
-		/>
+function Acts({ detail }: { detail: AccountDetail }) {
+	const offered = ACCOUNT_COMMANDS.filter((spec) =>
+		spec.name === "account.suspend"
+			? !detail.suspended_at
+			: spec.name === "account.unsuspend"
+				? Boolean(detail.suspended_at)
+				: true,
 	);
+	const [contain, grave] = [offered.filter((s) => !s.grave), offered.filter((s) => s.grave)];
+
+	const rail = (specs: typeof offered) =>
+		specs.map((spec) => (
+			<Link
+				key={spec.name}
+				to={`/review/${spec.name}/${detail.id}`}
+				className={`flex min-h-10 items-center rounded-full px-4 py-2 text-[14px] ${
+					spec.grave
+						? "bg-persimmon/15 font-bold text-persimmon-ink"
+						: "bg-wash hover:bg-wash-strong"
+				}`}
+			>
+				{spec.title}
+			</Link>
+		));
 
 	return (
-		<>
-			<Panel title="Contain" note="Each one tells you what it changed once it has run.">
-				{detail.suspended_at ? (
-					<CommandForm
-						name="account.unsuspend"
-						label="Unsuspend"
-						action="Unsuspend this account"
-						args={{ user_id: detail.id }}
-						invalidates={["account", "account-audit", "attention"]}
-					/>
-				) : null}
-				<CommandForm
-					name="account.sign_out_everywhere"
-					label="Sign out everywhere"
-					about="Every session it has open stops working."
-					action="Sign this account out"
-					args={{ user_id: detail.id }}
-					invalidates={["account", "account-audit"]}
-				/>
-				<CommandForm
-					name="account.set_limits"
-					label="Set limits on writes or webhooks"
-					about="An empty box means the platform's default."
-					action="Save these limits"
-					args={limitArgs}
-					invalidates={["account", "account-audit"]}
-					fields={
-						<>
-							{numberField("coach", "Coach $ a month")}
-							{numberField("beats", "Beat writes a minute")}
-							{numberField("signals", "Signal writes a minute")}
-							{numberField("imports", "Imports an hour")}
-							<label className="flex h-10 items-center gap-2 text-[14px]">
-								<input
-									type="checkbox"
-									checked={limits.webhooksOff}
-									onChange={(e) => setLimits({ ...limits, webhooksOff: e.target.checked })}
-									className="size-4 accent-[var(--leaf)]"
-								/>
-								Webhooks off
-							</label>
-						</>
-					}
-				/>
-				<CommandForm
-					name="account.clear_limits"
-					label="Clear limits"
-					about="Back to the platform's defaults."
-					action="Clear all limits"
-					args={{ user_id: detail.id }}
-					invalidates={["account", "account-audit"]}
-				/>
+		<Pair>
+			<Panel title="Contain" note="Each one shows you what will change before it runs.">
+				<div className="flex flex-col gap-2 px-6 pb-5">{rail(contain)}</div>
 			</Panel>
-			<Panel
-				danger
-				title="Suspend or erase"
-				note="Each one asks for the account's email, so you know it's the account you mean."
-			>
-				{detail.suspended_at ? null : (
-					<CommandForm
-						name="account.suspend"
-						label="Suspend for abuse"
-						action="Suspend this account"
-						args={{ user_id: detail.id, kind: "abuse", reason }}
-						confirmHint="Type the account's email to confirm"
-						invalidates={["account", "account-audit", "attention"]}
-						fields={
-							<TextField
-								label="Reason, for the record (never shown)"
-								value={reason}
-								onChange={(e) => setReason(e.target.value)}
-								className="min-w-[15rem] flex-1"
-							/>
-						}
-					/>
-				)}
-				<CommandForm
-					name="account.erase"
-					label="Erase this account"
-					about="Deletes everything they have, seven days after you queue it, and only when they asked for it. It suspends the account while it waits."
-					action="Queue this erasure"
-					done="Queued. Cancel it from Jobs and windows inside the week."
-					args={{ user_id: detail.id }}
-					confirmHint="Type the account's email to confirm"
-					invalidates={["account", "account-audit", "operator-jobs", "attention"]}
-				/>
-				<div className="border-t border-hairline pt-4">
-					<Prose>
-						The deletion keeps each organisation's working-time record under a tombstone, as
-						PRIVACY.md promises. Everything else goes.
-					</Prose>
-				</div>
+			<Panel danger title="Suspend or erase" note="Each asks for the account's email, typed back.">
+				<div className="flex flex-col gap-2 px-6 pb-5">{rail(grave)}</div>
+				<Prose>
+					An erasure waits out a window you can still stop it in, and keeps each organisation's
+					working-time record under a tombstone, as PRIVACY.md promises.
+				</Prose>
 			</Panel>
-		</>
+		</Pair>
 	);
 }

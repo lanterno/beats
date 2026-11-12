@@ -1,0 +1,363 @@
+/**
+ * Review before acting: what a command will change, who notices and whether
+ * it can be taken back — read before anything is typed, and on a page of its
+ * own so the dangerous act is never the easiest thing on a list of accounts
+ * (docs/backoffice.md § The line, § Commands).
+ *
+ * What will change comes from `POST /commands/{name}/preview`, which passes
+ * the runner's own gates and writes nothing, so a mistyped id or a window
+ * already queued is answered here rather than after an address is typed. The
+ * "after" column, who notices and whether it can be undone are fixed text
+ * per command (shared/commands.ts): the API cannot answer them without
+ * running the thing.
+ */
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Link, useParams } from "react-router";
+import { OperatorApiError } from "@/shared/api/client";
+import { previewCommand, runCommand } from "@/shared/api/commands";
+import {
+	ACCOUNT_COMMANDS,
+	type CommandField,
+	type CommandSpec,
+	commandSpec,
+	emptyArgs,
+	ON_THE_RECORD,
+} from "@/shared/commands";
+import { plainMessage } from "@/shared/lib/errors";
+import { useSettled } from "@/shared/lib/useSettled";
+import {
+	buttonClass,
+	Chip,
+	Empty,
+	Facts,
+	Failed,
+	Id,
+	Loading,
+	Page,
+	Panel,
+	Prose,
+	Table,
+	TextField,
+} from "@/shared/ui";
+
+/**
+ * A 422 from the preview means the arguments do not parse yet — a reason not
+ * written, a limit left as text. It is the form talking, not a failure, so
+ * the page asks for the rest instead of showing an error.
+ */
+export function isIncomplete(error: unknown): boolean {
+	return error instanceof OperatorApiError && error.statusCode === 422;
+}
+
+/** A day and minute, as the operator reads an instant. */
+const minute = (iso: string | null | undefined): string =>
+	typeof iso === "string" && iso ? iso.slice(0, 16).replace("T", " ") : "—";
+
+function Fields({
+	fields,
+	args,
+	onChange,
+}: {
+	fields: CommandField[];
+	args: Record<string, unknown>;
+	onChange: (key: string, value: unknown) => void;
+}) {
+	return (
+		<div className="flex flex-wrap items-start gap-4 px-6 pb-5">
+			{fields.map((field) =>
+				field.kind === "checkbox" ? (
+					<label key={field.key} className="flex max-w-[22rem] items-start gap-2 text-[14px]">
+						<input
+							type="checkbox"
+							checked={Boolean(args[field.key])}
+							onChange={(e) => onChange(field.key, e.target.checked)}
+							className="mt-0.5 size-4 accent-[var(--leaf)]"
+						/>
+						<span>
+							{field.label}
+							{field.hint ? (
+								<span className="block text-[13px] text-ink-muted">{field.hint}</span>
+							) : null}
+						</span>
+					</label>
+				) : (
+					<div
+						key={field.key}
+						className={field.kind === "number" ? "w-36" : "min-w-[16rem] flex-1"}
+					>
+						<TextField
+							label={field.label}
+							value={String(args[field.key] ?? "")}
+							inputMode={field.kind === "number" ? "numeric" : undefined}
+							onChange={(e) => onChange(field.key, e.target.value)}
+						/>
+						{field.hint ? <p className="mt-1 text-[13px] text-ink-muted">{field.hint}</p> : null}
+					</div>
+				),
+			)}
+		</div>
+	);
+}
+
+/** The acts available on this subject, so one can be swapped for another
+ * without going back. */
+function Pick({ subject, chosen }: { subject: string; chosen: string }) {
+	return (
+		// biome-ignore lint/a11y/useSemanticElements: a fieldset cannot be a rounded flex track across browsers
+		<div
+			role="group"
+			aria-label="What do you want to do?"
+			className="flex flex-wrap gap-1 px-6 pb-4"
+		>
+			{ACCOUNT_COMMANDS.map((spec) => (
+				<Link
+					key={spec.name}
+					to={`/review/${spec.name}/${subject}`}
+					aria-current={spec.name === chosen ? "true" : undefined}
+					className={`inline-flex h-9 items-center rounded-full px-3.5 text-[14px] ${
+						spec.name === chosen ? "bg-wash-strong font-bold" : "hover:bg-wash"
+					}`}
+				>
+					{spec.title}
+				</Link>
+			))}
+		</div>
+	);
+}
+
+export function Review() {
+	const { command = "", subject = "" } = useParams();
+	const spec = commandSpec(command);
+	const queryClient = useQueryClient();
+	const [args, setArgs] = useState<Record<string, unknown>>(() => (spec ? emptyArgs(spec) : {}));
+	const [typed, setTyped] = useState("");
+
+	// Previewed with the arguments as they stand, once typing has stopped:
+	// the route validates them exactly as the act will, so an unfilled field
+	// comes back 422 and that is the page's own "there is more to fill in",
+	// not a failure. Settled, or every keystroke would be a request.
+	const sentArgs = sent(spec, args);
+	const settledArgs = useSettled(sentArgs);
+	const preview = useQuery({
+		queryKey: ["preview", command, subject, settledArgs],
+		queryFn: () => previewCommand(command, { user_id: subject, ...settledArgs }),
+		enabled: Boolean(spec && subject),
+		retry: false,
+	});
+
+	const act = useMutation({
+		mutationFn: () => runCommand(command, { user_id: subject, ...sentArgs }, typed || undefined),
+		onSuccess: () => {
+			// Not the preview: once the act has run, "Now" is the state it
+			// found, and re-reading it would make the change table claim the
+			// account was always in the state the act just put it in.
+			for (const key of ["account", "account-audit", "operator-jobs", "attention"]) {
+				queryClient.invalidateQueries({ queryKey: [key] });
+			}
+		},
+	});
+
+	if (!spec) {
+		return (
+			<Page title="No such command" back={{ to: "/accounts", label: "Back to accounts" }}>
+				<Panel>
+					<Empty title="This page reviews an account command.">
+						Open an account and choose one of its acts.
+					</Empty>
+				</Panel>
+			</Page>
+		);
+	}
+
+	const back = { to: `/accounts/${subject}`, label: "Back to the account" };
+
+	if (preview.isPending) return <Loading />;
+	const incomplete = isIncomplete(preview.error);
+	if (preview.error && !incomplete) {
+		return (
+			<Page title={spec.title} back={back} lead="Nothing has happened.">
+				<Failed error={preview.error} onRetry={() => preview.refetch()} />
+			</Page>
+		);
+	}
+
+	const before = (preview.data?.before ?? {}) as Record<string, unknown>;
+	const done = act.data;
+	// A windowed command answers {queued, job}; an inline one answers its
+	// audit row. Both mean it worked, and they are read differently.
+	const queued = Boolean(done && "queued" in done);
+	const blocked = preview.data?.already_queued === true;
+	const needsTyping = preview.data?.confirmation_required === true;
+	const ready = !blocked && !done && !incomplete && (!needsTyping || typed.trim().length > 0);
+
+	return (
+		<Page
+			title={done ? "Done. Here is what changed." : "Check what will change, then do it."}
+			back={back}
+			lead={
+				done ? (
+					"It is on the record, and the account page already shows it."
+				) : (
+					<>
+						Acting on <Id>{subject}</Id>. Nothing has happened yet.
+					</>
+				)
+			}
+		>
+			<div className="grid gap-[18px] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+				<div className="flex min-w-0 flex-col gap-[18px]">
+					<Panel title="What do you want to do?">
+						<Pick subject={subject} chosen={command} />
+						<Prose>{spec.about}</Prose>
+						{spec.fields && !done ? (
+							<Fields
+								fields={spec.fields}
+								args={args}
+								onChange={(key, value) => setArgs({ ...args, [key]: value })}
+							/>
+						) : null}
+					</Panel>
+
+					<Panel raised danger={spec.grave} title={done ? "What happened" : "Do it"}>
+						{done ? (
+							<>
+								<Facts
+									items={[
+										["Command", spec.title],
+										["Subject", <Id key="s">{subject}</Id>],
+										[
+											"Where it is",
+											queued
+												? `Queued, runs from ${minute(preview.data?.runs_after)} UTC`
+												: "Done, and on the record",
+										],
+									]}
+								/>
+								<div className="flex flex-wrap gap-2 px-6 pt-1 pb-5">
+									<Link to={back.to} className={buttonClass("primary")}>
+										Back to the account
+									</Link>
+									<Link to="/audit" className={buttonClass("secondary")}>
+										See it in the audit
+									</Link>
+								</div>
+							</>
+						) : blocked ? (
+							<div className="px-6 pb-5">
+								<p className="text-[15px] font-bold">This is already queued for this account.</p>
+								<p className="mt-1 text-[14px] text-ink-muted">
+									One window at a time, by design. Cancel the one waiting before queueing another.
+								</p>
+								<Link to="/jobs" className={`${buttonClass("secondary")} mt-3`}>
+									Open jobs and windows
+								</Link>
+							</div>
+						) : (
+							<div className="px-6 pb-5">
+								{needsTyping ? (
+									<div className="mb-3 max-w-[26rem]">
+										<TextField
+											label="Type the account's email to confirm"
+											value={typed}
+											onChange={(e) => setTyped(e.target.value)}
+											autoComplete="off"
+											spellCheck={false}
+										/>
+										<p className="mt-1 text-[13px] text-ink-muted">
+											Typed from what you already know about this account, never offered here.
+										</p>
+									</div>
+								) : null}
+								<div className="flex flex-wrap items-center gap-3">
+									<button
+										type="button"
+										disabled={!ready || act.isPending}
+										onClick={() => act.mutate()}
+										className={buttonClass(spec.grave ? "danger" : "primary")}
+									>
+										{act.isPending ? "Working…" : spec.action}
+									</button>
+									<Link to={back.to} className={buttonClass("secondary")}>
+										Leave it as it is
+									</Link>
+									{incomplete ? (
+										<span className="text-[14px] text-ink-muted">
+											Fill in the fields above first.
+										</span>
+									) : needsTyping && !typed.trim() ? (
+										<span className="text-[14px] text-ink-muted">Type the address to confirm.</span>
+									) : null}
+								</div>
+								{act.error ? (
+									<p role="alert" className="mt-3 text-[14px] text-persimmon-ink">
+										{plainMessage(act.error)}
+									</p>
+								) : null}
+							</div>
+						)}
+					</Panel>
+				</div>
+
+				<Panel raised title={done ? "What it changed" : "What will change"}>
+					<Table
+						head={["What", "Now", "After"]}
+						rows={spec.changes(before, args).map((row) => [
+							row.what,
+							<span key="now" className="text-ink-muted">
+								{row.now}
+							</span>,
+							<span key="after" className="font-bold">
+								{row.after}
+							</span>,
+						])}
+						empty={<Empty title="Nothing to show." />}
+					/>
+					<Facts
+						items={[
+							[
+								"When",
+								preview.data?.runs_after
+									? `Runs from ${minute(preview.data.runs_after)} UTC`
+									: "At once",
+							],
+							...(preview.data?.window_days
+								? ([["You can stop it for", `${preview.data.window_days} days`]] as Array<
+										[string, string]
+									>)
+								: []),
+							["Who notices", spec.notices],
+							["Can you undo it", spec.undo],
+							["On the record", ON_THE_RECORD],
+						]}
+					/>
+					{spec.grave ? (
+						<div className="px-6 pb-5">
+							<Chip tone="owed">This one is hard to take back</Chip>
+						</div>
+					) : null}
+				</Panel>
+			</div>
+		</Page>
+	);
+}
+
+/** Only the fields this command declares, with empty boxes left out so the
+ * API reads them as "the platform's default" rather than zero. */
+function sent(
+	spec: CommandSpec | undefined,
+	args: Record<string, unknown>,
+): Record<string, unknown> {
+	if (!spec?.fields) return {};
+	const out: Record<string, unknown> = {};
+	for (const field of spec.fields) {
+		const value = args[field.key];
+		if (field.kind === "checkbox") out[field.key] = Boolean(value);
+		else if (value === "" || value === undefined || value === null) out[field.key] = null;
+		else out[field.key] = field.kind === "number" ? Number(value) : value;
+	}
+	return out;
+}
+
+export { sent };
