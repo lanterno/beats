@@ -256,6 +256,17 @@ _signups_last_hour = 0
 _signups_counted_at = 0.0
 
 
+async def refuse_if_signups_paused(db: AsyncDatabase) -> None:
+    """Paused outright: refused. What `/register/verify` checks, so a row a
+    script started before the pause cannot be finished during it. Not the
+    slow-down: that is a ceiling on sign-ups *started*, applied at the start,
+    and a visitor it let through is already in the count — checked again at
+    verify, the ceiling would refuse them against their own start, and a
+    ceiling of one would refuse everyone."""
+    if (await resolve(db)).paused("signups", datetime.now(UTC)):
+        raise SignupsPaused()
+
+
 async def refuse_if_signups_closed(db: AsyncDatabase, network_key: str | None = None) -> None:
     """Paused: refused. Slowed: refused once the hour holds `value` sign-ups
     already. Slowed for one network: refused once *that network* started
