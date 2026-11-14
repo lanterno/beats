@@ -34,7 +34,6 @@ import {
 	Chip,
 	Empty,
 	Facts,
-	Failed,
 	Id,
 	Loading,
 	Page,
@@ -275,15 +274,12 @@ function CommandReview() {
 	const back = family.back(subject);
 
 	if (preview.isPending && !answered.current) return <Loading />;
-	const refused = isRefusal(preview.error);
 	const refusal = refusalOf(preview.error, fields, args);
-	if (preview.error && !refused) {
-		return (
-			<Page title={spec.title} back={back} lead="Nothing has happened.">
-				<Failed error={preview.error} onRetry={() => preview.refetch()} />
-			</Page>
-		);
-	}
+	// Anything but a refusal of the arguments: a subject that does not
+	// resolve, a store that did not answer. It is said beside the form, not
+	// instead of it — an account id half typed into a field is a 404 until
+	// it is whole, and the field must stay there to finish it.
+	const failed = preview.error && !isRefusal(preview.error) ? preview.error : null;
 
 	const before = (preview.data?.before ?? {}) as Record<string, unknown>;
 	// Until a preview has answered (the arguments are refused, or it failed)
@@ -309,7 +305,7 @@ function CommandReview() {
 		!preview.isPlaceholderData &&
 		JSON.stringify(sentArgs) === JSON.stringify(settledArgs);
 	const ready =
-		previewed && !blocked && !done && !refused && (!needsTyping || typed.trim().length > 0);
+		previewed && !preview.error && !blocked && !done && (!needsTyping || typed.trim().length > 0);
 
 	return (
 		<Page
@@ -429,6 +425,20 @@ function CommandReview() {
 										{reason}
 									</p>
 								))}
+								{failed ? (
+									<div role="alert" className="mt-3 flex flex-wrap items-center gap-3">
+										<p className="min-w-0 flex-1 text-[14px] text-persimmon-ink">
+											{plainMessage(failed)}
+										</p>
+										<button
+											type="button"
+											onClick={() => preview.refetch()}
+											className={buttonClass("secondary")}
+										>
+											Check again
+										</button>
+									</div>
+								) : null}
 								{act.error ? (
 									<p role="alert" className="mt-3 text-[14px] text-persimmon-ink">
 										{plainMessage(act.error)}
