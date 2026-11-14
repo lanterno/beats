@@ -12,10 +12,21 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import { minuteOf } from "@/shared/lib/format";
-import { Chip, day, Empty, Failed, Id, Loading, Page, Panel, Table } from "@/shared/ui";
-import { CommandForm } from "@/shared/ui/CommandForm";
+import {
+	buttonClass,
+	Chip,
+	day,
+	Empty,
+	Failed,
+	Id,
+	Loading,
+	Page,
+	Panel,
+	Table,
+} from "@/shared/ui";
 
 type Row = Record<string, unknown>;
 
@@ -137,15 +148,14 @@ export function Jobs() {
 						<JobState key="state" state={r.state} />,
 						<Tries key="tries" row={r} />,
 						r.state === "queued" ? (
-							<CommandForm
-								key={`cancel-${r.id}`}
-								inline
-								name="job.cancel"
-								label={`Cancel ${text(r.command)} for ${text(r.subject_id)}`}
-								action="Cancel"
-								args={{ job_id: r.id }}
-								invalidates={["operator-jobs", "attention"]}
-							/>
+							<Link
+								key={`cancel-${text(r.id)}`}
+								to={`/review/job.cancel/${text(r.id)}`}
+								aria-label={`Cancel ${text(r.command)} for ${text(r.subject_id)}`}
+								className={buttonClass("secondary")}
+							>
+								Cancel
+							</Link>
 						) : null,
 					])}
 					empty={

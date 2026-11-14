@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import type { ErasureRequestState } from "@/shared/api/schema";
+import { EVERY_ORGANISATION } from "@/shared/commands";
 import { daysBetween, deadlineOf } from "@/shared/lib/deadline";
 import { dayOf } from "@/shared/lib/format";
 import {
@@ -34,7 +35,6 @@ import {
 	Prose,
 	Table,
 } from "@/shared/ui";
-import { CommandForm } from "@/shared/ui/CommandForm";
 
 /** Where a request stands, in words: the status, and the days it has waited
  * out of the month it has, the mail's day being day 1 and the deadline the
@@ -125,16 +125,18 @@ export function Compliance() {
 				title="Retention purge, platform-wide"
 				note="Never scheduled, by decision: PRIVACY.md and the DPA promise an operator runs it."
 			>
-				<CommandForm
-					name="retention.purge"
-					label="Purge every organisation"
-					about="Every organisation's records past its own retention period, and this back office's audit past four years."
-					action="Queue the purge"
-					done="Queued. Cancel it from Jobs and windows until its window ends."
-					args={{ organisation_id: null }}
-					confirmHint='Type "all" to confirm'
-					invalidates={["operator-jobs", "attention"]}
-				/>
+				<Prose>
+					Every organisation's records past its own retention period, and this back office's audit
+					past four years. Its review counts what would go before you queue it.
+				</Prose>
+				<div className="px-6 pb-5">
+					<Link
+						to={`/review/retention.purge/${EVERY_ORGANISATION}`}
+						className={buttonClass("danger")}
+					>
+						Review the purge
+					</Link>
+				</div>
 			</Panel>
 			<Panel
 				title="What this back office may see"

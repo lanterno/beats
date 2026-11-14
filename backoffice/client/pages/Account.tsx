@@ -18,6 +18,7 @@ import { ACCOUNT_COMMANDS } from "@/shared/commands";
 import { dayOf, dollars, everyDay, formatBytes, whole } from "@/shared/lib/format";
 import { rememberOpened } from "@/shared/lib/recent";
 import {
+	buttonClass,
 	Chip,
 	DayBars,
 	day,
@@ -33,7 +34,6 @@ import {
 	Prose,
 	Table,
 } from "@/shared/ui";
-import { CommandForm } from "@/shared/ui/CommandForm";
 
 /** How much of the coach bar chart to draw: the month's shape, as the API's
  * own window (`ACCOUNT_COACH_SPEND_DAYS`). */
@@ -190,93 +190,100 @@ export function Account() {
 			}
 		>
 			<Marks detail={data} />
-			<CoachSpend detail={data} id={id} />
-			<div className="grid grid-cols-2 gap-[18px] sm:grid-cols-4">
-				<Tile label="Projects" value={whole(data.projects)} />
-				<Tile label="Sessions" value={whole(data.sessions)} />
-				<Tile label="Devices" value={whole((data.devices ?? []).length)} />
-				<Tile label="Stored, estimated" value={formatBytes(data.storage_bytes ?? 0)} />
-			</div>
-			<Panel title="Devices" note="Revoking asks the device to pair again.">
-				<Table
-					head={["Device", day("Paired"), day("Last seen"), "State", ""]}
-					rows={(data.devices ?? []).map((d) => [
-						<Id key={d.device_id}>{d.device_id}</Id>,
-						dayOf(d.created_at),
-						dayOf(d.last_seen),
-						<Chip key="state" tone={d.revoked ? "quiet" : "good"}>
-							{d.revoked ? "Revoked" : "Paired"}
-						</Chip>,
-						d.revoked ? null : (
-							<CommandForm
-								key={`revoke-${d.device_id}`}
-								inline
-								name="device.revoke"
-								label={`Revoke device ${d.device_id}`}
-								action="Revoke"
-								args={{ user_id: data.id, device_id: d.device_id }}
-								invalidates={["account"]}
+			<div className="grid gap-[18px] lg:grid-cols-[minmax(0,1fr)_320px]">
+				<div className="flex min-w-0 flex-col gap-[18px]">
+					<CoachSpend detail={data} id={id} />
+					<div className="grid grid-cols-2 gap-[18px] sm:grid-cols-4">
+						<Tile label="Projects" value={whole(data.projects)} />
+						<Tile label="Sessions" value={whole(data.sessions)} />
+						<Tile label="Devices" value={whole((data.devices ?? []).length)} />
+						<Tile label="Stored, estimated" value={formatBytes(data.storage_bytes ?? 0)} />
+					</div>
+					<Panel title="Devices" note="Revoking asks the device to pair again.">
+						<Table
+							head={["Device", day("Paired"), day("Last seen"), "State", ""]}
+							rows={(data.devices ?? []).map((d) => [
+								<Id key={d.device_id}>{d.device_id}</Id>,
+								dayOf(d.created_at),
+								dayOf(d.last_seen),
+								<Chip key="state" tone={d.revoked ? "quiet" : "good"}>
+									{d.revoked ? "Revoked" : "Paired"}
+								</Chip>,
+								d.revoked ? null : (
+									<Link
+										key={`revoke-${d.device_id}`}
+										to={`/review/device.revoke/${data.id}?device_id=${encodeURIComponent(d.device_id)}`}
+										aria-label={`Revoke device ${d.device_id}`}
+										className="link"
+									>
+										Revoke
+									</Link>
+								),
+							])}
+							empty={
+								<Empty title="No devices are paired.">
+									A paired wall clock or daemon shows up here.
+								</Empty>
+							}
+						/>
+					</Panel>
+					<Pair>
+						<Panel title="Connected" note="Which services, never what they hold.">
+							<Facts
+								items={[
+									["Integrations", data.integrations?.join(", ") || "None"],
+									["Passkeys", whole(data.passkeys)],
+									["Single sign-on", data.sso_providers?.join(", ") || "None"],
+									["Signed out everywhere", dayOf(data.sessions_valid_after)],
+									["Limits overridden", data.limits_overridden ? "Yes" : "No"],
+									["Biometric rows", whole(data.biometric_rows)],
+								]}
 							/>
-						),
-					])}
-					empty={
-						<Empty title="No devices are paired.">
-							A paired wall clock or daemon shows up here.
-						</Empty>
-					}
-				/>
-			</Panel>
-			<Pair>
-				<Panel title="Connected" note="Which services, never what they hold.">
-					<Facts
-						items={[
-							["Integrations", data.integrations?.join(", ") || "None"],
-							["Passkeys", whole(data.passkeys)],
-							["Single sign-on", data.sso_providers?.join(", ") || "None"],
-							["Signed out everywhere", dayOf(data.sessions_valid_after)],
-							["Limits overridden", data.limits_overridden ? "Yes" : "No"],
-							["Biometric rows", whole(data.biometric_rows)],
-						]}
-					/>
-				</Panel>
-				<Panel title="Organisations">
-					<Table
-						head={["Organisation", "Role", "Membership"]}
-						rows={(data.organisations ?? []).map((m) => [
-							<Link
-								key={m.organisation_id}
-								to={`/organisations/${m.organisation_id}`}
-								className="link"
-							>
-								{m.organisation_name || m.organisation_id}
-							</Link>,
-							m.role,
-							<Chip key="state" tone={m.active ? "good" : "quiet"}>
-								{m.active ? "Active" : "Ended"}
-							</Chip>,
-						])}
-						empty={<Empty title="Not a member of any organisation." />}
-					/>
-				</Panel>
-			</Pair>
-			<Acts detail={data} />
-			<History id={id} />
-			<Panel title="Out of reach here">
-				<Prose>
-					Sessions, project names, notes, coach conversations and integration tokens. There is no
-					way to view the app as this person, and a test plants a sentinel in each of those and
-					fails if one reaches this page.
-				</Prose>
-			</Panel>
+						</Panel>
+						<Panel title="Organisations">
+							<Table
+								head={["Organisation", "Role", "Membership"]}
+								rows={(data.organisations ?? []).map((m) => [
+									<Link
+										key={m.organisation_id}
+										to={`/organisations/${m.organisation_id}`}
+										className="link"
+									>
+										{m.organisation_name || m.organisation_id}
+									</Link>,
+									m.role,
+									<Chip key="state" tone={m.active ? "good" : "quiet"}>
+										{m.active ? "Active" : "Ended"}
+									</Chip>,
+								])}
+								empty={<Empty title="Not a member of any organisation." />}
+							/>
+						</Panel>
+					</Pair>
+					<History id={id} />
+				</div>
+				<aside aria-label="What can be done" className="flex flex-col gap-[18px]">
+					<Acts detail={data} />
+					<Panel title="Out of reach here">
+						<Prose>
+							Sessions, project names, notes, coach conversations and integration tokens. There is
+							no way to view the app as this person, and a test plants a sentinel in each of those
+							and fails if one reaches this page.
+						</Prose>
+					</Panel>
+				</aside>
+			</div>
 		</Page>
 	);
 }
 
 /**
- * The acts, each a link to its review rather than a form here: the operator
- * reads what will change, who notices and whether it can be taken back
- * before anything is typed (docs/backoffice.md § Commands — the dangerous
- * act must not be the easiest thing on the page).
+ * The acts, in the rail beside the account, each a link to its review
+ * rather than a form here: the operator reads what will change, who notices
+ * and whether it can be taken back before anything is typed
+ * (docs/backoffice.md § Commands — the dangerous act must not be the easiest
+ * thing on the page). The erasure stands apart, as the one that cannot be
+ * taken back once it has run.
  *
  * Which acts are offered is this page's to decide, from the state it already
  * has; what each one does is the runner's, and the review asks it.
@@ -289,35 +296,40 @@ function Acts({ detail }: { detail: AccountDetail }) {
 				? Boolean(detail.suspended_at)
 				: true,
 	);
-	const [contain, grave] = [offered.filter((s) => !s.grave), offered.filter((s) => s.grave)];
-
-	const rail = (specs: typeof offered) =>
-		specs.map((spec) => (
-			<Link
-				key={spec.name}
-				to={`/review/${spec.name}/${detail.id}`}
-				className={`flex min-h-10 items-center rounded-full px-4 py-2 text-[14px] ${
-					spec.grave
-						? "bg-persimmon/15 font-bold text-persimmon-ink"
-						: "bg-wash hover:bg-wash-strong"
-				}`}
-			>
-				{spec.title}
-			</Link>
-		));
+	const erase = offered.find((spec) => spec.name === "account.erase");
+	const contain = offered.filter((spec) => spec !== erase);
 
 	return (
-		<Pair>
+		<>
 			<Panel title="Contain" note="Each one shows you what will change before it runs.">
-				<div className="flex flex-col gap-2 px-6 pb-5">{rail(contain)}</div>
+				<div className="flex flex-col gap-2 px-6 pb-5">
+					{contain.map((spec) => (
+						<Link
+							key={spec.name}
+							to={`/review/${spec.name}/${detail.id}`}
+							className="flex min-h-10 items-center rounded-full bg-wash px-4 py-2 text-[14px] hover:bg-wash-strong"
+						>
+							{spec.title}
+						</Link>
+					))}
+				</div>
 			</Panel>
-			<Panel danger title="Suspend or erase" note="Each asks for the account's email, typed back.">
-				<div className="flex flex-col gap-2 px-6 pb-5">{rail(grave)}</div>
-				<Prose>
-					An erasure waits out a window you can still stop it in, and keeps each organisation's
-					working-time record under a tombstone, as PRIVACY.md promises.
-				</Prose>
-			</Panel>
-		</Pair>
+			{erase ? (
+				<Panel danger title={erase.title}>
+					<Prose>
+						{erase.about} Queueing it suspends the account while it waits, and each organisation's
+						working-time record is kept under a tombstone, as PRIVACY.md promises.
+					</Prose>
+					<div className="px-6 pb-5">
+						<Link
+							to={`/review/${erase.name}/${detail.id}`}
+							className={`${buttonClass("danger")} w-full`}
+						>
+							Review the erasure
+						</Link>
+					</div>
+				</Panel>
+			) : null}
+		</>
 	);
 }

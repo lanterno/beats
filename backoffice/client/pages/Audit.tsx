@@ -25,20 +25,24 @@ const text = (value: unknown): string =>
 	value === undefined || value === null ? "—" : String(value);
 
 /**
- * Rows whose subject or command contains `needle`, matched without case.
+ * Rows whose subject is `needle` whole, or whose command contains it,
+ * matched without case.
  *
  * A filter over rows already on the page, never a query: a search the server
  * answers over the whole audit would be a way to ask "what has been done to
- * this address", and the address is not in here to ask with. The exact
- * account id is what an operator has in hand, and it matches whole.
+ * this address", and the address is not in here to ask with. The exact id
+ * is what an operator has in hand, and it matches whole: a fragment of one
+ * would browse the subjects instead, which is what the palette refuses too.
+ * A command is the back office's own name, so any part of one will do —
+ * "organisation." finds every organisation act.
  */
 export function matching(rows: Row[], needle: string): Row[] {
 	const wanted = needle.trim().toLowerCase();
 	if (!wanted) return rows;
-	return rows.filter((row) =>
-		[row.subject_id, row.command].some(
-			(field) => typeof field === "string" && field.toLowerCase().includes(wanted),
-		),
+	return rows.filter(
+		(row) =>
+			(typeof row.subject_id === "string" && row.subject_id.toLowerCase() === wanted) ||
+			(typeof row.command === "string" && row.command.toLowerCase().includes(wanted)),
 	);
 }
 
@@ -104,7 +108,7 @@ export function Audit() {
 			<Panel raised>
 				<div className="px-6 pt-4">
 					<TextField
-						label="Filter by exact id or command"
+						label="Filter by a whole id, or a command"
 						className="max-w-[26rem]"
 						value={needle}
 						onChange={(e) => setNeedle(e.target.value)}

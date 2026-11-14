@@ -50,11 +50,25 @@ export const RUNBOOKS: Runbook[] = [
 		title: "An organisation lost its owner",
 		reviewed_on: "2026-11-14",
 		about:
-			"Nobody can manage its members, its projects or its closing. That includes every owner being suspended.",
+			"Nobody can manage its members, its projects or its closing. The back office can act for it, but only while it has no owner and only when someone there asks.",
 		steps: [
-			"Do nothing on your own initiative. You step in only when someone from the organisation asks, by mail you can point back to.",
-			"Open the organisation and check who is still active, by role. Prefer handing ownership to an existing admin.",
-			"If nobody is left to hand it to, the organisation can be closed, which gives each member their projects back.",
+			"Do nothing on your own initiative. You step in only when someone from the organisation asks, by mail from the address on their account, which you can point back to.",
+			"Find the requester's account by that address, then open the organisation. Its page counts who is active by role; it never says who they are.",
+			"Make the requester owner from the organisation's page. The review shows their role and the highest role any active member holds, and the act is refused unless they hold it. If someone outranks them, ask that person to write in instead: choosing among members is taking a side.",
+			"If nobody will take it on, start closing it. Members get at least 30 days to take their projects with them; from the closing day it can be deleted, which hands each member their projects back first.",
+		],
+	},
+	{
+		id: "organisation-owners-suspended",
+		title: "Every owner of an organisation is suspended",
+		reviewed_on: "2026-11-14",
+		about:
+			"Its owners are still its owners, so the back office cannot act on it: a suspended owner counts, or suspending one would hand you their organisation. Until a suspension lifts, nobody there can manage it.",
+		steps: [
+			"Do not grant ownership or start closing. Both are refused while it has an owner, suspended or not.",
+			"Find out why. Filter the audit log by account.suspend and account.erase, and open each account it names: an account's Organisations panel says whether it owns this one.",
+			"If an owner's suspension was a mistake, or has done its job, unsuspend them from their account, and the row leaves by itself. An erasure's suspension lifts only by cancelling the erasure.",
+			"If an owner's erasure runs, they stop being its owner. When none is left, the row becomes an organisation with no owner: follow that runbook, and only when someone there asks.",
 		],
 	},
 	{

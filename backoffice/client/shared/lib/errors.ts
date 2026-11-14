@@ -17,7 +17,8 @@ const IN_PLAIN_WORDS: Record<string, string> = {
 	// The run.app URL stays up behind the same IAP (docs/backoffice.md).
 	OPERATOR_BAD_ORIGIN:
 		"This address can read but can't change anything. Make the change from backoffice.lifepete.com.",
-	CONFIRMATION_MISMATCH: "That doesn't match. Type it exactly as it's written on this page.",
+	CONFIRMATION_MISMATCH:
+		"That doesn't match. Type exactly what the confirmation box asks for, capitals and spaces included.",
 	VIEWER_CANNOT_ACT: "Your role can read here, but it can't run commands.",
 };
 

@@ -16,14 +16,14 @@ A command with a `window` is destructive and enqueues instead of executing
 """
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
-from beats.domain.exceptions import DomainException, OrganisationNotFound
+from beats.domain.exceptions import DomainException
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
 from beats.infrastructure.operator_store import MongoPlatformControlsStore
@@ -31,6 +31,13 @@ from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
 from beats.operator.erasure_requests import CloseErasureRequest, LogErasureRequest
 from beats.operator.ids import DocumentId
+from beats.operator.organisation_commands import (
+    BeginClosing,
+    CancelClosing,
+    DeleteOrganisation,
+    GrantOwner,
+    organisation_name,
+)
 from beats.operator.settings import OperatorIdentity
 from beats.operator.status_page import (
     MESSAGE_MAX,
@@ -281,97 +288,16 @@ class RevokeDevice(_AccountCommand):
     args_model = RevokeDeviceArgs
 
     async def describe(self, ctx: CommandContext, args: RevokeDeviceArgs) -> dict[str, Any]:
+        # `revoke` acts only on a device of this account, so another's is
+        # nothing to revoke here (None), however it stands.
         reg = await ctx.devices.get_by_device_id(args.device_id)
-        return {"device_id": args.device_id, "revoked": reg.revoked if reg else None}
+        if reg is None or reg.user_id != args.user_id:
+            return {"device_id": args.device_id, "revoked": None}
+        return {"device_id": args.device_id, "revoked": reg.revoked}
 
     async def execute(self, ctx: CommandContext, args: RevokeDeviceArgs) -> dict[str, Any]:
         revoked = await ctx.devices.revoke(args.device_id, args.user_id)
         return {"device_id": args.device_id, "revoked": bool(revoked) or None}
-
-
-# ── organisations ────────────────────────────────────────────────────
-
-
-class OrganisationArgs(BaseModel):
-    organisation_id: DocumentId
-
-
-async def _organisation_name(ctx: CommandContext, organisation_id: str) -> str:
-    """Resolves or refuses, like _account_email: an unknown organisation is a
-    404 at queue time, never a waived confirmation."""
-    org = await ctx.organisations.store.get_organisation(organisation_id)
-    if org is None:
-        raise OrganisationNotFound()
-    return org.name
-
-
-async def _organisation_state(ctx: CommandContext, organisation_id: str) -> dict[str, Any]:
-    org = await ctx.organisations.store.get_organisation(organisation_id)
-    if org is None:
-        return {"exists": False}
-    return {
-        "owners": await ctx.organisations.store.count_owners(organisation_id),
-        "closes_on": org.closes_on.isoformat() if org.closes_on else None,
-    }
-
-
-class _OrganisationCommand:
-    subject_kind = "organisation"
-    window: timedelta | None = None
-    args_model: type[BaseModel] = OrganisationArgs
-
-    def subject_id(self, args: Any) -> str:
-        return args.organisation_id
-
-    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
-        return await _organisation_name(ctx, args.organisation_id)
-
-    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        return await _organisation_state(ctx, args.organisation_id)
-
-    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        raise NotImplementedError
-
-    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
-        return None
-
-
-class GrantOwnerArgs(OrganisationArgs):
-    user_id: DocumentId
-
-
-class GrantOwner(_OrganisationCommand):
-    name = "organisation.grant_owner"
-    args_model = GrantOwnerArgs
-
-    async def execute(self, ctx: CommandContext, args: GrantOwnerArgs) -> dict[str, Any]:
-        updated = await ctx.organisations.operator_grant_owner(args.organisation_id, args.user_id)
-        state = await _organisation_state(ctx, args.organisation_id)
-        return {**state, "granted_to": args.user_id, "role": updated.role.value}
-
-
-class BeginClosingArgs(OrganisationArgs):
-    closes_on: date | None = None
-
-
-class BeginClosing(_OrganisationCommand):
-    name = "organisation.begin_closing"
-    args_model = BeginClosingArgs
-
-    async def execute(self, ctx: CommandContext, args: BeginClosingArgs) -> dict[str, Any]:
-        await ctx.organisations.operator_begin_closing(args.organisation_id, args.closes_on)
-        return await _organisation_state(ctx, args.organisation_id)
-
-
-class CancelClosing(_OrganisationCommand):
-    name = "organisation.cancel_closing"
-
-    async def confirmation(self, ctx: CommandContext, args: OrganisationArgs) -> str | None:
-        return None
-
-    async def execute(self, ctx: CommandContext, args: OrganisationArgs) -> dict[str, Any]:
-        await ctx.organisations.operator_cancel_closing(args.organisation_id)
-        return await _organisation_state(ctx, args.organisation_id)
 
 
 # ── the platform's switches and limits ───────────────────────────────
@@ -704,19 +630,6 @@ class EraseAccount(_AccountCommand):
         }
 
 
-class DeleteOrganisation(_OrganisationCommand):
-    """Queued with a 1-day window. The notice was the request, so no second
-    one is needed; the twin's rules run when the job does, so an organisation
-    given an owner while it waited is refused then."""
-
-    name = "organisation.delete"
-    window: timedelta | None = timedelta(days=1)
-
-    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        counts = await ctx.organisations.operator_delete_organisation(args.organisation_id)
-        return dict(counts)
-
-
 class RetentionPurgeArgs(BaseModel):
     # None purges every organisation; the confirmation is then the word
     # "all", typed.
@@ -739,15 +652,27 @@ class RetentionPurge:
     async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
         if args.organisation_id is None:
             return "all"
-        return await _organisation_name(ctx, args.organisation_id)
+        return await organisation_name(ctx, args.organisation_id)
 
     async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        """The dry run, summed: rows past their period that would go, and
+        living members' rows that would lose the stamp and stay theirs. An
+        organisation with nothing past its period is read, not touched."""
         from beats.infrastructure.retention import purge_expired_records
 
         report = await purge_expired_records(
             ctx.db, apply=False, organisation_id=args.organisation_id
         )
-        return {"would_touch_organisations": len(report.organisations)}
+        counts = [o.counts for o in report.organisations]
+        one = report.organisations[0] if args.organisation_id and report.organisations else None
+        return {
+            "would_touch_organisations": sum(1 for c in counts if any(c.values())),
+            "rows_deleted": sum(n for c in counts for k, n in c.items() if k.endswith("_deleted")),
+            "rows_unstamped": sum(
+                n for c in counts for k, n in c.items() if k.endswith("_unstamped")
+            ),
+            "cutoff": one.cutoff.isoformat() if one else None,
+        }
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         from beats.infrastructure.retention import purge_expired_records
@@ -755,7 +680,9 @@ class RetentionPurge:
         report = await purge_expired_records(
             ctx.db, apply=True, actor_kind="operator", organisation_id=args.organisation_id
         )
-        return {"purged_organisations": len(report.organisations)}
+        return {
+            "purged_organisations": sum(1 for o in report.organisations if any(o.counts.values()))
+        }
 
     async def on_queued(self, ctx: CommandContext, args: Any) -> None:
         return None
@@ -793,7 +720,12 @@ class CancelJob:
         job = await MongoOperatorJobs(ctx.db).get(args.job_id)
         if job is None:
             raise JobNotFound()
-        return {"command": job["command"], "state": job["state"]}
+        return {
+            "command": job["command"],
+            "state": job["state"],
+            "subject_id": job.get("subject_id"),
+            "run_after": job.get("run_after"),
+        }
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         from beats.infrastructure.operator_jobs import MongoOperatorJobs

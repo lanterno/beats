@@ -307,6 +307,20 @@ class TestOperatorOrganisationActs:
         assert refused.status_code == 409
         assert refused.json()["code"] == "REQUESTER_NOT_HIGHEST"
 
+    def test_the_preview_says_where_the_requester_stands(self, operator_client, mongo):
+        planted = self._org(mongo)  # its one active member is an admin
+
+        def before(user_id: str) -> dict:
+            return operator_client.post(
+                "/api/operator/commands/organisation.grant_owner/preview",
+                json={"args": {"organisation_id": planted["org_id"], "user_id": user_id}},
+                headers=self.OWN,
+            ).json()["before"]
+
+        requester = before(planted["member_id"])
+        assert (requester["requester_role"], requester["highest_role"]) == ("admin", "admin")
+        assert before(str(ObjectId()))["requester_role"] is None
+
     def test_a_closing_notice_may_always_move_later(self, operator_client, mongo):
         """Amends decision 29: a notice with five days left can be extended
         by a week, while a fresh short notice is still refused."""
@@ -811,6 +825,66 @@ class TestCommandPreview:
         bad = self._preview(operator_client, "account.suspend", {"user_id": ""})
         assert bad.status_code == 422
         assert bad.json()["code"] == "INVALID_COMMAND_ARGS"
+
+    def test_a_rule_on_the_arguments_as_a_whole_has_no_path(self, operator_client):
+        """The review puts each reason beside the box it names, and says one
+        that names none by the button: a model-level rule has an empty path,
+        and its message is the validator's own sentence, without pydantic's
+        "Value error, " in front of it."""
+        too_far = (datetime.now(UTC) + timedelta(days=8)).isoformat()
+        whole = self._preview(
+            operator_client, "control.set", {"name": "coach", "until": too_far, "reason": "r"}
+        ).json()
+        assert whole["code"] == "INVALID_COMMAND_ARGS"
+        assert whole["fields"] == [
+            {
+                "path": "",
+                "message": "a pause lasts at most 7 days; set it again after",
+                "type": "value_error",
+            }
+        ]
+
+    def test_a_device_is_previewed_only_on_the_account_it_belongs_to(self, operator_client, mongo):
+        """revoke is scoped to the account; a preview that found another
+        account's device would promise an act that touches nothing."""
+        owner, other = self._user(mongo, "owner@example.test"), self._user(mongo, "o@example.test")
+        mongo.device_registrations.insert_one(
+            {"user_id": owner, "device_id": "dev-preview", "revoked": False}
+        )
+        try:
+            mine = self._preview(
+                operator_client, "device.revoke", {"user_id": owner, "device_id": "dev-preview"}
+            ).json()
+            theirs = self._preview(
+                operator_client, "device.revoke", {"user_id": other, "device_id": "dev-preview"}
+            ).json()
+        finally:
+            mongo.device_registrations.delete_many({"device_id": "dev-preview"})
+        assert mine["before"]["revoked"] is False
+        assert theirs["before"]["revoked"] is None
+
+    def test_a_purge_counts_what_it_would_change_not_every_organisation(
+        self, operator_client, mongo
+    ):
+        """An organisation with nothing past its period is read and left
+        alone; the review counts the ones that would change, and the rows."""
+        quiet, stale = ObjectId(), ObjectId()
+        mongo.organisations.insert_many(
+            [{"_id": oid, "name": oid.binary.hex(), "created_by": "x"} for oid in (quiet, stale)]
+        )
+        mongo.org_audit.insert_one(
+            {"organisation_id": str(stale), "at": "2000-01-01T00:00:00", "event": "old"}
+        )
+        try:
+            every = self._preview(operator_client, "retention.purge", {}).json()["before"]
+            one = self._preview(
+                operator_client, "retention.purge", {"organisation_id": str(quiet)}
+            ).json()["before"]
+        finally:
+            mongo.organisations.delete_many({"_id": {"$in": [quiet, stale]}})
+            mongo.org_audit.delete_many({"organisation_id": str(stale)})
+        assert (every["would_touch_organisations"], every["rows_deleted"]) == (1, 1)
+        assert (one["would_touch_organisations"], one["rows_deleted"]) == (0, 0)
 
     def test_a_subject_that_does_not_resolve_refuses_before_anything_is_typed(
         self, operator_client, mongo

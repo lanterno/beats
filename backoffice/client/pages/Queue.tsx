@@ -11,7 +11,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import type { QueueRow } from "@/shared/api/schema";
-import { type Bucket, bucketOf, dueLabel, KINDS, queueHeadline } from "@/shared/lib/queue";
+import { type Bucket, bucketOf, dueLabel, KINDS, queueHeadline, waiting } from "@/shared/lib/queue";
 import { buttonClass, Chip, Empty, Failed, Id, Loading, Page, Panel, Prose } from "@/shared/ui";
 
 const FILTERS: Array<{ id: Bucket | "all"; label: string }> = [
@@ -48,7 +48,7 @@ export function Queue() {
 					<div className="flex flex-wrap gap-1 px-6 pt-4 pb-1">
 						{FILTERS.map(({ id, label }) => {
 							const n =
-								id === "all" ? rows.length : rows.filter((r) => bucketOf(r, now) === id).length;
+								id === "all" ? waiting(rows) : rows.filter((r) => bucketOf(r, now) === id).length;
 							return (
 								<button
 									key={id}

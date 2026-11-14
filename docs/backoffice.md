@@ -107,7 +107,8 @@ sourcing.
 
 An audit each handler must remember to write will be missing from the one
 action anybody cares about, so a mutation is a command object
-(`beats/operator/commands.py`) — name, role, window, confirmation, describe,
+(`beats/operator/commands.py`, the organisation acts beside it in
+`organisation_commands.py`) — name, role, window, confirmation, describe,
 execute — and the runner (`beats/operator/runner.py`) is the only path:
 
 1. check the role (`viewer` runs no command — two roles from day one, so a
@@ -147,6 +148,14 @@ either is the signal it was put in the wrong place.
 | `retention.purge` | job, 1 day | the name, or `all` | `purge_expired_records(organisation_id=…)` |
 | `job.cancel` | inline | — | the job store; lifts a suspension only when it was the erasure's |
 
+**The operator API's schema names what each command takes**: `x-command-args`
+in its OpenAPI document maps every command to its arguments model
+(`OperatorAPI.openapi` in `operator_server.py`), and the back office's
+generated `openapi.json` carries it. The review's tests send every spec in
+`client/shared/commands.ts`, every box filled, against that model, so a box
+the model lacks — which pydantic drops without a word — or one of the wrong
+kind fails there rather than when the operator presses the button.
+
 ### The operator's organisation acts
 
 The member methods cannot be called as they stand — `_member` refuses any
@@ -161,10 +170,13 @@ their organisation — every act is 409 `ORGANISATION_HAS_OWNER`. The request
 comes by mail to the PRIVACY.md address, from the address on the requester's
 account; the owner role goes to the requester and nobody else, and only to
 one holding the highest role any active member holds (409
-`REQUESTER_NOT_HIGHEST`) — picking among members is taking a side. A closing
-notice may always move **later** (the 30-day minimum protects members; a
-later day only gives them more), for owner and operator alike. Deletion needs
-no second request — the notice was the request.
+`REQUESTER_NOT_HIGHEST`) — picking among members is taking a side. Its
+preview says both, the requester's role (none, when they are not an active
+member) and the highest any active member holds, so the review shows the
+refusal coming; the back office serves no roster, only counts by role. A
+closing notice may always move **later** (the 30-day minimum protects
+members; a later day only gives them more), for owner and operator alike.
+Deletion needs no second request — the notice was the request.
 
 Every operator act on an organisation lands in its own audit log under
 `actor_kind: operator` (`OrgAuditEvent.actor_kind`: member | system |
@@ -469,8 +481,7 @@ cannot keep.
   safety* below). The deploy-state card links to the Cloud Run console until
   roadmaps/secret-manager.md lands.
 - **Work queue** (`GET /api/operator/queue`): the rows behind the Attention
-  counts (`GET /api/operator/attention`, which still badges the sidebar),
-  ids and dates only, each with a due date from the constants in
+  counts (`GET /api/operator/attention`), ids and dates only, each with a due date from the constants in
   `operator/reads.py` (`queue_due`). The conditions are organisations with no
   owner, and those whose every owner is suspended (the operator doesn't act
   for the latter — they have an owner — but somebody should know); failed
@@ -484,16 +495,28 @@ cannot keep.
   request the operator logged (see *Privacy and compliance*) is a row too,
   due 14 days after the mail arrived, until an erasure is queued for its
   account or it is closed; a paused control is a row due when it ends.
+  The sidebar's badge counts the rows the queue lists, off the same query;
+  the Attention counts summed would count approvals where the queue has one
+  row per organisation, and miss what it lists before it is due.
 - **The palette** (⌘K, in the top bar): goes to a page, opens a command's
   review for an account named by its whole id, and finds one account by its
   whole address through the same `POST /accounts/lookup`. Pages are filtered
   by what is typed; people never are — a fragment finds no one. A command
   never runs from it, and an address is forgotten when the dialog closes.
-- **Review** (`/review/{command}/{subject}`): every account command is carried
-  out from a page of its own, showing what it would change
-  (`POST /commands/{name}/preview`, which writes nothing and refuses a
-  `viewer` as the act does), who notices and whether it can be undone (fixed
-  text per command, `client/shared/commands.ts`), and the typed confirmation.
+- **Review** (`/review/{command}/{subject}`): every command is carried out
+  from a page of its own, and every other page offers an act only as a link
+  there. It shows what the act would change (`POST /commands/{name}/preview`,
+  which writes nothing and refuses a `viewer` as the act does), who notices
+  and whether it can be undone (fixed text per command,
+  `client/shared/commands.ts`), and the typed confirmation. A refused
+  argument is said beside its box in the API's words, read off the 422's
+  `fields`; "fill in the boxes" is said only for a required box that is
+  empty. A preview that fails otherwise keeps the form, with the failure and
+  a retry beside the button, and the change table says nothing of "now"
+  until a preview has answered. The link a page opens it with fills only
+  the boxes that name what is acted on (a device, a network: `linked` on the
+  field), never what is said or decided, so a crafted link cannot open a
+  status post already written.
 - **Access and controls**: the switches and the global limits (§ Controls),
   each thrown from its review page; who can get in, read off the allowlist;
   what each role can do; and the access review as a list to read down, since
@@ -516,9 +539,17 @@ cannot keep.
   subject-access export**: a person exports everything themselves, and an
   export the operator generates would carry someone's content through the
   one surface built never to.
-- **Organisations**: rosters, states, timesheet counts, and the audit without
-  each event's `details`; the three acts, offered only while no owner is
-  left.
+- **Organisations**: each one's state — needs you (no owner, and nothing
+  under way), watching (every owner suspended), closing or deleting, active —
+  with counts by role, timesheet counts, its retention, and its audit
+  without each event's `details`. **Never a roster**: the API answers how
+  many hold each role, not who, so the page says how to find the requester
+  (by the address the mail came from) and the grant's review says where
+  they stand. The acts — make the requester owner, start, move or cancel the
+  closing, purge its expired records, and delete it once a deletion queued
+  now would find its closing day come — are links into their reviews,
+  offered only while no owner is left. A queued deletion is read off the job
+  queue and shown on the list and the page, with the review that cancels it.
 - **Trust and safety**: outliers rather than guessed thresholds — coach spend, flow
   windows today, sessions created, report links minted (the only public path
   serving a user's data), webhook destinations by domain (outbound HTTP from
@@ -610,9 +641,10 @@ cannot keep.
   Firebase's own release list is deliberately not read: `version.json`
   already says what is live, without another grant or a site id. Today says
   what each half is running.
-- **Jobs and windows**: the job queue with cancel. A failed job has no
-  re-run: three attempts is terminal, and the way back is to queue the
-  command again.
+- **Jobs and windows**: the job queue, each queued job cancelled from its
+  review (`job.cancel`, whose preview names the job's subject and when it
+  would run). A failed job has no re-run: three attempts is terminal, and
+  the way back is to queue the command again.
 - **Privacy and compliance**: the platform-wide retention purge behind the
   typed word `all`, and **the erasure request log** (shipped 2026-11-14,
   stage 8 of what was roadmaps/backoffice.md). A request that arrives by
@@ -641,6 +673,7 @@ cannot keep.
   (`MongoErasureRequests`, `erasure_requests` on the Atlas grant). The
   earlier reason for not counting requests — that it would take an in-app
   request — does not hold for a log the operator keeps.
-- **Audit log**: the operator audit — readable, filterable, editable by
-  nobody, kept four years. It holds what ran: the runner writes the row after
+- **Audit log**: the operator audit — readable, filtered on the page by a
+  subject's whole id (a fragment would browse the subjects) or any part of a
+  command's name, editable by nobody, kept four years. It holds what ran: the runner writes the row after
   a command succeeds, so a refused or failed command is not in it.

@@ -59,12 +59,14 @@ client/
     │                  credential), the command POST, generated types + schema
     ├── lib/           renderings (bytes, days, counts), the hour, which
     │                  deployment this is, what a failure says to the
-    │                  operator, and the queue's and the palette's rules
-    ├── commands.ts    each account command in the operator's words
+    │                  operator, and the queue's, the palette's and the
+    │                  organisations' rules
+    ├── commands.ts    every command in the operator's words, as its review
+    │                  shows it: who notices, the undo, the boxes, the change
     ├── runbooks.ts    the runbooks, each with its reviewed_on
     ├── config/        brand.ts, stamped by scripts/gen_brand.py
-    └── ui/            Page, Panel, Table, Facts, the icons, and CommandForm —
-                       one command as a row with its typed confirmation
+    └── ui/            Page, Panel, Table, Facts, Chip, the buttons and the
+                       icons
 ```
 
 The sidebar is grouped by the question being asked — Now, People, Platform,
@@ -79,6 +81,8 @@ same reason (openapi-typescript drives the compiler API that typescript@7 no
 longer exposes). Nothing is shared with `ui/` on purpose — the API-client
 pattern is small enough to copy once and let diverge.
 
-Every mutation goes through `CommandForm` → `POST /api/operator/commands/{name}`
-(docs/backoffice.md § Commands). The browser adds the `Origin` header the
+Every mutation is carried out from its review, `/review/{command}/{subject}`
+(`pages/Review.tsx`), which previews it and then sends
+`POST /api/operator/commands/{name}` (docs/backoffice.md § Commands); a page
+offers an act only as a link there. The browser adds the `Origin` header the
 server requires on writes; nothing here can or should fake one.

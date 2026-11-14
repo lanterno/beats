@@ -21,11 +21,11 @@ import {
 	type CommandField,
 	type CommandSpec,
 	commandSpec,
-	emptyArgs,
 	FAMILIES,
 	familyOf,
 	fieldsOf,
 	ON_THE_RECORD,
+	startingArgs,
 } from "@/shared/commands";
 import { plainMessage } from "@/shared/lib/errors";
 import { useSettled } from "@/shared/lib/useSettled";
@@ -34,7 +34,6 @@ import {
 	Chip,
 	Empty,
 	Facts,
-	Failed,
 	Id,
 	Loading,
 	Page,
@@ -44,46 +43,103 @@ import {
 	TextField,
 } from "@/shared/ui";
 
+/** A 422 from the preview: the arguments do not parse yet. It is the form
+ * talking, not a failure, so the form stays and says what is wrong. */
+const isRefusal = (error: unknown): boolean =>
+	error instanceof OperatorApiError && error.statusCode === 422;
+
+/** What a refused preview says, sorted by where the page shows it. */
+export interface Refusal {
+	/** The API's reason, in its own words, beside each box it names. */
+	byField: Record<string, string>;
+	/** Reasons that name no box here: a rule on the arguments as a whole
+	 * (a pause's end too far out), or an argument the form has no box for. */
+	general: string[];
+	/** A required box is still empty. Only then does the page ask to "fill
+	 * in the fields above": pydantic's "Field required" beside an empty box
+	 * says less. */
+	incomplete: boolean;
+}
+
+const blank = (value: unknown): boolean =>
+	value === undefined || value === null || String(value).trim() === "";
+
 /**
- * A 422 from the preview means the arguments do not parse yet — a reason not
- * written, a limit left as text. It is the form talking, not a failure, so
- * the page asks for the rest instead of showing an error.
+ * Reads the envelope's `fields` (api/src/beats/api/errors.py) against the
+ * form: a path's first part is the argument, so `affected.1` is the
+ * affected box. Anything but a 422 is not a refusal of the arguments and
+ * reads as none.
  */
-export function isIncomplete(error: unknown): boolean {
-	return error instanceof OperatorApiError && error.statusCode === 422;
+export function refusalOf(
+	error: unknown,
+	fields: CommandField[],
+	args: Record<string, unknown>,
+): Refusal {
+	const refusal: Refusal = { byField: {}, general: [], incomplete: false };
+	if (!(error instanceof OperatorApiError) || error.statusCode !== 422) return refusal;
+	if (error.fields.length === 0) {
+		refusal.general.push(error.message);
+		return refusal;
+	}
+	const declared = new Set(fields.map((field) => field.key));
+	for (const problem of error.fields) {
+		const key = problem.path.split(".")[0] ?? "";
+		if (!declared.has(key)) refusal.general.push(problem.message);
+		else if (problem.type === "missing" && blank(args[key])) refusal.incomplete = true;
+		else refusal.byField[key] ??= problem.message;
+	}
+	return refusal;
 }
 
 /** A day and minute, as the operator reads an instant. */
 const minute = (iso: string | null | undefined): string =>
 	typeof iso === "string" && iso ? iso.slice(0, 16).replace("T", " ") : "—";
 
+/** The API's reason for one box, under it. */
+function Problem({ id, message }: { id: string; message: string | undefined }) {
+	return message ? (
+		<p id={id} className="mt-1 text-[13px] text-persimmon-ink">
+			{message}
+		</p>
+	) : null;
+}
+
 function Fields({
 	fields,
 	args,
+	problems,
 	onChange,
 }: {
 	fields: CommandField[];
 	args: Record<string, unknown>;
+	problems: Record<string, string>;
 	onChange: (key: string, value: unknown) => void;
 }) {
 	return (
 		<div className="flex flex-wrap items-start gap-4 px-6 pb-5">
-			{fields.map((field) =>
-				field.kind === "checkbox" ? (
-					<label key={field.key} className="flex max-w-[22rem] items-start gap-2 text-[14px]">
-						<input
-							type="checkbox"
-							checked={Boolean(args[field.key])}
-							onChange={(e) => onChange(field.key, e.target.checked)}
-							className="mt-0.5 size-4 accent-[var(--leaf)]"
-						/>
-						<span>
-							{field.label}
-							{field.hint ? (
-								<span className="block text-[13px] text-ink-muted">{field.hint}</span>
-							) : null}
-						</span>
-					</label>
+			{fields.map((field) => {
+				const problem = problems[field.key];
+				const said = `problem-${field.key}`;
+				return field.kind === "checkbox" ? (
+					<div key={field.key} className="max-w-[22rem]">
+						<label className="flex items-start gap-2 text-[14px]">
+							<input
+								type="checkbox"
+								checked={Boolean(args[field.key])}
+								onChange={(e) => onChange(field.key, e.target.checked)}
+								aria-invalid={problem ? true : undefined}
+								aria-describedby={problem ? said : undefined}
+								className="mt-0.5 size-4 accent-[var(--leaf)]"
+							/>
+							<span>
+								{field.label}
+								{field.hint ? (
+									<span className="block text-[13px] text-ink-muted">{field.hint}</span>
+								) : null}
+							</span>
+						</label>
+						<Problem id={said} message={problem} />
+					</div>
 				) : (
 					<div
 						key={field.key}
@@ -94,11 +150,14 @@ function Fields({
 							value={String(args[field.key] ?? "")}
 							inputMode={field.kind === "number" ? "numeric" : undefined}
 							onChange={(e) => onChange(field.key, e.target.value)}
+							aria-invalid={problem ? true : undefined}
+							aria-describedby={problem ? said : undefined}
 						/>
 						{field.hint ? <p className="mt-1 text-[13px] text-ink-muted">{field.hint}</p> : null}
+						<Problem id={said} message={problem} />
 					</div>
-				),
-			)}
+				);
+			})}
 		</div>
 	);
 }
@@ -141,18 +200,13 @@ function CommandReview() {
 	const { command = "", subject = "" } = useParams();
 	const spec = commandSpec(command);
 	const queryClient = useQueryClient();
-	// A page may hand a field's value in the URL (the Trust page hands the
-	// network key to slow); only declared fields are read, nothing else.
+	// A page may hand a box its value in the URL (the Trust page hands the
+	// network key to slow) — only a box marked `linked`, which names what is
+	// acted on; a crafted link fills nothing that is said or decided.
 	const [search] = useSearchParams();
-	const [args, setArgs] = useState<Record<string, unknown>>(() => {
-		if (!spec) return {};
-		const empty = emptyArgs(spec, subject);
-		for (const field of fieldsOf(spec, subject)) {
-			const given = search.get(field.key);
-			if (given !== null && field.kind !== "checkbox") empty[field.key] = given;
-		}
-		return empty;
-	});
+	const [args, setArgs] = useState<Record<string, unknown>>(() =>
+		spec ? startingArgs(spec, subject, (key) => search.get(key)) : {},
+	);
 	const family = FAMILIES[spec?.family ?? "account"];
 	const fields = spec ? fieldsOf(spec, subject) : [];
 	const [typed, setTyped] = useState("");
@@ -161,13 +215,11 @@ function CommandReview() {
 	// the route validates them exactly as the act will, so an unfilled field
 	// comes back 422 and that is the page's own "there is more to fill in",
 	// not a failure. Settled, or every keystroke would be a request.
-	const sentArgs = sent(fields, args);
+	const sentArgs = spec ? requestArgs(spec, subject, args) : {};
 	const settledArgs = useSettled(sentArgs);
-	// A subjectless command makes its subject; the route's is a placeholder.
-	const named = spec?.subjectless ? {} : { [family.subjectKey]: subject };
 	const preview = useQuery({
 		queryKey: ["preview", command, subject, settledArgs],
-		queryFn: () => previewCommand(command, { ...named, ...settledArgs }),
+		queryFn: () => previewCommand(command, settledArgs),
 		enabled: Boolean(spec && subject),
 		retry: false,
 		// The subject's "Now" stays on screen while the next preview loads.
@@ -175,7 +227,7 @@ function CommandReview() {
 	});
 
 	const act = useMutation({
-		mutationFn: () => runCommand(command, { ...named, ...sentArgs }, typed || undefined),
+		mutationFn: () => runCommand(command, sentArgs, typed || undefined),
 		onSuccess: () => {
 			// Not the preview: once the act has run, "Now" is the state it
 			// found, and re-reading it would make the change table claim the
@@ -188,6 +240,9 @@ function CommandReview() {
 				"controls",
 				"operator-queue",
 				"erasure-requests",
+				"organisation",
+				"organisations",
+				"organisation-audit",
 			]) {
 				queryClient.invalidateQueries({ queryKey: [key] });
 			}
@@ -215,16 +270,18 @@ function CommandReview() {
 	const back = family.back(subject);
 
 	if (preview.isPending && !answered.current) return <Loading />;
-	const incomplete = isIncomplete(preview.error);
-	if (preview.error && !incomplete) {
-		return (
-			<Page title={spec.title} back={back} lead="Nothing has happened.">
-				<Failed error={preview.error} onRetry={() => preview.refetch()} />
-			</Page>
-		);
-	}
+	const refusal = refusalOf(preview.error, fields, args);
+	// Anything but a refusal of the arguments: a subject that does not
+	// resolve, a store that did not answer. It is said beside the form, not
+	// instead of it — an account id half typed into a field is a 404 until
+	// it is whole, and the field must stay there to finish it.
+	const failed = preview.error && !isRefusal(preview.error) ? preview.error : null;
 
 	const before = (preview.data?.before ?? {}) as Record<string, unknown>;
+	// Until a preview has answered (the arguments are refused, or it failed)
+	// there is no subject to read, and an empty `before` read as one would
+	// say "Active" or "Running" of anything.
+	const known = preview.data !== undefined;
 	// `describe()` answers {exists: false} for an account that is not there.
 	// A command that asks for the email never gets this far — looking the
 	// address up is what 404s — but one that asks for nothing would, and the
@@ -244,14 +301,22 @@ function CommandReview() {
 		!preview.isPlaceholderData &&
 		JSON.stringify(sentArgs) === JSON.stringify(settledArgs);
 	const ready =
-		previewed && !blocked && !done && !incomplete && (!needsTyping || typed.trim().length > 0);
+		previewed && !preview.error && !blocked && !done && (!needsTyping || typed.trim().length > 0);
 
 	return (
 		<Page
-			title={done ? "Done. Here is what changed." : "Check what will change, then do it."}
+			title={
+				queued
+					? "Queued. It runs when its window ends."
+					: done
+						? "Done. Here is what changed."
+						: "Check what will change, then do it."
+			}
 			back={back}
 			lead={
-				done ? (
+				queued ? (
+					"Until then it waits on Jobs and windows, where you can still cancel it. The audit records it when it runs."
+				) : done ? (
 					"It is on the record, and its page already shows it."
 				) : spec.subjectless ? (
 					"Nothing has happened yet."
@@ -271,6 +336,7 @@ function CommandReview() {
 							<Fields
 								fields={fields}
 								args={args}
+								problems={refusal.byField}
 								onChange={(key, value) => setArgs({ ...args, [key]: value })}
 							/>
 						) : null}
@@ -297,8 +363,8 @@ function CommandReview() {
 									<Link to={back.to} className={buttonClass("primary")}>
 										{back.label}
 									</Link>
-									<Link to="/audit" className={buttonClass("secondary")}>
-										See it in the audit
+									<Link to={queued ? "/jobs" : "/audit"} className={buttonClass("secondary")}>
+										{queued ? "See it in jobs and windows" : "See it in the audit"}
 									</Link>
 								</div>
 							</>
@@ -314,7 +380,7 @@ function CommandReview() {
 							</div>
 						) : blocked ? (
 							<div className="px-6 pb-5">
-								<p className="text-[15px] font-bold">This is already queued for this account.</p>
+								<p className="text-[15px] font-bold">This is already queued.</p>
 								<p className="mt-1 text-[14px] text-ink-muted">
 									One window at a time, by design. Cancel the one waiting before queueing another.
 								</p>
@@ -327,7 +393,7 @@ function CommandReview() {
 								{needsTyping ? (
 									<div className="mb-3 max-w-[26rem]">
 										<TextField
-											label={family.typedLabel}
+											label={family.typedLabel(subject)}
 											value={typed}
 											onChange={(e) => setTyped(e.target.value)}
 											autoComplete="off"
@@ -350,7 +416,7 @@ function CommandReview() {
 									<Link to={back.to} className={buttonClass("secondary")}>
 										Leave it as it is
 									</Link>
-									{incomplete ? (
+									{refusal.incomplete ? (
 										<span className="text-[14px] text-ink-muted">
 											Fill in the fields above first.
 										</span>
@@ -358,6 +424,25 @@ function CommandReview() {
 										<span className="text-[14px] text-ink-muted">Type it to confirm.</span>
 									) : null}
 								</div>
+								{refusal.general.map((reason) => (
+									<p key={reason} className="mt-3 text-[14px] text-persimmon-ink">
+										{reason}
+									</p>
+								))}
+								{failed ? (
+									<div role="alert" className="mt-3 flex flex-wrap items-center gap-3">
+										<p className="min-w-0 flex-1 text-[14px] text-persimmon-ink">
+											{plainMessage(failed)}
+										</p>
+										<button
+											type="button"
+											onClick={() => preview.refetch()}
+											className={buttonClass("secondary")}
+										>
+											Check again
+										</button>
+									</div>
+								) : null}
 								{act.error ? (
 									<p role="alert" className="mt-3 text-[14px] text-persimmon-ink">
 										{plainMessage(act.error)}
@@ -378,7 +463,7 @@ function CommandReview() {
 								rows={spec.changes(before, args, subject).map((row) => [
 									row.what,
 									<span key="now" className="text-ink-muted">
-										{row.now}
+										{known ? row.now : "—"}
 									</span>,
 									<span key="after" className="font-bold">
 										{row.after}
@@ -415,6 +500,18 @@ function CommandReview() {
 			</div>
 		</Page>
 	);
+}
+
+/** Everything the review sends for a command: the arguments that name its
+ * subject — none for a subjectless command, which makes its subject and
+ * whose route's is a placeholder — and its own fields as `sent` reads them. */
+export function requestArgs(
+	spec: CommandSpec,
+	subject: string,
+	args: Record<string, unknown>,
+): Record<string, unknown> {
+	const named = spec.subjectless ? {} : FAMILIES[spec.family].named(subject);
+	return { ...named, ...sent(fieldsOf(spec, subject), args) };
 }
 
 /** Only the fields this command declares, with empty boxes left out so the

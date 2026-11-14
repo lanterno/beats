@@ -30,9 +30,10 @@ import { RunbookPage, Runbooks } from "@/pages/Runbooks";
 import { Today } from "@/pages/Today";
 import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
-import type { AttentionCounts, OperatorMe } from "@/shared/api/schema";
+import type { AttentionCounts, OperatorMe, QueueRow } from "@/shared/api/schema";
 import { APP_NAME } from "@/shared/config/brand";
 import { applyHour, type Hour, readHour } from "@/shared/lib/hour";
+import { waiting } from "@/shared/lib/queue";
 import { deployment } from "@/shared/lib/where";
 import {
 	BellIcon,
@@ -54,8 +55,15 @@ const queryClient = new QueryClient({
 	defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
-/** A nav entry's badge, when the landing page's counts carry one for it. */
-type Badge = (counts: AttentionCounts) => number;
+/** What a nav entry's badge can count: the queries its page reads, under the
+ * same keys, so the badge and the page are one cache and never disagree. */
+interface Counts {
+	attention?: AttentionCounts;
+	queue?: QueueRow[];
+}
+
+/** A nav entry's badge; nothing until its query has answered. */
+type Badge = (counts: Counts) => number | undefined;
 
 const GROUPS = [
 	{
@@ -66,7 +74,10 @@ const GROUPS = [
 				to: "/queue",
 				label: "Work queue",
 				Icon: BellIcon,
-				badge: ((counts) => Object.values(counts).reduce((sum, n) => sum + n, 0)) satisfies Badge,
+				// The rows the queue lists, not the Attention counts summed: those
+				// count approvals where the queue has one row per organisation,
+				// and leave out what the queue lists before it is due.
+				badge: (({ queue }) => queue && waiting(queue)) satisfies Badge,
 			},
 		],
 	},
@@ -87,7 +98,8 @@ const GROUPS = [
 				Icon: ClockIcon,
 				// What is unfinished: waiting out a window, or stopped and needing
 				// somebody. Done jobs are history and belong on the page, not here.
-				badge: ((counts) => counts.jobs_queued + counts.jobs_failed) satisfies Badge,
+				badge: (({ attention }) =>
+					attention && attention.jobs_queued + attention.jobs_failed) satisfies Badge,
 			},
 			{ to: "/capacity", label: "Capacity and cost", Icon: DatabaseIcon },
 			{ to: "/releases", label: "Releases", Icon: LinesIcon },
@@ -176,6 +188,10 @@ function Nav() {
 		queryKey: ["attention"],
 		queryFn: () => get<AttentionCounts>("/api/operator/attention"),
 	});
+	const queue = useQuery({
+		queryKey: ["operator-queue"],
+		queryFn: () => get<QueueRow[]>("/api/operator/queue"),
+	});
 	return (
 		<nav
 			aria-label="Back office"
@@ -185,7 +201,10 @@ function Nav() {
 				<div key={group.label} className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5">
 					<p className="hidden px-3.5 pb-1 text-[12px] text-ink-muted lg:block">{group.label}</p>
 					{group.items.map((item) => {
-						const count = "badge" in item && attention.data ? item.badge(attention.data) : 0;
+						const count =
+							"badge" in item
+								? (item.badge({ attention: attention.data, queue: queue.data }) ?? 0)
+								: 0;
 						return (
 							<NavLink
 								key={item.to}
