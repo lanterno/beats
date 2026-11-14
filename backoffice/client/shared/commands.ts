@@ -24,8 +24,9 @@ export interface CommandField {
 	hint?: string;
 	/** A page may hand this box its value in the link it opens the review
 	 * with (`startingArgs`). Only for what names the thing acted on — a
-	 * device, a network — never for what is said or decided: a link anyone
-	 * can craft must not open a status post already written. */
+	 * device — never for what is said or decided: a link anyone can craft
+	 * must not open a status post already written. A network's key is no
+	 * box at all: it may not be in a link (shared/lib/handover.ts). */
 	linked?: true;
 }
 
@@ -630,11 +631,22 @@ const PAUSE_FIELDS: CommandField[] = [
 ];
 
 const stateOf = (before: Record<string, unknown>, name: string): string => {
-	if (!before.set || !before.in_force) return isLimit(name) ? "No limit" : "Running";
+	if (!before.set || !before.in_force)
+		return isLimit(name) ? "No limit" : before.one_network ? "Not slowed" : "Running";
 	if (name === "signups" && before.value) return `Slowed to ${before.value} an hour`;
 	if (isLimit(name)) return `${before.value} ${CONTROLS[name as ControlName]?.unit ?? ""}`.trim();
 	return `Paused until ${typeof before.until === "string" ? before.until.slice(0, 16) : "—"}`;
 };
+
+/** The row's subject. Sign-ups say whom they cover: everyone, or the one
+ * network a page handed over (shared/lib/handover.ts), which is named and
+ * never shown by its key. */
+const controlWhat = (name: string, args: Record<string, unknown>): string =>
+	args.network
+		? "Sign-ups from one network"
+		: name === "signups"
+			? "Sign-ups, for everyone"
+			: (CONTROLS[name as ControlName]?.title ?? name);
 
 export const CONTROL_COMMANDS: CommandSpec[] = [
 	{
@@ -657,28 +669,23 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 								key: "value",
 								label: "Ceiling an hour",
 								kind: "number",
-								hint: "Leave empty to pause outright.",
-							},
-							{
-								key: "network",
-								label: "Network key",
-								kind: "text",
-								hint: "From the Trust page's signal, to slow that one network. Empty slows everyone. Ends at UTC midnight at the latest.",
-								linked: true,
+								hint: "Leave empty to pause outright. One network is only ever slowed, until UTC midnight at the latest.",
 							},
 						]
 					: PAUSE_FIELDS,
 		changes: (before, args, name) => [
 			{
-				what: CONTROLS[name as ControlName]?.title ?? name,
+				what: controlWhat(name, args),
 				now: stateOf(before, name),
 				after: isLimit(name)
 					? args.value
 						? `${args.value} ${CONTROLS[name as ControlName]?.unit ?? ""}`.trim()
 						: "No limit"
 					: name === "signups" && args.value
-						? `${args.network ? "Network A slowed" : "Slowed"} to ${args.value} an hour until ${String(args.until ?? "—").slice(0, 16)}`
-						: `Paused until ${String(args.until ?? "—").slice(0, 16)}`,
+						? `Slowed to ${args.value} an hour until ${String(args.until ?? "—").slice(0, 16)}`
+						: args.network
+							? "Slowed, once a ceiling is written"
+							: `Paused until ${String(args.until ?? "—").slice(0, 16)}`,
 			},
 		],
 	},
@@ -690,11 +697,11 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 		about: "Puts it back to open: running, or no limit.",
 		notices: "Everyone, within 30 seconds: whatever was refused is accepted again.",
 		undo: "Yes. Set it again.",
-		changes: (before, _args, name) => [
+		changes: (before, args, name) => [
 			{
-				what: CONTROLS[name as ControlName]?.title ?? name,
+				what: controlWhat(name, args),
 				now: stateOf(before, name),
-				after: isLimit(name) ? "No limit" : "Running",
+				after: isLimit(name) ? "No limit" : args.network ? "Not slowed" : "Running",
 			},
 		],
 	},

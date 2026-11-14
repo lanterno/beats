@@ -13,6 +13,7 @@ import { get } from "@/shared/api/client";
 import type { AbuseReport, SignupWave } from "@/shared/api/schema";
 import { API_LOG, logsQuery, metricChart } from "@/shared/lib/console";
 import { counted, dollars, everyDay } from "@/shared/lib/format";
+import { handOver } from "@/shared/lib/handover";
 import {
 	buttonClass,
 	DayBars,
@@ -65,7 +66,7 @@ function AccountRows({
 
 /**
  * The hour's sign-ups in words. The network is "Network A", never its key;
- * the key travels only into the slow-down's review, as the control's subject.
+ * the key travels only into the slow-down's review, in navigation state.
  */
 export function waveSentence(wave: SignupWave): string {
 	const usual = wave.usual === 0 ? "usually none" : `usually about ${wave.usual}`;
@@ -78,7 +79,7 @@ export function waveSentence(wave: SignupWave): string {
 
 function SignupWavePanel({ wave }: { wave: SignupWave }) {
 	const slow = wave.largest_key
-		? `/review/control.set/signups?network=${encodeURIComponent(wave.largest_key)}`
+		? handOver("/review/control.set/signups", { network: wave.largest_key })
 		: null;
 	return (
 		<Panel
@@ -88,7 +89,7 @@ function SignupWavePanel({ wave }: { wave: SignupWave }) {
 			<Prose>{waveSentence(wave)}</Prose>
 			{slow ? (
 				<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
-					<Link to={slow} className={buttonClass("secondary")}>
+					<Link {...slow} className={buttonClass("secondary")}>
 						Slow sign-ups from Network A
 					</Link>
 					<span className="text-[13px] text-ink-muted">
