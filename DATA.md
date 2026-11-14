@@ -315,13 +315,23 @@ a `1.2` file does into one from before billing.
 
 Email <ahmed.elghareeb@proton.me> from the address on your account. I will:
 
-1. Run `api/scripts/erase_account.py`, which drops every document keyed to your user id
-   across every collection above — except the rows that are an organisation's
-   working-time record (docs/organisations.md, decision 3): entries and absences stamped
-   with an organisation, the balance adjustments and contract behind a balance it read,
-   and your membership's name and email, all kept under a tombstone id no account has
-2. Revoke active sessions and credentials
-3. Reply to confirm
+1. Log the request the day it arrives (*Erasure requests*, above), and check that it
+   came from the address on the account
+2. Queue the erasure from the control plane (`account.erase`, docs/backoffice.md § Jobs).
+   It runs seven days later. For that week the account is suspended, so whoever opens it
+   is refused with the day it will be erased and how to stop it; writing to the same
+   address inside the window cancels the erasure and lifts the suspension
+3. When it runs, the erasure drops every document keyed to your user id across every
+   collection above, your credentials, sessions and paired devices among them — except
+   the rows that are an organisation's working-time record (docs/organisations.md,
+   decision 3): entries and absences stamped with an organisation, the balance
+   adjustments and contract behind a balance it read, and your membership's name and
+   email, all kept under a tombstone id no account has. It closes the logged request as
+   erased
+4. Reply to confirm
+
+`api/scripts/erase_account.py` is the break-glass path, for when the control plane
+cannot be used: given the account's id, it runs the same erasure at once, with no window.
 
 Backups (if any operational backup exists at the time) roll off on the provider's standard window.
 
