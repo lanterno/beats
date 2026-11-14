@@ -198,6 +198,20 @@ class TestErasureRequestLog:
         assert ("erasure_request_open", fresh) in kinds
         assert ("erasure_request_open", old) in kinds
 
+    def test_the_audit_names_an_id_never_the_reference(self, operator_client, mongo):
+        """operator_audit is kept four years and holds its subject as an id:
+        the account's when the request names one, else the request's own. The
+        reference the operator typed is in no audit row."""
+        user_id = str(ObjectId())
+        mongo.users.insert_one({"_id": ObjectId(user_id), "email": "named@example.test"})
+        self._log(operator_client, 1, user_id=user_id, reference="T-4417")
+        alone = self._log(operator_client, 1, reference="T-4418")
+
+        audit = list(mongo.operator_audit.find({"command": "erasure_request.log"}))
+        assert sorted(row["subject_id"] for row in audit) == sorted([user_id, alone])
+        assert "T-441" not in str(audit)
+        assert mongo.erasure_requests.find_one({"_id": ObjectId(alone)})["reference"] == "T-4418"
+
     def test_a_reference_is_never_an_address(self, operator_client):
         refused = self._run(
             operator_client,
