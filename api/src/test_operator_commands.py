@@ -147,6 +147,8 @@ class TestOperatorCommands:
         bad = self._run(operator_client, "account.suspend", {"user_id": ""})
         assert bad.status_code == 422
         assert bad.json()["code"] == "INVALID_COMMAND_ARGS"
+        # Each argument that failed is named, so the review can say which box.
+        assert {f["path"] for f in bad.json()["fields"]} == {"user_id", "reason"}
 
     async def test_a_viewer_runs_no_command(self):
         """The role gate is the runner's, so it holds for every command at
