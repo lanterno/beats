@@ -43,7 +43,13 @@ export interface Family {
 	missing: string;
 }
 
-export const FAMILIES: Record<"account" | "control" | "erasure" | "deploy", Family> = {
+export const FAMILIES: Record<"account" | "control" | "erasure" | "deploy" | "status", Family> = {
+	status: {
+		subjectKey: "name",
+		back: () => ({ to: "/", label: "Back to Today" }),
+		typedLabel: "Type it to confirm",
+		missing: "There is nothing to act on.",
+	},
 	deploy: {
 		// The subject is fixed ("api") and sent as nothing: both deploy
 		// commands are subjectless on the wire.
@@ -525,11 +531,99 @@ export const DEPLOY_COMMANDS: CommandSpec[] = [
 	},
 ];
 
+/**
+ * Telling customers what is happening (docs/status-page.md): one public file,
+ * written whole. The review shows exactly what will go public before it
+ * does. Nothing about a person in a post: the file is public and keeps its
+ * history.
+ */
+export const STATUS_STATES = ["degraded", "outage", "maintenance", "operational"] as const;
+export const STATUS_PARTS = [
+	"web app",
+	"api",
+	"sign-in",
+	"coach",
+	"integrations",
+	"phone apps",
+] as const;
+
+export const STATUS_COMMANDS: CommandSpec[] = [
+	{
+		family: "status",
+		subjectless: true,
+		name: "status.publish",
+		title: "Publish an update",
+		action: "Publish this, publicly",
+		about:
+			"Goes to the public status page and the banner in the app within about a minute, for everyone. Name no account, organisation, id, count of people affected or internal hostname: the file is public and its history is kept.",
+		notices: "Everyone who opens the app or the status page, within about a minute.",
+		undo: "Post again. Nothing is deleted: the last twenty posts stay on the page.",
+		fields: [
+			{ key: "state", label: "State", kind: "text", hint: `One of: ${STATUS_STATES.join(", ")}` },
+			{
+				key: "message",
+				label: "Message",
+				kind: "text",
+				hint: "At most 280 characters. Plain words.",
+			},
+			{
+				key: "affected",
+				label: "Affected",
+				kind: "text",
+				hint: `Comma-separated, from: ${STATUS_PARTS.join(", ")}. Empty for none.`,
+			},
+		],
+		changes: (before, args) => [
+			{
+				what: "What customers see",
+				now: before.published
+					? `${before.state}${before.message ? `: ${before.message}` : ""}`
+					: "Nothing published yet",
+				after: `${String(args.state || "—")}: ${String(args.message || "—")}`,
+			},
+			{
+				what: "Affected",
+				now:
+					Array.isArray(before.affected) && before.affected.length
+						? before.affected.join(", ")
+						: "—",
+				after: String(args.affected || "—"),
+			},
+		],
+	},
+	{
+		family: "status",
+		subjectless: true,
+		name: "status.clear",
+		title: "Say it is over",
+		action: "Publish the all-clear",
+		about: "Posts operational, with a short message, so the page says when it ended.",
+		notices: "Everyone, within about a minute: the banner goes.",
+		undo: "Publish an update again.",
+		fields: [
+			{
+				key: "message",
+				label: "Message",
+				kind: "text",
+				hint: "Empty says: Everything is working again.",
+			},
+		],
+		changes: (before, args) => [
+			{
+				what: "What customers see",
+				now: before.published ? String(before.state) : "Nothing published yet",
+				after: `operational: ${String(args.message || "Everything is working again.")}`,
+			},
+		],
+	},
+];
+
 const EVERY_COMMAND = [
 	...ACCOUNT_COMMANDS,
 	...CONTROL_COMMANDS,
 	...ERASURE_COMMANDS,
 	...DEPLOY_COMMANDS,
+	...STATUS_COMMANDS,
 ];
 
 export const commandSpec = (name: string): CommandSpec | undefined =>

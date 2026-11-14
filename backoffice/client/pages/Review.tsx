@@ -401,6 +401,12 @@ function sent(fields: CommandField[], args: Record<string, unknown>): Record<str
 		const value = args[field.key];
 		if (field.kind === "checkbox") out[field.key] = Boolean(value);
 		else if (value === "" || value === undefined || value === null) out[field.key] = null;
+		else if (field.key === "affected" && typeof value === "string")
+			// The status commands take a list; the box is one line of names.
+			out[field.key] = value
+				.split(",")
+				.map((v) => v.trim())
+				.filter(Boolean);
 		else out[field.key] = field.kind === "number" ? Number(value) : value;
 	}
 	return out;

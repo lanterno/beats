@@ -66,6 +66,67 @@ export function monthSpend(capacity: CapacityReport, now: Date): number {
 		.reduce((sum, c) => sum + c.cost_usd, 0);
 }
 
+interface PublicStatus {
+	available: boolean;
+	state: string;
+	message: string;
+	affected: string[];
+	updated_at?: string | null;
+	published: boolean;
+}
+
+/** What customers are being told (docs/status-page.md), and the way to say more. */
+function StatusPanel() {
+	const status = useQuery({
+		queryKey: ["public-status"],
+		queryFn: () => get<PublicStatus>("/api/operator/status"),
+	});
+	if (status.error) {
+		return (
+			<Panel title="What customers see">
+				<Failed bare error={status.error} onRetry={() => status.refetch()} />
+			</Panel>
+		);
+	}
+	if (!status.data) return null;
+	const s = status.data;
+	if (!s.available) {
+		return (
+			<Panel title="What customers see">
+				<Prose>
+					This deployment has no status bucket, so there is no public status page to write to.
+				</Prose>
+			</Panel>
+		);
+	}
+	const quiet = s.state === "operational";
+	return (
+		<Panel
+			raised={!quiet}
+			title="What customers see"
+			note={
+				s.published
+					? `${s.state}${s.message ? ` — ${s.message}` : ""}${s.updated_at ? `, since ${minuteOf(s.updated_at)} UTC` : ""}.`
+					: "Nothing has been published yet; the page reads as operational."
+			}
+		>
+			<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
+				<Link
+					to="/review/status.publish/public"
+					className={buttonClass(quiet ? "secondary" : "primary")}
+				>
+					Publish an update
+				</Link>
+				{!quiet ? (
+					<Link to="/review/status.clear/public" className={buttonClass("secondary")}>
+						Say it is over
+					</Link>
+				) : null}
+			</div>
+		</Panel>
+	);
+}
+
 export function Today() {
 	const queue = useQuery({
 		queryKey: ["operator-queue"],
@@ -167,6 +228,7 @@ export function Today() {
 				</Panel>
 			</Pair>
 			<HealthPanel />
+			<StatusPanel />
 			<Panel title="Done lately" note="The back office's last few commands. Times are UTC.">
 				{audit.error ? (
 					<Failed error={audit.error} onRetry={() => audit.refetch()} bare />
