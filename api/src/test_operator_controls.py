@@ -179,6 +179,22 @@ class TestControlCommands:
             assert a not in str(entry), "a network's key is in no audit row"
             assert b not in str(entry), "a network's key is in no audit row"
 
+    def test_the_access_page_reads_each_sign_up_control_with_its_network(self, operator_client):
+        """What the page needs to show each and lift each: the network's key
+        on its own row, none on the one for everyone, that one first."""
+        until = self._before_midnight().isoformat()
+        key = "d" * 32
+        for args in (
+            {"name": "signups", "until": until, "reason": "a wave", "value": 5, "network": key},
+            {"name": "signups", "until": until, "reason": "everyone"},
+        ):
+            assert self._run(operator_client, "control.set", args).status_code == 200
+        controls = operator_client.get("/api/operator/controls").json()
+        assert [(c["name"], c["network"], c["value"], c["in_force"]) for c in controls] == [
+            ("signups", None, None, True),
+            ("signups", key, 5, True),
+        ]
+
     def test_only_signups_are_slowed_for_one_network(self, operator_client):
         refused = self._run(
             operator_client, "control.clear", {"name": "coach", "network": "c" * 32}
