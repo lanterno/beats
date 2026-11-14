@@ -870,6 +870,58 @@
         "title": "PreviewRequest",
         "type": "object"
       },
+      "QueueRow": {
+        "description": "One row behind an Attention count: what it is, which id, since when,\nand when it is due. Ids and dates only. Nothing stores that a row was\nhandled; it leaves when its condition clears.\n\nSuperseded approvals and absence requests are one row per organisation\n(`count` of them, `since` the oldest), with no member named.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "title": "Count",
+            "type": "integer"
+          },
+          "due": {
+            "format": "date-time",
+            "title": "Due",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "organisation_without_owner",
+              "organisation_all_owners_suspended",
+              "job_failed",
+              "job_queued",
+              "approvals_superseded",
+              "absence_requests_pending",
+              "account_near_coach_cap"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject_id",
+          "since",
+          "due"
+        ],
+        "title": "QueueRow",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1534,6 +1586,32 @@
           }
         },
         "summary": "Organisation Audit",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/queue": {
+      "get": {
+        "description": "The rows behind the Attention counts, soonest due first: ids and\ndates, never a member's name. Nothing stores that a row was handled; it\nleaves when its condition clears.",
+        "operationId": "queue_api_operator_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QueueRow"
+                  },
+                  "title": "Response Queue Api Operator Queue Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Queue",
         "tags": [
           "operator"
         ]

@@ -322,6 +322,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Queue
+         * @description The rows behind the Attention counts, soonest due first: ids and
+         *     dates, never a member's name. Nothing stores that a row was handled; it
+         *     leaves when its condition clears.
+         */
+        get: operations["queue_api_operator_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -656,6 +678,36 @@ export interface components {
             args?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * QueueRow
+         * @description One row behind an Attention count: what it is, which id, since when,
+         *     and when it is due. Ids and dates only. Nothing stores that a row was
+         *     handled; it leaves when its condition clears.
+         *
+         *     Superseded approvals and absence requests are one row per organisation
+         *     (`count` of them, `since` the oldest), with no member named.
+         */
+        QueueRow: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /**
+             * Due
+             * Format: date-time
+             */
+            due: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "organisation_without_owner" | "organisation_all_owners_suspended" | "job_failed" | "job_queued" | "approvals_superseded" | "absence_requests_pending" | "account_near_coach_cap";
+            /** Since */
+            since: string | null;
+            /** Subject Id */
+            subject_id: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -1107,6 +1159,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_api_operator_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueRow"][];
                 };
             };
         };
