@@ -4,6 +4,7 @@ database cannot be read. The routes that refuse are test_account_controls.py;
 the commands that write are test_operator_commands.py.
 """
 
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -120,14 +121,22 @@ class TestCache:
         yield
         platform_controls.clear()
 
-    async def test_a_failed_read_keeps_the_last_value(self):
+    @pytest.fixture
+    def clock(self, monkeypatch) -> list[float]:
+        """The process's monotonic clock, moved by hand: the bound is read
+        off it, so a test steps past it rather than waiting it out."""
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+        return clock
+
+    async def test_a_failed_read_keeps_the_last_value(self, clock):
         later = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
         col = _Collection([_doc("imports", until=later)])
         first = await platform_controls.resolve(_db(col))
         assert first.paused("imports", datetime.now(UTC)) is True
 
         col.fail = True
-        platform_controls._expires_at = 0.0  # the bound has passed
+        clock[0] += platform_controls.TTL_SECONDS + 1
         again = await platform_controls.resolve(_db(col))
         assert again.paused("imports", datetime.now(UTC)) is True, "the last value stands"
 
@@ -137,10 +146,15 @@ class TestCache:
         controls = await platform_controls.resolve(_db(_Collection(fail=True)))
         assert controls == PlatformControls()
 
-    async def test_the_bound_holds_between_reads(self):
+    async def test_the_bound_holds_between_reads_and_ends(self, clock):
         col = _Collection([])
         await platform_controls.resolve(_db(col))
         later = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
         col.docs = [_doc("coach", until=later)]
+        clock[0] += platform_controls.TTL_SECONDS - 1
         cached = await platform_controls.resolve(_db(col))
         assert cached.paused("coach", datetime.now(UTC)) is False, "not re-read inside the bound"
+
+        clock[0] += 2
+        fresh = await platform_controls.resolve(_db(col))
+        assert fresh.paused("coach", datetime.now(UTC)) is True, "re-read once it has passed"

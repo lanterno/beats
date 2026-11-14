@@ -593,10 +593,9 @@ class TestPlatformControlsAPI:
         assert start.status_code == 409
         assert start.json()["code"] == "SIGNUPS_PAUSED"
 
-        from beats import platform_controls
-
+        # `_control` forgets what was read, the hour's count with the rest:
+        # it is cached a bound, like the controls.
         self._control(mongo, "signups", until=self._soon(), value=5)
-        platform_controls._signups_counted_at = 0.0
         assert (
             client.post(
                 "/api/auth/register/start", json={"email": "room@example.test", "display_name": "R"}
