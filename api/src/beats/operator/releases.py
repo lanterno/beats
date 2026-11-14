@@ -11,11 +11,14 @@ answering, behind one narrow port (`ReleaseSource`):
 - **The web app's live commit**, from the `version.json` its build writes
   (`ui/vite.config.ts`), fetched from the web origin.
 - **Commit subjects**, from GitHub's public API, cached per sha for good: a
-  commit's subject never changes.
+  commit's subject never changes. A commit GitHub does not know is cached as
+  unknown, so it is asked about once.
 
 The API's own commit is the operator's image tag, which Terraform gives both
 services in one apply: "as deployed", since a revision that failed to become
-ready leaves the API on the previous one. Nothing here moves traffic, and
+ready leaves the API on the previous one. A tag that is not a sha (a hand
+`terraform apply` leaves `container_image_tag` at its default, `latest`)
+reads as unknown and is never sent to GitHub. Nothing here moves traffic, and
 nothing reads the API's Cloud Run service, whose spec carries its secrets.
 
 **Little to configure.** The project and token come from the metadata server;
@@ -110,6 +113,13 @@ def parse_builds(body: dict[str, Any]) -> list[Build]:
         )
     out.sort(key=lambda b: b.created_at.isoformat() if b.created_at else "", reverse=True)
     return out
+
+
+def commit_or_none(value: str | None) -> str | None:
+    """A commit sha, or None for anything else — `latest`, a branch, an
+    empty setting. Nothing that is not a sha is shown as a commit, linked
+    to one, or asked of GitHub."""
+    return value if value and _SHA.match(value) else None
 
 
 def parse_version(body: object) -> str | None:
@@ -209,7 +219,10 @@ class LiveReleases:
                 f"{GITHUB}/repos/{self._repository}/commits/{sha}",
                 headers={"Accept": "application/vnd.github+json"},
             )
-            if resp.status_code == 404:
+            # GitHub answers 404 for a repository it cannot find and 422 ("No
+            # commit found for SHA") for a ref the repository does not have:
+            # both mean there is no subject to show, now or later.
+            if resp.status_code in (404, 422):
                 return None
             resp.raise_for_status()
             message = ((resp.json().get("commit") or {}).get("message")) or ""
@@ -232,6 +245,7 @@ class ReleasesCache:
     async def report(
         self, source: ReleaseSource, *, api_commit: str | None, repository: str
     ) -> ReleasesReport:
+        api_commit = commit_or_none(api_commit)
         if self._read_at == 0.0 or time.monotonic() - self._read_at >= self._seconds:
             self._read_at = time.monotonic()
             unavailable: list[str] = []
