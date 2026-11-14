@@ -21,12 +21,20 @@ ready leaves the API on the previous one. A tag that is not a sha (a hand
 reads as unknown and is never sent to GitHub. Nothing here moves traffic, and
 nothing reads the API's Cloud Run service, whose spec carries its secrets.
 
+**Read at once.** The three sources are asked side by side, and the subjects
+the builds bring with them likewise, over one long-lived client, so a page's
+first fill waits for the slowest answer rather than the sum of them. A
+subject that fails leaves the others to answer; GitHub saying it is rate
+limited quiets every subject until the time it names, since the address is
+Cloud Run's, shared, and the unauthenticated limit is 60 an hour.
+
 **Little to configure.** The project and token come from the metadata server;
 the web origin and the API's commit are set by Terraform; the repository has
 a default. Off Google Cloud the builds answer "unavailable" and the rest still
 answers what it can.
 """
 
+import asyncio
 import re
 import time
 from dataclasses import dataclass, field
@@ -75,6 +83,27 @@ class ReleasesReport:
     repository: str
     # Which sources did not answer this time: "builds", "web", "subjects".
     unavailable: list[str] = field(default_factory=list)
+
+
+class GitHubRateLimited(Exception):
+    """GitHub said to stop asking until `until` (epoch seconds)."""
+
+    def __init__(self, until: float):
+        super().__init__(f"GitHub is rate limiting until {until:.0f}")
+        self.until = until
+
+
+def quiet_until(headers: httpx.Headers, now: float) -> float | None:
+    """When GitHub's answer says asking may start again, or None when it is
+    not a rate limit: `retry-after` for its secondary limits, the reset of
+    an exhausted primary limit otherwise."""
+    retry = headers.get("retry-after", "")
+    if retry.isdigit():
+        return now + int(retry)
+    reset = headers.get("x-ratelimit-reset", "")
+    if headers.get("x-ratelimit-remaining") == "0" and reset.isdigit():
+        return float(reset)
+    return None
 
 
 class ReleaseSource(Protocol):
@@ -176,63 +205,78 @@ class LiveReleases:
         self._repository = repository
         self._transport = transport
         self._project: str | None = None
+        self._http: httpx.AsyncClient | None = None
 
     def _client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(timeout=TIMEOUT_SECONDS, transport=self._transport)
+        """One client for every call this source makes, opened on first use
+        and kept: its connections are reused across the sources, the
+        subjects and the minutes between refreshes."""
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(timeout=TIMEOUT_SECONDS, transport=self._transport)
+        return self._http
+
+    async def aclose(self) -> None:
+        if self._http is not None:
+            await self._http.aclose()
 
     async def builds(self) -> list[Build]:
-        async with self._client() as client:
-            meta = {"Metadata-Flavor": "Google"}
-            if self._project is None:
-                resp = await client.get(f"{METADATA}/project/project-id", headers=meta)
-                resp.raise_for_status()
-                self._project = resp.text
-            resp = await client.get(
-                f"{METADATA}/instance/service-accounts/default/token", headers=meta
+        client = self._client()
+        meta = {"Metadata-Flavor": "Google"}
+        token_url = f"{METADATA}/instance/service-accounts/default/token"
+        if self._project is None:
+            project, token = await asyncio.gather(
+                client.get(f"{METADATA}/project/project-id", headers=meta),
+                client.get(token_url, headers=meta),
             )
-            resp.raise_for_status()
-            token = resp.json()["access_token"]
-            resp = await client.get(
-                f"{CLOUD_BUILD}/projects/{self._project}/locations/global/builds",
-                params={"pageSize": str(BUILDS_SHOWN * 2)},
-                headers={"Authorization": f"Bearer {token}"},
-            )
-            resp.raise_for_status()
-            return parse_builds(resp.json())
+            project.raise_for_status()
+            self._project = project.text
+        else:
+            token = await client.get(token_url, headers=meta)
+        token.raise_for_status()
+        resp = await client.get(
+            f"{CLOUD_BUILD}/projects/{self._project}/locations/global/builds",
+            params={"pageSize": str(BUILDS_SHOWN * 2)},
+            headers={"Authorization": f"Bearer {token.json()['access_token']}"},
+        )
+        resp.raise_for_status()
+        return parse_builds(resp.json())
 
     async def web_commit(self) -> str | None:
         if not self._web_origin:
             raise LookupError("no web origin configured")
-        async with self._client() as client:
-            resp = await client.get(f"{self._web_origin}/version.json")
-            if resp.status_code == 404:
-                return None
-            resp.raise_for_status()
-            try:
-                return parse_version(resp.json())
-            except ValueError:
-                return None
+        resp = await self._client().get(f"{self._web_origin}/version.json")
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        try:
+            return parse_version(resp.json())
+        except ValueError:
+            return None
 
     async def subject(self, sha: str) -> str | None:
-        async with self._client() as client:
-            resp = await client.get(
-                f"{GITHUB}/repos/{self._repository}/commits/{sha}",
-                headers={"Accept": "application/vnd.github+json"},
-            )
-            # GitHub answers 404 for a repository it cannot find and 422 ("No
-            # commit found for SHA") for a ref the repository does not have:
-            # both mean there is no subject to show, now or later.
-            if resp.status_code in (404, 422):
-                return None
-            resp.raise_for_status()
-            message = ((resp.json().get("commit") or {}).get("message")) or ""
-            return message.splitlines()[0] if message else None
+        resp = await self._client().get(
+            f"{GITHUB}/repos/{self._repository}/commits/{sha}",
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        # GitHub answers 404 for a repository it cannot find and 422 ("No
+        # commit found for SHA") for a ref the repository does not have:
+        # both mean there is no subject to show, now or later.
+        if resp.status_code in (404, 422):
+            return None
+        if resp.status_code in (403, 429):
+            until = quiet_until(resp.headers, time.time())
+            if until is not None:
+                raise GitHubRateLimited(until)
+        resp.raise_for_status()
+        message = ((resp.json().get("commit") or {}).get("message")) or ""
+        return message.splitlines()[0] if message else None
 
 
 class ReleasesCache:
     """Each source's last answer, re-read after the bound; a source that
     fails keeps its last answer and is named in `unavailable`. Subjects are
-    kept for good, since a commit's subject never changes."""
+    kept for good, since a commit's subject never changes; one that fails
+    is asked again at the next refresh, and holds up none of the others."""
 
     def __init__(self, *, seconds: float = CACHE_SECONDS):
         self._seconds = seconds
@@ -241,6 +285,8 @@ class ReleasesCache:
         self._web: str | None = None
         self._subjects: dict[str, str | None] = {}
         self._unavailable: list[str] = []
+        # Epoch seconds before which GitHub is not asked (GitHubRateLimited).
+        self._github_quiet_until = 0.0
 
     async def report(
         self, source: ReleaseSource, *, api_commit: str | None, repository: str
@@ -249,22 +295,34 @@ class ReleasesCache:
         if self._read_at == 0.0 or time.monotonic() - self._read_at >= self._seconds:
             self._read_at = time.monotonic()
             unavailable: list[str] = []
-            try:
-                self._builds = await source.builds()
-            except Exception:  # noqa: BLE001 — one source failing is a state
+            builds, web = await asyncio.gather(
+                source.builds(), source.web_commit(), return_exceptions=True
+            )
+            # One source failing is a state: it keeps its last answer.
+            if isinstance(builds, BaseException):
                 unavailable.append("builds")
-            try:
-                self._web = await source.web_commit()
-            except Exception:  # noqa: BLE001
+            else:
+                self._builds = builds
+            if isinstance(web, BaseException):
                 unavailable.append("web")
+            else:
+                self._web = web
             wanted = {b.sha for b in self._builds[:BUILDS_SHOWN]} | {self._web, api_commit}
-            for sha in sorted(s for s in wanted if s and s not in self._subjects):
-                try:
-                    self._subjects[sha] = await source.subject(sha)
-                except Exception:  # noqa: BLE001
-                    if "subjects" not in unavailable:
-                        unavailable.append("subjects")
-                    break  # rate-limited or away: try the rest next time
+            todo = sorted(s for s in wanted if s and s not in self._subjects)
+            if todo and time.time() < self._github_quiet_until:
+                unavailable.append("subjects")
+            elif todo:
+                answers = await asyncio.gather(
+                    *(source.subject(sha) for sha in todo), return_exceptions=True
+                )
+                for sha, answer in zip(todo, answers, strict=True):
+                    if isinstance(answer, GitHubRateLimited):
+                        self._github_quiet_until = max(self._github_quiet_until, answer.until)
+                    if isinstance(answer, BaseException):
+                        if "subjects" not in unavailable:
+                            unavailable.append("subjects")
+                    else:
+                        self._subjects[sha] = answer
             self._unavailable = unavailable
         return assemble(
             self._builds,

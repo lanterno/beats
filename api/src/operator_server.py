@@ -88,9 +88,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.operator_settings = settings
     app.state.health_source = GoogleMonitoring(settings.api_service_name)
     app.state.health_cache = HealthCache()
-    app.state.release_source = LiveReleases(
-        web_origin=settings.web_origin, repository=settings.github_repository
-    )
+    releases = LiveReleases(web_origin=settings.web_origin, repository=settings.github_repository)
+    app.state.release_source = releases
     app.state.releases_cache = ReleasesCache()
     app.state.deploy_freeze = (
         GcsDeployFreeze(settings.freeze_bucket) if settings.freeze_bucket else None
@@ -101,6 +100,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     logger.info("Database connected.")
     yield
     logger.info("Disconnecting from database...")
+    await releases.aclose()
     await client.close()
 
 
