@@ -14,6 +14,7 @@ days, the reason `/api/reports` takes its token in a header.
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
@@ -36,7 +37,7 @@ from beats.operator.reads import (
 )
 from beats.operator.releases import ReleasesReport
 from beats.operator.runner import CommandPreview, preview_command, run_command
-from beats.operator.status_page import state_of
+from beats.operator.status_page import StatusUnreadable, state_of
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
 
@@ -245,21 +246,32 @@ async def deploy_freeze(request: Request, operator: CurrentOperator) -> FreezeSt
 
 class PublicStatus(BaseModel):
     available: bool
-    state: str
+    # Null when the file could not be read back, which `problem` says why:
+    # unknown, never "operational".
+    state: str | None
     message: str
     affected: list[str]
     updated_at: str | None = None
     published: bool = False
+    # "unreadable": the file is there but is not one the commands wrote, and
+    # they refuse to write over it.
+    problem: Literal["unreadable"] | None = None
 
 
 @router.get("/status", response_model=PublicStatus)
 async def public_status(request: Request, operator: CurrentOperator) -> PublicStatus:
     """What customers see on the status page right now, read back from the
-    same public file. Not available where no status bucket is configured."""
+    same public file. Not available where no status bucket is configured;
+    a file that cannot be read is said, never shown as all good."""
     store = getattr(request.app.state, "status_store", None)
     if store is None:
         return PublicStatus(available=False, state="operational", message="", affected=[])
-    doc, _ = await store.read()
+    try:
+        doc, _ = await store.read()
+    except StatusUnreadable:
+        return PublicStatus(
+            available=True, state=None, message="", affected=[], problem="unreadable"
+        )
     return PublicStatus(available=True, **state_of(doc))
 
 

@@ -67,7 +67,11 @@ OPERATIONAL = StatusDoc(
 )
 
 
-def parse(text: str) -> StatusDoc | None:
+def parse(text: str) -> StatusDoc:
+    """The file back. One that is there but is not a file these commands
+    wrote — edited by hand, cut short — raises `StatusUnreadable` rather
+    than reading as no file: the next post would start a fresh history over
+    it, and the read-back would say nothing was ever published."""
     try:
         raw = json.loads(text)
         return StatusDoc(
@@ -86,7 +90,7 @@ def parse(text: str) -> StatusDoc | None:
             ],
         )
     except ValueError, KeyError, TypeError, AttributeError:
-        return None
+        raise StatusUnreadable() from None
 
 
 def next_doc(
@@ -106,6 +110,20 @@ class StatusUnavailable(DomainException):
     status_code = 409
     code = "STATUS_UNAVAILABLE"
     message = "No status bucket is configured for this deployment"
+
+
+class StatusUnreadable(DomainException):
+    """The file is there but cannot be read. Nothing writes over it: a post
+    would replace the history the public page shows with one line. Only a
+    person can tell what it should say, so it is put right by hand
+    (docs/status-page.md)."""
+
+    status_code = 409
+    code = "STATUS_UNREADABLE"
+    message = (
+        "The status file is there but cannot be read, and a post would replace its history; "
+        "put it right by hand first"
+    )
 
 
 class StatusConflict(DomainException):
@@ -130,7 +148,8 @@ class StatusNotReviewed(DomainException):
 
 class StatusStore(Protocol):
     async def read(self) -> tuple[StatusDoc | None, int]:
-        """The file and its generation; (None, 0) when there is none."""
+        """The file and its generation; (None, 0) when there is none. A file
+        that is there but cannot be read raises `StatusUnreadable`."""
         ...
 
     async def write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
@@ -196,13 +215,17 @@ class GcsStatusStore:
 
 
 class MemoryStatusStore:
-    """For tests and local development: the file in memory, with a
-    generation that moves on every write."""
+    """For tests and local development: the file's text in memory, read
+    the way the bucket's is, with a generation that moves on every write."""
 
     def __init__(self):
-        self.doc: StatusDoc | None = None
+        self.text: str | None = None
         self.generation = 0
         self.writes = 0
+
+    @property
+    def doc(self) -> StatusDoc | None:
+        return parse(self.text) if self.text is not None else None
 
     async def read(self) -> tuple[StatusDoc | None, int]:
         return self.doc, self.generation
@@ -210,7 +233,7 @@ class MemoryStatusStore:
     async def write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
         if if_generation_match != self.generation:
             raise StatusConflict()
-        self.doc = doc
+        self.text = doc.to_json()
         self.generation += 1
         self.writes += 1
 
