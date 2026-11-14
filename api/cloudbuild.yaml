@@ -147,16 +147,31 @@ steps:
         released=$$?
         status=$$(cat /workspace/.deploy/apply-status 2>/dev/null || echo 1)
         if [ "$$status" = frozen ]; then
-          # Red on purpose: green reads as "deployed". Re-run the newest build
-          # once the freeze lifts (docs/backoffice.md § Deploy freeze).
-          echo "Frozen: $COMMIT_SHA was not deployed. Re-run the newest build after the freeze lifts." >&2
-          exit 1
+          # Held, not failed: deploy-frozen below turns the build red.
+          exit "$$released"
         fi
         if [ "$$status" != 0 ]; then
           echo "terraform-apply recorded a failure (exit $$status)." >&2
           exit 1
         fi
         exit "$$released"
+
+  # A build the deploy freeze held back fails here, in a step of its own, so
+  # that it can be told from one whose deploy failed: the back office's
+  # Releases reads which step failed (api/src/beats/operator/releases.py)
+  # and shows it as held, not as a bad release to revert. Red on purpose:
+  # green reads as "deployed". Once the freeze lifts, re-run the build
+  # Releases names (docs/backoffice.md § Deploy freeze).
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-frozen'
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        if [ "$$(cat /workspace/.deploy/decision 2>/dev/null)" = frozen ]; then
+          echo "Frozen: $COMMIT_SHA was not deployed. Once the freeze lifts, re-run the build the back office's Releases names." >&2
+          exit 1
+        fi
 
 images:
   - '${_REGISTRY_LOCATION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO_NAME}/${_IMAGE_NAME}:$COMMIT_SHA'
