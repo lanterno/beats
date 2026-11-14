@@ -37,6 +37,15 @@ I can suspend an account. A suspended account is refused everywhere it can act �
 
 Anything I do through the control plane is written to an audit record of its own, which nobody can edit and which holds ids, never names or addresses; it is kept four years, the platform's default retention, and then purged; where the act touches an organisation — only one left with no owner, and only when its members ask — it also lands in that organisation's own audit log, marked as the operator's act, so its admins can tell an act of mine from an act of theirs.
 
+To notice a burst of sign-ups from one place, LifePete keeps for 48 hours a
+count of sign-ups per hour per network, where the network is the first part of
+the visitor's address (the /24 for IPv4, the /48 for IPv6), hashed with a key
+that changes every day. The address itself is not stored, the hash cannot be
+reversed or matched against a guess after the day ends, and no account is ever
+linked to a network. The operator sees only how large the largest group in an
+hour is, and may slow sign-ups from it for the rest of the day; nobody is
+blocked, and nobody who has an account is affected.
+
 Beats also keeps, per account, the **day** a request last carried its credential — a date, never a time, written at most once a day — and per paired device the time it last authenticated, also at most once a day. That is what lets an operator see that an account is in use at all without reading when you work.
 
 ## Third-party integrations (all optional)

@@ -219,6 +219,11 @@ Kept only as long as it takes to finish one request, then deleted by a TTL index
   asked. Taken when the browser comes back; otherwise ten minutes.
 - **Pairing codes** (`pairing_codes`): the hash of a code shown once to pair a device, and
   your account id. Taken when used; otherwise five minutes.
+- **Sign-up network counts** (`signup_network_counts`): per hour, per network — the
+  visitor's address cut to its /24 (IPv4) or /48 (IPv6) and HMAC-hashed with a key derived
+  for the UTC day from the server's own secret — how many sign-ups were started and how
+  many finished. No address, no account id, and nothing that joins an account to a
+  network. 48 hours.
 
 ## Encryption
 
