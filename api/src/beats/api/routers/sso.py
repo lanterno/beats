@@ -176,9 +176,14 @@ async def start_flow(
 
 async def _signups_closed(visitor: str | None) -> bool:
     """Whether the operator has paused or slowed sign-ups (docs/backoffice.md
-    § Controls), for this visitor's network. Asked before the exchange's
-    outcome is known, and applied only on the branch that would create an
-    account."""
+    § Controls), for everyone or for this visitor's network. Asked before the
+    exchange's outcome is known, and applied only on the branch that would
+    create an account — never a sign-in.
+
+    The whole check, slow-downs included, because for a provider the
+    sign-up starts and finishes in one step: nothing has counted this
+    visitor yet, so the ceiling cannot refuse them against their own start
+    (the reason `/register/verify` checks the pause alone)."""
     try:
         await platform_controls.refuse_if_signups_closed(
             Database.get_db(), signup_networks.key_for(visitor)
@@ -284,6 +289,10 @@ async def complete(
     # vouched for learns that the account is suspended.
     refuse_suspended(user)
     if created:
+        # Started and finished at once: counted as both, so an account a
+        # provider creates counts against its network's slow-down — which
+        # reads `started` — as a passkey's start does.
+        await signup_networks.count_started(Database.get_db(), visitor)
         await signup_networks.count_completed(Database.get_db(), visitor)
 
     token = _session_manager.create_session_token(user.id or "", user.email)

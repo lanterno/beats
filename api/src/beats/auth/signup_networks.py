@@ -88,7 +88,9 @@ async def _count(db: AsyncDatabase, address: str | None, field: str) -> None:
 
 
 async def count_started(db: AsyncDatabase, address: str | None) -> None:
-    """`POST /register/start` created a user row — abandoned starts included."""
+    """`POST /register/start` created a user row — abandoned starts
+    included — or a provider created an account, which starts and finishes
+    a sign-up at once. A network's slow-down reads this count."""
     await _count(db, address, "started")
 
 
