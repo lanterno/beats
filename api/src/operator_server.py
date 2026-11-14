@@ -45,6 +45,7 @@ from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
 from beats.api.routers.operator import router as operator_router
 from beats.domain.exceptions import DomainException
+from beats.operator.deploy_freeze import GcsDeployFreeze
 from beats.operator.health import GoogleMonitoring, HealthCache
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
 from beats.operator.releases import LiveReleases, ReleasesCache
@@ -87,6 +88,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         web_origin=settings.web_origin, repository=settings.github_repository
     )
     app.state.releases_cache = ReleasesCache()
+    app.state.deploy_freeze = (
+        GcsDeployFreeze(settings.freeze_bucket) if settings.freeze_bucket else None
+    )
     logger.info("Database connected.")
     yield
     logger.info("Disconnecting from database...")
