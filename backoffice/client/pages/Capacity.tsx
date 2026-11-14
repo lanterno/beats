@@ -1,7 +1,7 @@
 /**
  * What the platform will cost and how it will behave next quarter: storage
- * per collection and the coach's platform-wide cost. Latency, error rates
- * and instance counts are Cloud Monitoring's — linked, not rebuilt.
+ * per collection and the coach's platform-wide cost, and live health from
+ * Cloud Monitoring (shared/ui/HealthPanel.tsx) with refused writes per route.
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -9,6 +9,7 @@ import { get } from "@/shared/api/client";
 import type { CapacityReport } from "@/shared/api/schema";
 import { counted, dollars, formatBytes, whole } from "@/shared/lib/format";
 import { day, Empty, Failed, figure, Loading, Page, Panel, Prose, Table } from "@/shared/ui";
+import { HealthPanel } from "@/shared/ui/HealthPanel";
 
 const MONITORING = "https://console.cloud.google.com/monitoring/dashboards?project=beats-476914";
 
@@ -34,6 +35,7 @@ export function Capacity() {
 					: "The database has no collections yet."
 			}
 		>
+			<HealthPanel routes />
 			<Panel raised title="Collections">
 				<Table
 					head={["Collection", figure("Documents"), figure("Storage")]}

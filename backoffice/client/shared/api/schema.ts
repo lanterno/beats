@@ -29,3 +29,5 @@ export type AccessEntry = components["schemas"]["AccessEntry"];
 export type ErasureRequestState = components["schemas"]["ErasureRequestState"];
 /** One row behind an Attention count: ids and dates, never a name. */
 export type QueueRow = components["schemas"]["QueueRow"];
+/** Live health from Cloud Monitoring: live, stale (with its age) or unavailable. */
+export type HealthReport = components["schemas"]["HealthReport"];

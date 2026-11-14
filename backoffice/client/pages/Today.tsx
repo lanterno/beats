@@ -29,6 +29,7 @@ import {
 	Prose,
 	Table,
 } from "@/shared/ui";
+import { HealthPanel } from "@/shared/ui/HealthPanel";
 
 const CLOUD_RUN = "https://console.cloud.google.com/run?project=beats-476914";
 
@@ -160,6 +161,7 @@ export function Today() {
 					)}
 				</Panel>
 			</Pair>
+			<HealthPanel />
 			<Panel title="Done lately" note="The back office's last few commands. Times are UTC.">
 				{audit.error ? (
 					<Failed error={audit.error} onRetry={() => audit.refetch()} bare />
