@@ -73,6 +73,20 @@ class TestAssemble:
         ]
         assert report.web_subject == "ui: two"
 
+    def test_a_commit_built_again_has_one_live_build_the_newest_green_one(self):
+        """The bug this pins: every build of the deployed commit read as live,
+        so a re-run, or a re-run that failed, showed two live rows."""
+        builds = [
+            Build(A, "FAILURE", None, None, "log/3"),
+            Build(A, "SUCCESS", None, None, "log/2"),
+            Build(A, "SUCCESS", None, None, "log/1"),
+            Build(B, "SUCCESS", None, None, "log/0"),
+        ]
+        report = assemble(
+            builds, api_commit=A, web_commit=None, subjects={}, repository="o/r", unavailable=[]
+        )
+        assert [r.log_url for r in report.builds if r.live] == ["log/2"]
+
     def test_an_unknown_api_commit_marks_nothing_live(self):
         report = assemble(
             [Build(A, "SUCCESS", None, None, None)],
