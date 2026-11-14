@@ -5,10 +5,18 @@
  * a figure Google had no points for reads as "no data", never as zero.
  */
 
+import { useQuery } from "@tanstack/react-query";
+import { get } from "@/shared/api/client";
 import type { HealthReport } from "@/shared/api/schema";
 
-export const MONITORING_CONSOLE =
-	"https://console.cloud.google.com/monitoring/dashboards?project=beats-476914";
+/** The live figures, read again each minute; Today and Capacity share the read. */
+export function useHealth() {
+	return useQuery({
+		queryKey: ["health"],
+		queryFn: () => get<HealthReport>("/api/operator/health"),
+		refetchInterval: 60_000,
+	});
+}
 
 /** 0.9983 → "99.83%"; null → "no data". */
 export function percent(value: number | null | undefined, digits = 2): string {
@@ -37,7 +45,11 @@ export function freshness(report: HealthReport): string | null {
 	return `Google did not answer. These figures are ${minutes} min old.`;
 }
 
-/** "1 of 2", "1", or "no data". */
+/**
+ * "1 of 2", "1", or "no data": the busiest revision's active instances
+ * against the ceiling, which is per revision; idle ones a rollover leaves on
+ * the old revision count against neither (operator/health.py).
+ */
 export function instancesOf(report: HealthReport): string {
 	const now = report.figures?.instances;
 	if (now === null || now === undefined) return "no data";

@@ -3,6 +3,8 @@ answers at their awkward shapes, and the cache's three states. The route is
 test_operator.py's, over a fake of the port — never a stubbed Google in a
 live page."""
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -10,6 +12,8 @@ from beats.operator.health import (
     GoogleMonitoring,
     HealthCache,
     HealthFigures,
+    ProjectId,
+    busiest_now,
     by_label,
     latest_value,
     share,
@@ -46,6 +50,18 @@ class TestParsing:
             ]
         }
         assert total_value(body) == 15
+
+    def test_busiest_now_is_the_largest_series_at_the_newest_instant(self):
+        body = {
+            "timeSeries": [
+                # The revision a rollover replaced: busy earlier, gone now.
+                {"points": [_point(2, "2026-11-14T09:55:00Z")]},
+                {"points": [_point(1, "2026-11-14T10:00:00Z"), _point(1, "2026-11-14T09:55:00Z")]},
+                {"points": [_point(0, "2026-11-14T10:00:00Z")]},
+            ]
+        }
+        assert busiest_now(body) == 1
+        assert busiest_now({}) is None
 
     def test_a_share_tells_no_errors_from_no_data(self):
         assert share(None, 200) == 0.0
@@ -131,6 +147,64 @@ class TestGoogle:
             await source.read()
         assert (await HealthCache().report(source, None)).state == "unavailable"
 
+    async def test_the_metadata_and_the_six_queries_are_asked_side_by_side(self):
+        """Each call waits for its phase's others to have started: asked one
+        after another, as they once were — eight calls of a 3 s timeout
+        each — the first would wait forever."""
+        metadata, series = asyncio.Barrier(2), asyncio.Barrier(6)
+
+        async def answer(request: httpx.Request) -> httpx.Response:
+            if "metadata" in str(request.url):
+                await metadata.wait()
+                if "project-id" in str(request.url):
+                    return httpx.Response(200, text="proj-1")
+                return httpx.Response(200, json={"access_token": "t"})
+            await series.wait()
+            return httpx.Response(200, json={})
+
+        source = GoogleMonitoring("beats-api", transport=httpx.MockTransport(answer))
+        figures = await asyncio.wait_for(source.read(), timeout=2)
+        assert figures.availability is None
+
+    async def test_instances_are_the_busiest_revisions_active_ones_not_every_instance(self):
+        """The bug this pins, seen live as "Instances now: 3 of 2": every
+        revision's instances, idle and active, were added up and set against
+        the ceiling, which is one revision's. Monitoring is stood in for by
+        what it does with the query it is sent: drop what the filter drops,
+        then add up per group."""
+        now, earlier = "2026-11-14T10:00:00Z", "2026-11-14T09:55:00Z"
+        raw = [  # revision, state, value, end
+            ("rev-new", "active", 2, now),
+            ("rev-old", "idle", 1, now),
+            ("rev-old", "active", 2, earlier),
+        ]
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if "project-id" in url:
+                return httpx.Response(200, text="proj-1")
+            if "token" in url:
+                return httpx.Response(200, json={"access_token": "t"})
+            f = request.url.params["filter"]
+            if "instance_count" not in f:
+                return httpx.Response(200, json={})
+            by_revision = "revision_name" in request.url.params.get("aggregation.groupByFields", "")
+            groups: dict[tuple[str, str], float] = {}
+            for revision, state, value, end in raw:
+                if 'metric.label.state="active"' in f and state != "active":
+                    continue
+                key = (revision if by_revision else "all", end)
+                groups[key] = groups.get(key, 0) + value
+            series: dict[str, list] = {}
+            for (group, end), value in groups.items():
+                series.setdefault(group, []).append(_point(value, end))
+            return httpx.Response(
+                200, json={"timeSeries": [{"points": p} for p in series.values()]}
+            )
+
+        figures = await GoogleMonitoring("beats-api", transport=httpx.MockTransport(answer)).read()
+        assert figures.instances == 2
+
     async def test_figures_are_read_off_the_answers(self):
         def answer(request: httpx.Request) -> httpx.Response:
             url = str(request.url)
@@ -157,3 +231,34 @@ class TestGoogle:
         assert figures.error_share == 0.01
         assert figures.p95_latency_ms is None, "no points is no data"
         assert figures.refused_writes == []
+
+
+class TestProjectId:
+    async def test_the_project_is_read_once_and_kept(self):
+        calls = 0
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            assert request.headers["Metadata-Flavor"] == "Google"
+            return httpx.Response(200, text="proj-1")
+
+        project = ProjectId(transport=httpx.MockTransport(answer))
+        assert await project.get() == "proj-1"
+        assert await project.get() == "proj-1"
+        assert calls == 1
+
+    async def test_off_google_cloud_it_is_none_and_the_failure_is_kept(self):
+        """The pages then link nowhere rather than to a project in the
+        bundle, and do not wait on an absent metadata server each time."""
+        calls = 0
+
+        def refuse(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            raise httpx.ConnectError("no metadata server here")
+
+        project = ProjectId(transport=httpx.MockTransport(refuse))
+        assert await project.get() is None
+        assert await project.get() is None
+        assert calls == 1

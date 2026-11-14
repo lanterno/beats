@@ -5,10 +5,13 @@ own: the current state, a short message, what is affected, and the last
 posts. The page at `lifepete.com/status` and the SPA's banner read that file
 and nothing else, so both still work when the API is down — the only time
 they matter. Written whole each time, by `status.publish` and `status.clear`
-through the runner, with `ifGenerationMatch` so two writes cannot silently
-lose one, and with `Cache-Control: public, max-age=30`, because Cloud
-Storage's default for a public object is an hour of caching and "we're back"
-must not arrive an hour late.
+through the runner, over the version of the file the operator reviewed and
+no other: the review reads the file's generation, the act sends it back, and
+the write is conditional on it (`ifGenerationMatch`), so a post made between
+the review and the send is refused rather than replaced unseen. With
+`Cache-Control: public, max-age=30`, because Cloud Storage's default for a
+public object is an hour of caching and "we're back" must not arrive an hour
+late.
 
 **Nothing about a person in a post** — the file is public and keeps its
 history — and no email, no push, no third-party status page.
@@ -18,6 +21,7 @@ commands answer 409 `STATUS_UNAVAILABLE` and the back office says so.
 """
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol, get_args
@@ -26,6 +30,8 @@ import httpx
 
 from beats.domain.exceptions import DomainException
 from beats.operator.health import METADATA, TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
 
 STORAGE = "https://storage.googleapis.com"
 OBJECT = "status.json"
@@ -64,7 +70,11 @@ OPERATIONAL = StatusDoc(
 )
 
 
-def parse(text: str) -> StatusDoc | None:
+def parse(text: str) -> StatusDoc:
+    """The file back. One that is there but is not a file these commands
+    wrote — edited by hand, cut short — raises `StatusUnreadable` rather
+    than reading as no file: the next post would start a fresh history over
+    it, and the read-back would say nothing was ever published."""
     try:
         raw = json.loads(text)
         return StatusDoc(
@@ -83,7 +93,7 @@ def parse(text: str) -> StatusDoc | None:
             ],
         )
     except ValueError, KeyError, TypeError, AttributeError:
-        return None
+        raise StatusUnreadable() from None
 
 
 def next_doc(
@@ -105,18 +115,55 @@ class StatusUnavailable(DomainException):
     message = "No status bucket is configured for this deployment"
 
 
+class StatusUnreachable(DomainException):
+    """Cloud Storage, or the metadata server that hands out its token, did
+    not answer. Nothing was changed; the read-back says "unreachable" rather
+    than a state, and an act answers this in the envelope instead of a bare
+    500."""
+
+    status_code = 503
+    code = "STATUS_UNREACHABLE"
+    message = "Cloud Storage did not answer for the status file; nothing was changed"
+
+
+class StatusUnreadable(DomainException):
+    """The file is there but cannot be read. Nothing writes over it: a post
+    would replace the history the public page shows with one line. Only a
+    person can tell what it should say, so it is put right by hand
+    (docs/status-page.md)."""
+
+    status_code = 409
+    code = "STATUS_UNREADABLE"
+    message = (
+        "The status file is there but cannot be read, and a post would replace its history; "
+        "put it right by hand first"
+    )
+
+
 class StatusConflict(DomainException):
-    """Somebody else published between the read and the write. Read again
-    and publish again: nothing was lost, nothing was overwritten."""
+    """Somebody else published since the review read the file, or between
+    the read and the write. Review it again and publish again: nothing was
+    lost, nothing was overwritten."""
 
     status_code = 409
     code = "STATUS_CONFLICT"
-    message = "The status file changed under you; read it again and publish again"
+    message = "The status file changed since you reviewed it; review it again and publish again"
+
+
+class StatusNotReviewed(DomainException):
+    """A post says which version of the file it was reviewed against — the
+    generation the preview answered. Without it there is nothing to hold the
+    write to, and a colleague's newer post could be replaced unseen."""
+
+    status_code = 409
+    code = "STATUS_NOT_REVIEWED"
+    message = "Send the generation the review showed, so a newer post is not replaced unseen"
 
 
 class StatusStore(Protocol):
     async def read(self) -> tuple[StatusDoc | None, int]:
-        """The file and its generation; (None, 0) when there is none."""
+        """The file and its generation; (None, 0) when there is none. A file
+        that is there but cannot be read raises `StatusUnreadable`."""
         ...
 
     async def write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
@@ -141,24 +188,36 @@ class GcsStatusStore:
         return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
     async def read(self) -> tuple[StatusDoc | None, int]:
-        async with self._client() as client:
-            headers = await self._token(client)
-            meta = await client.get(
-                f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}", headers=headers
-            )
-            if meta.status_code == 404:
-                return None, 0
-            meta.raise_for_status()
-            generation = int(meta.json()["generation"])
-            body = await client.get(
-                f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
-                params={"alt": "media", "generation": str(generation)},
-                headers=headers,
-            )
-            body.raise_for_status()
-            return parse(body.text), generation
+        try:
+            async with self._client() as client:
+                headers = await self._token(client)
+                meta = await client.get(
+                    f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}", headers=headers
+                )
+                if meta.status_code == 404:
+                    return None, 0
+                meta.raise_for_status()
+                generation = int(meta.json()["generation"])
+                body = await client.get(
+                    f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
+                    params={"alt": "media", "generation": str(generation)},
+                    headers=headers,
+                )
+                body.raise_for_status()
+                text = body.text
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("status file unreachable on read: %r", e)
+            raise StatusUnreachable() from e
+        return parse(text), generation
 
     async def write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
+        try:
+            await self._write(doc, if_generation_match=if_generation_match)
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("status file unreachable on write: %r", e)
+            raise StatusUnreachable() from e
+
+    async def _write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
         boundary = "beats-status-boundary"
         metadata = json.dumps({"name": OBJECT, "cacheControl": CACHE_CONTROL})
         body = (
@@ -182,13 +241,17 @@ class GcsStatusStore:
 
 
 class MemoryStatusStore:
-    """For tests and local development: the file in memory, with a
-    generation that moves on every write."""
+    """For tests and local development: the file's text in memory, read
+    the way the bucket's is, with a generation that moves on every write."""
 
     def __init__(self):
-        self.doc: StatusDoc | None = None
+        self.text: str | None = None
         self.generation = 0
         self.writes = 0
+
+    @property
+    def doc(self) -> StatusDoc | None:
+        return parse(self.text) if self.text is not None else None
 
     async def read(self) -> tuple[StatusDoc | None, int]:
         return self.doc, self.generation
@@ -196,17 +259,36 @@ class MemoryStatusStore:
     async def write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
         if if_generation_match != self.generation:
             raise StatusConflict()
-        self.doc = doc
+        self.text = doc.to_json()
         self.generation += 1
         self.writes += 1
 
 
 async def publish(
-    store: StatusStore, *, state: str, message: str, affected: list[str], now: datetime
+    store: StatusStore,
+    *,
+    state: str,
+    message: str,
+    affected: list[str],
+    now: datetime,
+    reviewed: int | None = None,
 ) -> StatusDoc:
+    """The post, on top of the file the operator reviewed and only that one.
+
+    `reviewed` is the generation the review read (`describe()` answers it,
+    the act sends it back; None, a caller that did not say, is refused). A
+    file that has moved since — a colleague's post in between, minutes ago —
+    is 409 `STATUS_CONFLICT`, so the operator sees the newer "Now" and
+    decides again. The write is conditional on the same generation, which
+    covers the last gap, between this read and the write.
+    """
+    if reviewed is None:
+        raise StatusNotReviewed()
     current, generation = await store.read()
+    if generation != reviewed:
+        raise StatusConflict()
     doc = next_doc(current, state=state, message=message, affected=affected, now=now)
-    await store.write(doc, if_generation_match=generation)
+    await store.write(doc, if_generation_match=reviewed)
     return doc
 
 

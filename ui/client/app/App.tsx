@@ -32,6 +32,7 @@ import { Status } from "@/pages/status/Status";
 import { config } from "@/shared/config";
 import { leaveLanding, rememberReturnTo, takeReturnTo, useSuspensionNotice } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
+import { StatusBanner } from "@/shared/ui/status-banner";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
 import { QueryProvider } from "./providers";
@@ -111,6 +112,16 @@ function HomeOrDashboard() {
 	return <HomePage />;
 }
 
+/** A page outside the shell, with the status banner over it (docs/status-page.md). */
+function Public({ children }: { children: React.ReactNode }) {
+	return (
+		<>
+			{children}
+			<StatusBanner floating />
+		</>
+	);
+}
+
 function AuthInitializer({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		initializeAuth();
@@ -137,14 +148,35 @@ export function App() {
 						<BrowserRouter>
 							<Routes>
 								{/* Public routes */}
-								<Route path="/" element={<HomeOrDashboard />} />
+								<Route
+									path="/"
+									element={
+										<Public>
+											<HomeOrDashboard />
+										</Public>
+									}
+								/>
 								{/* Where sign-in providers send the browser back: public,
 								    since a sign-in arrives before there is a session. */}
-								<Route path="/auth/callback" element={<SsoCallback />} />
+								<Route
+									path="/auth/callback"
+									element={
+										<Public>
+											<SsoCallback />
+										</Public>
+									}
+								/>
 								{/* A report link (docs/billing.md, phase 1c): a client opens it
 								    with no account, so it sits outside ProtectedRoute and
 								    outside Layout — there is nothing here to navigate to. */}
-								<Route path="/r/:token" element={<Report />} />
+								<Route
+									path="/r/:token"
+									element={
+										<Public>
+											<Report />
+										</Public>
+									}
+								/>
 								{/* The status page (docs/status-page.md): public, and only where a
 								    deployment names its status file. */}
 								{config.statusUrl ? <Route path="/status" element={<Status />} /> : null}
@@ -176,7 +208,14 @@ export function App() {
 								</Route>
 
 								{/* Fallback */}
-								<Route path="*" element={<NotFound />} />
+								<Route
+									path="*"
+									element={
+										<Public>
+											<NotFound />
+										</Public>
+									}
+								/>
 							</Routes>
 						</BrowserRouter>
 					</AuthInitializer>

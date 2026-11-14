@@ -3,10 +3,19 @@
  * Shows today, this week (with comparison), and streak at a glance.
  */
 import { Flame } from "lucide-react";
-import { useAllCurrentWeekSessions, useLastWeekTotal, useStreaks } from "@/entities/session";
+import {
+	useAllBeats,
+	useAllCurrentWeekSessions,
+	useLastWeekTotal,
+	useStreaks,
+} from "@/entities/session";
+import { waitingFor } from "@/shared/api";
 import { startOfDay } from "@/shared/lib";
 
 export function SidebarStats() {
+	// Every figure here is summed from the beats, so without them it says why
+	// rather than showing nothing tracked (shared/api/reach.ts).
+	const waiting = waitingFor(useAllBeats());
 	const { data: dailySummary } = useAllCurrentWeekSessions();
 	const { data: streaks } = useStreaks();
 	const { data: lastWeek } = useLastWeekTotal();
@@ -32,6 +41,19 @@ export function SidebarStats() {
 
 	const currentStreak = streaks?.current ?? 0;
 	const longestStreak = streaks?.longest ?? 0;
+
+	if (waiting === "unreachable" || waiting === "failed") {
+		return (
+			<p
+				className="rounded-[1.125rem] bg-secondary px-3 py-2.5 text-center text-xs text-muted-foreground"
+				role="status"
+			>
+				{waiting === "unreachable"
+					? "Can't reach the server right now. The app keeps trying."
+					: "Your totals could not be loaded."}
+			</p>
+		);
+	}
 
 	return (
 		<div className="space-y-2">

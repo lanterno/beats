@@ -169,16 +169,17 @@ export async function logout(): Promise<void> {
 	await post("/api/account/logout");
 }
 
+/**
+ * A fresh token for the session, or null when there is no session left to
+ * refresh. A failure is thrown, not swallowed: a 401 ends the session and a
+ * network error or a 5xx does not (`endsSession` in the auth store).
+ */
 export async function refreshToken(): Promise<string | null> {
 	const token = getSessionToken();
 	if (!token) return null;
-	try {
-		const { post } = await import("@/shared/api");
-		const data = await post<{ token: string }>("/api/account/refresh");
-		return data.token;
-	} catch {
-		return null;
-	}
+	const { post } = await import("@/shared/api");
+	const data = await post<{ token: string }>("/api/account/refresh");
+	return data.token;
 }
 
 // Credential Management (authed endpoints — use centralized client)

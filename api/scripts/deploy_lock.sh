@@ -223,7 +223,7 @@ decide() {
 			until_epoch=$(sed -n 's/^until_epoch=\([0-9][0-9]*\)$/\1/p' <<<"$flag" | head -n 1)
 			if [[ -n $until_epoch ]] && ((until_epoch > $(date +%s))); then
 				printf 'frozen\n' >"$DEPLOY_STATE_DIR/decision"
-				log "frozen: deploys are held until $(sed -n 's/^until=//p' <<<"$flag" | head -n 1) ($(sed -n 's/^reason=//p' <<<"$flag" | head -n 1)). Not deploying $COMMIT_SHA; once the freeze lifts, re-run the newest build."
+				log "frozen: deploys are held until $(sed -n 's/^until=//p' <<<"$flag" | head -n 1) ($(sed -n 's/^reason=//p' <<<"$flag" | head -n 1)). Not deploying $COMMIT_SHA; once the freeze lifts, re-run the build the back office's Releases names."
 				return 0
 			fi
 			log "the deploy freeze has expired; deciding as usual"

@@ -291,6 +291,12 @@ resource "google_logging_metric" "import_bytes" {
 # A tile in the first row or column leaves out yPos or xPos rather than
 # saying 0: the API drops zero positions, and the provider would then see a
 # change to the dashboard on every apply.
+#
+# The back office's live health (api/src/beats/operator/health.py) asks
+# Monitoring some of the same questions: the uptime checks, the API's
+# requests, 5xx and p95 latency, and write_limit_refusals by its metric name.
+# Its filters are copied there, not read from here, so a filter or a metric
+# name changed in this file is changed there too.
 locals {
   api_metrics = "resource.type=\"cloud_run_revision\" AND resource.label.service_name=\"${var.api_service_name}\""
 }

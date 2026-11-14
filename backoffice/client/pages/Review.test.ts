@@ -9,7 +9,7 @@ import {
 	fieldsOf,
 	startingArgs,
 } from "@/shared/commands";
-import { refusalOf, requestArgs, sent } from "./Review";
+import { actArgs, refusalOf, requestArgs, sent } from "./Review";
 
 const limits = () => commandSpec("account.set_limits");
 const fields = (name: string, subject = "x"): CommandField[] => {
@@ -206,6 +206,29 @@ describe("the status commands", () => {
 		);
 		expect(rows?.[0].after).toContain("Down.");
 		expect(rows?.[1]).toMatchObject({ now: "coach", after: "coach, api" });
+	});
+
+	// The act goes on top of the file the review showed: it names that
+	// version, and the API refuses it if someone has posted since.
+	it("carries the version its review read, and nothing else from it", () => {
+		const spec = commandSpec("status.publish") as CommandSpec;
+		const before = { generation: 7, state: "operational", published: true };
+		expect(actArgs(spec, { state: "degraded", message: "Slow." }, before)).toEqual({
+			state: "degraded",
+			message: "Slow.",
+			generation: 7,
+		});
+	});
+
+	it("sends no version the review did not read, for the API to refuse", () => {
+		const spec = commandSpec("status.clear") as CommandSpec;
+		expect(actArgs(spec, {}, undefined)).toEqual({});
+		expect(actArgs(spec, {}, { generation: null })).toEqual({});
+	});
+
+	it("carries nothing for a command that names nothing to carry", () => {
+		const spec = commandSpec("account.set_limits") as CommandSpec;
+		expect(actArgs(spec, { user_id: "u" }, { generation: 7 })).toEqual({ user_id: "u" });
 	});
 });
 
@@ -452,6 +475,19 @@ describe("what a review sends, against the API's schema", () => {
 					}),
 				];
 				expect(wrong, `${name} on ${subject}`).toEqual([]);
+			}
+		}
+	});
+
+	// What an act carries from its review is what the preview answers, so it
+	// must be an argument the command takes and one the preview can go
+	// without.
+	it("carries from the review only arguments the command takes, and none it requires", () => {
+		for (const [name, ref] of commands) {
+			const model = resolve(ref);
+			for (const key of commandSpec(name)?.reviewed ?? []) {
+				expect(model.properties?.[key], `${name} takes ${key}`).toBeDefined();
+				expect(model.required ?? [], `${name} previews without ${key}`).not.toContain(key);
 			}
 		}
 	});

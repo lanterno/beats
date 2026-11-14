@@ -24,7 +24,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import type { AbuseReport, SignupWave } from "@/shared/api/schema";
-import { API_LOG, logsQuery, metricChart } from "@/shared/lib/console";
+import { useConsole } from "@/shared/lib/console";
 import { counted, dollars, everyDay } from "@/shared/lib/format";
 import { handOver } from "@/shared/lib/handover";
 import {
@@ -40,14 +40,6 @@ import {
 	Prose,
 	Table,
 } from "@/shared/ui";
-
-// A refusal and a restore's size are facts about a request, logged and
-// counted and never stored (docs/backoffice.md § The pages, Trust and
-// safety), so they are links rather than rows.
-const REFUSALS = logsQuery(`${API_LOG}\ntextPayload:"WRITE_LIMIT_REFUSED"`, 7);
-const REFUSALS_BY_ROUTE = metricChart("beats-api/write_limit_refusals");
-const IMPORTS = logsQuery(`${API_LOG}\ntextPayload:"IMPORT_RECEIVED"`, 30);
-const IMPORT_SIZES = metricChart("beats-api/import_bytes");
 
 /** The page's first sentence. Only the sign-up signal is judged: the table
  * is a ranking with nothing to hold it against, so the sentence never calls
@@ -207,6 +199,11 @@ function OutlierTable({ report }: { report: AbuseReport }) {
 }
 
 export function Trust() {
+	// A refusal and a restore's size are facts about a request, logged and
+	// counted and never stored (docs/backoffice.md § The pages, Trust and
+	// safety), so they are links rather than rows: into this deployment's
+	// project, and none off Google Cloud.
+	const links = useConsole();
 	const { data, error, refetch } = useQuery({
 		queryKey: ["abuse"],
 		queryFn: () => get<AbuseReport>("/api/operator/abuse"),
@@ -227,23 +224,32 @@ export function Trust() {
 			>
 				<Prose>
 					It stays empty until a write limit is set. Restores are logged the same way, with their
-					size:{" "}
-					<a href={IMPORTS} className="link">
-						each restore of the last 30 days
-					</a>
-					, with the account that sent it.
+					size
+					{links ? (
+						<>
+							:{" "}
+							<a href={links.apiLog("IMPORT_RECEIVED", 30)} className="link">
+								each restore of the last 30 days
+							</a>
+							, with the account that sent it.
+						</>
+					) : (
+						". Cloud Logging and Cloud Monitoring have both, on Google Cloud."
+					)}
 				</Prose>
-				<div className="flex flex-wrap gap-2 px-6 pb-5">
-					<a href={REFUSALS} className={buttonClass("secondary")}>
-						Open the query in Cloud Logging
-					</a>
-					<a href={REFUSALS_BY_ROUTE} className={buttonClass("secondary")}>
-						See them by route
-					</a>
-					<a href={IMPORT_SIZES} className={buttonClass("secondary")}>
-						See restores by size
-					</a>
-				</div>
+				{links ? (
+					<div className="flex flex-wrap gap-2 px-6 pb-5">
+						<a href={links.apiLog("WRITE_LIMIT_REFUSED", 7)} className={buttonClass("secondary")}>
+							Open the query in Cloud Logging
+						</a>
+						<a href={links.apiMetric("write_limit_refusals")} className={buttonClass("secondary")}>
+							See them by route
+						</a>
+						<a href={links.apiMetric("import_bytes")} className={buttonClass("secondary")}>
+							See restores by size
+						</a>
+					</div>
+				) : null}
 			</Panel>
 		</Page>
 	);

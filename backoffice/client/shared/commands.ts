@@ -160,6 +160,12 @@ export interface CommandSpec {
 	grave?: boolean;
 	/** Fixed, or by subject: a control's fields depend on which control. */
 	fields?: CommandField[] | ((subject: string) => CommandField[]);
+	/** Arguments the act takes from its preview's "now" rather than from a
+	 * box: the version of what was reviewed, so the API can refuse an act on
+	 * something that changed after the review (the status file's
+	 * `generation`, docs/status-page.md). The preview answers them, so it
+	 * never needs them itself. */
+	reviewed?: readonly string[];
 	/** The rows of the change table, from the subject's state and the
 	 * arguments typed so far. */
 	changes: (
@@ -796,7 +802,7 @@ export const DEPLOY_COMMANDS: CommandSpec[] = [
 			"Every API build that reaches its deploy step while this is in force skips its apply and goes red. It ends by itself at the time you set, within 7 days. The web app can still ship: it deploys from its own workflow, which this does not hold.",
 		notices:
 			"Whoever merges: their build goes red saying it was frozen. Users notice nothing — nothing changes for them.",
-		undo: "Yes. Unfreeze it, then re-run the newest build: a build held back does not deploy by itself.",
+		undo: "Yes. Unfreeze it, then re-run the build Releases names: a build held back does not deploy by itself.",
 		fields: [
 			{
 				key: "until",
@@ -824,7 +830,7 @@ export const DEPLOY_COMMANDS: CommandSpec[] = [
 		title: "Lift the freeze",
 		action: "Lift the freeze",
 		about:
-			"API builds deploy again. One held back while frozen does not deploy by itself: re-run the newest build, which Releases names.",
+			"API builds deploy again. One held back while frozen does not deploy by itself: re-run the build Releases names, the newest commit the freeze held back.",
 		notices: "Nobody, until the next build deploys.",
 		undo: "Yes. Freeze again.",
 		changes: (before) => [
@@ -861,6 +867,7 @@ export const STATUS_COMMANDS: CommandSpec[] = [
 		subjectless: true,
 		name: "status.publish",
 		title: "Publish an update",
+		reviewed: ["generation"],
 		action: "Publish this, publicly",
 		about:
 			"Goes to the public status page and the banner in the app within about a minute, for everyone. Name no account, organisation, id, count of people affected or internal hostname: the file is public and its history is kept.",
@@ -904,6 +911,7 @@ export const STATUS_COMMANDS: CommandSpec[] = [
 		subjectless: true,
 		name: "status.clear",
 		title: "Say it is over",
+		reviewed: ["generation"],
 		action: "Publish the all-clear",
 		about: "Posts operational, with a short message, so the page says when it ended.",
 		notices: "Everyone, within about a minute: the banner goes.",

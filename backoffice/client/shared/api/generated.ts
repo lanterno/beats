@@ -281,9 +281,32 @@ export interface paths {
         /**
          * Deploy Freeze
          * @description Whether the API's deploys are frozen, until when and why. Not
-         *     available where no freeze bucket is configured.
+         *     available where no freeze bucket is configured; a flag that cannot be
+         *     read is said, never shown as "not frozen".
          */
         get: operations["deploy_freeze_api_operator_deploy_freeze_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/deployment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deployment
+         * @description Where this back office runs, so a link into Google's console names
+         *     the deployment's own project rather than one written into the bundle.
+         *     The project comes from the metadata server, the service from Terraform.
+         */
+        get: operations["deployment_api_operator_deployment_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -487,7 +510,8 @@ export interface paths {
         /**
          * Public Status
          * @description What customers see on the status page right now, read back from the
-         *     same public file. Not available where no status bucket is configured.
+         *     same public file. Not available where no status bucket is configured;
+         *     a file that cannot be read is said, never shown as all good.
          */
         get: operations["public_status_api_operator_status_get"];
         put?: never;
@@ -687,6 +711,11 @@ export interface components {
         /** ClearStatusArgs */
         ClearStatusArgs: {
             /**
+             * Generation
+             * @default null
+             */
+            generation: number | null;
+            /**
              * Message
              * @default Everything is working again.
              */
@@ -721,6 +750,11 @@ export interface components {
         CollectionSize: {
             /** Documents */
             documents: number;
+            /**
+             * Index Bytes
+             * @default 0
+             */
+            index_bytes: number;
             /** Name */
             name: string;
             /** Storage Bytes */
@@ -822,6 +856,13 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** Deployment */
+        Deployment: {
+            /** Api Service */
+            api_service: string;
+            /** Project */
+            project: string | null;
+        };
         /** DeviceSummary */
         DeviceSummary: {
             /** Created At */
@@ -890,7 +931,9 @@ export interface components {
             /** Available */
             available: boolean;
             /** Frozen */
-            frozen: boolean;
+            frozen: boolean | null;
+            /** Problem */
+            problem?: "unreachable" | null;
             /** Reason */
             reason?: string | null;
             /** Set By */
@@ -946,6 +989,20 @@ export interface components {
              * @enum {string}
              */
             state: "live" | "stale" | "unavailable";
+        };
+        /**
+         * HeldBuild
+         * @description The build to re-run once the freeze lifts (`to_rerun`).
+         */
+        HeldBuild: {
+            /** Created At */
+            created_at: string | null;
+            /** Log Url */
+            log_url: string | null;
+            /** Sha */
+            sha: string;
+            /** Subject */
+            subject: string | null;
         };
         /** LogErasureRequestArgs */
         LogErasureRequestArgs: {
@@ -1065,13 +1122,15 @@ export interface components {
             available: boolean;
             /** Message */
             message: string;
+            /** Problem */
+            problem?: ("unreadable" | "unreachable") | null;
             /**
              * Published
              * @default false
              */
             published: boolean;
             /** State */
-            state: string;
+            state: string | null;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -1084,6 +1143,11 @@ export interface components {
         PublishStatusArgs: {
             /** Affected */
             affected?: ("web app" | "api" | "sign-in" | "coach" | "integrations" | "phone apps")[];
+            /**
+             * Generation
+             * @default null
+             */
+            generation: number | null;
             /** Message */
             message: string;
             /**
@@ -1134,6 +1198,11 @@ export interface components {
             created_at: string | null;
             /** Finished At */
             finished_at: string | null;
+            /**
+             * Held
+             * @default false
+             */
+            held: boolean;
             /** Live */
             live: boolean;
             /** Log Url */
@@ -1153,6 +1222,7 @@ export interface components {
             builds: components["schemas"]["ReleaseRow"][];
             /** Repository */
             repository: string;
+            rerun?: components["schemas"]["HeldBuild"] | null;
             /** Unavailable */
             unavailable?: string[];
             /** Web Commit */
@@ -1658,6 +1728,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FreezeState"];
+                };
+            };
+        };
+    };
+    deployment_api_operator_deployment_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deployment"];
                 };
             };
         };

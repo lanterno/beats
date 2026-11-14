@@ -236,7 +236,12 @@ function CommandReview() {
 	});
 
 	const act = useMutation({
-		mutationFn: () => runCommand(command, sentArgs, typed || undefined),
+		mutationFn: () =>
+			runCommand(
+				command,
+				spec ? actArgs(spec, sentArgs, preview.data?.before) : sentArgs,
+				typed || undefined,
+			),
 		onSuccess: () => {
 			// Not the preview: once the act has run, "Now" is the state it
 			// found, and re-reading it would make the change table claim the
@@ -528,6 +533,26 @@ function CommandReview() {
 /** Everything the review sends for a command: the arguments that name its
  * subject — none for a subjectless command, which makes its subject and
  * whose route's is a placeholder — and its own fields as `sent` reads them. */
+/**
+ * What the act sends: the arguments the review previewed, and what the spec
+ * says the act carries from the preview's "now" (`reviewed`) — the status
+ * file's generation, so a post made after the review is refused rather than
+ * replaced unseen. Nothing else in "now" rides along, and a version the
+ * preview did not answer is left out for the API to refuse.
+ */
+export function actArgs(
+	spec: CommandSpec,
+	previewed: Record<string, unknown>,
+	before: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+	const carried: Record<string, unknown> = {};
+	for (const key of spec.reviewed ?? []) {
+		const value = before?.[key];
+		if (value !== undefined && value !== null) carried[key] = value;
+	}
+	return { ...previewed, ...carried };
+}
+
 export function requestArgs(
 	spec: CommandSpec,
 	subject: string,

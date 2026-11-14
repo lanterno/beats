@@ -9,8 +9,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import type { CapacityReport, QueueRow, ReleasesReport } from "@/shared/api/schema";
-import { API_LOG, logsQuery } from "@/shared/lib/console";
+import type { CapacityReport, PublicStatus, QueueRow, ReleasesReport } from "@/shared/api/schema";
+import { useConsole } from "@/shared/lib/console";
 import { dollars, formatBytes, minuteOf } from "@/shared/lib/format";
 import { bucketOf, dueLabel, KINDS } from "@/shared/lib/queue";
 import { releasesHeadline } from "@/shared/lib/releases";
@@ -30,14 +30,6 @@ import {
 	Table,
 } from "@/shared/ui";
 import { HealthPanel } from "@/shared/ui/HealthPanel";
-
-const CLOUD_RUN = "https://console.cloud.google.com/run?project=beats-476914";
-
-// Accounts a per-account write limit refused. Not a count on this page:
-// nothing stores a refusal, by the decision in docs/backoffice.md § *Abuse*
-// — the account is in the log line and in no document, so the question
-// "which accounts, this week" is a log query and not a number.
-const REFUSALS = logsQuery(`${API_LOG}\ntextPayload:"WRITE_LIMIT_REFUSED"`, 7);
 
 /** How many of the queue's rows Today shows before "Open the queue". */
 const NEXT = 4;
@@ -65,15 +57,6 @@ export function monthSpend(capacity: CapacityReport, now: Date): number {
 		.reduce((sum, c) => sum + c.cost_usd, 0);
 }
 
-interface PublicStatus {
-	available: boolean;
-	state: string;
-	message: string;
-	affected: string[];
-	updated_at?: string | null;
-	published: boolean;
-}
-
 /** What customers are being told (docs/status-page.md), and the way to say more. */
 function StatusPanel() {
 	const status = useQuery({
@@ -95,6 +78,28 @@ function StatusPanel() {
 				<Prose>
 					This deployment has no status bucket, so there is no public status page to write to.
 				</Prose>
+			</Panel>
+		);
+	}
+	if (s.state === null) {
+		// No publish is offered: the API refuses one over a file it cannot
+		// read, and cannot write one where it cannot reach.
+		return (
+			<Panel raised title="What customers see">
+				<div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-5">
+					<p className="min-w-0 flex-1 text-[15px] leading-relaxed">
+						{s.problem === "unreadable"
+							? "The status file is there but cannot be read, so what customers see is unknown and nothing can be published over it. Put the file right by hand first (docs/status-page.md)."
+							: "The status bucket did not answer, so what customers see is unknown."}
+					</p>
+					<button
+						type="button"
+						onClick={() => status.refetch()}
+						className={buttonClass("secondary")}
+					>
+						Try again
+					</button>
+				</div>
 			</Panel>
 		);
 	}
@@ -143,6 +148,7 @@ export function Today() {
 		queryKey: ["capacity"],
 		queryFn: () => get<CapacityReport>("/api/operator/capacity"),
 	});
+	const links = useConsole();
 	// The queue is the page's sentence; without it there is no page. The other
 	// panels fail on their own, so one broken read does not hide the rest.
 	if (queue.error) return <Failed error={queue.error} onRetry={() => queue.refetch()} />;
@@ -246,27 +252,49 @@ export function Today() {
 			</Panel>
 			<Pair>
 				<Panel title="Writes refused by a per-account limit">
+					{/* Not a count: nothing stores a refusal, by the decision in
+					docs/backoffice.md § *Abuse* — the account is in the log line and
+					in no document, so "which accounts, this week" is a log query. */}
 					<Prose>
-						These live in the log, never in a document, so it's a query rather than a count:{" "}
-						<a href={REFUSALS} className="link">
-							the accounts refused in the last 7 days
-						</a>
-						. It stays empty until a <code>WRITES_PER_MINUTE_*</code> ceiling is set.
+						These live in the log, never in a document, so it's a query rather than a count
+						{links ? (
+							<>
+								:{" "}
+								<a href={links.apiLog("WRITE_LIMIT_REFUSED", 7)} className="link">
+									the accounts refused in the last 7 days
+								</a>
+							</>
+						) : (
+							", in the API's log on Google Cloud"
+						)}
+						. It stays empty until a write ceiling is in force: one set on{" "}
+						<Link to="/access" className="link">
+							Access
+						</Link>
+						, an account's own, or a <code>WRITES_PER_MINUTE_*</code> setting.
 					</Prose>
 				</Panel>
 				<Panel title="Shipped">
-					<Prose>
-						{releases.data ? releasesHeadline(releases.data) : "Reading the releases…"}{" "}
-						<Link to="/releases" className="link">
-							Every release
-						</Link>
-						. Whether a revision became ready waits on the API's secrets leaving its Cloud Run spec;
-						until then,{" "}
-						<a href={CLOUD_RUN} className="link">
-							the Cloud Run console
-						</a>{" "}
-						says.
-					</Prose>
+					{releases.error ? (
+						<Failed error={releases.error} onRetry={() => releases.refetch()} bare />
+					) : (
+						<Prose>
+							{releases.data ? releasesHeadline(releases.data) : "Reading the releases…"}{" "}
+							<Link to="/releases" className="link">
+								Every release
+							</Link>
+							. Whether a revision became ready waits on the API's secrets leaving its Cloud Run
+							spec; until then,{" "}
+							{links ? (
+								<a href={links.cloudRun} className="link">
+									the Cloud Run console
+								</a>
+							) : (
+								"the Cloud Run console"
+							)}{" "}
+							says.
+						</Prose>
+					)}
 				</Panel>
 			</Pair>
 		</Page>

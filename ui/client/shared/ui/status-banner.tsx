@@ -1,6 +1,8 @@
 /**
- * The status banner (docs/status-page.md): shown in the shell only when the
- * public status file says something is not operational. It polls the file
+ * The status banner (docs/status-page.md): shown when the public status
+ * file says something is not operational — in the app's shell, and
+ * `floating` over the public pages (the home page, a report link, the
+ * sign-in callback), whose own headers it must not cover. It polls the file
  * about once a minute and, when the fetch fails, shows nothing — it must
  * never hold up or break the app. Nothing here touches the API.
  */
@@ -10,7 +12,7 @@ import { Link } from "react-router";
 import { config } from "@/shared/config";
 import { fetchStatus, type StatusDoc, showsBanner, statusSentence } from "@/shared/lib/status";
 
-export function StatusBanner() {
+export function StatusBanner({ floating = false }: { floating?: boolean }) {
 	const [doc, setDoc] = useState<StatusDoc | null>(null);
 	useEffect(() => {
 		if (!config.statusUrl) return;
@@ -30,7 +32,9 @@ export function StatusBanner() {
 	return (
 		<div
 			role="status"
-			className="lg:ml-72 mx-4 mt-3 rounded-2xl bg-amber-100 px-4 py-2 font-body text-sm text-amber-950 shadow-soft"
+			className={`${
+				floating ? "fixed inset-x-4 bottom-4 z-[60] mx-auto max-w-xl" : "lg:ml-72 mx-4 mt-3"
+			} rounded-2xl bg-amber-100 px-4 py-2 font-body text-sm text-amber-950 shadow-soft`}
 		>
 			{statusSentence(doc)}
 			{doc.message ? ` ${doc.message}` : ""}{" "}

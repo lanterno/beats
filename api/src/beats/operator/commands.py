@@ -534,7 +534,16 @@ def _status_store(ctx: CommandContext) -> StatusStore:
     return ctx.status
 
 
-class PublishStatusArgs(BaseModel):
+class _ReviewedStatusArgs(BaseModel):
+    # The file's generation as the review showed it: `describe()` answers it
+    # in `before`, and the act sends it back, so the post goes on top of the
+    # version the operator read and no other (status_page.publish). Optional
+    # here only because the preview is asked before it is known; the act
+    # refuses without it.
+    generation: int | None = Field(default=None, ge=0)
+
+
+class PublishStatusArgs(_ReviewedStatusArgs):
     """What goes public, whole. Nothing about a person: no account, no
     organisation, no id, no count of those affected — the operator's words
     are checked by the review, not by code, so the review shows them whole."""
@@ -544,7 +553,7 @@ class PublishStatusArgs(BaseModel):
     affected: list[Part] = Field(default_factory=list, max_length=6)
 
 
-class ClearStatusArgs(BaseModel):
+class ClearStatusArgs(_ReviewedStatusArgs):
     message: str = Field(
         default="Everything is working again.", min_length=1, max_length=MESSAGE_MAX
     )
@@ -562,8 +571,10 @@ class _StatusCommand:
         return None
 
     async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        doc, _ = await _status_store(ctx).read()
-        return state_of(doc)
+        # The generation goes with what the review shows, for the act to
+        # send back (_ReviewedStatusArgs).
+        doc, generation = await _status_store(ctx).read()
+        return {**state_of(doc), "generation": generation}
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         raise NotImplementedError
@@ -583,6 +594,7 @@ class PublishStatus(_StatusCommand):
             message=args.message,
             affected=list(args.affected),
             now=datetime.now(UTC),
+            reviewed=args.generation,
         )
         return state_of(doc)
 
@@ -600,6 +612,7 @@ class ClearStatus(_StatusCommand):
             message=args.message,
             affected=[],
             now=datetime.now(UTC),
+            reviewed=args.generation,
         )
         return state_of(doc)
 

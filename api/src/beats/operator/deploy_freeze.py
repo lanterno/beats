@@ -16,6 +16,7 @@ The bucket is named by `OPERATOR_FREEZE_BUCKET`, set by Terraform; unset,
 the commands answer 409 `FREEZE_UNAVAILABLE` and the page says so.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
@@ -24,6 +25,8 @@ import httpx
 
 from beats.domain.exceptions import DomainException
 from beats.operator.health import METADATA, TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
 
 STORAGE = "https://storage.googleapis.com"
 OBJECT = "freeze"
@@ -44,6 +47,17 @@ class FreezeUnavailable(DomainException):
     status_code = 409
     code = "FREEZE_UNAVAILABLE"
     message = "No freeze bucket is configured for this deployment"
+
+
+class FreezeUnreachable(DomainException):
+    """Cloud Storage, or the metadata server that hands out its token, did
+    not answer. Whether deploys are frozen is then unknown: the read says
+    so rather than "not frozen", and an act answers this in the envelope
+    instead of a bare 500."""
+
+    status_code = 503
+    code = "FREEZE_UNREACHABLE"
+    message = "Cloud Storage did not answer for the deploy freeze; nothing was changed"
 
 
 class DeployFreeze(Protocol):
@@ -82,7 +96,8 @@ def parse(text: str) -> Freeze | None:
 
 class GcsDeployFreeze:
     """The flag in Cloud Storage, over the JSON API with a metadata-server
-    token: no client library, the image being the API's too."""
+    token: no client library, the image being the API's too. A call that
+    fails raises `FreezeUnreachable`, never the transport's own error."""
 
     def __init__(self, bucket: str, *, transport: httpx.AsyncBaseTransport | None = None):
         self._bucket = bucket
@@ -100,32 +115,44 @@ class GcsDeployFreeze:
         return httpx.AsyncClient(timeout=TIMEOUT_SECONDS, transport=self._transport)
 
     async def get(self) -> Freeze | None:
-        async with self._client() as client:
-            resp = await client.get(
-                f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
-                params={"alt": "media"},
-                headers=await self._token(client),
-            )
-            if resp.status_code == 404:
-                return None
-            resp.raise_for_status()
-            return parse(resp.text)
+        try:
+            async with self._client() as client:
+                resp = await client.get(
+                    f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
+                    params={"alt": "media"},
+                    headers=await self._token(client),
+                )
+                if resp.status_code == 404:
+                    return None
+                resp.raise_for_status()
+                return parse(resp.text)
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("deploy freeze unreachable on read: %r", e)
+            raise FreezeUnreachable() from e
 
     async def set(self, freeze: Freeze) -> None:
-        async with self._client() as client:
-            resp = await client.post(
-                f"{STORAGE}/upload/storage/v1/b/{self._bucket}/o",
-                params={"uploadType": "media", "name": OBJECT},
-                content=render(freeze).encode(),
-                headers={**await self._token(client), "Content-Type": "text/plain"},
-            )
-            resp.raise_for_status()
+        try:
+            async with self._client() as client:
+                resp = await client.post(
+                    f"{STORAGE}/upload/storage/v1/b/{self._bucket}/o",
+                    params={"uploadType": "media", "name": OBJECT},
+                    content=render(freeze).encode(),
+                    headers={**await self._token(client), "Content-Type": "text/plain"},
+                )
+                resp.raise_for_status()
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("deploy freeze unreachable on write: %r", e)
+            raise FreezeUnreachable() from e
 
     async def clear(self) -> None:
-        async with self._client() as client:
-            resp = await client.delete(
-                f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
-                headers=await self._token(client),
-            )
-            if resp.status_code != 404:
-                resp.raise_for_status()
+        try:
+            async with self._client() as client:
+                resp = await client.delete(
+                    f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
+                    headers=await self._token(client),
+                )
+                if resp.status_code != 404:
+                    resp.raise_for_status()
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("deploy freeze unreachable on clear: %r", e)
+            raise FreezeUnreachable() from e

@@ -315,7 +315,7 @@ export function DayBars({
 						className="pointer-events-none absolute -top-2 -translate-x-1/2 rounded-full bg-ink px-2.5 py-0.5 text-[12px] whitespace-nowrap text-panel-solid"
 						style={{ left: `${Math.min(92, Math.max(8, ((hovered + 0.5) / days.length) * 100))}%` }}
 					>
-						{shown.day}: {shown.value}
+						{shown.day}: {show(shown.value)}
 					</div>
 				) : null}
 			</div>

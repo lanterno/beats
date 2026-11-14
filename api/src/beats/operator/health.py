@@ -13,6 +13,11 @@ instance ceiling are set by Terraform beside the operator's other values
 read fails, and the page says "unavailable" with the console link — never an
 invented number.
 
+**Read at once.** The metadata calls, then the six Monitoring queries, are
+made side by side over one client, so a read waits for its slowest answer
+rather than the sum of them — the worst case is two round trips' timeouts,
+not eight.
+
 **Cached in the process** (`HealthCache`): the operator runs one instance, so
 a local cache is the whole cache. A failed read answers the last figures and
 how old they are; a failure is cached too, so a local run does not wait on an
@@ -20,10 +25,14 @@ unreachable metadata server on every request. Nothing is stored: no time
 series, no table, no query box.
 
 The filters below are the ones the `api` dashboard in
-`terraform/monitoring.tf` draws, and change with it.
+`terraform/monitoring.tf` draws, except the instance count, which is read the
+way the instances-at-max alert in `terraform/alerts.tf` reads it; they change
+with those.
 """
 
+import asyncio
 import time
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, Protocol
@@ -53,7 +62,12 @@ class HealthFigures:
     availability: float | None  # share of uptime probes passing, last 24 h
     error_share: float | None  # 5xx / all requests, last hour
     p95_latency_ms: float | None  # last hour
-    instances: float | None  # most recent 5-minute maximum
+    # Active instances on the busiest revision, most recent 5-minute maximum.
+    # The ceiling, maxScale (terraform/cloudrun.tf), is a revision's, and the
+    # instances-at-max alert (terraform/alerts.tf) reads it the same way: a
+    # sum over every revision and both states counts the last revision's
+    # idle instances during a rollover, and read "3 of 2".
+    instances: float | None
     refused_writes: list[RouteFigure] = field(default_factory=list)  # last 24 h
 
 
@@ -125,6 +139,24 @@ def by_label(body: dict[str, Any], label: str) -> list[RouteFigure]:
     return [RouteFigure(k, v) for k, v in sorted(out.items(), key=lambda kv: -kv[1])]
 
 
+def busiest_now(body: dict[str, Any]) -> float | None:
+    """At the newest instant any series has a point for, the largest value
+    among the series — one series per revision, so the busiest revision's
+    count. A revision that has stopped has no point then and cannot win
+    with an older one."""
+    points = [
+        (end, value)
+        for series in body.get("timeSeries") or []
+        for point in series.get("points") or []
+        if (value := _point_value(point)) is not None
+        and (end := (point.get("interval") or {}).get("endTime", ""))
+    ]
+    if not points:
+        return None
+    newest = max(end for end, _ in points)
+    return max(value for end, value in points if end == newest)
+
+
 def share(part: float | None, whole: float | None) -> float | None:
     """A ratio that knows the difference between no errors and no data."""
     if whole is None or whole == 0:
@@ -133,6 +165,22 @@ def share(part: float | None, whole: float | None) -> float | None:
 
 
 # ── Google ───────────────────────────────────────────────────────────
+
+
+async def all_of[T](*calls: Awaitable[T]) -> list[T]:
+    """Every call's answer, run side by side. The first to fail cancels the
+    rest before its own error is raised, unwrapped, so no request is left
+    running on a client about to close."""
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(_wrap(call)) for call in calls]
+    except ExceptionGroup as failed:
+        raise failed.exceptions[0] from None
+    return [task.result() for task in tasks]
+
+
+async def _wrap[T](call: Awaitable[T]) -> T:
+    return await call
 
 
 class GoogleMonitoring:
@@ -184,11 +232,16 @@ class GoogleMonitoring:
 
     async def read(self) -> HealthFigures:
         async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, transport=self._transport) as client:
+            token_path = "instance/service-accounts/default/token"
             if self._project is None:
-                self._project = (await self._metadata(client, "project/project-id")).text
-            token = (
-                await self._metadata(client, "instance/service-accounts/default/token")
-            ).json()["access_token"]
+                project, token_resp = await all_of(
+                    self._metadata(client, "project/project-id"),
+                    self._metadata(client, token_path),
+                )
+                self._project = project.text
+            else:
+                token_resp = await self._metadata(client, token_path)
+            token = token_resp.json()["access_token"]
 
             api = (
                 f'resource.type="cloud_run_revision" '
@@ -197,61 +250,97 @@ class GoogleMonitoring:
             requests = f'{api} AND metric.type="run.googleapis.com/request_count"'
             hour, day = timedelta(hours=1), timedelta(days=1)
 
-            uptime = await self._series(
-                client,
-                token,
-                'resource.type="uptime_url" '
-                'AND metric.type="monitoring.googleapis.com/uptime_check/check_passed"',
-                window=day,
-                aligner="ALIGN_FRACTION_TRUE",
-                reducer="REDUCE_MEAN",
-            )
-            errors = await self._series(
-                client,
-                token,
-                f'{requests} AND metric.label.response_code_class="5xx"',
-                window=hour,
-                aligner="ALIGN_SUM",
-                reducer="REDUCE_SUM",
-            )
-            total = await self._series(
-                client, token, requests, window=hour, aligner="ALIGN_SUM", reducer="REDUCE_SUM"
-            )
-            latency = await self._series(
-                client,
-                token,
-                f'{api} AND metric.type="run.googleapis.com/request_latencies"',
-                window=hour,
-                aligner="ALIGN_DELTA",
-                reducer="REDUCE_PERCENTILE_95",
-            )
-            instances = await self._series(
-                client,
-                token,
-                f'{api} AND metric.type="run.googleapis.com/container/instance_count"',
-                window=timedelta(minutes=15),
-                period=timedelta(minutes=5),
-                aligner="ALIGN_MAX",
-                reducer="REDUCE_SUM",
-            )
-            refused = await self._series(
-                client,
-                token,
-                'resource.type="cloud_run_revision" AND metric.type='
-                f'"logging.googleapis.com/user/{self._service}/write_limit_refusals"',
-                window=day,
-                aligner="ALIGN_SUM",
-                reducer="REDUCE_SUM",
-                group_by="metric.label.route",
+            uptime, errors, total, latency, instances, refused = await all_of(
+                self._series(
+                    client,
+                    token,
+                    'resource.type="uptime_url" '
+                    'AND metric.type="monitoring.googleapis.com/uptime_check/check_passed"',
+                    window=day,
+                    aligner="ALIGN_FRACTION_TRUE",
+                    reducer="REDUCE_MEAN",
+                ),
+                self._series(
+                    client,
+                    token,
+                    f'{requests} AND metric.label.response_code_class="5xx"',
+                    window=hour,
+                    aligner="ALIGN_SUM",
+                    reducer="REDUCE_SUM",
+                ),
+                self._series(
+                    client, token, requests, window=hour, aligner="ALIGN_SUM", reducer="REDUCE_SUM"
+                ),
+                self._series(
+                    client,
+                    token,
+                    f'{api} AND metric.type="run.googleapis.com/request_latencies"',
+                    window=hour,
+                    aligner="ALIGN_DELTA",
+                    reducer="REDUCE_PERCENTILE_95",
+                ),
+                self._series(
+                    client,
+                    token,
+                    f'{api} AND metric.type="run.googleapis.com/container/instance_count" '
+                    'AND metric.label.state="active"',
+                    window=timedelta(minutes=15),
+                    period=timedelta(minutes=5),
+                    aligner="ALIGN_MAX",
+                    reducer="REDUCE_SUM",
+                    group_by="resource.label.revision_name",
+                ),
+                self._series(
+                    client,
+                    token,
+                    'resource.type="cloud_run_revision" AND metric.type='
+                    f'"logging.googleapis.com/user/{self._service}/write_limit_refusals"',
+                    window=day,
+                    aligner="ALIGN_SUM",
+                    reducer="REDUCE_SUM",
+                    group_by="metric.label.route",
+                ),
             )
 
         return HealthFigures(
             availability=latest_value(uptime),
             error_share=share(total_value(errors), total_value(total)),
             p95_latency_ms=latest_value(latency),
-            instances=latest_value(instances),
+            instances=busiest_now(instances),
             refused_writes=by_label(refused, "route"),
         )
+
+
+class ProjectId:
+    """The Google Cloud project this deployment runs in, read off the
+    metadata server, for the pages' links into Google's console — which
+    would otherwise have to name a project in the bundle. Kept for good once
+    read; None off Google Cloud, where a failure is kept a minute, as
+    health's is, so a page never waits on an absent metadata server."""
+
+    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
+        self._project: str | None = None
+        self._failed_at: float | None = None
+
+    async def get(self) -> str | None:
+        if self._project is not None:
+            return self._project
+        if self._failed_at is not None and time.monotonic() - self._failed_at < CACHE_SECONDS:
+            return None
+        try:
+            async with httpx.AsyncClient(
+                timeout=TIMEOUT_SECONDS, transport=self._transport
+            ) as client:
+                resp = await client.get(
+                    f"{METADATA}/project/project-id", headers={"Metadata-Flavor": "Google"}
+                )
+                resp.raise_for_status()
+        except httpx.HTTPError:
+            self._failed_at = time.monotonic()
+            return None
+        self._project = resp.text.strip() or None
+        return self._project
 
 
 # ── the cache ────────────────────────────────────────────────────────

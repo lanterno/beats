@@ -4,8 +4,12 @@
  * Uses localStorage for token persistence across browser sessions.
  */
 import { useSyncExternalStore } from "react";
+import { ApiError } from "@/shared/api";
 
 const SESSION_TOKEN_KEY = "beats_session_token";
+
+// How long to wait before asking again when the API could not answer.
+const RETRY_MS = 30_000;
 
 // Buffer in seconds — treat token as expired this many seconds early so
 // in-flight requests don't race against the actual expiry.
@@ -54,6 +58,8 @@ let state: AuthState = {
 
 // Auto-refresh timer handle
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+// The next try at /me, while the API has not answered it
+let userTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Subscribers for React's useSyncExternalStore
 const listeners = new Set<() => void>();
@@ -64,7 +70,42 @@ function emitChange() {
 	}
 }
 
+/**
+ * Whether a failed call means the session is over. Only the API saying so
+ * does: a 401 (which the API client has already acted on). A network error
+ * or a 5xx says the API is unwell, not that the person is signed out, and
+ * ending the session then would sign everyone out of an outage and leave
+ * them a passkey ceremony away from their timer.
+ */
+export function endsSession(error: unknown): boolean {
+	return error instanceof ApiError && error.isUnauthorized();
+}
+
 // Token Auto-Refresh
+
+/**
+ * Swap the token for a fresh one. When the API cannot answer, the token is
+ * kept while it lasts and the swap is tried again shortly; past its expiry
+ * `getSessionToken` ends the session anyway, since the API would refuse it.
+ */
+async function refreshSession(): Promise<void> {
+	try {
+		const { refreshToken } = await import("../api/authApi");
+		const newToken = await refreshToken();
+		if (newToken) {
+			setSessionToken(newToken);
+		} else {
+			clearSessionToken();
+		}
+	} catch (error) {
+		if (endsSession(error)) {
+			clearSessionToken();
+		} else if (state.token) {
+			if (refreshTimer) clearTimeout(refreshTimer);
+			refreshTimer = setTimeout(() => void refreshSession(), RETRY_MS);
+		}
+	}
+}
 
 /**
  * Schedule a token refresh 5 minutes before expiry.
@@ -80,19 +121,7 @@ function scheduleRefresh(token: string): void {
 	const refreshAt = payload.exp - 5 * 60;
 	const delayMs = Math.max(0, (refreshAt - Date.now() / 1000) * 1000);
 
-	refreshTimer = setTimeout(async () => {
-		try {
-			const { refreshToken } = await import("../api/authApi");
-			const newToken = await refreshToken();
-			if (newToken) {
-				setSessionToken(newToken);
-			} else {
-				clearSessionToken();
-			}
-		} catch {
-			clearSessionToken();
-		}
-	}, delayMs);
+	refreshTimer = setTimeout(() => void refreshSession(), delayMs);
 }
 
 function cancelRefresh(): void {
@@ -119,18 +148,32 @@ if (typeof document !== "undefined") {
 		if (timeLeft > 5 * 60) return;
 
 		// Token near expiry or expired — try to refresh
-		try {
-			const { refreshToken } = await import("../api/authApi");
-			const newToken = await refreshToken();
-			if (newToken) {
-				setSessionToken(newToken);
-			} else {
-				clearSessionToken();
-			}
-		} catch {
-			clearSessionToken();
-		}
+		await refreshSession();
 	});
+}
+
+/**
+ * Who is signed in, from /me. Asked again until it answers: the session
+ * stands meanwhile, without the account's email (the sidebar shows none,
+ * and storage scoped by it — pins, recent projects — reads empty).
+ */
+async function loadUser(): Promise<void> {
+	if (!state.token) return;
+	try {
+		const { getCurrentUser } = await import("../api/authApi");
+		const userInfo = await getCurrentUser();
+		state = {
+			...state,
+			user: { email: userInfo.email, displayName: userInfo.display_name },
+		};
+		emitChange();
+	} catch (error) {
+		if (endsSession(error)) {
+			clearSessionToken();
+		} else if (state.token) {
+			userTimer = setTimeout(() => void loadUser(), RETRY_MS);
+		}
+	}
 }
 
 /**
@@ -150,18 +193,7 @@ export async function initializeAuth(): Promise<void> {
 		scheduleRefresh(storedToken);
 
 		// Fetch user info in the background
-		try {
-			const { getCurrentUser } = await import("../api/authApi");
-			const userInfo = await getCurrentUser();
-			state = {
-				...state,
-				user: { email: userInfo.email, displayName: userInfo.display_name },
-			};
-			emitChange();
-		} catch {
-			// Token might be expired -- clear it
-			clearSessionToken();
-		}
+		await loadUser();
 	} else {
 		if (storedToken) localStorage.removeItem(SESSION_TOKEN_KEY);
 		state = {
@@ -193,6 +225,10 @@ export function setUser(user: UserInfo): void {
 
 export function clearSessionToken(): void {
 	cancelRefresh();
+	if (userTimer) {
+		clearTimeout(userTimer);
+		userTimer = null;
+	}
 	localStorage.removeItem(SESSION_TOKEN_KEY);
 	state = {
 		token: null,
