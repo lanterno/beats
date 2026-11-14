@@ -33,10 +33,12 @@ import logging
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, Response
+from pydantic.json_schema import models_json_schema
 from pymongo import AsyncMongoClient
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.staticfiles import StaticFiles
@@ -45,6 +47,7 @@ from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
 from beats.api.routers.operator import router as operator_router
 from beats.domain.exceptions import DomainException
+from beats.operator.commands import COMMANDS
 from beats.operator.deploy_freeze import GcsDeployFreeze
 from beats.operator.health import GoogleMonitoring, HealthCache
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
@@ -101,7 +104,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await client.close()
 
 
-app = FastAPI(
+class OperatorAPI(FastAPI):
+    """FastAPI, with each command's arguments in its schema.
+
+    A command's `args` is a plain object on the wire — the runner picks the
+    model by the command's name — so FastAPI's schema cannot say what any
+    one command takes. Each model is added to the components, and
+    `x-command-args` maps a command's name to its own, for the back office
+    to check what its review sends against what the runner will parse."""
+
+    def openapi(self) -> dict[str, Any]:
+        if self.openapi_schema is not None:
+            return self.openapi_schema
+        schema = super().openapi()
+        refs, defs = models_json_schema(
+            [(command.args_model, "validation") for command in COMMANDS.values()],
+            ref_template="#/components/schemas/{model}",
+        )
+        schema["components"]["schemas"].update(defs.get("$defs", {}))
+        schema["x-command-args"] = {
+            name: refs[(command.args_model, "validation")] for name, command in COMMANDS.items()
+        }
+        return schema
+
+
+app = OperatorAPI(
     title="Beats operator API",
     description="The control plane: operational metadata, never user content",
     lifespan=lifespan,
