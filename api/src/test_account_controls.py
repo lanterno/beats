@@ -637,6 +637,25 @@ class TestPlatformControlsAPI:
         account_access.clear()
         assert self._post_beat(client, auth_headers, project).status_code == 201
 
+    def test_the_control_caps_writes_beneath_the_deployments_setting(
+        self, client, auth_headers, mongo, monkeypatch
+    ):
+        """The middle of the order: the operator's control wins over the
+        deployment's setting, and the setting is what is left once the
+        control is cleared."""
+        from beats import platform_controls
+        from beats.settings import settings
+
+        monkeypatch.setattr(settings, "writes_per_minute_beats", 5)
+        project = self._project(client, auth_headers, "Ceilings")
+        self._control(mongo, "writes_per_minute_beats", value=1)
+        assert self._post_beat(client, auth_headers, project).status_code == 201
+        assert self._post_beat(client, auth_headers, project).status_code == 429
+
+        mongo.platform_controls.delete_many({})
+        platform_controls.clear()
+        assert self._post_beat(client, auth_headers, project).status_code == 201
+
     def test_paused_webhooks_drop_what_had_somewhere_to_go(
         self, client, auth_headers, mongo, caplog, monkeypatch
     ):
