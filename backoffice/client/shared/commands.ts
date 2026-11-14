@@ -31,8 +31,36 @@ export interface Change {
 	after: string;
 }
 
+/** Which page a command belongs to, and how its subject is named. */
+export interface Family {
+	/** The argument the subject travels as. */
+	subjectKey: "user_id" | "name";
+	/** Where "back" goes, for a subject. */
+	back: (subject: string) => { to: string; label: string };
+	/** The confirmation field's label, when a command asks for one. */
+	typedLabel: string;
+	/** What the page says when `describe()` answers {exists: false}. */
+	missing: string;
+}
+
+export const FAMILIES: Record<"account" | "control", Family> = {
+	account: {
+		subjectKey: "user_id",
+		back: (subject) => ({ to: `/accounts/${subject}`, label: "Back to the account" }),
+		typedLabel: "Type the account's email to confirm",
+		missing: "There is no account with that id.",
+	},
+	control: {
+		subjectKey: "name",
+		back: () => ({ to: "/access", label: "Back to access and controls" }),
+		typedLabel: "Type the control's name to confirm",
+		missing: "There is no control by that name.",
+	},
+};
+
 export interface CommandSpec {
 	name: string;
+	family: keyof typeof FAMILIES;
 	/** What the operator calls it. */
 	title: string;
 	/** The button: a verb and its object. */
@@ -46,11 +74,19 @@ export interface CommandSpec {
 	/** Destructive: the review wears the warning, and the button does not
 	 * wear the sun. */
 	grave?: boolean;
-	fields?: CommandField[];
+	/** Fixed, or by subject: a control's fields depend on which control. */
+	fields?: CommandField[] | ((subject: string) => CommandField[]);
 	/** The rows of the change table, from the subject's state and the
 	 * arguments typed so far. */
-	changes: (before: Record<string, unknown>, args: Record<string, unknown>) => Change[];
+	changes: (
+		before: Record<string, unknown>,
+		args: Record<string, unknown>,
+		subject: string,
+	) => Change[];
 }
+
+export const fieldsOf = (spec: CommandSpec, subject: string): CommandField[] =>
+	typeof spec.fields === "function" ? spec.fields(subject) : (spec.fields ?? []);
 
 const limitRow = (
 	what: string,
@@ -75,6 +111,7 @@ const limitRow = (
  */
 export const ACCOUNT_COMMANDS: CommandSpec[] = [
 	{
+		family: "account",
 		name: "account.set_limits",
 		title: "Set limits on writes or webhooks",
 		action: "Save these limits",
@@ -108,6 +145,7 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 		],
 	},
 	{
+		family: "account",
 		name: "account.clear_limits",
 		title: "Clear limits",
 		action: "Clear all limits",
@@ -123,6 +161,7 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 		],
 	},
 	{
+		family: "account",
 		name: "account.sign_out_everywhere",
 		title: "Sign out everywhere",
 		action: "Sign this account out",
@@ -143,6 +182,7 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 		],
 	},
 	{
+		family: "account",
 		name: "account.suspend",
 		title: "Suspend for abuse",
 		action: "Suspend this account",
@@ -166,6 +206,7 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 		],
 	},
 	{
+		family: "account",
 		name: "account.unsuspend",
 		title: "Unsuspend",
 		action: "Unsuspend this account",
@@ -184,6 +225,7 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 		],
 	},
 	{
+		family: "account",
 		name: "account.erase",
 		title: "Erase this account",
 		action: "Queue this erasure",
@@ -210,12 +252,137 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 	},
 ];
 
+/**
+ * The platform's switches and limits (docs/backoffice.md § Controls). One
+ * `control.set` serves every control, so what it asks for depends on which
+ * one is the subject: a pause takes an end and a reason, a limit a value,
+ * and sign-ups may take both, which slows them to a ceiling an hour.
+ */
+export const PAUSES = ["coach", "webhooks", "imports", "signups"] as const;
+export const LIMITS = [
+	"writes_per_minute_beats",
+	"writes_per_minute_signals",
+	"imports_per_hour",
+] as const;
+export type ControlName = (typeof PAUSES)[number] | (typeof LIMITS)[number];
+
+export const isLimit = (name: string): boolean => (LIMITS as readonly string[]).includes(name);
+
+/** A control, in the operator's words. */
+export const CONTROLS: Record<ControlName, { title: string; note: string; unit?: string }> = {
+	coach: { title: "Coach", note: "Paused stops every new coach request, for everyone." },
+	webhooks: {
+		title: "Webhook delivery",
+		note: "Paused drops what would have been sent. There is no queue behind this, so nothing catches up when it comes back.",
+	},
+	imports: { title: "Imports", note: "Paused refuses new imports. Exports keep working." },
+	signups: {
+		title: "Sign-ups",
+		note: "Paused refuses new accounts; a ceiling slows them to so many an hour. Nobody who has an account is kept out.",
+	},
+	writes_per_minute_beats: {
+		title: "Beat writes per account",
+		note: "Suggested: 120 a minute. A refusal asks the device to retry; check the request log before setting one lower.",
+		unit: "a minute",
+	},
+	writes_per_minute_signals: {
+		title: "Signal writes per account",
+		note: "Suggested: 60 a minute.",
+		unit: "a minute",
+	},
+	imports_per_hour: {
+		title: "Imports per account",
+		note: "Suggested: 10 an hour.",
+		unit: "an hour",
+	},
+};
+
+const PAUSE_FIELDS: CommandField[] = [
+	{
+		key: "until",
+		label: "Until (UTC)",
+		kind: "text",
+		hint: "An instant like 2026-11-21T09:00:00Z. At most 7 days from now: every pause expires.",
+	},
+	{ key: "reason", label: "Reason, for your record", kind: "text", hint: "Never shown to users." },
+];
+
+const stateOf = (before: Record<string, unknown>, name: string): string => {
+	if (!before.set || !before.in_force) return isLimit(name) ? "No limit" : "Running";
+	if (name === "signups" && before.value) return `Slowed to ${before.value} an hour`;
+	if (isLimit(name)) return `${before.value} ${CONTROLS[name as ControlName]?.unit ?? ""}`.trim();
+	return `Paused until ${typeof before.until === "string" ? before.until.slice(0, 16) : "—"}`;
+};
+
+export const CONTROL_COMMANDS: CommandSpec[] = [
+	{
+		family: "control",
+		name: "control.set",
+		title: "Set it",
+		action: "Set this control",
+		about:
+			"Takes effect for everyone within 30 seconds, on every instance. A pause has an end and lifts itself; a limit stays until it is cleared.",
+		notices:
+			"Everyone, at once: a paused request is refused with a fixed sentence (409, its own code). The reason stays here.",
+		undo: "Yes. Clear it, or set it again. A pause also ends by itself.",
+		fields: (name) =>
+			isLimit(name)
+				? [{ key: "value", label: CONTROLS[name as ControlName]?.unit ?? "Value", kind: "number" }]
+				: name === "signups"
+					? [
+							...PAUSE_FIELDS,
+							{
+								key: "value",
+								label: "Ceiling an hour",
+								kind: "number",
+								hint: "Leave empty to pause outright.",
+							},
+						]
+					: PAUSE_FIELDS,
+		changes: (before, args, name) => [
+			{
+				what: CONTROLS[name as ControlName]?.title ?? name,
+				now: stateOf(before, name),
+				after: isLimit(name)
+					? args.value
+						? `${args.value} ${CONTROLS[name as ControlName]?.unit ?? ""}`.trim()
+						: "No limit"
+					: name === "signups" && args.value
+						? `Slowed to ${args.value} an hour until ${String(args.until ?? "—").slice(0, 16)}`
+						: `Paused until ${String(args.until ?? "—").slice(0, 16)}`,
+			},
+		],
+	},
+	{
+		family: "control",
+		name: "control.clear",
+		title: "Clear it",
+		action: "Clear this control",
+		about: "Puts it back to open: running, or no limit.",
+		notices: "Everyone, within 30 seconds: whatever was refused is accepted again.",
+		undo: "Yes. Set it again.",
+		changes: (before, _args, name) => [
+			{
+				what: CONTROLS[name as ControlName]?.title ?? name,
+				now: stateOf(before, name),
+				after: isLimit(name) ? "No limit" : "Running",
+			},
+		],
+	},
+];
+
 export const commandSpec = (name: string): CommandSpec | undefined =>
-	ACCOUNT_COMMANDS.find((c) => c.name === name);
+	[...ACCOUNT_COMMANDS, ...CONTROL_COMMANDS].find((c) => c.name === name);
+
+/** The commands that share a subject with `spec`, for swapping one for another. */
+export const familyOf = (spec: CommandSpec): CommandSpec[] =>
+	spec.family === "account" ? ACCOUNT_COMMANDS : CONTROL_COMMANDS;
 
 /** What every command puts on the record, said once. */
 export const ON_THE_RECORD = "You, the command, the subject, and what it changed on either side.";
 
 /** `webhooks_disabled` is a flag; the rest are numbers or text. */
-export const emptyArgs = (spec: CommandSpec): Record<string, unknown> =>
-	Object.fromEntries((spec.fields ?? []).map((f) => [f.key, f.kind === "checkbox" ? false : ""]));
+export const emptyArgs = (spec: CommandSpec, subject: string): Record<string, unknown> =>
+	Object.fromEntries(
+		fieldsOf(spec, subject).map((f) => [f.key, f.kind === "checkbox" ? false : ""]),
+	);

@@ -6,6 +6,7 @@
  */
 
 import type { QueueRow } from "@/shared/api/schema";
+import { CONTROLS, type ControlName } from "@/shared/commands";
 
 export type Bucket = "overdue" | "today" | "later";
 
@@ -103,6 +104,15 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		next: "Open the organisation",
 		to: (row) => `/organisations/${row.subject_id}`,
 		runbook: "organisation-waiting",
+	},
+	control_paused: {
+		title: (row) =>
+			`${CONTROLS[row.subject_id as ControlName]?.title ?? row.subject_id} is paused for everyone`,
+		label: "Control",
+		why: "You, or another operator, paused it on purpose. It lifts itself at the instant shown; clear it sooner from access and controls.",
+		next: "Open access and controls",
+		to: () => "/access",
+		runbook: "control-paused",
 	},
 	account_near_coach_cap: {
 		title: (row) => `Account ${short(row.subject_id)} is at 80% of its coach cap`,

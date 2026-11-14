@@ -46,6 +46,7 @@ export const PAGES: Destination[] = [
 	{ label: "Privacy and compliance", to: "/compliance" },
 	{ label: "Audit log", to: "/audit" },
 	{ label: "Runbooks", to: "/runbooks" },
+	{ label: "Access and controls", to: "/access" },
 ];
 
 /** Pages whose name contains the typed text; every page for nothing typed. */

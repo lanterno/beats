@@ -19,5 +19,9 @@ export type CapacityReport = components["schemas"]["CapacityReport"];
 export type OperatorMe = components["schemas"]["OperatorMe"];
 /** What a command would do, answered without doing it. */
 export type CommandPreview = components["schemas"]["CommandPreview"];
+/** One platform control as it stands (docs/backoffice.md § Controls). */
+export type ControlState = components["schemas"]["ControlState"];
+/** One person on the operator allowlist, as the deployment was started. */
+export type AccessEntry = components["schemas"]["AccessEntry"];
 /** One row behind an Attention count: ids and dates, never a name. */
 export type QueueRow = components["schemas"]["QueueRow"];

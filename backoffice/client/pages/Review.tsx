@@ -18,11 +18,13 @@ import { Link, useParams } from "react-router";
 import { OperatorApiError } from "@/shared/api/client";
 import { previewCommand, runCommand } from "@/shared/api/commands";
 import {
-	ACCOUNT_COMMANDS,
 	type CommandField,
 	type CommandSpec,
 	commandSpec,
 	emptyArgs,
+	FAMILIES,
+	familyOf,
+	fieldsOf,
 	ON_THE_RECORD,
 } from "@/shared/commands";
 import { plainMessage } from "@/shared/lib/errors";
@@ -103,7 +105,7 @@ function Fields({
 
 /** The acts available on this subject, so one can be swapped for another
  * without going back. */
-function Pick({ subject, chosen }: { subject: string; chosen: string }) {
+function Pick({ spec, subject, chosen }: { spec: CommandSpec; subject: string; chosen: string }) {
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: a fieldset cannot be a rounded flex track across browsers
 		<div
@@ -111,16 +113,16 @@ function Pick({ subject, chosen }: { subject: string; chosen: string }) {
 			aria-label="What do you want to do?"
 			className="flex flex-wrap gap-1 px-6 pb-4"
 		>
-			{ACCOUNT_COMMANDS.map((spec) => (
+			{familyOf(spec).map((other) => (
 				<Link
-					key={spec.name}
-					to={`/review/${spec.name}/${subject}`}
-					aria-current={spec.name === chosen ? "true" : undefined}
+					key={other.name}
+					to={`/review/${other.name}/${subject}`}
+					aria-current={other.name === chosen ? "true" : undefined}
 					className={`inline-flex h-9 items-center rounded-full px-3.5 text-[14px] ${
-						spec.name === chosen ? "bg-wash-strong font-bold" : "hover:bg-wash"
+						other.name === chosen ? "bg-wash-strong font-bold" : "hover:bg-wash"
 					}`}
 				>
-					{spec.title}
+					{other.title}
 				</Link>
 			))}
 		</div>
@@ -131,29 +133,41 @@ export function Review() {
 	const { command = "", subject = "" } = useParams();
 	const spec = commandSpec(command);
 	const queryClient = useQueryClient();
-	const [args, setArgs] = useState<Record<string, unknown>>(() => (spec ? emptyArgs(spec) : {}));
+	const [args, setArgs] = useState<Record<string, unknown>>(() =>
+		spec ? emptyArgs(spec, subject) : {},
+	);
+	const family = FAMILIES[spec?.family ?? "account"];
+	const fields = spec ? fieldsOf(spec, subject) : [];
 	const [typed, setTyped] = useState("");
 
 	// Previewed with the arguments as they stand, once typing has stopped:
 	// the route validates them exactly as the act will, so an unfilled field
 	// comes back 422 and that is the page's own "there is more to fill in",
 	// not a failure. Settled, or every keystroke would be a request.
-	const sentArgs = sent(spec, args);
+	const sentArgs = sent(fields, args);
 	const settledArgs = useSettled(sentArgs);
 	const preview = useQuery({
 		queryKey: ["preview", command, subject, settledArgs],
-		queryFn: () => previewCommand(command, { user_id: subject, ...settledArgs }),
+		queryFn: () => previewCommand(command, { [family.subjectKey]: subject, ...settledArgs }),
 		enabled: Boolean(spec && subject),
 		retry: false,
 	});
 
 	const act = useMutation({
-		mutationFn: () => runCommand(command, { user_id: subject, ...sentArgs }, typed || undefined),
+		mutationFn: () =>
+			runCommand(command, { [family.subjectKey]: subject, ...sentArgs }, typed || undefined),
 		onSuccess: () => {
 			// Not the preview: once the act has run, "Now" is the state it
 			// found, and re-reading it would make the change table claim the
 			// account was always in the state the act just put it in.
-			for (const key of ["account", "account-audit", "operator-jobs", "attention"]) {
+			for (const key of [
+				"account",
+				"account-audit",
+				"operator-jobs",
+				"attention",
+				"controls",
+				"operator-queue",
+			]) {
 				queryClient.invalidateQueries({ queryKey: [key] });
 			}
 		},
@@ -163,15 +177,15 @@ export function Review() {
 		return (
 			<Page title="No such command" back={{ to: "/accounts", label: "Back to accounts" }}>
 				<Panel>
-					<Empty title="This page reviews an account command.">
-						Open an account and choose one of its acts.
+					<Empty title="This page reviews a command.">
+						Open an account, or access and controls, and choose one of its acts.
 					</Empty>
 				</Panel>
 			</Page>
 		);
 	}
 
-	const back = { to: `/accounts/${subject}`, label: "Back to the account" };
+	const back = family.back(subject);
 
 	if (preview.isPending) return <Loading />;
 	const incomplete = isIncomplete(preview.error);
@@ -203,7 +217,7 @@ export function Review() {
 			back={back}
 			lead={
 				done ? (
-					"It is on the record, and the account page already shows it."
+					"It is on the record, and its page already shows it."
 				) : (
 					<>
 						Acting on <Id>{subject}</Id>. Nothing has happened yet.
@@ -214,11 +228,11 @@ export function Review() {
 			<div className="grid gap-[18px] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
 				<div className="flex min-w-0 flex-col gap-[18px]">
 					<Panel title="What do you want to do?">
-						<Pick subject={subject} chosen={command} />
+						<Pick spec={spec} subject={subject} chosen={command} />
 						<Prose>{spec.about}</Prose>
-						{spec.fields && !done ? (
+						{fields.length > 0 && !done ? (
 							<Fields
-								fields={spec.fields}
+								fields={fields}
 								args={args}
 								onChange={(key, value) => setArgs({ ...args, [key]: value })}
 							/>
@@ -242,7 +256,7 @@ export function Review() {
 								/>
 								<div className="flex flex-wrap gap-2 px-6 pt-1 pb-5">
 									<Link to={back.to} className={buttonClass("primary")}>
-										Back to the account
+										{back.label}
 									</Link>
 									<Link to="/audit" className={buttonClass("secondary")}>
 										See it in the audit
@@ -251,12 +265,12 @@ export function Review() {
 							</>
 						) : missing ? (
 							<div className="px-6 pb-5">
-								<p className="text-[15px] font-bold">There is no account with that id.</p>
+								<p className="text-[15px] font-bold">{family.missing}</p>
 								<p className="mt-1 text-[14px] text-ink-muted">
-									Nothing here will act on it. Check the id against the mail it came from.
+									Nothing here will act on it. Check it against where it came from.
 								</p>
-								<Link to="/accounts" className={`${buttonClass("secondary")} mt-3`}>
-									Find an account
+								<Link to={back.to} className={`${buttonClass("secondary")} mt-3`}>
+									{back.label}
 								</Link>
 							</div>
 						) : blocked ? (
@@ -274,14 +288,14 @@ export function Review() {
 								{needsTyping ? (
 									<div className="mb-3 max-w-[26rem]">
 										<TextField
-											label="Type the account's email to confirm"
+											label={family.typedLabel}
 											value={typed}
 											onChange={(e) => setTyped(e.target.value)}
 											autoComplete="off"
 											spellCheck={false}
 										/>
 										<p className="mt-1 text-[13px] text-ink-muted">
-											Typed from what you already know about this account, never offered here.
+											Typed from what you already know about the subject, never offered here.
 										</p>
 									</div>
 								) : null}
@@ -302,7 +316,7 @@ export function Review() {
 											Fill in the fields above first.
 										</span>
 									) : needsTyping && !typed.trim() ? (
-										<span className="text-[14px] text-ink-muted">Type the address to confirm.</span>
+										<span className="text-[14px] text-ink-muted">Type it to confirm.</span>
 									) : null}
 								</div>
 								{act.error ? (
@@ -322,7 +336,7 @@ export function Review() {
 						<>
 							<Table
 								head={["What", "Now", "After"]}
-								rows={spec.changes(before, args).map((row) => [
+								rows={spec.changes(before, args, subject).map((row) => [
 									row.what,
 									<span key="now" className="text-ink-muted">
 										{row.now}
@@ -366,13 +380,9 @@ export function Review() {
 
 /** Only the fields this command declares, with empty boxes left out so the
  * API reads them as "the platform's default" rather than zero. */
-function sent(
-	spec: CommandSpec | undefined,
-	args: Record<string, unknown>,
-): Record<string, unknown> {
-	if (!spec?.fields) return {};
+function sent(fields: CommandField[], args: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
-	for (const field of spec.fields) {
+	for (const field of fields) {
 		const value = args[field.key];
 		if (field.kind === "checkbox") out[field.key] = Boolean(value);
 		else if (value === "" || value === undefined || value === null) out[field.key] = null;

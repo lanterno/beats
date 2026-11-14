@@ -80,6 +80,18 @@ export const RUNBOOKS: Runbook[] = [
 		],
 	},
 	{
+		id: "control-paused",
+		title: "Something is paused for everyone",
+		reviewed_on: "2026-11-14",
+		about:
+			"An operator threw one of the platform's switches: the coach, webhook delivery, imports or sign-ups. Users of that thing get a fixed 409 sentence; everything else works.",
+		steps: [
+			"Open access and controls and read who set it, when it ends and why. Every pause ends by itself within 7 days at most.",
+			"If the incident is over, clear it: the public API notices within 30 seconds. If it is not, leave it, and set it again before it expires if it must outlast its end.",
+			"Webhooks paused were dropped, not held: the WEBHOOKS_PAUSED_DROPPED lines in the API's log count what was lost.",
+		],
+	},
+	{
 		id: "bad-release",
 		title: "A release is bad",
 		reviewed_on: "2026-11-14",

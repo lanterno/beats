@@ -15,6 +15,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router";
 import { Palette } from "@/app/Palette";
+import { Access } from "@/pages/Access";
 import { Account } from "@/pages/Account";
 import { Accounts } from "@/pages/Accounts";
 import { Audit } from "@/pages/Audit";
@@ -96,6 +97,7 @@ const GROUPS = [
 			{ to: "/compliance", label: "Privacy and compliance", Icon: LockIcon },
 			{ to: "/audit", label: "Audit log", Icon: LinesIcon },
 			{ to: "/runbooks", label: "Runbooks", Icon: ClipboardIcon },
+			{ to: "/access", label: "Access and controls", Icon: ShieldIcon },
 		],
 	},
 ] as const;
@@ -249,6 +251,7 @@ function Shell() {
 						<Route path="/compliance" element={<Compliance />} />
 						<Route path="/audit" element={<Audit />} />
 						<Route path="/runbooks" element={<Runbooks />} />
+						<Route path="/access" element={<Access />} />
 						<Route path="/runbooks/:id" element={<RunbookPage />} />
 					</Routes>
 				</div>
