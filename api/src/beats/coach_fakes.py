@@ -14,9 +14,9 @@ from anthropic.types import TextBlock
 from pymongo import AsyncMongoClient
 
 from beats.coach.gateway import (
-    MODEL_PRICING,
     GatewayResponse,
 )
+from beats.coach.pricing import MODEL_PRICING
 from beats.coach.repos import (
     CoachRepos,
 )

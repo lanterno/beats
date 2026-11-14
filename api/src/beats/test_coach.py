@@ -10,13 +10,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from beats.coach.gateway import (
-    MODEL_PRICING,
-    UNKNOWN_MODEL_PRICING,
     CacheSpec,
     _apply_cache_control,
     _estimate_cost,
-    pricing_for,
 )
+from beats.coach.pricing import MODEL_PRICING, UNKNOWN_MODEL_PRICING, pricing_for
 from beats.coach.repos import (
     LLM_USAGE_COLLECTION,
 )
