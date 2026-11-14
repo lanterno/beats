@@ -222,6 +222,26 @@ class TestControlCommands:
         assert [(r["kind"], r["subject_id"]) for r in rows] == [("control_paused", "webhooks")]
         assert rows[0]["due"].startswith(until[:16])
 
+    def test_the_queue_tells_a_pause_from_a_slow_down_and_everyone_from_a_network(
+        self, operator_client
+    ):
+        until = self._before_midnight().isoformat()
+        for args in (
+            {"name": "coach", "until": until, "reason": "r"},
+            {"name": "signups", "until": until, "reason": "r", "value": 20},
+            {"name": "signups", "until": until, "reason": "r", "value": 5, "network": "e" * 32},
+            {"name": "signups", "until": until, "reason": "r", "value": 5, "network": "f" * 32},
+        ):
+            assert self._run(operator_client, "control.set", args).status_code == 200, args
+        rows = operator_client.get("/api/operator/queue").json()
+        assert sorted((r["kind"], r["subject_id"], r["count"]) for r in rows) == [
+            ("control_paused", "coach", 1),
+            ("control_slowed", "signups", 1),
+            ("control_slowed_network", "signups", 2),
+        ]
+        assert "e" * 32 not in str(rows), "the queue names no network"
+        assert operator_client.get("/api/operator/attention").json()["controls_paused"] == 4
+
     def test_access_lists_the_allowlist_and_nothing_else(self, operator_client):
         access = operator_client.get("/api/operator/access").json()
         assert {(a["email"], a["role"]) for a in access} == {
