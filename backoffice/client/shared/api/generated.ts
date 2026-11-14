@@ -185,9 +185,11 @@ export interface paths {
         };
         /**
          * Capacity
-         * @description What the platform will cost: documents and storage per collection, and
-         *     the coach's cost by day and model with the cache-hit ratio's inputs.
-         *     Latency and error rates are Cloud Monitoring's — link, don't rebuild.
+         * @description What the platform will cost: documents and storage per collection, the
+         *     database's size a day as the job runner kept it and its pace, its
+         *     connections, and the coach's cost by day and model with the cache-hit
+         *     ratio's inputs. Latency and error rates are Cloud Monitoring's — link,
+         *     don't rebuild.
          */
         get: operations["capacity_api_operator_capacity_get"];
         put?: never;
@@ -707,6 +709,10 @@ export interface components {
             coach_cost: components["schemas"]["CoachCostDay"][];
             /** Collections */
             collections: components["schemas"]["CollectionSize"][];
+            connections?: components["schemas"]["DatabaseConnections"] | null;
+            growth?: components["schemas"]["DatabaseGrowth"] | null;
+            /** Sizes */
+            sizes?: components["schemas"]["SizeDay"][];
         };
         /** ClearStatusArgs */
         ClearStatusArgs: {
@@ -735,6 +741,8 @@ export interface components {
         CoachCostDay: {
             /** Cache Read Tokens */
             cache_read_tokens: number;
+            /** Cache Saved Usd */
+            cache_saved_usd: number;
             /** Calls */
             calls: number;
             /** Cost Usd */
@@ -750,6 +758,10 @@ export interface components {
         CollectionSize: {
             /** Documents */
             documents: number;
+            /** Growth Bytes A Month */
+            growth_bytes_a_month?: number | null;
+            /** Growth Share A Month */
+            growth_share_a_month?: number | null;
             /**
              * Index Bytes
              * @default 0
@@ -848,6 +860,41 @@ export interface components {
             until: string | null;
             /** Value */
             value: number | null;
+        };
+        /**
+         * DatabaseConnections
+         * @description `serverStatus`'s connections as the cluster answers them: those open
+         *     now, and how many it allows — open and still available together, which on
+         *     Atlas's free tier is its 500.
+         */
+        DatabaseConnections: {
+            /** Allowed */
+            allowed: number;
+            /** Current */
+            current: number;
+        };
+        /**
+         * DatabaseGrowth
+         * @description The pace: what the database moved between two days kept, carried to a
+         *     month of 30 days. `until` is the newest size kept and `since` the oldest
+         *     within `GROWTH_PACE_DAYS` before it — or, when the runner kept none in
+         *     that span, the one kept just before `until`.
+         */
+        DatabaseGrowth: {
+            /** Bytes A Month */
+            bytes_a_month: number;
+            /** Change Bytes */
+            change_bytes: number;
+            /**
+             * Since
+             * Format: date
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date
+             */
+            until: string;
         };
         /** DayFigure */
         DayFigure: {
@@ -1343,6 +1390,20 @@ export interface components {
             largest_key: string | null;
             /** Usual */
             usual: number;
+        };
+        /**
+         * SizeDay
+         * @description The database's size on disk as the job runner kept it that UTC day:
+         *     every collection's `storage_bytes` added up, as the page's own total is.
+         */
+        SizeDay: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Storage Bytes */
+            storage_bytes: number;
         };
         /** SuspendArgs */
         SuspendArgs: {
