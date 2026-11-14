@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectWithDuration } from "@/entities/project";
 import { projectKeys } from "@/entities/project";
 import type { FlowWindow, FlowWindowSummary, Gap, HeatmapDay, RhythmSlot } from "@/shared/api";
-import { billingRootKey, organisationsRootKey } from "@/shared/api";
+import { billingRootKey, organisationsRootKey, retryWhileUnreachable } from "@/shared/api";
 import {
 	formatDateShort,
 	getCurrentWeekRange,
@@ -48,6 +48,9 @@ export function useAllBeats() {
 		queryKey: sessionKeys.allBeats(),
 		queryFn: () => fetchBeats(),
 		staleTime: 15_000,
+		// The sidebar's totals come from it, so it keeps trying a server it
+		// cannot reach rather than giving up (shared/api/reach.ts).
+		retry: retryWhileUnreachable,
 	});
 }
 

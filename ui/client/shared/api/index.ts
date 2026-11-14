@@ -18,6 +18,14 @@ export {
 } from "./client";
 // Query-key roots shared across entities
 export { billingRootKey, clientsRootKey, organisationsRootKey } from "./keys";
+// Whether the server can be reached, from a query's retry state
+export {
+	isUnreachable,
+	type QueryState,
+	retryWhileUnreachable,
+	type Waiting,
+	waitingFor,
+} from "./reach";
 // Generated OpenAPI types (see ./schema.ts for ergonomic re-exports)
 export type { Paths, Schemas } from "./schema";
 // Re-export types

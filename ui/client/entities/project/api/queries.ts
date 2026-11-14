@@ -4,6 +4,7 @@
  */
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiContract, ApiGoalOverride, ApiProjectListItem } from "@/shared/api";
+import { retryWhileUnreachable } from "@/shared/api";
 import type { ContractWeek, Ledger, ProjectWithDuration, VacationYear } from "../model";
 import { toProject } from "../model";
 import {
@@ -98,6 +99,9 @@ export function useProjects() {
 			return items.map(toProjectWithDuration);
 		},
 		staleTime: 30_000, // Consider fresh for 30 seconds
+		// The dashboard draws nothing without it, so it keeps trying a server it
+		// cannot reach rather than giving up (shared/api/reach.ts).
+		retry: retryWhileUnreachable,
 	});
 }
 
