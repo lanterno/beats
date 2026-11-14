@@ -260,18 +260,28 @@ and set the three write limits, without a deploy — from *Access and
 controls*, each through its own review and the runner like every mutation.
 
 - **One collection, `platform_controls`**, one document per control keyed on
-  its name: four pauses (`coach`, `webhooks`, `imports`, `signups`) and three
-  limits (`writes_per_minute_beats`, `writes_per_minute_signals`,
-  `imports_per_hour`). Written only by `control.set` and `control.clear`
-  (`MongoPlatformControlsStore`, `infrastructure/operator_store.py`). No
-  `user_id`: it is the platform's, and erasure's sweep never sees it. It is on
-  the `beatsOperator` Atlas role's write list (terraform/README.md).
+  its name and `network`: four pauses (`coach`, `webhooks`, `imports`,
+  `signups`) and three limits (`writes_per_minute_beats`,
+  `writes_per_minute_signals`, `imports_per_hour`), each with `network`
+  null, for everyone; and beside the `signups` one, a document per network
+  slowed on its own (see *Trust and safety* under § The pages), carrying the
+  network's key and an `expires_at` equal to its `until`, which a TTL index
+  deletes, so a key lives no longer than its slow-down. The two kinds never
+  overwrite each other: `control.clear` with a `network` lifts that network's
+  and nothing else, and without one lifts everyone's. Written only by
+  `control.set` and `control.clear` (`MongoPlatformControlsStore`,
+  `infrastructure/operator_store.py`). No `user_id`: it is the platform's,
+  and erasure's sweep never sees it. It is on the `beatsOperator` Atlas
+  role's write list (terraform/README.md).
 - **Every pause expires.** `control.set` requires an `until`, at most
   `MAX_PAUSE` (7 days) ahead, and a `reason` for the operator's own page.
   An expired document reads as open, so no job clears it. `signups` has a
   third state: with a `value`, sign-ups are *slowed* to that many an hour
   (counted off `users.created_at` for the last hour, cached a bound) until
-  `until`. The limits are settings and do not expire.
+  `until`. A network's slow-down is only ever that, never a pause, and ends
+  by the next UTC midnight. Both apply at once: a visitor is refused by
+  whichever of everyone's control and their network's refuses first. The
+  limits are settings and do not expire.
 - **The public API reads through a cache** (`beats/platform_controls.py`, the
   shape of `auth/account_access.py`, the same 30-second bound, refreshed by
   the auth middleware on every authenticated request): a pause lands within
@@ -283,16 +293,22 @@ controls*, each through its own review and the runner like every mutation.
   root loads it too.
 - **Where each is enforced:** `coach` in `UsageTracker.enforce_budget`, which
   the gateway calls before every model call (inside the chat stream the
-  refusal rides as an error event, status gone); `imports` first thing in
-  `POST /api/export/import`; `webhooks` beside the per-account switch in
-  `dispatch_webhook_event`, where it **drops** — there is no outbox — with
-  one `WEBHOOKS_PAUSED_DROPPED` line per event so the loss can be counted;
+  refusal rides as an error event, status gone); `imports` in a dependency of
+  `POST /api/export/import`, which FastAPI resolves before slowapi counts the
+  request, so a paused import spends none of the account's imports for the
+  hour; `webhooks` beside the per-account switch in `dispatch_webhook_event`,
+  where it **drops** — there is no outbox — with one
+  `WEBHOOKS_PAUSED_DROPPED` line, and its `deliveries`, per event that had a
+  webhook to go to, so the line counts what was lost and nothing else;
   `signups` at `POST /register/start` before the user row exists, at
   `/register/verify` for the pause alone (start leaves a row a script could
   finish later; the slow-down counted this visitor at start, and checked
   again would refuse them against their own start) and on the branch of
-  `SSOAccountService.sign_in` that would create an account — never a
-  sign-in or an added passkey. The three limits sit in `_ceiling`
+  `SSOAccountService.sign_in` that would create an account, in full, since a
+  provider's sign-up starts and finishes in one step — never a sign-in or an
+  added passkey. An account a provider creates counts as both a start and a
+  finish for its network, so a network's slow-down holds it as it holds a
+  passkey's. The three limits sit in `_ceiling`
   (`api/rate_limits.py`): the account's override, then the control, then the
   setting, which stays for self-hosted.
 - **Refusals are 409** with `COACH_PAUSED`, `IMPORTS_PAUSED` or
@@ -303,9 +319,17 @@ controls*, each through its own review and the runner like every mutation.
   each client does with a refusal), so an old SPA against this API reads the
   sentence.
 - **Attention counts anything paused** (`controls_paused`), the queue has a
-  row for it due when it ends (`control_paused`, with a runbook), and *Access
-  and controls* shows the allowlist read-only beside the switches: the list
-  is an environment value, and changing it is a deploy.
+  row for it due when it ends, by what it does and to whom (`control_paused`;
+  `control_slowed` for sign-ups slowed for everyone; one
+  `control_slowed_network` row counting every network slowed, due when the
+  first ends), and *Access and controls* shows the allowlist read-only beside
+  the switches: the list is an environment value, and changing it is a
+  deploy. The page gives each network's slow-down a row of its own under
+  sign-ups, never showing its key, with its own Change and Clear. `GET
+  /controls` is the one read that carries a key (`ControlState.network`), so
+  the page can hand it back; `control.set` and `control.clear` record in
+  `operator_audit` only that a control covered one network (`one_network`),
+  never which.
 - **The limit values** are not in code. The owner's guidance, on the page:
   120 beat writes and 60 signal writes a minute and 10 imports an hour, as
   `api/src/beats/settings.py` recommends — set only after reading the
@@ -496,10 +520,10 @@ cannot keep.
   "done"; a row is the condition, and leaves when it clears. An erasure
   request the operator logged (see *Privacy and compliance*) is a row too,
   due 14 days after the mail arrived, until an erasure is queued for its
-  account or it is closed; a paused control is a row due when it ends.
-  The sidebar's badge counts the rows the queue lists, off the same query;
-  the Attention counts summed would count approvals where the queue has one
-  row per organisation, and miss what it lists before it is due.
+  account or it is closed; a paused or slowed control is a row due when it
+  ends. The sidebar's badge counts the rows the queue lists, off the same
+  query; the Attention counts summed would count approvals where the queue
+  has one row per organisation, and miss what it lists before it is due.
 - **The palette** (⌘K, in the top bar): goes to a page, opens a command's
   review for an account named by its whole id, and finds one account by its
   whole address through the same `POST /accounts/lookup`. Pages are filtered
@@ -516,9 +540,15 @@ cannot keep.
   empty. A preview that fails otherwise keeps the form, with the failure and
   a retry beside the button, and the change table says nothing of "now"
   until a preview has answered. The link a page opens it with fills only
-  the boxes that name what is acted on (a device, a network: `linked` on the
-  field), never what is said or decided, so a crafted link cannot open a
-  status post already written.
+  the boxes that name what is acted on (a device: `linked` on the field),
+  never what is said or decided, so a crafted link cannot open a status post
+  already written. A network's key is no box and is in no link: it reaches
+  the review in navigation state, and the URL names only what was handed
+  over (`?carried=network`, `client/shared/lib/handover.ts`), because a URL
+  is kept in the browser's history and in the request log when the page is
+  opened afresh. A reload keeps the state; a new tab or a copied link loses
+  it, and the page then says to start again from where the network was
+  chosen, rather than offering the act for everyone.
 - **Access and controls**: the switches and the global limits (§ Controls),
   each thrown from its review page; who can get in, read off the allowlist;
   what each role can do; and the access review as a list to read down, since
@@ -557,7 +587,13 @@ cannot keep.
   serving a user's data), webhook destinations by domain (outbound HTTP from
   our servers is ours to answer for), devices per account, signups per day.
   Abuse that shows in requests rather than accounts is already counted and
-  alerted on in Cloud Monitoring.
+  alerted on in Cloud Monitoring. The page opens on a sentence read off the
+  sign-up signal, then the signal with its one act, then the six axes in a
+  single table with a tab each, each its highest 20. The mock's "against the
+  median" and "already restricted" columns are not there: nothing about the
+  rest of the accounts is read, and the second would be the list of
+  restrictions across accounts no page keeps. Its chart is by day, because
+  sign-ups are read by day.
 
   **Sign-ups from one network** (shipped 2026-11-14, stage 3 of what was
   roadmaps/backoffice.md): the hour's finished sign-ups against the median
@@ -571,18 +607,26 @@ cannot keep.
   can sign a session runs the signal (`auth/signup_networks.py`). Only a
   counter is stored (`signup_network_counts`: hour, key, `started`,
   `completed`, 48-hour TTL), written best-effort from the two passkey doors
-  and the SSO branch that creates an account. The page says "Network A",
+  and the SSO branch that creates an account (as both a start and a
+  finish). Below the minimum nothing is said, not even how many networks
+  there were: beside the hour's count, a count of networks would tell small
+  groups apart. The page says "Network A",
   never the key, and says in words that offices, universities, carrier
   networks and an organisation onboarding its staff all look like this. The
-  action is the `signups` control with the key as its `network`: a ceiling an
-  hour for that network alone, read off the signal's own counter, that slows
-  and never blocks and ends at the next UTC midnight at the latest, when the
-  key stops matching. Why stored, when the two signals below are "logged and
+  action is the `signups` control with the key as its `network`, a record
+  beside the control for everyone (§ Controls): a ceiling an hour for that
+  network alone, read off the signal's own counter, that slows and never
+  blocks and ends at the next UTC midnight at the latest, when the key stops
+  matching. The key goes to the review in navigation state, never in a URL. Why stored, when the two signals below are "logged and
   counted, never stored": those are facts about one account's request; this
   holds no account at all, and logging it would show the operator raw
   addresses or need a metric label per network. PRIVACY.md and DATA.md say
-  what is kept, for how long and why. Behind a self-hosted nginx every
-  visitor is one network, which only makes the signal quiet.
+  what is kept, for how long and why. A self-hosted install sees each
+  visitor's own network: its nginx forwards the address (`ui/nginx.conf`) and
+  the API believes nginx alone (`FORWARDED_ALLOW_IPS` in
+  `compose.selfhost.yml`). Only a proxy in front of that nginx, unnamed,
+  would make every visitor one network, which would hold everyone to one
+  network's slow-down.
 
   Two of its signals are **logged and counted, never stored** (decided
   2026-11-07). A per-account write limit's refusal
