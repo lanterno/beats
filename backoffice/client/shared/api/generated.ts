@@ -527,6 +527,11 @@ export interface components {
             /** Role */
             role: string;
         };
+        /** AccountArgs */
+        AccountArgs: {
+            /** User Id */
+            user_id: string;
+        };
         /** AccountDetail */
         AccountDetail: {
             /**
@@ -657,12 +662,45 @@ export interface components {
             /** Organisations Without Owner */
             organisations_without_owner: number;
         };
+        /** BeginClosingArgs */
+        BeginClosingArgs: {
+            /**
+             * Closes On
+             * @default null
+             */
+            closes_on: string | null;
+            /** Organisation Id */
+            organisation_id: string;
+        };
+        /** CancelJobArgs */
+        CancelJobArgs: {
+            /** Job Id */
+            job_id: string;
+        };
         /** CapacityReport */
         CapacityReport: {
             /** Coach Cost */
             coach_cost: components["schemas"]["CoachCostDay"][];
             /** Collections */
             collections: components["schemas"]["CollectionSize"][];
+        };
+        /** ClearStatusArgs */
+        ClearStatusArgs: {
+            /**
+             * Message
+             * @default Everything is working again.
+             */
+            message: string;
+        };
+        /** CloseErasureRequestArgs */
+        CloseErasureRequestArgs: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "erased" | "no_account" | "withdrawn";
+            /** Request Id */
+            request_id: string;
         };
         /** CoachCostDay */
         CoachCostDay: {
@@ -725,6 +763,14 @@ export interface components {
             };
             /** Confirmation */
             confirmation?: string | null;
+        };
+        /** ControlArgs */
+        ControlArgs: {
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "coach" | "webhooks" | "imports" | "signups" | "writes_per_minute_beats" | "writes_per_minute_signals" | "imports_per_hour";
         };
         /**
          * ControlState
@@ -804,6 +850,19 @@ export interface components {
             /** Subject Id */
             subject_id: string | null;
         };
+        /**
+         * FreezeArgs
+         * @description Every freeze ends: `until` is required and capped like a pause.
+         */
+        FreezeArgs: {
+            /** Reason */
+            reason: string;
+            /**
+             * Until
+             * Format: date-time
+             */
+            until: string;
+        };
         /** FreezeState */
         FreezeState: {
             /** Available */
@@ -816,6 +875,13 @@ export interface components {
             set_by?: string | null;
             /** Until */
             until?: string | null;
+        };
+        /** GrantOwnerArgs */
+        GrantOwnerArgs: {
+            /** Organisation Id */
+            organisation_id: string;
+            /** User Id */
+            user_id: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -859,6 +925,21 @@ export interface components {
              */
             state: "live" | "stale" | "unavailable";
         };
+        /** LogErasureRequestArgs */
+        LogErasureRequestArgs: {
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Reference */
+            reference: string;
+            /**
+             * User Id
+             * @default null
+             */
+            user_id: string | null;
+        };
         /** MembershipSummary */
         MembershipSummary: {
             /** Active */
@@ -870,6 +951,11 @@ export interface components {
             /** Role */
             role: string;
         };
+        /**
+         * NoArgs
+         * @description A command whose subject is fixed and that takes nothing else.
+         */
+        NoArgs: Record<string, never>;
         /** OperatorMe */
         OperatorMe: {
             /** Email */
@@ -901,6 +987,11 @@ export interface components {
             project_id: string | null;
             /** Subject User Id */
             subject_user_id: string | null;
+        };
+        /** OrganisationArgs */
+        OrganisationArgs: {
+            /** Organisation Id */
+            organisation_id: string;
         };
         /** OrganisationDetail */
         OrganisationDetail: {
@@ -961,6 +1052,23 @@ export interface components {
             state: string;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * PublishStatusArgs
+         * @description What goes public, whole. Nothing about a person: no account, no
+         *     organisation, no id, no count of those affected — the operator's words
+         *     are checked by the review, not by code, so the review shows them whole.
+         */
+        PublishStatusArgs: {
+            /** Affected */
+            affected?: ("web app" | "api" | "sign-in" | "coach" | "integrations" | "phone apps")[];
+            /** Message */
+            message: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "operational" | "degraded" | "outage" | "maintenance";
         };
         /**
          * QueueRow
@@ -1024,12 +1132,92 @@ export interface components {
             /** Web Subject */
             web_subject: string | null;
         };
+        /** RetentionPurgeArgs */
+        RetentionPurgeArgs: {
+            /**
+             * Organisation Id
+             * @default null
+             */
+            organisation_id: string | null;
+        };
+        /** RevokeDeviceArgs */
+        RevokeDeviceArgs: {
+            /** Device Id */
+            device_id: string;
+            /** User Id */
+            user_id: string;
+        };
         /** RouteFigure */
         RouteFigure: {
             /** Route */
             route: string;
             /** Value */
             value: number;
+        };
+        /**
+         * SetControlArgs
+         * @description A pause needs `until` (inside MAX_PAUSE) and a `reason` for the
+         *     operator's own page; a limit needs a `value` and takes neither. `signups`
+         *     may carry a `value` too — a ceiling an hour — and is then slowed rather
+         *     than paused, until `until`. The sentence a user sees is fixed text; the
+         *     reason never reaches them.
+         */
+        SetControlArgs: {
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "coach" | "webhooks" | "imports" | "signups" | "writes_per_minute_beats" | "writes_per_minute_signals" | "imports_per_hour";
+            /**
+             * Network
+             * @default null
+             */
+            network: string | null;
+            /**
+             * Reason
+             * @default null
+             */
+            reason: string | null;
+            /**
+             * Until
+             * @default null
+             */
+            until: string | null;
+            /**
+             * Value
+             * @default null
+             */
+            value: number | null;
+        };
+        /** SetLimitsArgs */
+        SetLimitsArgs: {
+            /**
+             * Coach Monthly Budget Usd
+             * @default null
+             */
+            coach_monthly_budget_usd: number | null;
+            /**
+             * Imports Per Hour
+             * @default null
+             */
+            imports_per_hour: number | null;
+            /** User Id */
+            user_id: string;
+            /**
+             * Webhooks Disabled
+             * @default false
+             */
+            webhooks_disabled: boolean;
+            /**
+             * Writes Per Minute Beats
+             * @default null
+             */
+            writes_per_minute_beats: number | null;
+            /**
+             * Writes Per Minute Signals
+             * @default null
+             */
+            writes_per_minute_signals: number | null;
         };
         /**
          * SignupWave
@@ -1052,6 +1240,19 @@ export interface components {
             largest_key: string | null;
             /** Usual */
             usual: number;
+        };
+        /** SuspendArgs */
+        SuspendArgs: {
+            /**
+             * Kind
+             * @default abuse
+             * @enum {string}
+             */
+            kind: "abuse" | "other";
+            /** Reason */
+            reason: string;
+            /** User Id */
+            user_id: string;
         };
         /** ValidationError */
         ValidationError: {

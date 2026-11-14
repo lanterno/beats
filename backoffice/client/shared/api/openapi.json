@@ -93,6 +93,21 @@
         "title": "AccessEntry",
         "type": "object"
       },
+      "AccountArgs": {
+        "properties": {
+          "user_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "AccountArgs",
+        "type": "object"
+      },
       "AccountDetail": {
         "properties": {
           "biometric_rows": {
@@ -403,6 +418,49 @@
         "title": "AttentionCounts",
         "type": "object"
       },
+      "BeginClosingArgs": {
+        "properties": {
+          "closes_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Closes On"
+          },
+          "organisation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Organisation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organisation_id"
+        ],
+        "title": "BeginClosingArgs",
+        "type": "object"
+      },
+      "CancelJobArgs": {
+        "properties": {
+          "job_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "CancelJobArgs",
+        "type": "object"
+      },
       "CapacityReport": {
         "properties": {
           "coach_cost": {
@@ -425,6 +483,44 @@
           "coach_cost"
         ],
         "title": "CapacityReport",
+        "type": "object"
+      },
+      "ClearStatusArgs": {
+        "properties": {
+          "message": {
+            "default": "Everything is working again.",
+            "maxLength": 280,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "title": "ClearStatusArgs",
+        "type": "object"
+      },
+      "CloseErasureRequestArgs": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "erased",
+              "no_account",
+              "withdrawn"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "reason"
+        ],
+        "title": "CloseErasureRequestArgs",
         "type": "object"
       },
       "CoachCostDay": {
@@ -573,6 +669,28 @@
           }
         },
         "title": "CommandRequest",
+        "type": "object"
+      },
+      "ControlArgs": {
+        "properties": {
+          "name": {
+            "enum": [
+              "coach",
+              "webhooks",
+              "imports",
+              "signups",
+              "writes_per_minute_beats",
+              "writes_per_minute_signals",
+              "imports_per_hour"
+            ],
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ControlArgs",
         "type": "object"
       },
       "ControlState": {
@@ -810,6 +928,28 @@
         "title": "ErasureRequestState",
         "type": "object"
       },
+      "FreezeArgs": {
+        "description": "Every freeze ends: `until` is required and capped like a pause.",
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "until": {
+            "format": "date-time",
+            "title": "Until",
+            "type": "string"
+          }
+        },
+        "required": [
+          "until",
+          "reason"
+        ],
+        "title": "FreezeArgs",
+        "type": "object"
+      },
       "FreezeState": {
         "properties": {
           "available": {
@@ -860,6 +1000,28 @@
           "frozen"
         ],
         "title": "FreezeState",
+        "type": "object"
+      },
+      "GrantOwnerArgs": {
+        "properties": {
+          "organisation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Organisation Id",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organisation_id",
+          "user_id"
+        ],
+        "title": "GrantOwnerArgs",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1010,6 +1172,39 @@
         "title": "HealthReport",
         "type": "object"
       },
+      "LogErasureRequestArgs": {
+        "properties": {
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "reference": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Reference",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "reference",
+          "received_on"
+        ],
+        "title": "LogErasureRequestArgs",
+        "type": "object"
+      },
       "MembershipSummary": {
         "properties": {
           "active": {
@@ -1036,6 +1231,12 @@
           "active"
         ],
         "title": "MembershipSummary",
+        "type": "object"
+      },
+      "NoArgs": {
+        "description": "A command whose subject is fixed and that takes nothing else.",
+        "properties": {},
+        "title": "NoArgs",
         "type": "object"
       },
       "OperatorMe": {
@@ -1127,6 +1328,21 @@
           "project_id"
         ],
         "title": "OrgAuditRow",
+        "type": "object"
+      },
+      "OrganisationArgs": {
+        "properties": {
+          "organisation_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Organisation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "organisation_id"
+        ],
+        "title": "OrganisationArgs",
         "type": "object"
       },
       "OrganisationDetail": {
@@ -1294,6 +1510,49 @@
           "affected"
         ],
         "title": "PublicStatus",
+        "type": "object"
+      },
+      "PublishStatusArgs": {
+        "description": "What goes public, whole. Nothing about a person: no account, no\norganisation, no id, no count of those affected \u2014 the operator's words\nare checked by the review, not by code, so the review shows them whole.",
+        "properties": {
+          "affected": {
+            "items": {
+              "enum": [
+                "web app",
+                "api",
+                "sign-in",
+                "coach",
+                "integrations",
+                "phone apps"
+              ],
+              "type": "string"
+            },
+            "maxItems": 6,
+            "title": "Affected",
+            "type": "array"
+          },
+          "message": {
+            "maxLength": 280,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "operational",
+              "degraded",
+              "outage",
+              "maintenance"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "message"
+        ],
+        "title": "PublishStatusArgs",
         "type": "object"
       },
       "QueueRow": {
@@ -1487,6 +1746,47 @@
         "title": "ReleasesReport",
         "type": "object"
       },
+      "RetentionPurgeArgs": {
+        "properties": {
+          "organisation_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Organisation Id"
+          }
+        },
+        "title": "RetentionPurgeArgs",
+        "type": "object"
+      },
+      "RevokeDeviceArgs": {
+        "properties": {
+          "device_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Device Id",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "device_id"
+        ],
+        "title": "RevokeDeviceArgs",
+        "type": "object"
+      },
       "RouteFigure": {
         "properties": {
           "route": {
@@ -1503,6 +1803,154 @@
           "value"
         ],
         "title": "RouteFigure",
+        "type": "object"
+      },
+      "SetControlArgs": {
+        "description": "A pause needs `until` (inside MAX_PAUSE) and a `reason` for the\noperator's own page; a limit needs a `value` and takes neither. `signups`\nmay carry a `value` too \u2014 a ceiling an hour \u2014 and is then slowed rather\nthan paused, until `until`. The sentence a user sees is fixed text; the\nreason never reaches them.",
+        "properties": {
+          "name": {
+            "enum": [
+              "coach",
+              "webhooks",
+              "imports",
+              "signups",
+              "writes_per_minute_beats",
+              "writes_per_minute_signals",
+              "imports_per_hour"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Network"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Until"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SetControlArgs",
+        "type": "object"
+      },
+      "SetLimitsArgs": {
+        "properties": {
+          "coach_monthly_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Coach Monthly Budget Usd"
+          },
+          "imports_per_hour": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Imports Per Hour"
+          },
+          "user_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          },
+          "webhooks_disabled": {
+            "default": false,
+            "title": "Webhooks Disabled",
+            "type": "boolean"
+          },
+          "writes_per_minute_beats": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Writes Per Minute Beats"
+          },
+          "writes_per_minute_signals": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Writes Per Minute Signals"
+          }
+        },
+        "required": [
+          "user_id"
+        ],
+        "title": "SetLimitsArgs",
         "type": "object"
       },
       "SignupWave": {
@@ -1561,6 +2009,37 @@
           "groups"
         ],
         "title": "SignupWave",
+        "type": "object"
+      },
+      "SuspendArgs": {
+        "properties": {
+          "kind": {
+            "default": "abuse",
+            "enum": [
+              "abuse",
+              "other"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "user_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "reason"
+        ],
+        "title": "SuspendArgs",
         "type": "object"
       },
       "ValidationError": {
@@ -2423,6 +2902,71 @@
           "operator"
         ]
       }
+    }
+  },
+  "x-command-args": {
+    "account.clear_limits": {
+      "$ref": "#/components/schemas/AccountArgs"
+    },
+    "account.erase": {
+      "$ref": "#/components/schemas/AccountArgs"
+    },
+    "account.set_limits": {
+      "$ref": "#/components/schemas/SetLimitsArgs"
+    },
+    "account.sign_out_everywhere": {
+      "$ref": "#/components/schemas/AccountArgs"
+    },
+    "account.suspend": {
+      "$ref": "#/components/schemas/SuspendArgs"
+    },
+    "account.unsuspend": {
+      "$ref": "#/components/schemas/AccountArgs"
+    },
+    "control.clear": {
+      "$ref": "#/components/schemas/ControlArgs"
+    },
+    "control.set": {
+      "$ref": "#/components/schemas/SetControlArgs"
+    },
+    "deploy.freeze": {
+      "$ref": "#/components/schemas/FreezeArgs"
+    },
+    "deploy.unfreeze": {
+      "$ref": "#/components/schemas/NoArgs"
+    },
+    "device.revoke": {
+      "$ref": "#/components/schemas/RevokeDeviceArgs"
+    },
+    "erasure_request.close": {
+      "$ref": "#/components/schemas/CloseErasureRequestArgs"
+    },
+    "erasure_request.log": {
+      "$ref": "#/components/schemas/LogErasureRequestArgs"
+    },
+    "job.cancel": {
+      "$ref": "#/components/schemas/CancelJobArgs"
+    },
+    "organisation.begin_closing": {
+      "$ref": "#/components/schemas/BeginClosingArgs"
+    },
+    "organisation.cancel_closing": {
+      "$ref": "#/components/schemas/OrganisationArgs"
+    },
+    "organisation.delete": {
+      "$ref": "#/components/schemas/OrganisationArgs"
+    },
+    "organisation.grant_owner": {
+      "$ref": "#/components/schemas/GrantOwnerArgs"
+    },
+    "retention.purge": {
+      "$ref": "#/components/schemas/RetentionPurgeArgs"
+    },
+    "status.clear": {
+      "$ref": "#/components/schemas/ClearStatusArgs"
+    },
+    "status.publish": {
+      "$ref": "#/components/schemas/PublishStatusArgs"
     }
   }
 }
