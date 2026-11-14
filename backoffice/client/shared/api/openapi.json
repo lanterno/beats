@@ -358,6 +358,10 @@
             "title": "Controls Paused",
             "type": "integer"
           },
+          "erasure_requests_overdue": {
+            "title": "Erasure Requests Overdue",
+            "type": "integer"
+          },
           "jobs_failed": {
             "title": "Jobs Failed",
             "type": "integer"
@@ -383,7 +387,8 @@
           "jobs_failed",
           "approvals_superseded_over_30d",
           "absence_requests_pending_over_14d",
-          "accounts_near_coach_cap"
+          "accounts_near_coach_cap",
+          "erasure_requests_overdue"
         ],
         "title": "AttentionCounts",
         "type": "object"
@@ -722,6 +727,79 @@
         "title": "DomainFigure",
         "type": "object"
       },
+      "ErasureRequestState": {
+        "description": "One logged erasure request: the day it arrived, the operator's\nreference, the account by id or none, and where it stands \u2014 read off\nthe job queue, never stored.",
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "erasure_queued",
+              "erasure_ran",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "received_on",
+          "subject_id",
+          "status",
+          "closed_at",
+          "closed_reason"
+        ],
+        "title": "ErasureRequestState",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -996,7 +1074,8 @@
               "approvals_superseded",
               "absence_requests_pending",
               "account_near_coach_cap",
-              "control_paused"
+              "control_paused",
+              "erasure_request_open"
             ],
             "title": "Kind",
             "type": "string"
@@ -1544,6 +1623,32 @@
           }
         },
         "summary": "Controls",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/erasure-requests": {
+      "get": {
+        "description": "The erasure request log: when each mail arrived and where it stands.\nA reference and an id, never an address.",
+        "operationId": "erasure_requests_api_operator_erasure_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ErasureRequestState"
+                  },
+                  "title": "Response Erasure Requests Api Operator Erasure Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Erasure Requests",
         "tags": [
           "operator"
         ]

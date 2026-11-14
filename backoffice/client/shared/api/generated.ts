@@ -271,6 +271,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/erasure-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Erasure Requests
+         * @description The erasure request log: when each mail arrived and where it stands.
+         *     A reference and an id, never an address.
+         */
+        get: operations["erasure_requests_api_operator_erasure_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/jobs": {
         parameters: {
             query?: never;
@@ -535,6 +556,8 @@ export interface components {
             approvals_superseded_over_30d: number;
             /** Controls Paused */
             controls_paused: number;
+            /** Erasure Requests Overdue */
+            erasure_requests_overdue: number;
             /** Jobs Failed */
             jobs_failed: number;
             /** Jobs Queued */
@@ -663,6 +686,34 @@ export interface components {
             /** Value */
             value: number;
         };
+        /**
+         * ErasureRequestState
+         * @description One logged erasure request: the day it arrived, the operator's
+         *     reference, the account by id or none, and where it stands — read off
+         *     the job queue, never stored.
+         */
+        ErasureRequestState: {
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed Reason */
+            closed_reason: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Reference */
+            reference: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "erasure_queued" | "erasure_ran" | "closed";
+            /** Subject Id */
+            subject_id: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -777,7 +828,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "organisation_without_owner" | "organisation_all_owners_suspended" | "job_failed" | "job_queued" | "approvals_superseded" | "absence_requests_pending" | "account_near_coach_cap" | "control_paused";
+            kind: "organisation_without_owner" | "organisation_all_owners_suspended" | "job_failed" | "job_queued" | "approvals_superseded" | "absence_requests_pending" | "account_near_coach_cap" | "control_paused" | "erasure_request_open";
             /** Since */
             since: string | null;
             /** Subject Id */
@@ -1136,6 +1187,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ControlState"][];
+                };
+            };
+        };
+    };
+    erasure_requests_api_operator_erasure_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErasureRequestState"][];
                 };
             };
         };
