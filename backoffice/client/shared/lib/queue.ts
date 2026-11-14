@@ -69,7 +69,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "Its owners are there but cannot sign in, so in practice nobody manages it.",
 		next: "Open the organisation",
 		to: (row) => `/organisations/${row.subject_id}`,
-		runbook: "organisation-owner",
+		runbook: "organisation-owners-suspended",
 	},
 	job_failed: {
 		title: (row) => `Job ${short(row.subject_id)} failed three times`,
