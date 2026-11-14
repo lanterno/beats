@@ -286,6 +286,10 @@ function CommandReview() {
 	}
 
 	const before = (preview.data?.before ?? {}) as Record<string, unknown>;
+	// Until a preview has answered (the arguments are refused, or it failed)
+	// there is no subject to read, and an empty `before` read as one would
+	// say "Active" or "Running" of anything.
+	const known = preview.data !== undefined;
 	// `describe()` answers {exists: false} for an account that is not there.
 	// A command that asks for the email never gets this far — looking the
 	// address up is what 404s — but one that asks for nothing would, and the
@@ -445,7 +449,7 @@ function CommandReview() {
 								rows={spec.changes(before, args, subject).map((row) => [
 									row.what,
 									<span key="now" className="text-ink-muted">
-										{row.now}
+										{known ? row.now : "—"}
 									</span>,
 									<span key="after" className="font-bold">
 										{row.after}
