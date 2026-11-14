@@ -418,20 +418,27 @@ function CommandReview() {
 }
 
 /** Only the fields this command declares, with empty boxes left out so the
- * API reads them as "the platform's default" rather than zero. */
+ * API reads them as their defaults: "the platform's default" for a limit
+ * rather than zero, the fixed all-clear for a status message, no parts for
+ * `affected`. A null would be refused wherever the default is not None.
+ * A number box holding something that is not a number goes as typed, for
+ * the API to refuse; read as NaN it would go as null, and a slow-down of
+ * "1,000" would arrive as a pause. */
 function sent(fields: CommandField[], args: Record<string, unknown>): Record<string, unknown> {
 	const out: Record<string, unknown> = {};
 	for (const field of fields) {
 		const value = args[field.key];
 		if (field.kind === "checkbox") out[field.key] = Boolean(value);
-		else if (value === "" || value === undefined || value === null) out[field.key] = null;
+		else if (value === undefined || value === null || String(value).trim() === "") continue;
 		else if (field.key === "affected" && typeof value === "string")
 			// The status commands take a list; the box is one line of names.
 			out[field.key] = value
 				.split(",")
 				.map((v) => v.trim())
 				.filter(Boolean);
-		else out[field.key] = field.kind === "number" ? Number(value) : value;
+		else if (field.kind === "number" && Number.isFinite(Number(value)))
+			out[field.key] = Number(value);
+		else out[field.key] = value;
 	}
 	return out;
 }
