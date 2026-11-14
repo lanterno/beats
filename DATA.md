@@ -15,6 +15,7 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 | Web app  | Firebase Hosting                                                           | nginx in the same stack, one origin with the API                         | Static assets only                                   |
 | Secrets  | GCP Secret Manager                                                         | `api/.env` and the environment on the host                               | OAuth client secrets, Anthropic API key, infra creds |
 | Logs     | Google Cloud Logging                                                       | Container logs (`just logs`)                                             | Request logs (no request bodies)                     |
+| Status   | A public JSON file in Google Cloud Storage (`<project>-status/status.json`) | None: the route and the banner only exist where `VITE_STATUS_URL` is set | The current state, a message, what is affected, the last twenty posts; nothing about a person |
 | Backups  | None configured in this repo                                               | `just backup <dir>`: a gzipped mongodump archive, taken on demand        | The database                                         |
 
 ## What's stored, by domain
