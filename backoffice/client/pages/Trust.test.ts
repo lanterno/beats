@@ -8,6 +8,7 @@ const wave = (fields: Partial<SignupWave>): SignupWave => ({
 	hour: "2026-11-14T09",
 	completed: 0,
 	usual: 0,
+	above_usual: false,
 	accounts_with_writes: 0,
 	largest_group: null,
 	largest_key: null,
@@ -19,10 +20,16 @@ describe("trustHeadline", () => {
 		expect(
 			trustHeadline(wave({ completed: 84, usual: 14, largest_group: 71, largest_key: KEY })),
 		).toBe("One network stands out in this hour's sign-ups.");
-		expect(trustHeadline(wave({ completed: 9, usual: 4 }))).toBe(
+		expect(trustHeadline(wave({ completed: 9, usual: 4, above_usual: true }))).toBe(
 			"More people are signing up than usual this hour.",
 		);
 		expect(trustHeadline(wave({ completed: 4, usual: 4 }))).toBe(
+			"This hour's sign-ups are ordinary.",
+		);
+	});
+
+	it("leaves the judgement to the API, so one sign-up against none is ordinary", () => {
+		expect(trustHeadline(wave({ completed: 1, usual: 0, above_usual: false }))).toBe(
 			"This hour's sign-ups are ordinary.",
 		);
 	});
