@@ -2,10 +2,15 @@
 sources, one failing while the others answer, and a web version.json that is
 missing. The route is test_operator.py's, over a fake of the port."""
 
+import asyncio
+import time
+
 import httpx
+import pytest
 
 from beats.operator.releases import (
     Build,
+    GitHubRateLimited,
     LiveReleases,
     ReleasesCache,
     assemble,
@@ -142,6 +147,85 @@ class TestCache:
         assert "latest" not in source.asked
 
 
+class _Several(_Source):
+    """Three builds, and a GitHub that keeps failing for one of them."""
+
+    def __init__(self, failing: str | None = None, limited_until: float | None = None):
+        super().__init__()
+        self.failing = failing
+        self.limited_until = limited_until
+
+    async def builds(self):
+        return [Build(sha, "SUCCESS", None, None, None) for sha in (A, B, C)]
+
+    async def web_commit(self):
+        return None
+
+    async def subject(self, sha):
+        self.asked.append(sha)
+        if self.limited_until is not None:
+            raise GitHubRateLimited(self.limited_until)
+        if sha == self.failing:
+            raise httpx.ReadTimeout("this one times out every time")
+        return f"subject of {sha[:1]}"
+
+
+class TestSubjects:
+    async def test_a_sha_that_keeps_failing_starves_none_of_the_others(self):
+        """The bug this pins: subjects were asked one by one in sorted order,
+        stopping at the first failure, so B failing forever left C's subject
+        unasked forever."""
+        source, cache = _Several(failing=B), ReleasesCache(seconds=0)
+        for _ in range(2):
+            report = await cache.report(source, api_commit=None, repository="o/r")
+            assert {r.sha: r.subject for r in report.builds} == {
+                A: "subject of a",
+                B: None,
+                C: "subject of c",
+            }
+            assert report.unavailable == ["subjects"]
+        assert source.asked.count(B) == 2, "the failing one is asked again next time"
+        assert source.asked.count(C) == 1
+
+    async def test_a_rate_limit_quiets_github_until_the_time_it_names(self):
+        source, cache = _Several(limited_until=time.time() + 3600), ReleasesCache(seconds=0)
+        await cache.report(source, api_commit=None, repository="o/r")
+        asked = len(source.asked)
+        report = await cache.report(source, api_commit=None, repository="o/r")
+        assert len(source.asked) == asked, "not asked again inside the window"
+        assert report.unavailable == ["subjects"]
+
+    async def test_the_sources_and_the_subjects_are_asked_side_by_side(self):
+        """Each waits on the others to have started: asked one after another,
+        the first would wait forever."""
+        started = {"builds": asyncio.Event(), "web": asyncio.Event()}
+        subjects = asyncio.Barrier(3)
+
+        class Waiting(_Several):
+            async def builds(self):
+                started["builds"].set()
+                await started["web"].wait()
+                return await super().builds()
+
+            async def web_commit(self):
+                started["web"].set()
+                await started["builds"].wait()
+                return None
+
+            async def subject(self, sha):
+                await subjects.wait()
+                return await super().subject(sha)
+
+        report = await asyncio.wait_for(
+            ReleasesCache().report(Waiting(), api_commit=None, repository="o/r"), timeout=2
+        )
+        assert [r.subject for r in report.builds] == [
+            "subject of a",
+            "subject of b",
+            "subject of c",
+        ]
+
+
 class TestLive:
     async def test_a_missing_version_file_is_unknown_not_a_failure(self):
         def answer(request: httpx.Request) -> httpx.Response:
@@ -198,6 +282,23 @@ class TestLive:
             assert "subjects" not in report.unavailable
         github = [c for c in calls if c.startswith("/repos/")]
         assert github == [f"/repos/o/r/commits/{A}"] * 2, "once by hand, once by the cache"
+
+    @pytest.mark.parametrize(
+        ("status", "headers"),
+        [
+            (403, {"x-ratelimit-remaining": "0", "x-ratelimit-reset": "4102444800"}),
+            (429, {"retry-after": "60"}),
+        ],
+    )
+    async def test_githubs_rate_limit_is_read_as_one(self, status, headers):
+        source = LiveReleases(
+            web_origin="",
+            repository="o/r",
+            transport=httpx.MockTransport(lambda r: httpx.Response(status, headers=headers)),
+        )
+        with pytest.raises(GitHubRateLimited) as limited:
+            await source.subject(A)
+        assert limited.value.until > time.time()
 
     async def test_a_subject_is_the_first_line_of_the_message(self):
         def answer(request: httpx.Request) -> httpx.Response:
