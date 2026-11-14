@@ -12,6 +12,7 @@ from beats.operator.health import (
     GoogleMonitoring,
     HealthCache,
     HealthFigures,
+    ProjectId,
     busiest_now,
     by_label,
     latest_value,
@@ -230,3 +231,34 @@ class TestGoogle:
         assert figures.error_share == 0.01
         assert figures.p95_latency_ms is None, "no points is no data"
         assert figures.refused_writes == []
+
+
+class TestProjectId:
+    async def test_the_project_is_read_once_and_kept(self):
+        calls = 0
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            assert request.headers["Metadata-Flavor"] == "Google"
+            return httpx.Response(200, text="proj-1")
+
+        project = ProjectId(transport=httpx.MockTransport(answer))
+        assert await project.get() == "proj-1"
+        assert await project.get() == "proj-1"
+        assert calls == 1
+
+    async def test_off_google_cloud_it_is_none_and_the_failure_is_kept(self):
+        """The pages then link nowhere rather than to a project in the
+        bundle, and do not wait on an absent metadata server each time."""
+        calls = 0
+
+        def refuse(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            raise httpx.ConnectError("no metadata server here")
+
+        project = ProjectId(transport=httpx.MockTransport(refuse))
+        assert await project.get() is None
+        assert await project.get() is None
+        assert calls == 1
