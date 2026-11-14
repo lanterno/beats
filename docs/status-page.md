@@ -65,7 +65,7 @@ by Cloud Run. Everything else here follows from that.
   (#298), which is not built.
 - **No hosted third-party status page.** It would be a new subprocessor in
   PRIVACY.md, and its subscriber lists a new place holding customers' addresses.
-- **It stands alone.** It depends on no incident record (roadmaps/backoffice.md
+- **It stands alone.** It depends on no incident record (docs/backoffice.md
   § *Not decided*). If those are built later they can prefill a post.
 
 Every browser now asks Google for this file, which shows Google the visitor's

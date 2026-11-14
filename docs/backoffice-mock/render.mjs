@@ -19,8 +19,8 @@
  * Usage (Playwright comes from ui/'s install — this folder has none of its
  * own, and goes away when the stages ship):
  *
- *   node roadmaps/backoffice-mock/render.mjs            # every screen
- *   node roadmaps/backoffice-mock/render.mjs Jobs Audit # just these
+ *   node docs/backoffice-mock/render.mjs            # every screen
+ *   node docs/backoffice-mock/render.mjs Jobs Audit # just these
  *
  * Like `scripts/gen_icons.py`, it has no `--check`: run it after editing a
  * source and commit what it wrote. A check would have to be a byte compare,
@@ -43,7 +43,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(HERE, "source");
 const SCREENS = join(HERE, "screens");
 
-// Playwright is ui/'s dev dependency; nothing is installed in roadmaps/.
+// Playwright is ui/'s dev dependency; nothing is installed in docs/.
 const require = createRequire(join(HERE, "..", "..", "ui", "package.json"));
 let chromium;
 try {

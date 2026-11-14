@@ -327,6 +327,42 @@ a reason) and `deploy.unfreeze` — the runner and the audit like every act.
   Terraform), the commands answer 409 `FREEZE_UNAVAILABLE` and the panel says
   the builds cannot be held back from here.
 
+## Decided against, or postponed
+
+The redesign's last open questions were answered on 2026-11-14, when its last
+stage shipped and its roadmap went. None of these is built, each on purpose,
+and a screen that offered one would be the same bug as a control the API
+cannot serve.
+
+- **Rolling a release back from the back office** — postponed by the owner on
+  2026-11-08. A rollback stays what it is: revert on `main`. A build never
+  rolls back, because `deploy_lock.sh` skips a commit the live one already
+  contains. It would take `run.services.update` on the operator's account,
+  which holds nothing like it, and a way to square a moved traffic split with
+  Terraform, whose next apply owns the service and would move it straight
+  back. Reopen it only if a real incident shows that reverting on `main` was
+  too slow, measured from the merge to the live revision.
+- **A required reason and reference on every command** — no. The record is
+  you, the command, the subject and the two sides; a reason that had to be
+  typed would be typed badly, and the one command whose reason matters
+  (suspension) already asks for it. The deploy freeze, a pause and a status
+  post carry theirs because somebody else reads them.
+- **Incidents and write-ups** — no, not as a record here. The status page
+  tells customers; a write-up is prose, and belongs in the repository's
+  history with the fix. If one is ever kept, it can prefill a status post.
+- **A list of restrictions in force across accounts** — no. Each account's
+  page shows its own suspension and limits, and a list across accounts is
+  the browsable account list the line refuses; nothing records why, or when
+  to look again, for the same reason.
+- **An audit of each lookup** — no. Opening an account is a read, and reads
+  are not recorded: a write on every read path would slow the one thing the
+  operator does most, and a log of who looked at whom is a record about
+  people the control plane deliberately does not keep. The recent list is
+  ids in `localStorage`, visible to nobody else.
+- **Snoozing or finishing a queue item** — no. A row is the condition, and
+  it leaves when the condition does; stored state per row would let a row be
+  ticked off while the thing itself still stands.
+
 ## Authentication
 
 Google IAP is in front, on the Cloud Run service; the app verifies the signed
@@ -415,8 +451,8 @@ on by them on 2026-11-08.
 
 ## The pages, by the job they serve
 
-The pages were reorganised around the work on 2026-11-14 (the mock is in
-roadmaps/backoffice-mock/). A page appears in the sidebar only once it is
+The pages were reorganised around the work on 2026-11-14 (the mock they were
+drawn from is in [backoffice-mock/](backoffice-mock/)). A page appears in the sidebar only once it is
 built: a nav entry to a screen that does not exist is a promise the API
 cannot keep.
 

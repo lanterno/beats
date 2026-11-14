@@ -97,6 +97,17 @@ project.
 
    A copy missed here is still a live credential. Only rotating a secret
    makes every old copy of it worthless.
+5. **Then the control plane's deploy-state row** (moved here from the
+   control plane's roadmap on 2026-11-14, when the rest of it shipped): once
+   the API's spec carries no secret, reading the service is safe, and Today
+   can say whether the newest revision became ready instead of linking to
+   the Cloud Run console. The reads are what `api/scripts/deploy_lock.sh`
+   reads — the API service and its revisions, the Artifact Registry tags,
+   and `beats/deploy.lock` alone as an object get under a `resource.name`
+   condition (a condition cannot narrow a list, so the operator never lists
+   the state bucket) — granted to the `beats-operator` service account in
+   `terraform/operator.tf`, gated on `operator_enabled`. The Releases page's
+   "as deployed" label on the API's commit goes then, replaced by the truth.
 
 ## What must not happen
 

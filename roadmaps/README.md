@@ -10,18 +10,17 @@ built, and why.
 | [account-emails.md](account-emails.md) | Several verified addresses on one account — what #341 waits on, and the one place decision 11's no-email rule gets revisited |
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
-| [backoffice.md](backoffice.md) | The operator's control plane (#424) shipped 2026-11-04 ([docs/backoffice.md](../docs/backoffice.md)); the redesign the owner chose on 2026-11-08 shipped in full on 2026-11-14; what is left: the deploy-state row that waits on secret-manager.md, what was postponed, and what is undecided |
-| [backoffice-mock/](backoffice-mock/) | The redesign [backoffice.md](backoffice.md) builds: a picture and the source of every screen, readable without Claude |
 | [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state row waits on |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
-| [file-sizes.md](file-sizes.md) | The Python files past the 1000-line ceiling (stated 2026-11-06), and the seams to carve each at — mostly the four big test files |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
 
-Five of these were split out of `organisations.md` on 2026-10-31. The test
+Five pieces were split out of `organisations.md` on 2026-10-31. The test
 each had to fail to stay: **is it an organisations feature?** A control
 plane, push, an account's addresses, taking money and an identity protocol
 are none of them, and filing them under the epic was shaping each around one
-view of one feature. Three of the epic's own items wait on one of them
+view of one feature. The control plane has since shipped in full
+([docs/backoffice.md](../docs/backoffice.md), 2026-11-14) and its file went;
+the four others are above. Three of the epic's own items wait on one of them
 (#341 on the addresses, #345 on the money, #351 on push), and its file
 keeps, for each of those three, the paragraph saying what stays the epic's
 when the blocker clears.

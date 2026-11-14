@@ -1,12 +1,15 @@
 # The back office mock
 
 The redesign of the operator's back office, as the owner reviewed it on
-2026-11-08. [backoffice.md](../backoffice.md) is the plan that builds it.
+2026-11-08 and as it was built by 2026-11-14 ([backoffice.md](../backoffice.md)
+§ *The pages*). It moved here from `roadmaps/` with the last stage; it is the
+design the pages were drawn from, kept so a change to a page can be checked
+against what was decided.
 
 **It can be built as drawn.** On 2026-11-09 every control that promised what
 the product cannot do was corrected here, so there is no list of exceptions to
 hold in your head — if a screen shows it, the API can serve it or the screen
-says why it cannot. backoffice.md § *The design* records what changed. Keep it
+says why it cannot. Keep it
 true: adding a control the API cannot serve is the same bug here as in the code.
 
 Every figure, person and organisation in it is invented. Nothing here needs
@@ -24,8 +27,8 @@ a reference: do not port the `.dc.html` format or import `backoffice.css`.
 ## Redrawing the pictures
 
 ```bash
-node roadmaps/backoffice-mock/render.mjs            # every screen
-node roadmaps/backoffice-mock/render.mjs Jobs Audit # just these
+node docs/backoffice-mock/render.mjs            # every screen
+node docs/backoffice-mock/render.mjs Jobs Audit # just these
 ```
 
 Edit a source, run it, commit what it wrote. Playwright comes from `ui/`'s
