@@ -14,6 +14,7 @@ from beats.operator.status_page import (
     GcsStatusStore,
     MemoryStatusStore,
     StatusConflict,
+    StatusUnreadable,
     next_doc,
     parse,
     publish,
@@ -33,13 +34,14 @@ class TestDocument:
         assert doc.posts[0].message == f"post {POSTS_KEPT + 2}"
         assert doc.state == "degraded"
 
-    def test_render_and_parse_agree_and_garbage_is_none(self):
+    def test_render_and_parse_agree_and_garbage_is_unreadable_not_absent(self):
         doc = next_doc(
             None, state="outage", message="Sign-in is down.", affected=["sign-in"], now=NOW
         )
         assert parse(doc.to_json()) == doc
-        assert parse("<!doctype html>") is None
-        assert parse('{"state": "outage"}') is None
+        for garbage in ("<!doctype html>", '{"state": "outage"}', "[]", '{"state": "outage", '):
+            with pytest.raises(StatusUnreadable):
+                parse(garbage)
 
 
 class _FailingWrite(MemoryStatusStore):
@@ -186,6 +188,30 @@ class TestStatusCommands:
         assert refused.status_code == 409
         assert refused.json()["code"] == "STATUS_NOT_REVIEWED"
         assert self.store.writes == 0
+
+    def test_a_file_that_cannot_be_read_is_said_and_never_written_over(self, operator_client):
+        """The bug this pins: a corrupt file once read as no file, so the read
+        said nothing had been published and the next post replaced the
+        history with one line."""
+        self.store.text = '{"state": "outage", "posts": [{"at": "cut short'
+        self.store.generation = 7
+
+        read = operator_client.get("/api/operator/status").json()
+        assert read["problem"] == "unreadable"
+        assert read["state"] is None
+        assert read["published"] is False
+
+        args = {"state": "outage", "message": "Sign-in is down."}
+        preview = operator_client.post(
+            "/api/operator/commands/status.publish/preview", json={"args": args}, headers=self.OWN
+        )
+        assert preview.status_code == 409
+        assert preview.json()["code"] == "STATUS_UNREADABLE"
+        refused = self._run(operator_client, "status.publish", {**args, "generation": 7})
+        assert refused.status_code == 409
+        assert refused.json()["code"] == "STATUS_UNREADABLE"
+        assert self.store.writes == 0
+        assert self.store.text.endswith("cut short")
 
     def test_the_states_and_parts_are_fixed_lists_and_the_message_is_bounded(self, operator_client):
         for args in (
