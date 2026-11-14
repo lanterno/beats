@@ -235,8 +235,12 @@ function CommandReview() {
 		placeholderData: keepPreviousData,
 	});
 
+	// A status act names the version of the file its preview read, and the API
+	// refuses it (409) if someone has posted since (docs/status-page.md).
+	const generation = (preview.data?.before as Record<string, unknown> | undefined)?.generation;
+	const reviewed = typeof generation === "number" ? { generation } : {};
 	const act = useMutation({
-		mutationFn: () => runCommand(command, sentArgs, typed || undefined),
+		mutationFn: () => runCommand(command, { ...sentArgs, ...reviewed }, typed || undefined),
 		onSuccess: () => {
 			// Not the preview: once the act has run, "Now" is the state it
 			// found, and re-reading it would make the change table claim the
