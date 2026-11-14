@@ -185,8 +185,8 @@ class TestErasureRequestLog:
     ):
         from beats.operator.reads import ERASURE_REQUEST_ATTENTION_DAYS
 
-        fresh = self._log(operator_client, 1, reference="fresh")
-        old = self._log(operator_client, ERASURE_REQUEST_ATTENTION_DAYS, reference="old")
+        fresh = self._log(operator_client, 1, reference="T-1")
+        old = self._log(operator_client, ERASURE_REQUEST_ATTENTION_DAYS, reference="T-2")
 
         rows = operator_client.get("/api/operator/erasure-requests").json()
         assert {(r["id"], r["status"]) for r in rows} == {(fresh, "open"), (old, "open")}
@@ -212,14 +212,24 @@ class TestErasureRequestLog:
         assert "T-441" not in str(audit)
         assert mongo.erasure_requests.find_one({"_id": ObjectId(alone)})["reference"] == "T-4418"
 
-    def test_a_reference_is_never_an_address(self, operator_client):
-        refused = self._run(
-            operator_client,
-            "erasure_request.log",
-            {"reference": "ana@example.test", "received_on": "2026-11-01"},
-        )
-        assert refused.status_code == 422
-        assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+    def test_a_reference_is_a_ticket_or_a_date_never_a_name(self, operator_client, mongo):
+        """The reference is kept a year after the request closes, so it is
+        a ticket number or the mail's date and nothing a person is called."""
+        for typed in ("Jane Doe mail", "JaneDoe", "jane.doe.2026", "ana@example.test"):
+            refused = self._run(
+                operator_client,
+                "erasure_request.log",
+                {"reference": typed, "received_on": "2026-11-01"},
+            )
+            assert refused.status_code == 422, typed
+            assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+            [field] = refused.json()["fields"]
+            assert field["path"] == "reference"
+            assert field["message"].startswith("a ticket number or the mail's date")
+        assert mongo.erasure_requests.count_documents({}) == 0
+
+        for typed in ("T-1234", "#42", "2026-11-14-2"):
+            self._log(operator_client, 1, reference=typed)
 
     def test_the_state_is_read_off_the_job_queue(self, operator_client, mongo):
         user_id = str(ObjectId())
