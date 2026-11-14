@@ -39,6 +39,9 @@ from beats.operator.reads import (
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
+    QueueKind,
+    QueueRow,
+    queue_due,
 )
 
 # The collections the storage estimate sums, each keyed on `user_id` and led
@@ -198,6 +201,79 @@ class MongoOperatorReads:
             absence_requests_pending_over_14d=pending,
             accounts_near_coach_cap=near_cap,
         )
+
+    async def queue(self) -> list[QueueRow]:
+        """The rows behind the Attention counts, soonest due first. Ids and
+        dates only; a row is the condition itself, so nothing here is stored
+        and a row leaves when its condition clears.
+
+        Superseded approvals and pending absence requests are read whatever
+        their age, so the queue can show them before they are due; they are
+        grouped per organisation, with no member named."""
+        now = datetime.now(UTC)
+        rows: list[QueueRow] = []
+
+        def row(kind: QueueKind, subject: str, since: datetime | None, count: int = 1) -> None:
+            rows.append(QueueRow(kind, subject, since, queue_due(kind, since, now), count))
+
+        owners = await self._owners_by_org()
+        org_ids = [str(doc["_id"]) async for doc in self._db.organisations.find({}, projection=[])]
+        suspended = await self._suspended_of(sorted({u for ids in owners.values() for u in ids}))
+        for org in org_ids:
+            if not owners.get(org):
+                row("organisation_without_owner", org, None)
+            elif all(u in suspended for u in owners[org]):
+                row("organisation_all_owners_suspended", org, None)
+
+        cursor = self._db.operator_jobs.find(
+            {"state": {"$in": ["queued", "failed"]}},
+            projection=["state", "run_after", "finished_at"],
+        )
+        async for doc in cursor:
+            if doc["state"] == "failed":
+                row("job_failed", str(doc["_id"]), _as_datetime(doc.get("finished_at")))
+            else:
+                row("job_queued", str(doc["_id"]), _as_datetime(doc.get("run_after")))
+
+        for kind, collection, match, date_field in (
+            (
+                "approvals_superseded",
+                "org_timesheets",
+                {"status": "approved", "superseded_at": {"$ne": None}},
+                "superseded_at",
+            ),
+            (
+                "absence_requests_pending",
+                "org_absence_requests",
+                {"status": "pending"},
+                "requested_at",
+            ),
+        ):
+            grouped = await self._db[collection].aggregate(
+                [
+                    {"$match": match},
+                    {
+                        "$group": {
+                            "_id": "$organisation_id",
+                            "oldest": {"$min": f"${date_field}"},
+                            "count": {"$sum": 1},
+                        }
+                    },
+                ]
+            )
+            async for doc in grouped:
+                row(kind, str(doc["_id"]), _as_datetime(doc["oldest"]), int(doc["count"]))
+
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        spend = await self._coach_spend_by_user(month_start)
+        budgets = await self._coach_budgets()
+        for uid, spent in spend.items():
+            budget = budgets.get(uid, self._coach_default_budget)
+            if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
+                row("account_near_coach_cap", uid, None)
+
+        rows.sort(key=lambda r: r.due)
+        return rows
 
     # ── the operator's own records ──────────────────────────────────
 

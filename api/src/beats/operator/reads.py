@@ -15,8 +15,8 @@ not a review comment.
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
-from typing import Protocol
+from datetime import date, datetime, timedelta
+from typing import Literal, Protocol
 
 # The landing page's thresholds. They decide only what the operator is shown,
 # never what a user is allowed, so constants are enough; changing one is a
@@ -42,6 +42,52 @@ class AttentionCounts:
     approvals_superseded_over_30d: int
     absence_requests_pending_over_14d: int
     accounts_near_coach_cap: int
+
+
+QueueKind = Literal[
+    "organisation_without_owner",
+    "organisation_all_owners_suspended",
+    "job_failed",
+    "job_queued",
+    "approvals_superseded",
+    "absence_requests_pending",
+    "account_near_coach_cap",
+]
+
+
+@dataclass(frozen=True)
+class QueueRow:
+    """One row behind an Attention count: what it is, which id, since when,
+    and when it is due. Ids and dates only. Nothing stores that a row was
+    handled; it leaves when its condition clears.
+
+    Superseded approvals and absence requests are one row per organisation
+    (`count` of them, `since` the oldest), with no member named."""
+
+    kind: QueueKind
+    subject_id: str
+    since: datetime | None
+    due: datetime
+    count: int = 1
+
+
+def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetime:
+    """When a queue row is due, from the same constants Attention counts by.
+
+    A superseded approval is due `SUPERSEDED_ATTENTION_DAYS` after it was
+    superseded and an absence request `ABSENCE_REQUEST_ATTENTION_DAYS` after
+    it was made — the moment Attention starts counting it. A queued job is
+    due when its window ends, the last moment it can still be cancelled
+    (`since` is its `run_after`). Everything else needs somebody now: a
+    failed job, an organisation nobody can manage, a coach cap in reach.
+    A condition with no stored date is due `now`."""
+    if since is None:
+        return now
+    if kind == "approvals_superseded":
+        return since + timedelta(days=SUPERSEDED_ATTENTION_DAYS)
+    if kind == "absence_requests_pending":
+        return since + timedelta(days=ABSENCE_REQUEST_ATTENTION_DAYS)
+    return since
 
 
 @dataclass(frozen=True)
@@ -193,6 +239,7 @@ class OperatorReads(Protocol):
     """The aggregates the operator's pages read, and nothing else."""
 
     async def attention(self) -> AttentionCounts: ...
+    async def queue(self) -> list[QueueRow]: ...
     async def audit_log(self, limit: int = 200, subject_id: str | None = None) -> list[dict]: ...
     async def account_coach_spend(self, user_id: str, days: int = 30) -> list[DayFigure]: ...
     async def jobs(self, limit: int = 200) -> list[dict]: ...

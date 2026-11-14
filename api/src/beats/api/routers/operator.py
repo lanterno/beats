@@ -27,6 +27,7 @@ from beats.operator.reads import (
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
+    QueueRow,
 )
 from beats.operator.runner import CommandPreview, preview_command, run_command
 
@@ -58,6 +59,14 @@ async def me(operator: CurrentOperator) -> OperatorMe:
 async def attention(operator: CurrentOperator, reads: OperatorReadsDep) -> AttentionCounts:
     """The landing page's counts: the reason to open the control plane."""
     return await reads.attention()
+
+
+@router.get("/queue", response_model=list[QueueRow])
+async def queue(operator: CurrentOperator, reads: OperatorReadsDep) -> list[QueueRow]:
+    """The rows behind the Attention counts, soonest due first: ids and
+    dates, never a member's name. Nothing stores that a row was handled; it
+    leaves when its condition clears."""
+    return await reads.queue()
 
 
 @router.post("/accounts/lookup", response_model=list[AccountMatch])
