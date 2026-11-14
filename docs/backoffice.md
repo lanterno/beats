@@ -481,9 +481,27 @@ cannot keep.
   `api_rejections` already counts them. Until a `WRITES_PER_MINUTE_*`
   ceiling is set, the refusal signal counts nothing, which the page says.
 - **Capacity**: documents and storage per collection (`$collStats`), the
-  coach's platform cost by day and model with the cache-read inputs. Latency,
-  error rates and instance counts are Cloud Monitoring's — linked, not
-  rebuilt.
+  coach's platform cost by day and model with the cache-read inputs, and
+  live health with refused writes per route.
+- **Live health** (shipped 2026-11-14, stage 4 of what was
+  roadmaps/backoffice.md), on Today and Capacity through `GET
+  /api/operator/health`: availability over the last day (the uptime checks)
+  against the **99.5% a month target** (decided 2026-11-14: one region,
+  30-second cold starts and one operator make 99.9% a budget the first bad
+  deploy would spend), the share of 5xx and p95 latency over the last hour,
+  instances against their ceiling, and refused writes per route. Read by
+  `GoogleMonitoring` (`operator/health.py`) over plain `httpx`, behind the
+  `MonitoringSource` port, with `roles/monitoring.viewer` on the operator's
+  account (gated on `operator_enabled`). **Nothing to configure**: the
+  project and the token come from the metadata server, and the service name
+  and ceiling (`OPERATOR_API_SERVICE`, `OPERATOR_API_MAX_INSTANCES`) are set
+  by Terraform, with defaults. Cached a minute in the process; a Google
+  failure answers the last figures and their age, a failure is cached too,
+  and off Google Cloud the panel says "unavailable" with the console link —
+  never an invented number, never a broken page. Nothing is stored. Not
+  shown, on purpose: Google's open-alert list (`alerts.list`, in preview on
+  2026-11-08; the console link stands in) and the job runner's last run (a
+  run that finds nothing writes nothing, so no source holds it).
 - **Jobs and windows**: the job queue with cancel. A failed job has no
   re-run: three attempts is terminal, and the way back is to queue the
   command again.
