@@ -13,16 +13,24 @@ operator the command carries. A command's rules are checked when it runs,
 not when it was queued — a deletion whose organisation has been given an
 owner while it waited is refused then, which this runner records as the
 job's failure.
+
+After the queue, each run keeps the database's size for the UTC day if it
+is not kept yet (`infrastructure/database_sizes.py`), which Capacity reads its
+pace off. Second, and on its own: a size that cannot be taken logs a WARNING
+and nothing more, because the queue is what this runner is for and an ERROR
+here pages somebody (`operator_job_failures` in terraform/operator.tf).
 """
 
 import asyncio
 import logging
 import os
 import sys
+from datetime import UTC, datetime
 
 from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 
+from beats.infrastructure.database_sizes import MongoDatabaseSizes
 from beats.infrastructure.operator_jobs import MongoOperatorJobs
 from beats.operator.context import build_command_context
 from beats.operator.runner import run_command
@@ -60,6 +68,25 @@ async def run_due_jobs(db: AsyncDatabase) -> int:
     return handled
 
 
+async def keep_todays_size(db: AsyncDatabase) -> None:
+    """Keep the database's size for today unless it is kept already. Never
+    raises: a failure is a WARNING, which pages nobody, and the page shows
+    the last day a size was kept."""
+    try:
+        if await MongoDatabaseSizes(db).keep(datetime.now(UTC)):
+            logger.info("kept today's database size")
+    except Exception as e:  # noqa: BLE001 — a missed size must not fail the queue's run
+        logger.warning("today's database size was not kept: %s", f"{type(e).__name__}: {e}"[:500])
+
+
+async def tick(db: AsyncDatabase) -> int:
+    """One run of the job: drain the queue, then keep today's size. The
+    count handled."""
+    handled = await run_due_jobs(db)
+    await keep_todays_size(db)
+    return handled
+
+
 def _configure_logging() -> None:
     """INFO to stdout, ERROR and up to stderr — not basicConfig, which sends
     everything to stderr. Cloud Run marks unstructured stderr lines as
@@ -92,7 +119,7 @@ def main() -> int:
     async def run() -> int:
         client: AsyncMongoClient = AsyncMongoClient(dsn)
         try:
-            return await run_due_jobs(client[db_name])
+            return await tick(client[db_name])
         finally:
             await client.close()
 

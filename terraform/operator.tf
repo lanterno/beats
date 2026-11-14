@@ -322,9 +322,11 @@ locals {
 #
 # A Cloud Run Job running `python -m beats.operator.jobs`, started by Cloud
 # Scheduler every 15 minutes. It finds nothing due and exits on almost every
-# run, which on Cloud Run Jobs costs next to nothing. Nothing else is
-# scheduled: the retention purge stays an act the operator starts (decision
-# 30), now from a page rather than a shell.
+# run, which on Cloud Run Jobs costs next to nothing. Besides the queue, the
+# first run of each UTC day keeps the database's size for Capacity's pace
+# (`database_sizes`), which needs `collStats` on its database user. Nothing
+# else is scheduled: the retention purge stays an act the operator starts
+# (decision 30), now from a page rather than a shell.
 
 resource "google_project_service" "cloudscheduler" {
   count = var.operator_enabled ? 1 : 0

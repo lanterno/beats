@@ -432,7 +432,10 @@ production, not `beats`.
    M0 and Flex included; a change takes up to 30 seconds to apply):
    - Create a custom role `beatsOperator` on that database: **find on
      every collection**, plus the `collStats`, `dbStats` and
-     `listCollections` actions (the capacity page's counts need them), and
+     `listCollections` actions (the capacity page's counts need them), the
+     cluster-wide `serverStatus` action (Capacity's connections, added
+     2026-11-14; without it the tile says so and the rest of the page
+     reads), and
      **insert/update/remove only on**: `users` (suspension,
      `sessions_valid_after`), `account_limits`, `device_registrations`
      (`revoked`), `organisations` (closing), `org_members`, `org_audit`,
@@ -464,7 +467,9 @@ production, not `beats`.
    `beatsOperatorJobs` that finds, inserts, updates and removes in **every**
    collection of the database — erasure, an organisation's deletion and the
    purge between them touch nearly all of them — plus `listCollections`, which
-   erasure's final sweep calls, creating no index and dropping nothing. A user
+   erasure's final sweep calls, and `collStats`, which keeping the database's
+   size once a day reads (`database_sizes`, added 2026-11-14; without it the
+   run logs a warning and keeps none), creating no index and dropping nothing. A user
    of its own, not the API's or the operator's, so each credential rotates
    alone.
 

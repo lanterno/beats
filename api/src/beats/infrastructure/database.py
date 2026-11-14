@@ -134,6 +134,10 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     # 48 hours, by the TTL on `expires_at`; one row per hour and network.
     await db.signup_network_counts.create_index("expires_at", expireAfterSeconds=0)
     await db.signup_network_counts.create_index([("hour", 1), ("key", 1)], unique=True)
+    # The database's size a day, kept by the job runner for Capacity's pace
+    # (infrastructure/database_sizes.py): SIZE_KEEP_DAYS, by the TTL on
+    # `expires_at`. Keyed on the day as its _id, so it needs no other index.
+    await db.database_sizes.create_index("expires_at", expireAfterSeconds=0)
 
 
 class Database:

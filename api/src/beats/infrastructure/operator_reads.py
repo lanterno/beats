@@ -9,9 +9,12 @@ and greps every response for it.
 
 A pipeline per request is fine at this size (§ *What is deliberately not
 here*): no pre-computed aggregates, and the account page's storage estimate
-is computed for one account on that page only, never for a list.
+is computed for one account on that page only, never for a list. The one
+stored series is the database's own size a day (`database_sizes.py`), since
+a pace needs a size from before today and nothing else keeps one.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
@@ -19,7 +22,11 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from pydantic import TypeAdapter
 from pymongo.asynchronous.database import AsyncDatabase
+from pymongo.errors import PyMongoError
 
+from beats.coach.pricing import cache_saving_usd
+from beats.infrastructure.database_sizes import MongoDatabaseSizes, collection_stats
+from beats.operator.growth import database_growth, with_growth
 from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
     ACCOUNT_COACH_SPEND_DAYS,
@@ -38,6 +45,7 @@ from beats.operator.reads import (
     CoachCostDay,
     CollectionSize,
     ControlState,
+    DatabaseConnections,
     DayFigure,
     DeviceSummary,
     DomainFigure,
@@ -54,6 +62,8 @@ from beats.operator.reads import (
 )
 from beats.platform_controls import COLLECTION as CONTROLS_COLLECTION
 from beats.platform_controls import PAUSES, SIGNUP_NETWORK_COUNTS, control_from_doc, hour_key
+
+logger = logging.getLogger(__name__)
 
 # The collections the storage estimate sums, each keyed on `user_id` and led
 # by an index on it. What the account stores, never what it says.
@@ -829,22 +839,27 @@ class MongoOperatorReads:
         )
 
     async def capacity(self) -> CapacityReport:
-        collections = []
-        for name in sorted(await self._db.list_collection_names()):
-            cursor = await self._db[name].aggregate([{"$collStats": {"storageStats": {}}}])
-            rows = await cursor.to_list(1)
-            stats = rows[0].get("storageStats", {}) if rows else {}
-            collections.append(
-                CollectionSize(
-                    name=name,
-                    documents=int(stats.get("count", 0)),
-                    storage_bytes=int(stats.get("storageSize", 0)),
-                    index_bytes=int(stats.get("totalIndexSize", 0)),
-                )
+        # Each collection as it stands, and the database's pace off the
+        # sizes the job runner keeps a day (infrastructure/database_sizes.py).
+        sizes = MongoDatabaseSizes(self._db)
+        series = await sizes.series()
+        growth = database_growth(series)
+        collections = [
+            CollectionSize(
+                name=s.name,
+                documents=s.documents,
+                storage_bytes=s.storage_bytes,
+                index_bytes=s.index_bytes,
             )
+            for s in await collection_stats(self._db)
+        ]
+        if growth is not None:
+            then, now = await sizes.on(growth.since), await sizes.on(growth.until)
+            collections = with_growth(collections, growth, then, now)
 
         # The platform's coach cost by day and model, with what one account's
-        # /api/coach/usage cannot say: the cache-hit ratio across everyone.
+        # /api/coach/usage cannot say: the cache-hit ratio across everyone,
+        # and what the cache saved at each model's rates.
         # The last COACH_COST_DAYS days only, newest first: every day since
         # launch would grow without bound.
         today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -860,6 +875,7 @@ class MongoOperatorReads:
                     "cost_usd": {"$sum": "$cost_usd"},
                     "input_tokens": {"$sum": "$input_tokens"},
                     "cache_read": {"$sum": "$cache_read_input_tokens"},
+                    "cache_write": {"$sum": "$cache_creation_input_tokens"},
                     "calls": {"$sum": 1},
                 }
             },
@@ -874,7 +890,35 @@ class MongoOperatorReads:
                 input_tokens=int(d["input_tokens"]),
                 cache_read_tokens=int(d["cache_read"]),
                 calls=int(d["calls"]),
+                cache_saved_usd=round(
+                    cache_saving_usd(
+                        str(d["_id"]["model"]), int(d["cache_read"]), int(d["cache_write"])
+                    ),
+                    4,
+                ),
             )
             async for d in cursor
         ]
-        return CapacityReport(collections=collections, coach_cost=coach_cost)
+        return CapacityReport(
+            collections=collections,
+            coach_cost=coach_cost,
+            sizes=series,
+            growth=growth,
+            connections=await self._connections(),
+        )
+
+    async def _connections(self) -> DatabaseConnections | None:
+        """The cluster's connections, from `serverStatus` — which Atlas's free
+        tier answers with its connections among the few sections it keeps,
+        for a user whose role carries the action. Refused, the page says it
+        cannot tell rather than failing whole."""
+        try:
+            status = await self._db.command("serverStatus")
+        except PyMongoError as e:
+            logger.warning("serverStatus refused: %s", f"{type(e).__name__}: {e}"[:300])
+            return None
+        connections = status.get("connections") or {}
+        current, available = connections.get("current"), connections.get("available")
+        if not isinstance(current, int) or not isinstance(available, int):
+            return None
+        return DatabaseConnections(current=current, allowed=current + available)

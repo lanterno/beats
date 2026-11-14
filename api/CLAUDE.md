@@ -53,6 +53,7 @@ src/beats/
 │   └── utils.py         Date helpers (week-of, ISO conversion)
 ├── coach/        AI coach — streaming chat, brief generation, memory
 │   ├── chat.py, gateway.py, context.py, tools.py, memory.py, …
+│   ├── pricing.py       The models' price table and what the cache saved; imports no settings, so the operator reads it
 ├── infrastructure/
 │   ├── database.py      PyMongo async client singleton (Database.connect/disconnect)
 │   ├── migrations.py    Startup passes: a project without `kind` gets one (a day job its
@@ -68,7 +69,8 @@ src/beats/
 │   ├── project_repositories.py Beats, projects and the approved month's lock; MongoProjectRepository merges a member's assignments in
 │   ├── contract_repositories.py Absences and balance adjustments
 │   ├── billing_repositories.py Clients, project billing, overrides, budgets, report links
-│   └── signal_repositories.py Flow windows, signal summaries, pending suggestions, biometrics
+│   ├── signal_repositories.py Flow windows, signal summaries, pending suggestions, biometrics
+│   └── database_sizes.py The database's size, kept once a UTC day by the operator's job runner
 ├── settings.py   pydantic-settings (reads .env / env vars)
 ├── auth/         WebAuthn + JWT sessions; OpenID Connect sign-in (oidc.py, sso_accounts.py)
 └── server.py     FastAPI app + lifespan (in src/, not src/beats/)
@@ -96,9 +98,10 @@ suite.
 
 - **`src/test_api.py` and `src/test_api_*.py`** — HTTP integration tests against real MongoDB (testcontainers), one file per router area: projects, contracts, the ledger and what the project page reads off it, billing, report links (`test_api_reports.py` — the public read with no Authorization header, and the four assertions that a link cannot reach another client, a personal project, an internal id or a running timer), beats and the timer, the coach, intelligence, export and backup, accounts and auth, devices, signals, the daemon's suggestions, integrations and SSO. `test_api.py` itself keeps what belongs to no one router: the error envelope, what a stop names, the idempotency replay, two accounts' isolation.
 - **`src/test_account_controls.py`** — account controls over HTTP (docs/account-controls.md): suspension on both credential branches and at the pairing and report-link doors, sign-out everywhere against `auth_time`, the two last-seen stamps, and the per-account limits; then the platform's controls at the doors they guard, each pause and its expiry (`TestPlatformControlsAPI`), and the sign-up network signal with its slow-downs (`TestSignupNetworks`). Shares `test_api.py`'s harness and billing helpers; the SSO door's suspension test stays with `TestSSOAPI`.
-- **`src/test_operator.py`** — the operator deployment's contract (docs/backoffice.md): the fresh-interpreter isolation pins (no `beats.settings` in the operator root; no operator router in `server`), the allowlist and Origin lines, **the wall** (a sentinel in every right-column thing, grepped out of every page), the IAP verifier with a test that fails each of Google's checks on purpose, and Capacity's coach cost kept to recent days, newest first. The operator env and the `operator_client` fixture are `conftest.py`'s.
+- **`src/test_operator.py`** — the operator deployment's contract (docs/backoffice.md): the fresh-interpreter isolation pins (no `beats.settings` in the operator root; no operator router in `server`), the allowlist and Origin lines, **the wall** (a sentinel in every right-column thing, grepped out of every page), the IAP verifier with a test that fails each of Google's checks on purpose, and Capacity's coach cost kept to recent days, newest first, with what the cache saved at each model's rates. The operator env and the `operator_client` fixture are `conftest.py`'s.
 - **`src/test_operator_commands.py`** — the commands and the job queue: the runner's gates (confirmation, role, 404 at queue time for a mistyped subject), the organisation acts behind `ORGANISATION_HAS_OWNER`, and the erasure window's consistency rules (one queued job per subject, no unsuspend around it, a failed queueing leaves nothing standing, the sweep spares the operator's own records, the erasure closes the request that asked for it).
 - **`src/test_operator_controls.py`** — the platform switches and limits (`control.set`/`clear`: a pause's end and reason, a limit's value, a network's midnight cap) and the erasure request log: its state read off the job queue, what a reference may be, an id as the audit's subject, and an unknown account id refused on its box.
+- **`src/test_operator_capacity.py`** — Capacity's stored half: the daily size kept once a day and once when two runs overlap, figures and names only; a refused keep that logs a warning, pages nobody and leaves the queued job run; the pace and each collection's growth over HTTP; and the cluster's connections, with a refused `serverStatus` that leaves the rest of the page. The pace's arithmetic is `src/beats/test_operator_growth.py`'s, on its interesting inputs, without Mongo.
 - **`src/test_deploy_freeze.py`** — the deploy freeze: the flag's format, the two commands, a bucket that does not answer, and `decide` in `api/scripts/deploy_lock.sh` run against a stub `gcloud`.
 - **`src/test_status_page.py`** — the public status file: a failed write leaving the old file, the generation conflict and a post made between the review and the act, a file that cannot be read refused and a bucket that does not answer said, the commands.
 - **`src/beats/test_platform_controls.py`**, **`test_signup_networks.py`**, **`test_operator_health.py`**, **`test_operator_releases.py`** — the pure halves: what control documents mean and the cache's safety, address truncation and the day's key, Monitoring's answers read side by side, the instances counted per revision, and the health cache; release sources merged, read side by side and failing alone, one live build, and the held build to re-run.

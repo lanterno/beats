@@ -470,6 +470,33 @@
             },
             "title": "Collections",
             "type": "array"
+          },
+          "connections": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseConnections"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "growth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DatabaseGrowth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sizes": {
+            "items": {
+              "$ref": "#/components/schemas/SizeDay"
+            },
+            "title": "Sizes",
+            "type": "array"
           }
         },
         "required": [
@@ -534,6 +561,10 @@
             "title": "Cache Read Tokens",
             "type": "integer"
           },
+          "cache_saved_usd": {
+            "title": "Cache Saved Usd",
+            "type": "number"
+          },
           "calls": {
             "title": "Calls",
             "type": "integer"
@@ -561,7 +592,8 @@
           "cost_usd",
           "input_tokens",
           "cache_read_tokens",
-          "calls"
+          "calls",
+          "cache_saved_usd"
         ],
         "title": "CoachCostDay",
         "type": "object"
@@ -571,6 +603,28 @@
           "documents": {
             "title": "Documents",
             "type": "integer"
+          },
+          "growth_bytes_a_month": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Growth Bytes A Month"
+          },
+          "growth_share_a_month": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Growth Share A Month"
           },
           "index_bytes": {
             "default": 0,
@@ -808,6 +862,56 @@
           "set_at"
         ],
         "title": "ControlState",
+        "type": "object"
+      },
+      "DatabaseConnections": {
+        "description": "`serverStatus`'s connections as the cluster answers them: those open\nnow, and how many it allows \u2014 open and still available together, which on\nAtlas's free tier is its 500.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "integer"
+          },
+          "current": {
+            "title": "Current",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "current",
+          "allowed"
+        ],
+        "title": "DatabaseConnections",
+        "type": "object"
+      },
+      "DatabaseGrowth": {
+        "description": "The pace: what the database moved between two days kept, carried to a\nmonth of 30 days. `until` is the newest size kept and `since` the oldest\nwithin `GROWTH_PACE_DAYS` before it \u2014 or, when the runner kept none in\nthat span, the one kept just before `until`.",
+        "properties": {
+          "bytes_a_month": {
+            "title": "Bytes A Month",
+            "type": "number"
+          },
+          "change_bytes": {
+            "title": "Change Bytes",
+            "type": "integer"
+          },
+          "since": {
+            "format": "date",
+            "title": "Since",
+            "type": "string"
+          },
+          "until": {
+            "format": "date",
+            "title": "Until",
+            "type": "string"
+          }
+        },
+        "required": [
+          "since",
+          "until",
+          "change_bytes",
+          "bytes_a_month"
+        ],
+        "title": "DatabaseGrowth",
         "type": "object"
       },
       "DayFigure": {
@@ -2183,6 +2287,26 @@
         "title": "SignupWave",
         "type": "object"
       },
+      "SizeDay": {
+        "description": "The database's size on disk as the job runner kept it that UTC day:\nevery collection's `storage_bytes` added up, as the page's own total is.",
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "storage_bytes": {
+            "title": "Storage Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "storage_bytes"
+        ],
+        "title": "SizeDay",
+        "type": "object"
+      },
       "SuspendArgs": {
         "properties": {
           "kind": {
@@ -2580,7 +2704,7 @@
     },
     "/api/operator/capacity": {
       "get": {
-        "description": "What the platform will cost: documents and storage per collection, and\nthe coach's cost by day and model with the cache-hit ratio's inputs.\nLatency and error rates are Cloud Monitoring's \u2014 link, don't rebuild.",
+        "description": "What the platform will cost: documents and storage per collection, the\ndatabase's size a day as the job runner kept it and its pace, its\nconnections, and the coach's cost by day and model with the cache-hit\nratio's inputs. Latency and error rates are Cloud Monitoring's \u2014 link,\ndon't rebuild.",
         "operationId": "capacity_api_operator_capacity_get",
         "responses": {
           "200": {
