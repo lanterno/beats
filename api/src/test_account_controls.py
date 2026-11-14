@@ -422,21 +422,57 @@ class TestPlatformControlsAPI:
         from beats import platform_controls
 
         mongo.platform_controls.update_one(
-            {"name": name},
+            {"name": name, "network": None},
             {"$set": {"name": name, "until": until, "value": value, "reason": "test"}},
             upsert=True,
         )
         platform_controls.clear()
 
     @pytest.fixture(autouse=True)
-    def _clean(self, mongo):
+    def _clean(self, client, auth_headers, mongo):
         from beats import platform_controls
 
         platform_controls.clear()
         yield
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
         mongo.platform_controls.delete_many({})
         mongo.account_limits.delete_many({})
+        mongo.webhooks.delete_many({})
         platform_controls.clear()
+
+    @staticmethod
+    def _deliveries(monkeypatch) -> list[str]:
+        """Where webhook deliveries went: the one way out of our servers is
+        httpx, so it is caught there rather than sent to a real host."""
+        import httpx
+
+        sent: list[str] = []
+
+        async def post(_client, url, **_kwargs):
+            sent.append(str(url))
+            return httpx.Response(204)
+
+        monkeypatch.setattr(httpx.AsyncClient, "post", post)
+        return sent
+
+    @staticmethod
+    def _project(client, headers, name: str) -> str:
+        resp = client.post("/api/projects/", json={"name": name}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    @staticmethod
+    def _webhook(client, headers) -> None:
+        resp = client.post(
+            "/api/webhooks/", json={"url": "https://hooks.example.test/in"}, headers=headers
+        )
+        assert resp.status_code == 201, resp.text
+
+    @staticmethod
+    def _start_and_stop(client, headers, project: str) -> None:
+        """A timer start and stop: two events the timer routes dispatch."""
+        assert client.post(f"/api/projects/{project}/start", json={}, headers=headers).is_success
+        assert client.post("/api/projects/stop", json={}, headers=headers).is_success
 
     @staticmethod
     def _soon() -> str:
@@ -540,34 +576,35 @@ class TestPlatformControlsAPI:
         account_access.clear()
         assert self._post_beat(client, auth_headers, project).status_code == 201
 
-    def test_paused_webhooks_drop_with_a_line_per_event(self, auth_info, caplog):
+    def test_paused_webhooks_drop_what_had_somewhere_to_go(
+        self, client, auth_headers, mongo, caplog, monkeypatch
+    ):
         """No outbox holds a delivery, so a pause drops it — and logs it, so
-        the loss can be counted. Pre-warmed like the per-account switch's
-        test, so no event loop reaches the database."""
-        import asyncio
-        import time
+        the loss can be counted: one line for an event that had a webhook,
+        none for an event that had nowhere to go. Through the timer routes,
+        which dispatch."""
+        sent = self._deliveries(monkeypatch)
+        project = self._project(client, auth_headers, "Hooks")
+        self._control(mongo, "webhooks", until=self._soon())
 
-        from beats import platform_controls
-        from beats.api.routers.webhooks import dispatch_webhook_event
-        from beats.auth import account_access
+        def dropped() -> list[str]:
+            return [
+                r.getMessage()
+                for r in caplog.records
+                if "WEBHOOKS_PAUSED_DROPPED" in r.getMessage()
+            ]
 
-        class _Repo:
-            asked = False
-
-            async def list_by_event(self, event):
-                self.asked = True
-                return []
-
-        platform_controls._state = platform_controls.controls_from_docs(
-            [{"name": "webhooks", "until": self._soon()}], datetime.now(UTC)
-        )
-        platform_controls._expires_at = time.monotonic() + 60
-        account_access.remember("u-open", account_access.AccountAccess(exists=True))
-        repo = _Repo()
         with caplog.at_level(logging.WARNING, logger="beats.api.routers.webhooks"):
-            asyncio.run(dispatch_webhook_event("timer.start", {}, repo, "u-open"))  # ty: ignore[invalid-argument-type]
-        assert not repo.asked
-        assert any("WEBHOOKS_PAUSED_DROPPED event=timer.start" in r.message for r in caplog.records)
+            self._start_and_stop(client, auth_headers, project)
+            assert dropped() == [], "an event with no webhook lost nothing"
+
+            self._webhook(client, auth_headers)
+            self._start_and_stop(client, auth_headers, project)
+        assert len(dropped()) == 2
+        assert "event=timer.start" in dropped()[0]
+        assert "deliveries=1" in dropped()[0]
+        time.sleep(0.2)
+        assert sent == [], "nothing went out"
 
 
 class TestSignupNetworks:
