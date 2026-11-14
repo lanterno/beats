@@ -34,6 +34,7 @@ from api_helpers import arriving_from
 from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
     ACCOUNT_COACH_SPEND_DAYS,
+    COACH_COST_DAYS,
     SUPERSEDED_ATTENTION_DAYS,
     queue_due,
 )
@@ -623,6 +624,47 @@ class TestOneAccountsReads:
         itself, and neither should answer 500."""
         assert operator_client.get("/api/operator/accounts/not-an-id/coach").json() == []
         assert operator_client.get("/api/operator/accounts/not-an-id/audit").json() == []
+
+
+class TestCapacityRead:
+    """The platform's coach cost on Capacity: recent days, newest first."""
+
+    @staticmethod
+    def _usage(mongo, ts: datetime, model: str, cost: float):
+        mongo.llm_usage.insert_one(
+            {
+                "user_id": str(ObjectId()),
+                "ts": ts,
+                "model": model,
+                "cost_usd": cost,
+                "input_tokens": 100,
+                "cache_read_input_tokens": 300,
+            }
+        )
+
+    def test_the_coach_cost_is_recent_days_newest_first(self, operator_client, mongo):
+        """Every day since launch would grow the page without bound, and the
+        page reads the newest day first."""
+        midday = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+        self._usage(mongo, midday - timedelta(days=COACH_COST_DAYS + 9), "sonnet", 50.0)
+        self._usage(mongo, midday - timedelta(days=2), "sonnet", 1.5)
+        self._usage(mongo, midday, "haiku", 0.25)
+        self._usage(mongo, midday, "sonnet", 4.0)
+
+        rows = operator_client.get("/api/operator/capacity").json()["coach_cost"]
+        assert [(r["model"], r["cost_usd"]) for r in rows] == [
+            ("haiku", 0.25),
+            ("sonnet", 4.0),
+            ("sonnet", 1.5),
+        ]
+        assert rows[0]["day"] == rows[1]["day"] > rows[2]["day"]
+        assert rows[0]["cache_read_tokens"] == 300
+
+    def test_a_collection_says_what_its_indexes_take(self, operator_client, mongo):
+        self._usage(mongo, datetime.now(UTC), "haiku", 0.0)
+        collections = operator_client.get("/api/operator/capacity").json()["collections"]
+        usage = next(c for c in collections if c["name"] == "llm_usage")
+        assert usage["index_bytes"] > 0
 
 
 class TestQueueDue:
