@@ -27,6 +27,7 @@ from beats.coach.repos import (
 from beats.coach.usage import BudgetExceeded, UsageTracker, budget_message
 from beats.domain.exceptions import CoachNotConfigured
 from beats.infrastructure.database import Database
+from beats.platform_controls import CoachPaused
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ async def trigger_brief_generation(
 
     try:
         doc = await generate_brief(user_id, target_date=target, tz=tz)
-    except CoachNotConfigured:
+    except CoachNotConfigured, CoachPaused:
         raise
     except BudgetExceeded as exc:
         # Distinct from the generic RATE_LIMITED — clients should surface
@@ -212,6 +213,11 @@ async def coach_chat(
             # not something to hand a client.
             message = budget_message(exc.spent, exc.limit)
             error = {"type": "error", "error": message, "code": 429}
+            yield f"data: {json.dumps(error)}\n\n"
+        except CoachPaused as exc:
+            # The status has gone once the stream began; the refusal rides
+            # as an event, with its fixed sentence and its status as code.
+            error = {"type": "error", "error": exc.message, "code": exc.status_code}
             yield f"data: {json.dumps(error)}\n\n"
         except Exception:
             logger.exception("Chat stream failed for user=%s", user_id)
@@ -334,7 +340,7 @@ async def rewrite_memory(user_id: CurrentUserId, tz: TimezoneDep):
     """Trigger the coach to rewrite its memory from the last 7 days."""
     try:
         content = await rewrite_coach_memory(user_id, tz=tz)
-    except CoachNotConfigured:
+    except CoachNotConfigured, CoachPaused:
         raise
     except BudgetExceeded as exc:
         # Match the brief branch: explicit BUDGET_EXCEEDED

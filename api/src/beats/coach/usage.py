@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
+from beats import platform_controls
 from beats.auth import account_access
 from beats.coach.repos import LLM_USAGE_COLLECTION
 from beats.infrastructure.database import Database
@@ -85,6 +86,11 @@ class UsageTracker:
         return settings.coach_monthly_budget_usd
 
     async def enforce_budget(self) -> None:
+        """Refuses when the coach is paused for everyone (`CoachPaused`,
+        docs/backoffice.md § Controls) or this account's month is spent
+        (`BudgetExceeded`). Both are checked here because the gateway calls
+        this before every model call, inside the chat stream too."""
+        await platform_controls.refuse_if_coach_paused(Database.get_db())
         limit = await self.budget_usd()
         if limit <= 0:
             return

@@ -30,6 +30,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from beats import platform_controls
 from beats.api.routers.auth import UserRepoDep, _session_manager, limiter, refuse_suspended
 from beats.auth.oidc import (
     OIDCProvider,
@@ -172,6 +173,17 @@ async def start_flow(
     return SSOStartResponse(authorize_url=url, state=state)
 
 
+async def _signups_closed() -> bool:
+    """Whether the operator has paused or slowed sign-ups (docs/backoffice.md
+    § Controls). Asked before the exchange's outcome is known, and applied
+    only on the branch that would create an account."""
+    try:
+        await platform_controls.refuse_if_signups_closed(Database.get_db())
+    except platform_controls.SignupsPaused:
+        return True
+    return False
+
+
 @router.get("/providers", response_model=SSOProvidersResponse)
 async def list_providers(registry: RegistryDep) -> SSOProvidersResponse:
     """The providers people can sign in with here, in configured order.
@@ -255,7 +267,11 @@ async def complete(
         return SSOCompleteResponse(intent="link", provider=provider.id)
 
     try:
-        user, created = await accounts.sign_in(identity, allow_signup=provider.allow_signup)
+        user, created = await accounts.sign_in(
+            identity,
+            allow_signup=provider.allow_signup,
+            signups_paused=await _signups_closed(),
+        )
     except SSOSignupClosed as e:
         raise sso_error(status.HTTP_403_FORBIDDEN, "SSO_SIGNUP_CLOSED", str(e)) from e
 

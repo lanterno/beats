@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from beats import platform_controls
 from beats.api.errors import envelope as error_envelope
 from beats.api.errors import (
     http_exception_handler,
@@ -291,6 +292,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     )
 
                 await self._stamp_last_seen(user_id, access)
+                # The platform-wide controls, refreshed here so the synchronous
+                # rate-limit callables find them in the process.
+                await platform_controls.resolve(Database.get_db())
                 request.state.user_id = user_id
                 return await call_next(request)
 
@@ -352,6 +356,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     )
 
                 await self._stamp_last_seen(account_id, access)
+                await platform_controls.resolve(Database.get_db())
                 request.state.user_id = account_id
                 request.state.device_id = device_id
                 return await call_next(request)

@@ -26,6 +26,7 @@ from beats.auth.oidc import OIDCIdentity
 from beats.brand import APP_NAME
 from beats.domain.models import LinkedIdentity, User
 from beats.infrastructure.repositories import UserRepository
+from beats.platform_controls import SignupsPaused
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +84,22 @@ class SSOAccountService:
 
     # Cold arrival: sign in, or create the account
 
-    async def sign_in(self, identity: OIDCIdentity, *, allow_signup: bool) -> tuple[User, bool]:
+    async def sign_in(
+        self, identity: OIDCIdentity, *, allow_signup: bool, signups_paused: bool = False
+    ) -> tuple[User, bool]:
         """Resolve a verified identity to a beats user.
 
         Returns `(user, created)`. Raises `SSOSignupClosed` when the identity
-        is unknown and its provider does not create accounts.
+        is unknown and its provider does not create accounts, and
+        `SignupsPaused` when it would create one while the operator has
+        paused sign-ups — a known identity signs in either way.
         """
         existing = await self._users.get_by_identity(identity.issuer, identity.subject)
         if existing is not None:
             return await self._refresh_claims(existing, identity), False
+
+        if signups_paused:
+            raise SignupsPaused()
 
         if not allow_signup:
             logger.info(

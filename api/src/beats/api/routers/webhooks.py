@@ -9,6 +9,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
+from beats import platform_controls
 from beats.api.dependencies import (
     CurrentUserId,
     WebhookRepoDep,
@@ -105,6 +106,12 @@ async def dispatch_webhook_event(
     # a webhook registered before the switch was thrown must also fall
     # silent. Suspension can be undone; so can this.
     if await _webhooks_disabled(user_id):
+        return
+    # The operator's platform-wide pause drops too — there is no outbox to
+    # hold a delivery — with one line per event so the loss can be counted
+    # (docs/backoffice.md § Controls).
+    if await platform_controls.webhooks_paused(Database.get_db()):
+        logger.warning("WEBHOOKS_PAUSED_DROPPED event=%s account=%s", event, user_id)
         return
     webhooks = await repo.list_by_event(event)
     if not webhooks:

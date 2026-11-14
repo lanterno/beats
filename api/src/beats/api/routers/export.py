@@ -13,6 +13,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
 
+from beats import platform_controls
 from beats.api.dependencies import (
     AbsenceRepoDep,
     AdjustmentRepoDep,
@@ -53,6 +54,7 @@ from beats.domain.models import (
 from beats.domain.services import refuse_locked
 from beats.domain.utils import normalize_tz
 from beats.infrastructure.billing_repositories import ClientRepository
+from beats.infrastructure.database import Database
 from beats.infrastructure.project_repositories import (
     BeatRepository,
     ProjectRepository,
@@ -400,6 +402,9 @@ async def import_full_json(
     left out and listed under `skipped` with the code its route would
     answer. Billing, budgets included, is never skipped: its rules ran
     before the first write."""
+    # The operator's platform-wide pause (docs/backoffice.md § Controls),
+    # before the file is even read.
+    await platform_controls.refuse_if_imports_paused(Database.get_db())
     raw = await file.read()
     # The one record kept of how big a restore was: the Abuse page reads the
     # spread of these through the `import_bytes` metric in
