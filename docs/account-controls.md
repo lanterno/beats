@@ -133,6 +133,14 @@ account. `null` on a field means the global setting decides.
 No client drops a write because the account is suspended: suspension can be
 undone, and dropping would make it delete the person's own writes.
 
+The platform-wide pauses (docs/backoffice.md § Controls) answer 409 with
+`COACH_PAUSED`, `IMPORTS_PAUSED` or `SIGNUPS_PAUSED` and a fixed sentence.
+No client branches on them: each shows the API's `detail` for a code it does
+not know — the SPA through `describeError`, the coach stream through the
+event's `error`, the companion through `ApiException.message` — which is
+what an old client against a newer API needs. The daemon calls none of the
+paused routes.
+
 - **SPA.** `ACCOUNT_SUSPENDED` from any call — refresh and `/me` included —
   shows the API's sentence as a full-page notice
   (`shared/lib/suspension.ts`, the gate in `app/App.tsx`), stops the sync

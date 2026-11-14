@@ -422,7 +422,9 @@ production, not `beats`.
      **insert/update/remove only on**: `users` (suspension,
      `sessions_valid_after`), `account_limits`, `device_registrations`
      (`revoked`), `organisations` (closing), `org_members`, `org_audit`,
-     `operator_audit`, `operator_jobs`. It creates no index. That list is the
+     `operator_audit`, `operator_jobs`, `platform_controls` (the switches,
+     added 2026-11-14 — add it by hand before the first `control.set`, or
+     the command fails on the write). It creates no index. That list is the
      grant — a command that needs another collection changes
      docs/backoffice.md first.
    - Create a database user `beats-operator` with that role. Atlas's access

@@ -132,6 +132,7 @@ either is the signal it was put in the wrong place.
 | `account.sign_out_everywhere` | inline | — | the same: `sessions_valid_after` |
 | `account.set_limits` / `clear_limits` | inline | — | the same: `account_limits`, the whole document at once |
 | `device.revoke` | inline | — | the device repository |
+| `control.set` / `control.clear` | inline | — | `MongoPlatformControlsStore` (§ Controls) |
 | `account.erase` | job, **7 days** | the email | `erasure.erase_account` |
 | `organisation.grant_owner` | inline | the name | the operator twin of `set_role` |
 | `organisation.begin_closing` / `cancel_closing` | inline | the name / — | the twins (start or move / cancel) |
@@ -223,6 +224,65 @@ has neither). The audit is written under the operator the command carries.
   (`api/scripts/erase_account.py`): it takes an account id, or lists every
   case-insensitive match for an address and stops — the old exact `find_one`
   could miss the account a mail came from.
+
+## Controls: the switches and the global limits
+
+Shipped 2026-11-14 (stage 2 of what was roadmaps/backoffice.md). In an
+incident or a cost spike the operator can stop one kind of work for everyone,
+and set the three write limits, without a deploy — from *Access and
+controls*, each through its own review and the runner like every mutation.
+
+- **One collection, `platform_controls`**, one document per control keyed on
+  its name: four pauses (`coach`, `webhooks`, `imports`, `signups`) and three
+  limits (`writes_per_minute_beats`, `writes_per_minute_signals`,
+  `imports_per_hour`). Written only by `control.set` and `control.clear`
+  (`MongoPlatformControlsStore`, `infrastructure/operator_store.py`). No
+  `user_id`: it is the platform's, and erasure's sweep never sees it. It is on
+  the `beatsOperator` Atlas role's write list (terraform/README.md).
+- **Every pause expires.** `control.set` requires an `until`, at most
+  `MAX_PAUSE` (7 days) ahead, and a `reason` for the operator's own page.
+  An expired document reads as open, so no job clears it. `signups` has a
+  third state: with a `value`, sign-ups are *slowed* to that many an hour
+  (counted off `users.created_at` for the last hour, cached a bound) until
+  `until`. The limits are settings and do not expire.
+- **The public API reads through a cache** (`beats/platform_controls.py`, the
+  shape of `auth/account_access.py`, the same 30-second bound, refreshed by
+  the auth middleware on every authenticated request): a pause lands within
+  30 seconds, and the page says so. **An absent document means open**, which
+  is what makes a self-hosted install work with no operator at all. **A
+  failed read keeps the last value**, and open if there is none: the switches
+  are not a way for a database blip to turn the product off. The module
+  imports no settings and nothing under `beats.auth`, because the operator's
+  root loads it too.
+- **Where each is enforced:** `coach` in `UsageTracker.enforce_budget`, which
+  the gateway calls before every model call (inside the chat stream the
+  refusal rides as an error event, status gone); `imports` first thing in
+  `POST /api/export/import`; `webhooks` beside the per-account switch in
+  `dispatch_webhook_event`, where it **drops** — there is no outbox — with
+  one `WEBHOOKS_PAUSED_DROPPED` line per event so the loss can be counted;
+  `signups` at `POST /register/start` before the user row exists, at
+  `/register/verify` (start leaves a row a script could finish later) and on
+  the branch of `SSOAccountService.sign_in` that would create an account —
+  never a sign-in or an added passkey. The three limits sit in `_ceiling`
+  (`api/rate_limits.py`): the account's override, then the control, then the
+  setting, which stays for self-hosted.
+- **Refusals are 409** with `COACH_PAUSED`, `IMPORTS_PAUSED` or
+  `SIGNUPS_PAUSED` and fixed text, never the operator's reason. Not 503,
+  which would page the owner the moment they pause something on purpose; not
+  403 or 429, which `api_rejections` counts. Every client already shows the
+  API's `detail` for a code it does not know (docs/account-controls.md § What
+  each client does with a refusal), so an old SPA against this API reads the
+  sentence.
+- **Attention counts anything paused** (`controls_paused`), the queue has a
+  row for it due when it ends (`control_paused`, with a runbook), and *Access
+  and controls* shows the allowlist read-only beside the switches: the list
+  is an environment value, and changing it is a deploy.
+- **The limit values** are not in code. The owner's guidance, on the page:
+  120 beat writes and 60 signal writes a minute and 10 imports an hour, as
+  `api/src/beats/settings.py` recommends — set only after reading the
+  per-account rate those routes see in the request log, because the SPA's
+  sync engine retries a 429 and a default that refuses a real client is a
+  storm.
 
 ## Authentication
 
@@ -345,6 +405,10 @@ cannot keep.
   (`POST /commands/{name}/preview`, which writes nothing and refuses a
   `viewer` as the act does), who notices and whether it can be undone (fixed
   text per command, `client/shared/commands.ts`), and the typed confirmation.
+- **Access and controls**: the switches and the global limits (§ Controls),
+  each thrown from its review page; who can get in, read off the allowlist;
+  what each role can do; and the access review as a list to read down, since
+  nothing records that it was done.
 - **Runbooks**: static pages in the bundle (`client/shared/runbooks.ts`), each
   with a `reviewed_on` and marked stale after six months, linked from the
   queue rows they fit. The alert runbooks restate the `documentation` blocks
