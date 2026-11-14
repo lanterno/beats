@@ -161,6 +161,17 @@ def parse_version(body: object) -> str | None:
     return None
 
 
+def live_build(builds: list[Build], api_commit: str | None) -> Build | None:
+    """The one build the API's commit came from: the newest build of that
+    commit that succeeded. A commit is built again by a re-run or by Cloud
+    Build's retry, and only the last green one did the apply that stands; a
+    build of the same commit that failed deployed nothing. None when no
+    build read has it, as after a hand `terraform apply`."""
+    if api_commit is None:
+        return None
+    return next((b for b in builds if b.sha == api_commit and b.status == "SUCCESS"), None)
+
+
 def assemble(
     builds: list[Build],
     *,
@@ -171,6 +182,7 @@ def assemble(
     unavailable: list[str],
 ) -> ReleasesReport:
     """The page's one answer from whatever the sources gave."""
+    live = live_build(builds, api_commit)
     rows = [
         ReleaseRow(
             sha=b.sha,
@@ -179,7 +191,7 @@ def assemble(
             created_at=b.created_at,
             finished_at=b.finished_at,
             log_url=b.log_url,
-            live=api_commit is not None and b.sha == api_commit,
+            live=b is live,
         )
         for b in builds[:BUILDS_SHOWN]
     ]
