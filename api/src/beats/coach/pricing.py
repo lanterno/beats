@@ -71,3 +71,14 @@ def pricing_for(model: str) -> ModelPricing:
             return MODEL_PRICING[known]
     logger.warning("No pricing for model %s; billing at the highest known rate", model)
     return UNKNOWN_MODEL_PRICING
+
+
+def cache_saving_usd(model: str, cache_read: int, cache_write: int) -> float:
+    """What the prompt cache saved on one model's tokens, against sending the
+    same tokens uncached: each read billed at the read rate instead of input,
+    less the premium each write paid over input. Negative when the writes
+    cost more than the reads saved."""
+    rates = pricing_for(model)
+    saved = cache_read * (rates.input - rates.cache_read)
+    premium = cache_write * (rates.cache_write - rates.input)
+    return (saved - premium) / 1_000_000

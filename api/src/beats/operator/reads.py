@@ -385,6 +385,10 @@ class CoachCostDay:
     input_tokens: int
     cache_read_tokens: int
     calls: int
+    # What the cache saved that day on that model, at its rates
+    # (`coach/pricing.py`): reads not billed as input, less what writes
+    # paid over it. Negative when the writes cost more.
+    cache_saved_usd: float
 
 
 @dataclass(frozen=True)

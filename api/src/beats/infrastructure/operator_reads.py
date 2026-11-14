@@ -24,6 +24,7 @@ from pydantic import TypeAdapter
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 
+from beats.coach.pricing import cache_saving_usd
 from beats.infrastructure.database_sizes import MongoDatabaseSizes, collection_stats
 from beats.operator.growth import database_growth, with_growth
 from beats.operator.reads import (
@@ -857,7 +858,8 @@ class MongoOperatorReads:
             collections = with_growth(collections, growth, then, now)
 
         # The platform's coach cost by day and model, with what one account's
-        # /api/coach/usage cannot say: the cache-hit ratio across everyone.
+        # /api/coach/usage cannot say: the cache-hit ratio across everyone,
+        # and what the cache saved at each model's rates.
         # The last COACH_COST_DAYS days only, newest first: every day since
         # launch would grow without bound.
         today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -873,6 +875,7 @@ class MongoOperatorReads:
                     "cost_usd": {"$sum": "$cost_usd"},
                     "input_tokens": {"$sum": "$input_tokens"},
                     "cache_read": {"$sum": "$cache_read_input_tokens"},
+                    "cache_write": {"$sum": "$cache_creation_input_tokens"},
                     "calls": {"$sum": 1},
                 }
             },
@@ -887,6 +890,12 @@ class MongoOperatorReads:
                 input_tokens=int(d["input_tokens"]),
                 cache_read_tokens=int(d["cache_read"]),
                 calls=int(d["calls"]),
+                cache_saved_usd=round(
+                    cache_saving_usd(
+                        str(d["_id"]["model"]), int(d["cache_read"]), int(d["cache_write"])
+                    ),
+                    4,
+                ),
             )
             async for d in cursor
         ]
