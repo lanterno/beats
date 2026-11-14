@@ -50,14 +50,18 @@ Feature-Sliced like `ui/`, as far as this app needs layers:
 client/
 ├── app/App.tsx        the shell: the grouped sidebar, the mark, the
 │                      deployment label, the /me badge, the routes
-├── pages/             Attention, Accounts, Organisations, Trust, Capacity,
-│                      Jobs, Compliance, Audit — one file per operator job
+├── app/Palette.tsx    ⌘K: pages, a command's review, one exact account
+├── pages/             Today, Queue, Accounts, Account, Review, Organisations,
+│                      Trust, Capacity, Jobs, Compliance, Audit, Runbooks —
+│                      one file per operator job
 └── shared/
     ├── api/           same-origin fetch client (no token: IAP's cookie is the
     │                  credential), the command POST, generated types + schema
     ├── lib/           renderings (bytes, days, counts), the hour, which
-    │                  deployment this is, and what a failure says to the
-    │                  operator
+    │                  deployment this is, what a failure says to the
+    │                  operator, and the queue's and the palette's rules
+    ├── commands.ts    each account command in the operator's words
+    ├── runbooks.ts    the runbooks, each with its reviewed_on
     ├── config/        brand.ts, stamped by scripts/gen_brand.py
     └── ui/            Page, Panel, Table, Facts, the icons, and CommandForm —
                        one command as a row with its typed confirmation
@@ -65,9 +69,8 @@ client/
 
 The sidebar is grouped by the question being asked — Now, People, Platform,
 Governance — and a place is listed only once its page exists, so the nav never
-offers a screen that is not there. `pages/Attention.tsx` is the one whose file
-name and heading differ: it is "Today" in the nav, and stage 1 of
-[roadmaps/backoffice.md](../roadmaps/backoffice.md) rebuilds what is on it.
+offers a screen that is not there. What each page is for is in
+[docs/backoffice.md](../docs/backoffice.md) § *The pages*.
 
 A workspace of its own: `ui/`'s workspace reaches only its `tools/*`, so this
 one pins the same `packageManager` and copies its supply-chain policy

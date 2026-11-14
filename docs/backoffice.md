@@ -306,17 +306,50 @@ on by them on 2026-11-08.
 
 ## The pages, by the job they serve
 
-- **Attention**, the landing page: a count per row, and one link — the
-  accounts a per-account write limit refused, which is a log query because
-  nothing stores a refusal (see *Abuse* below). The counts are
-  organisations with no owner, and those
-  whose every owner is suspended (the operator doesn't act for the latter —
-  they have an owner — but somebody should know); queued jobs inside their
-  window and failed jobs; approvals superseded and never reopened for more
-  than 30 days; absence requests pending more than 14 days; accounts at 80%
-  of their coach cap. Erasure requests are deliberately not counted:
-  PRIVACY.md has a person ask by email, and counting them would take an
-  in-app request — a product change, not a control-plane page.
+The pages were reorganised around the work on 2026-11-14 (the mock is in
+roadmaps/backoffice-mock/). A page appears in the sidebar only once it is
+built: a nav entry to a screen that does not exist is a promise the API
+cannot keep.
+
+- **Today**, the landing page: one sentence saying what matters, read off the
+  queue; the next few rows due, each with the way to it; the jobs waiting out
+  a window; the back office's last few commands; storage and this month's
+  coach spend; and one link — the accounts a per-account write limit refused,
+  which is a log query because nothing stores a refusal (see *Trust and
+  safety* below). The deploy-state card links to the Cloud Run console until
+  roadmaps/secret-manager.md lands.
+- **Work queue** (`GET /api/operator/queue`): the rows behind the Attention
+  counts (`GET /api/operator/attention`, which still badges the sidebar),
+  ids and dates only, each with a due date from the constants in
+  `operator/reads.py` (`queue_due`). The conditions are organisations with no
+  owner, and those whose every owner is suspended (the operator doesn't act
+  for the latter — they have an owner — but somebody should know); failed
+  jobs, and queued jobs, due when their window ends; approvals superseded and
+  never reopened, due 30 days after; absence requests pending, due 14 days
+  after; accounts at 80% of their coach cap. The last two kinds are one row
+  per organisation, with a count and no member named, and are listed before
+  they are due. A row with no stored date is due when it is read and shows as
+  today, never overdue. **Nothing is stored**: there is no snooze and no
+  "done"; a row is the condition, and leaves when it clears. Erasure requests
+  are deliberately not counted: PRIVACY.md has a person ask by email, and
+  counting them would take an in-app request — a product change, not a
+  control-plane page (roadmaps/backoffice.md, stage 8, would change that with
+  a log the operator keeps).
+- **The palette** (⌘K, in the top bar): goes to a page, opens a command's
+  review for an account named by its whole id, and finds one account by its
+  whole address through the same `POST /accounts/lookup`. Pages are filtered
+  by what is typed; people never are — a fragment finds no one. A command
+  never runs from it, and an address is forgotten when the dialog closes.
+- **Review** (`/review/{command}/{subject}`): every account command is carried
+  out from a page of its own, showing what it would change
+  (`POST /commands/{name}/preview`, which writes nothing and refuses a
+  `viewer` as the act does), who notices and whether it can be undone (fixed
+  text per command, `client/shared/commands.ts`), and the typed confirmation.
+- **Runbooks**: static pages in the bundle (`client/shared/runbooks.ts`), each
+  with a `reviewed_on` and marked stale after six months, linked from the
+  queue rows they fit. The alert runbooks restate the `documentation` blocks
+  in `terraform/alerts.tf`, and change with them. A bad release's says to
+  revert on `main`. Nothing records when one was last used.
 - **Accounts**: found by exact email (case-insensitive — sign-up stores an
   address as typed under a unique index with no collation, so `Ana@` and
   `ana@` can be two accounts and a mail from either spelling must find both)
@@ -333,7 +366,7 @@ on by them on 2026-11-08.
 - **Organisations**: rosters, states, timesheet counts, and the audit without
   each event's `details`; the three acts, offered only while no owner is
   left.
-- **Abuse**: outliers rather than guessed thresholds — coach spend, flow
+- **Trust and safety**: outliers rather than guessed thresholds — coach spend, flow
   windows today, sessions created, report links minted (the only public path
   serving a user's data), webhook destinations by domain (outbound HTTP from
   our servers is ours to answer for), devices per account, signups per day.
@@ -354,7 +387,7 @@ on by them on 2026-11-08.
   row — the shape Capacity already uses for latency. The account is in the
   line and in no metric label: per-account labels are unbounded
   cardinality, and "which accounts, this week" is the log query the
-  Attention page links to. The address-keyed doors in `routers/auth.py` are
+  Today page links to. The address-keyed doors in `routers/auth.py` are
   deliberately out of both: scanners exhaust them all day, and
   `api_rejections` already counts them. Until a `WRITES_PER_MINUTE_*`
   ceiling is set, the refusal signal counts nothing, which the page says.
@@ -362,6 +395,11 @@ on by them on 2026-11-08.
   coach's platform cost by day and model with the cache-read inputs. Latency,
   error rates and instance counts are Cloud Monitoring's — linked, not
   rebuilt.
-- **Compliance**: the job queue with cancel, the platform-wide retention
-  purge behind the typed word `all`, and the operator audit — readable,
-  filterable, editable by nobody, kept four years.
+- **Jobs and windows**: the job queue with cancel. A failed job has no
+  re-run: three attempts is terminal, and the way back is to queue the
+  command again.
+- **Privacy and compliance**: the platform-wide retention purge behind the
+  typed word `all`.
+- **Audit log**: the operator audit — readable, filterable, editable by
+  nobody, kept four years. It holds what ran: the runner writes the row after
+  a command succeeds, so a refused or failed command is not in it.
