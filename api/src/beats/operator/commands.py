@@ -20,7 +20,15 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any, Literal, Protocol
 
-from pydantic import AfterValidator, BaseModel, Field, ValidationError, model_validator
+from bson import ObjectId
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    Field,
+    PrivateAttr,
+    ValidationError,
+    model_validator,
+)
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
@@ -515,6 +523,9 @@ class LogErasureRequestArgs(BaseModel):
     reference: Annotated[str, AfterValidator(_no_address)] = Field(min_length=1, max_length=200)
     received_on: date
     user_id: Annotated[str, AfterValidator(_an_account_id)] | None = None
+    # The request's own id, made before it is written, so the audit can name
+    # a request with no account by an id too. Never sent by the client.
+    _request_id: str = PrivateAttr(default_factory=lambda: str(ObjectId()))
 
     @model_validator(mode="after")
     def _not_in_the_future(self) -> LogErasureRequestArgs:
@@ -526,8 +537,9 @@ class LogErasureRequestArgs(BaseModel):
 class LogErasureRequest:
     """A request that arrived by mail gets a date, so the deadline is
     visible before anything is queued (docs/backoffice.md § The pages,
-    Compliance). The subject is the operator's reference; the account, when
-    there is one, is named by id in the row."""
+    Compliance). The audit's subject is an id — the account's when one is
+    named, else the request's own — and never the reference: the audit is
+    kept four years and names its subject the way it outlives it, by id."""
 
     name = "erasure_request.log"
     subject_kind = "erasure_request"
@@ -535,7 +547,7 @@ class LogErasureRequest:
     args_model: type[BaseModel] = LogErasureRequestArgs
 
     def subject_id(self, args: Any) -> str:
-        return args.reference
+        return args.user_id or args._request_id
 
     async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
         return None
@@ -555,6 +567,7 @@ class LogErasureRequest:
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         row = await MongoErasureRequests(ctx.db).log(
+            request_id=args._request_id,
             reference=args.reference,
             received_on=args.received_on.isoformat(),
             subject_id=args.user_id,

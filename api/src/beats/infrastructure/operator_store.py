@@ -108,8 +108,16 @@ class MongoErasureRequests:
         return doc
 
     async def log(
-        self, *, reference: str, received_on: str, subject_id: str | None, logged_by: str
+        self,
+        *,
+        request_id: str,
+        reference: str,
+        received_on: str,
+        subject_id: str | None,
+        logged_by: str,
     ) -> dict[str, Any]:
+        """`request_id` is made by the caller, before the write, so the
+        audit of logging it can name a request with no account by its id."""
         doc = {
             "reference": reference,
             "received_on": received_on,
@@ -121,8 +129,8 @@ class MongoErasureRequests:
             "closed_by": None,
             "expires_at": None,
         }
-        result = await self._col.insert_one(dict(doc))
-        return {**doc, "id": str(result.inserted_id)}
+        await self._col.insert_one({"_id": ObjectId(request_id), **doc})
+        return {**doc, "id": request_id}
 
     async def get(self, request_id: str) -> dict[str, Any] | None:
         try:
