@@ -10,10 +10,11 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import type { AbuseReport } from "@/shared/api/schema";
+import type { AbuseReport, SignupWave } from "@/shared/api/schema";
 import { API_LOG, logsQuery, metricChart } from "@/shared/lib/console";
 import { counted, dollars, everyDay } from "@/shared/lib/format";
 import {
+	buttonClass,
 	DayBars,
 	Empty,
 	Failed,
@@ -62,6 +63,44 @@ function AccountRows({
 	);
 }
 
+/**
+ * The hour's sign-ups in words. The network is "Network A", never its key;
+ * the key travels only into the slow-down's review, as the control's subject.
+ */
+export function waveSentence(wave: SignupWave): string {
+	const usual = wave.usual === 0 ? "usually none" : `usually about ${wave.usual}`;
+	const head = `${counted(wave.completed, "account was", "accounts were")} created this hour, ${usual}.`;
+	if (wave.largest_group === null || wave.largest_group === undefined) {
+		return `${head} No network is large enough to show.`;
+	}
+	return `${head} Network A is ${wave.largest_group} of them. Of all ${wave.completed}, ${wave.accounts_with_writes} ${wave.accounts_with_writes === 1 ? "has" : "have"} written anything.`;
+}
+
+function SignupWavePanel({ wave }: { wave: SignupWave }) {
+	const slow = wave.largest_key
+		? `/review/control.set/signups?network=${encodeURIComponent(wave.largest_key)}`
+		: null;
+	return (
+		<Panel
+			title="Sign-ups this hour, by network"
+			note="A network is an address cut to its /24 or /48 and hashed with a key that changes at UTC midnight. No account is joined to a network anywhere: this is a shape in the hour, not a list of people. Offices, universities, carrier networks and a company onboarding its staff all look like this."
+		>
+			<Prose>{waveSentence(wave)}</Prose>
+			{slow ? (
+				<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
+					<Link to={slow} className={buttonClass("secondary")}>
+						Slow sign-ups from Network A
+					</Link>
+					<span className="text-[13px] text-ink-muted">
+						A ceiling an hour for that network alone; nobody is blocked, and it ends at UTC midnight
+						at the latest, when the key stops matching.
+					</span>
+				</div>
+			) : null}
+		</Panel>
+	);
+}
+
 export function Trust() {
 	const { data, error, refetch } = useQuery({
 		queryKey: ["abuse"],
@@ -90,6 +129,7 @@ export function Trust() {
 					<div className="pb-5" />
 				)}
 			</Panel>
+			{data.signup_wave ? <SignupWavePanel wave={data.signup_wave} /> : null}
 			<Pair>
 				<AccountRows
 					title="Coach spend this month"

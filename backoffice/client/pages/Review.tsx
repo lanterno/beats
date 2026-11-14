@@ -14,7 +14,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { OperatorApiError } from "@/shared/api/client";
 import { previewCommand, runCommand } from "@/shared/api/commands";
 import {
@@ -133,9 +133,18 @@ export function Review() {
 	const { command = "", subject = "" } = useParams();
 	const spec = commandSpec(command);
 	const queryClient = useQueryClient();
-	const [args, setArgs] = useState<Record<string, unknown>>(() =>
-		spec ? emptyArgs(spec, subject) : {},
-	);
+	// A page may hand a field's value in the URL (the Trust page hands the
+	// network key to slow); only declared fields are read, nothing else.
+	const [search] = useSearchParams();
+	const [args, setArgs] = useState<Record<string, unknown>>(() => {
+		if (!spec) return {};
+		const empty = emptyArgs(spec, subject);
+		for (const field of fieldsOf(spec, subject)) {
+			const given = search.get(field.key);
+			if (given !== null && field.kind !== "checkbox") empty[field.key] = given;
+		}
+		return empty;
+	});
 	const family = FAMILIES[spec?.family ?? "account"];
 	const fields = spec ? fieldsOf(spec, subject) : [];
 	const [typed, setTyped] = useState("");

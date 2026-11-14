@@ -346,6 +346,12 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 								kind: "number",
 								hint: "Leave empty to pause outright.",
 							},
+							{
+								key: "network",
+								label: "Network key",
+								kind: "text",
+								hint: "From the Trust page's signal, to slow that one network. Empty slows everyone. Ends at UTC midnight at the latest.",
+							},
 						]
 					: PAUSE_FIELDS,
 		changes: (before, args, name) => [
@@ -357,7 +363,7 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 						? `${args.value} ${CONTROLS[name as ControlName]?.unit ?? ""}`.trim()
 						: "No limit"
 					: name === "signups" && args.value
-						? `Slowed to ${args.value} an hour until ${String(args.until ?? "—").slice(0, 16)}`
+						? `${args.network ? "Network A slowed" : "Slowed"} to ${args.value} an hour until ${String(args.until ?? "—").slice(0, 16)}`
 						: `Paused until ${String(args.until ?? "—").slice(0, 16)}`,
 			},
 		],

@@ -19,6 +19,8 @@ export type CapacityReport = components["schemas"]["CapacityReport"];
 export type OperatorMe = components["schemas"]["OperatorMe"];
 /** What a command would do, answered without doing it. */
 export type CommandPreview = components["schemas"]["CommandPreview"];
+/** The hour's sign-ups against the usual, and the largest network's share. */
+export type SignupWave = components["schemas"]["SignupWave"];
 /** One platform control as it stands (docs/backoffice.md § Controls). */
 export type ControlState = components["schemas"]["ControlState"];
 /** One person on the operator allowlist, as the deployment was started. */
