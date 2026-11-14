@@ -16,7 +16,7 @@ import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router";
 import { Account } from "@/pages/Account";
 import { Accounts } from "@/pages/Accounts";
-import { Attention } from "@/pages/Attention";
+
 import { Audit } from "@/pages/Audit";
 import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
@@ -24,6 +24,7 @@ import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
 import { Queue } from "@/pages/Queue";
 import { Review } from "@/pages/Review";
+import { Today } from "@/pages/Today";
 import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
 import type { AttentionCounts, OperatorMe } from "@/shared/api/schema";
@@ -231,7 +232,7 @@ function Shell() {
 				<div className="mx-auto max-w-[1148px]">
 					<Topbar />
 					<Routes>
-						<Route path="/" element={<Attention />} />
+						<Route path="/" element={<Today />} />
 						<Route path="/queue" element={<Queue />} />
 						<Route path="/accounts" element={<Accounts />} />
 						<Route path="/accounts/:id" element={<Account />} />
