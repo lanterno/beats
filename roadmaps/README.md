@@ -14,7 +14,6 @@ built, and why.
 | [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state row waits on |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
-| [companion-flutter.md](companion-flutter.md) | The companion held on Flutter 3.47 since stable 3.50 broke its tray plugin: moving `tray_manager`, `window_manager` and the SDK together, which Renovate's #448 waits on |
 
 Five pieces were split out of `organisations.md` on 2026-10-31. The test
 each had to fail to stay: **is it an organisations feature?** A control
