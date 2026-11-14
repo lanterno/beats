@@ -502,6 +502,25 @@ cannot keep.
   shown, on purpose: Google's open-alert list (`alerts.list`, in preview on
   2026-11-08; the console link stands in) and the job runner's last run (a
   run that finds nothing writes nothing, so no source holds it).
+- **Releases** (shipped 2026-11-14, stage 5 of what was
+  roadmaps/backoffice.md; `GET /api/operator/releases`): when something
+  breaks, what shipped just before it. The API's last ten builds from Cloud
+  Build's `builds.list` (`roles/cloudbuild.builds.viewer`, gated on
+  `operator_enabled`), each with its commit and GitHub subject; the commit
+  the API was deployed with, the operator's own image tag set by Terraform
+  (`OPERATOR_API_COMMIT`) and labelled "as deployed", since a revision that
+  failed to become ready leaves the previous one serving; and the web app's
+  live commit, from the `version.json` its build writes (`ui/vite.config.ts`,
+  only when `VITE_GIT_SHA` is set), fetched from `OPERATOR_WEB_ORIGIN`. A
+  web app on another commit than the API is normal and said so. Each source
+  answers on its own, cached a minute (`ReleasesCache`): one that fails keeps
+  its last answer and is named, and subjects are cached for good. Nothing
+  moves traffic, and nothing reads the API's Cloud Run service; a bad build
+  links to the runbook for reverting on `main`. A build viewer can read every
+  step's arguments, so `api/cloudbuild.yaml` must never put a secret in one.
+  Firebase's own release list is deliberately not read: `version.json`
+  already says what is live, without another grant or a site id. Today says
+  what each half is running.
 - **Jobs and windows**: the job queue with cancel. A failed job has no
   re-run: three attempts is terminal, and the way back is to queue the
   command again.
