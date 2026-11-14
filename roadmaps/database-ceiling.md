@@ -9,9 +9,13 @@ cost*), not how far it is from full. The mock
 (`docs/backoffice-mock/source/Capacity.dc.html`) says "the cluster is sized
 by hand, so there is no ceiling to measure against", which is true of a
 dedicated Atlas tier and false of the one production runs on: Atlas's free
-tier allows 0.5 GB, and refuses writes past it
+tier allows 0.5 GB of "uncompressed BSON documents stored in all collections,
+plus the bytes stored in their associated indexes"
 ([Atlas free cluster limits](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/)).
 The page was built without that sentence, and without a limit in its place.
+What Atlas does to a cluster past the limit is not written on that page;
+find out before step 3 below, since it decides how early the warning must
+come.
 
 ## What is there already
 
@@ -30,8 +34,8 @@ The page was built without that sentence, and without a limit in its place.
 
 - **A limit written into the page or the API as 512 MB.** The cluster is
   resized by hand in Atlas, and a constant goes silently wrong the day it is.
-- **A percentage of the size on disk.** It is the wrong figure: a database at
-  60% on disk can be at the limit uncompressed.
+- **A percentage of the size on disk.** It is the wrong figure: compressed,
+  it reads lower than what the limit counts.
 - **An invented figure when the source does not answer.** Say so, the way the
   connections tile does.
 
