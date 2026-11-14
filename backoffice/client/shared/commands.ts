@@ -402,9 +402,10 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 
 /**
  * The erasure request log (docs/backoffice.md § The pages, Compliance). A
- * request is logged with a reference the operator chooses — never an
- * address, which the API refuses — and closed with a reason once the
- * erasure ran, or there was no account, or they withdrew it.
+ * request is logged with a reference the operator chooses — a ticket number
+ * or the mail's date, which is all the API takes, so never a name or an
+ * address — and closed with a reason once the erasure ran, or there was no
+ * account, or they withdrew it.
  */
 export const ERASURE_COMMANDS: CommandSpec[] = [
 	{
@@ -422,14 +423,14 @@ export const ERASURE_COMMANDS: CommandSpec[] = [
 				key: "reference",
 				label: "Reference",
 				kind: "text",
-				hint: "Your own: a ticket number, the mail's date. Never an address.",
+				hint: "A ticket number or the mail's date, like T-1234 or 2026-11-14: a few letters at most, then digits. Never a name or an address.",
 			},
 			{ key: "received_on", label: "Received on (UTC day)", kind: "text", hint: "YYYY-MM-DD" },
 			{
 				key: "user_id",
 				label: "Account id",
 				kind: "text",
-				hint: "Leave empty when there is no account.",
+				hint: "The whole id, from the account's page. Leave empty when there is no account.",
 			},
 		],
 		changes: (before, args) => [
