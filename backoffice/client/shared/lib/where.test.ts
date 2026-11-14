@@ -23,7 +23,7 @@ describe("deployment", () => {
 	// rather than displayed, and the comparison decides whether the page
 	// says "Production". Getting it wrong in the safe direction is still wrong.
 	it("matches whatever the case", () => {
-		expect(deployment("BackOffice.LifePete.com").live).toBe(true);
+		expect(deployment("BACKOFFICE.LIFEPETE.COM").live).toBe(true);
 	});
 
 	// The nearest wrong answer: a hostname that merely ends in the real one.
