@@ -230,7 +230,9 @@ class MongoOperatorReads:
     async def controls(self) -> list[ControlState]:
         """Every control document, in force or expired: an expired pause is
         open to the public API and still shown here as what it was, until
-        it is cleared or set again."""
+        it is cleared or set again. A network's slow-down goes by TTL when
+        it ends. By name; under one, the control for everyone first, then
+        each network's in the order they were set."""
         now = datetime.now(UTC)
         docs = await self._db[CONTROLS_COLLECTION].find({}, projection={"_id": False}).to_list()
         return [
@@ -242,8 +244,12 @@ class MongoOperatorReads:
                 reason=c.reason,
                 set_by=c.set_by,
                 set_at=c.set_at,
+                network=c.network,
             )
-            for c in sorted(map(control_from_doc, docs), key=lambda c: c.name)
+            for c in sorted(
+                map(control_from_doc, docs),
+                key=lambda c: (c.name, c.network is not None, c.set_at or now),
+            )
         ]
 
     async def erasure_requests(self) -> list[ErasureRequestState]:

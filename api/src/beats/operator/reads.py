@@ -108,7 +108,14 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
 @dataclass(frozen=True)
 class ControlState:
     """One control as the Access page shows it. The operator's own text
-    (`reason`) is theirs to read back; a user never sees it."""
+    (`reason`) is theirs to read back; a user never sees it.
+
+    `network` is the opaque key of the one network a `signups` slow-down
+    covers, and None for a control that covers everyone; there may be any
+    number of the first beside the second. The page says "one network",
+    never the key, and hands the key back in a command's body to change or
+    lift that control alone — never in a URL, which Cloud Run logs, and
+    never into `operator_audit`, whose rows say `one_network` instead."""
 
     name: str
     in_force: bool
@@ -117,6 +124,7 @@ class ControlState:
     reason: str | None
     set_by: str | None
     set_at: datetime | None
+    network: str | None = None
 
 
 ErasureRequestStatus = Literal["open", "erasure_queued", "erasure_ran", "closed"]
