@@ -9,25 +9,36 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. Stage 1, the pages reorganised around the work, shipped on 2026-11-14
-and is in docs/backoffice.md § *The pages*; no other stage has started.
+from. Stages 1 and 2 — the pages reorganised around the work, and the
+switches with the global limits — shipped on 2026-11-14 and are in
+docs/backoffice.md § *The pages* and § *Controls*; no other stage has started.
+
+**The owner's inputs were decided on 2026-11-14**, so no stage below waits
+on a decision; each says what was decided and why, and what is still done by
+hand.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 2 | Switches: pause the coach, webhooks, imports or signups; the global write limits | Build | Nothing | One collection on an Atlas role; the limit values |
-| 3 | Signups from one network | Keep, and improve | Its action needs stage 2; the signal does not | The PRIVACY.md sentence; one new secret |
-| 4 | Live health from Cloud Monitoring | Build | Nothing | The availability target |
+| 3 | Signups from one network | Keep, and improve | Nothing | Setting the secret; approving the PRIVACY.md sentence drafted below |
+| 4 | Live health from Cloud Monitoring | Build | Nothing | Nothing (target decided below) |
 | 5 | Release history | Build | Nothing | Nothing |
 | 6 | Deploy freeze | Build | Nothing | Nothing |
 | 7 | Customer updates | Build | Its own file, [status-page.md](status-page.md) | The wording of the PRIVACY.md sentence |
-| 8 | Erasure request log | Wanted, not urgent | Do it last | One collection on an Atlas role |
+| 8 | Erasure request log | Wanted, not urgent | Do it last | Adding `erasure_requests` to the Atlas role |
 | – | Rolling a release back from the back office | Postponed | [Below](#postponed-rolling-a-release-back) | |
 | – | Reasons on commands, incidents, restrictions in force, an audit of lookups | No answer given | [Below](#not-decided-the-new-records) | The decision |
 
 The numbers are a suggested order. Apart from what the table says, any stage
 can be picked up alone. Stage 1's screens are built; the rows below marked
-"then 3 and 4 add to it" are what later stages add to a built page. Five smaller items from before the redesign are at the
-end of *Work*.
+"then 3 and 4 add to it" are what later stages add to a built page. Five
+smaller items from before the redesign are at the end of *Work*.
+
+**By hand, before stage 2 is used in production:** add `platform_controls`
+to the `beatsOperator` Atlas role's writes (terraform/README.md § *Operator
+Deployment*). Until then `control.set` fails on the write and nothing else
+is affected. The limit values are set from the page, not in code: 120 beat
+writes and 60 signal writes a minute and 10 imports an hour are the
+recommendation, after reading the per-account rate in the request log.
 
 ## The design
 
@@ -47,7 +58,7 @@ figure, person and organisation in it is invented.
 | `Trust` | `pages/Abuse.tsx` | 1, then 3 and 4 add to it |
 | `Capacity` | `pages/Capacity.tsx` | 1, then 4 adds to it |
 | `Jobs`, `Audit`, `Compliance` | `pages/Compliance.tsx`, split in three | 1, then 8 adds to it |
-| `Access` (access and controls) | Nothing | 2 |
+| `Access` (access and controls) | Nothing | Built, 2 |
 | `Releases` | Nothing | 5 and 6 |
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
 | `Phone`, `States`, `Dusk` | Not screens to build: narrow width, empty and error states, and the dusk hour, in every stage | All |
@@ -121,89 +132,6 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
 
 ## Work
 
-### Stage 2. Switches and the global limits
-
-**Goal:** in an incident or a cost spike, the operator can stop one kind of
-work for everyone, and set the three write limits, without a deploy.
-
-**What exists:** per-account limits only. `_ceiling` in
-`api/src/beats/api/rate_limits.py` reads a cached override and falls back to
-`settings.writes_per_minute_beats`, `writes_per_minute_signals` and
-`imports_per_hour`, all unset in production. `auth/account_access.py` is the
-pattern for a cached read (30 seconds, process-local, the bound written down).
-
-**Build:**
-
-- **A collection, `platform_controls`,** one document per control, keyed on its
-  name: `coach`, `webhooks`, `imports`, `signups` and the three limits. It is
-  written only by two new commands, `control.set` and `control.clear`, inline
-  and with no window, and through the runner like every other mutation. The
-  write sits beside `MongoAccountLimitsStore` in `operator_store.py`.
-- **Every pause expires.** `control.set` requires an `until`, capped by a named
-  constant, and a `reason` for the operator's own page (the shape of
-  `SuspendArgs.reason`). An expired document reads as open, so no job is needed
-  to clear it. The limits are settings and do not expire.
-- **The public API reads through a cache** in the shape of `account_access`,
-  with the same 30-second bound: a pause lands within 30 seconds, and the page
-  says so. **An absent document means open**, which is what makes a self-hosted
-  install work with no operator at all. **A failed read keeps the last value**,
-  and open if there is none. The switches must not become a way for a database
-  blip to turn the product off.
-- **Where each switch is enforced:**
-
-  | Control | Where | Note |
-  |---|---|---|
-  | `coach` | `UsageTracker.enforce_budget` (`coach/usage.py`) | `coach/gateway.py` calls it before every model call, and the routes already translate its exception, inside the chat stream too. Raise a sibling of `BudgetExceeded` and handle it wherever that one is handled; once the chat stream has begun the status has gone, so follow what that path does |
-  | `imports` | `POST /api/export/import` (`routers/export.py`) | First thing in the handler |
-  | `webhooks` | `dispatch_webhook_event` (`routers/webhooks.py`) | Beside the `_webhooks_disabled` early return. **Drops**, with one log line per event so the loss can be counted. Holding would need an outbox, which is out of scope |
-  | `signups` | `POST /register/start` before the user row is created, `POST /register/verify`, and the `allow_signup` branch in `auth/sso_accounts.py` | Never a sign-in or an added passkey. Verify is checked too because `start` leaves rows a script could finish later |
-  | the three limits | `_ceiling` | Order: the account's override, then the control, then the setting. The setting stays, for self-hosted |
-
-- **Slowing signups** is a third state of the `signups` control: a ceiling per
-  hour against a cached count of recent `users` rows. `created_at` is stored as
-  an ISO string (see the comment in `operator_reads.py`), so check that before
-  writing a range query.
-- **Refusals use the envelope, status 409,** with `COACH_PAUSED`,
-  `IMPORTS_PAUSED` or `SIGNUPS_PAUSED`. Not 503: `api_5xx` in
-  `terraform/alerts.tf` would page the owner the moment they pause something
-  on purpose. Not 403 or 429: `api_rejections` counts those. 409 is what this
-  API already answers when a state says no. The sentence is fixed text, never
-  the operator's `reason`.
-- **Attention gets a row** for anything paused, with who set it and when it
-  ends. The `Access` screen holds the switches and shows the allowlist,
-  read-only.
-
-**Before setting a limit:** check it against the per-account rate those routes
-actually see in the request logs. The SPA's sync engine retries 429, so a
-default that refuses a real client is a storm. The comment in
-`api/src/beats/settings.py` recommends 120 and 60 a minute and 10 an hour, as a
-starting point.
-
-**By hand, before the merge that uses it:** add `platform_controls` to the
-`beatsOperator` Atlas role's writes (terraform/README.md § *Operator
-Deployment*), and to that list in the same PR.
-
-**Clients:** check that the SPA and the companion show the API's `detail` for
-an unknown code rather than a generic failure. An old SPA against this API is a
-real state. The daemon calls none of these routes.
-
-**Tests:** each route refuses while paused and works after expiry; sign-in
-works while signups are paused; no document means open; a failed read keeps the
-last value; the order of the three ceilings; each command writes its audit row
-and a `viewer` is refused. `test_operator_server_never_loads_the_api_settings`
-must still pass.
-
-**Done when** each switch has been turned on and off against a local API, with
-the refusal shown in the SPA and the row on Attention.
-
-**Must not:** let any switch stop existing people signing in or reading their
-own data; add an indefinite pause; show the operator's words to users; add a
-scheduler to clear expiries.
-
-**Overturns:** nothing, but docs/backoffice.md gains the controls and
-docs/account-controls.md § *What each client does with a refusal* gains the
-codes.
-
 ### Stage 3. Signups from one network
 
 **Goal:** see a bulk-signup wave while it happens, and slow that one source
@@ -253,10 +181,25 @@ network, which is the unbounded cardinality that decision also refuses.
 
 **By hand:** the owner sets `SIGNUP_NETWORK_KEY` (a plain environment value
 like the others until [secret-manager.md](secret-manager.md) lands, a fifth
-secret after).
+secret after). Decided 2026-11-14: 32 random bytes, hex (`openssl rand -hex
+32`), rotated by setting a new value — rotation only resets the day's
+counters, which is harmless.
 
 **First, in its own commit:** the sentences in PRIVACY.md and DATA.md saying what
-is kept, for how long and why, approved by the owner. Nothing ships before them.
+is kept, for how long and why. Nothing ships before them. The wording,
+decided 2026-11-14 and to be pasted as drafted unless the owner objects:
+
+> To notice a burst of sign-ups from one place, LifePete keeps for 48 hours
+> a count of sign-ups per hour per network, where the network is the first
+> part of the visitor's address (the /24 for IPv4, the /48 for IPv6),
+> hashed with a key that changes every day. The address itself is not
+> stored, the hash cannot be reversed or matched against a guess after the
+> day ends, and no account is ever linked to a network. The operator sees
+> only how large the largest group in an hour is, and may slow sign-ups from
+> it for the rest of the day; nobody is blocked.
+
+The action is stage 2's `signups` control with the key as its subject —
+stage 2 shipped, so this is unblocked.
 
 **Tests:** IPv4 and IPv6 truncation at their boundaries; a key changing at UTC
 midnight; the minimum group size holding at one below it; abandoned starts not
@@ -308,8 +251,16 @@ touch the API's Cloud Run spec.
   pointing at the operator cannot work, because IAP refuses it, and a broker is
   deliberately absent.
 
-**Needs the owner:** the availability target. Until there is one, show the
-figure with no error budget.
+**The availability target, decided 2026-11-14: 99.5% a month** (about 3 h
+40 min of downtime), on the uptime checks of `api.lifepete.com/health` and
+`lifepete.com/`. Why not 99.9%: the API is one Cloud Run service in one
+region with cold starts of about 30 s, every API deploy is a revision
+switch, and one person operates it; 43 minutes a month would be an error
+budget spent by the first bad deploy and ignored thereafter. Why not lower:
+the product holds a day job's timesheet, and a half day's outage a month is
+the most the people who rely on it would call reliable. Show the budget left
+in the month against it; raise it when the figures have beaten it for three
+months running.
 
 **Tests:** the parsing of Monitoring's responses (empty series, a gap, a single
 point), the stale answer, and the route's auth. A fake of the port, never a
@@ -409,6 +360,14 @@ mail arrives, holding the day it arrived, a reference and `subject_id` (never
 explains) and **never an address**. A request from someone with no account is a
 reference alone. Attention shows any request past a named number of days with
 no erasure queued. Add the collection to the Atlas grant by hand first.
+
+Decided 2026-11-14: the collection is `erasure_requests`; the named number
+of days is 14 (the PRIVACY.md promise is seven days after queueing, so a
+request not queued within two weeks is the risk); a row is kept one year
+after the erasure it names ran, or after it was marked closed with no
+account, and the retention purge deletes it then — the same shape as the
+operator audit's four years, shorter because a request names nothing but a
+reference and an id.
 
 **Must not:** add an in-app request, or keep these rows with no stated retention.
 
