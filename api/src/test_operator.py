@@ -660,6 +660,27 @@ class TestCapacityRead:
         assert rows[0]["day"] == rows[1]["day"] > rows[2]["day"]
         assert rows[0]["cache_read_tokens"] == 300
 
+    def test_a_day_says_what_the_cache_saved_at_its_models_rates(self, operator_client, mongo):
+        """A million cached tokens save $1.80 on Sonnet 5 and $4.50 on Opus 5:
+        the same tokens, a different saving."""
+        midday = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+        mongo.llm_usage.insert_many(
+            {
+                "user_id": str(ObjectId()),
+                "ts": midday,
+                "model": model,
+                "cost_usd": 0.5,
+                "input_tokens": 100,
+                "cache_read_input_tokens": 1_000_000,
+                "cache_creation_input_tokens": 0,
+            }
+            for model in ("claude-sonnet-5", "claude-opus-5")
+        )
+        rows = operator_client.get("/api/operator/capacity").json()["coach_cost"]
+        saved = {r["model"]: r["cache_saved_usd"] for r in rows}
+        assert saved["claude-sonnet-5"] == pytest.approx(1.8)
+        assert saved["claude-opus-5"] == pytest.approx(4.5)
+
     def test_a_collection_says_what_its_indexes_take(self, operator_client, mongo):
         self._usage(mongo, datetime.now(UTC), "haiku", 0.0)
         collections = operator_client.get("/api/operator/capacity").json()["collections"]

@@ -14,7 +14,12 @@ from beats.coach.gateway import (
     _apply_cache_control,
     _estimate_cost,
 )
-from beats.coach.pricing import MODEL_PRICING, UNKNOWN_MODEL_PRICING, pricing_for
+from beats.coach.pricing import (
+    MODEL_PRICING,
+    UNKNOWN_MODEL_PRICING,
+    cache_saving_usd,
+    pricing_for,
+)
 from beats.coach.repos import (
     LLM_USAGE_COLLECTION,
 )
@@ -340,6 +345,25 @@ class TestModelPricing:
         for name, pricing in MODEL_PRICING.items():
             assert pricing.cache_write == pytest.approx(pricing.input * 1.25), name
             assert pricing.cache_read == pytest.approx(pricing.input * 0.10), name
+
+
+class TestCacheSaving:
+    """What Capacity says the prompt cache saved: net of the premium writes
+    pay, at the rates of the model that served the tokens."""
+
+    def test_reads_save_the_input_rate_less_the_read_rate(self):
+        # Sonnet 5 is $2 input a Mtok and $0.20 a cached read.
+        assert cache_saving_usd("claude-sonnet-5", 1_000_000, 0) == pytest.approx(1.8)
+
+    def test_writes_cost_their_premium_over_input(self):
+        """A cache written and never read again is a loss: $0.50 over input
+        on a Mtok of Sonnet 5."""
+        assert cache_saving_usd("claude-sonnet-5", 0, 1_000_000) == pytest.approx(-0.5)
+        assert cache_saving_usd("claude-sonnet-5", 1_000_000, 1_000_000) == pytest.approx(1.3)
+
+    def test_each_model_saves_at_its_own_rates(self):
+        assert cache_saving_usd("claude-opus-5", 1_000_000, 0) == pytest.approx(4.5)
+        assert cache_saving_usd("claude-opus-5-20260101", 1_000_000, 0) == pytest.approx(4.5)
 
 
 class TestApplyCacheControl:
