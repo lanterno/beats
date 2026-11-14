@@ -184,9 +184,13 @@ Install: `lefthook install` (from repo root). Source of truth is [`lefthook.yml`
   ```
 - **Daemon tests** live next to the code (`*_test.go` per package). The CLI's pure formatters (`formatRecentTable`, `formatStatusJSON`, etc.) are tested directly without spinning up an HTTP server; integration paths use `httptest`.
 - **Companion tests** are in `companion/test/` (flutter_test) — 370 of them. Pure helpers — bundle labels, repo path shortening, brief preview, tray icons — have parity tests that mirror the equivalent Go and TypeScript tests.
-  The SDK is the Homebrew install at `/opt/homebrew/share/flutter` (stable), on
+  The SDK is the Homebrew install at `/opt/homebrew/share/flutter`, on
   `PATH` through `/opt/homebrew/bin`, which the lefthook gates inherit from the
-  shell that runs `git`. `flutter doctor`
+  shell that runs `git`. It has to be a 3.47: CI runs the version
+  `companion/.fvmrc` pins, and `pubspec.yaml` refuses 3.50, whose Dart cannot
+  compile the tray plugin's locked `nativeapi`, so a `brew upgrade` that moves
+  the cask to today's stable breaks every companion gate until the upgrade in
+  [roadmaps/companion-flutter.md](roadmaps/companion-flutter.md) lands. `flutter doctor`
   reports the Android, Chrome and Linux-desktop toolchains as missing; that is
   expected and does not affect `analyze` or `test`, which is all the hooks run.
   Building the companion for a real target needs those installed.
