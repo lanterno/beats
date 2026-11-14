@@ -581,17 +581,26 @@ export type ControlName = (typeof PAUSES)[number] | (typeof LIMITS)[number];
 
 export const isLimit = (name: string): boolean => (LIMITS as readonly string[]).includes(name);
 
-/** A control, in the operator's words. */
-export const CONTROLS: Record<ControlName, { title: string; note: string; unit?: string }> = {
+/** A control, in the operator's words. `plural` is for the verb a sentence
+ * gives its title: "Imports are paused", "Coach is paused". */
+export const CONTROLS: Record<
+	ControlName,
+	{ title: string; note: string; unit?: string; plural?: boolean }
+> = {
 	coach: { title: "Coach", note: "Paused stops every new coach request, for everyone." },
 	webhooks: {
 		title: "Webhook delivery",
 		note: "Paused drops what would have been sent. There is no queue behind this, so nothing catches up when it comes back.",
 	},
-	imports: { title: "Imports", note: "Paused refuses new imports. Exports keep working." },
+	imports: {
+		title: "Imports",
+		note: "Paused refuses new imports. Exports keep working.",
+		plural: true,
+	},
 	signups: {
 		title: "Sign-ups",
 		note: "Paused refuses new accounts; a ceiling slows them to so many an hour. Nobody who has an account is kept out.",
+		plural: true,
 	},
 	writes_per_minute_beats: {
 		title: "Beat writes per account",
