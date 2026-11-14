@@ -68,6 +68,7 @@ class MongoPlatformControlsStore:
         value: int | None,
         reason: str | None,
         set_by: str,
+        network: str | None = None,
     ) -> dict[str, Any]:
         doc = {
             "name": name,
@@ -76,6 +77,7 @@ class MongoPlatformControlsStore:
             "reason": reason,
             "set_by": set_by,
             "set_at": datetime.now(UTC).isoformat(),
+            "network": network,
         }
         await self._col.update_one({"name": name}, {"$set": doc}, upsert=True)
         return doc

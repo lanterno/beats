@@ -64,6 +64,17 @@ MAX_PAUSE = timedelta(days=7)
 TTL_SECONDS = 30.0
 
 COLLECTION = "platform_controls"
+# Where the sign-up network signal keeps its hourly counters
+# (`auth/signup_networks.py` writes them; the operator reads them). Named here
+# so a network-scoped `signups` control can read the hour's count without this
+# module importing anything under `beats.auth`.
+SIGNUP_NETWORK_COUNTS = "signup_network_counts"
+
+
+def hour_key(at: datetime) -> str:
+    """The UTC hour as the counters key it: `2026-11-14T09`."""
+    return at.astimezone(UTC).strftime("%Y-%m-%dT%H")
+
 
 _iso = TypeAdapter(datetime)
 
@@ -80,6 +91,10 @@ class Control:
     reason: str | None = None
     set_by: str | None = None
     set_at: datetime | None = None
+    # `signups` only: the opaque network key the ceiling applies to, from the
+    # sign-up network signal. The key is derived for the UTC day, so such a
+    # control is capped at the next midnight, when it would stop matching.
+    network: str | None = None
 
     def in_force(self, now: datetime) -> bool:
         if self.name in LIMITS:
@@ -100,12 +115,20 @@ class PlatformControls:
         control = self.controls.get(name)
         if control is None or not control.in_force(now):
             return False
-        return not (name == "signups" and control.value is not None)
+        slowed = control.value is not None or control.network is not None
+        return not (name == "signups" and slowed)
 
-    def signups_per_hour(self, now: datetime) -> int | None:
-        """The ceiling on sign-ups an hour while signups are slowed."""
+    def signups_control(self, now: datetime) -> Control | None:
+        """The `signups` control in force, whatever its state."""
         control = self.controls.get("signups")
         if control is None or not control.in_force(now):
+            return None
+        return control
+
+    def signups_per_hour(self, now: datetime) -> int | None:
+        """The ceiling on sign-ups an hour while *every* sign-up is slowed."""
+        control = self.signups_control(now)
+        if control is None or control.network is not None:
             return None
         return control.value
 
@@ -137,6 +160,7 @@ def control_from_doc(doc: dict) -> Control:
         reason=doc.get("reason") if isinstance(doc.get("reason"), str) else None,
         set_by=doc.get("set_by") if isinstance(doc.get("set_by"), str) else None,
         set_at=_as_datetime(doc.get("set_at")),
+        network=doc.get("network") if isinstance(doc.get("network"), str) else None,
     )
 
 
@@ -232,16 +256,28 @@ _signups_last_hour = 0
 _signups_counted_at = 0.0
 
 
-async def refuse_if_signups_closed(db: AsyncDatabase) -> None:
+async def refuse_if_signups_closed(db: AsyncDatabase, network_key: str | None = None) -> None:
     """Paused: refused. Slowed: refused once the hour holds `value` sign-ups
-    already. `users.created_at` is stored in the model's JSON form (an ISO
-    string, see `MongoUserRepository`), so the bound is written the same
-    way and the comparison is lexical."""
+    already. Slowed for one network: refused once *that network* started
+    `value` sign-ups this hour, read off the signal's own counter, and only
+    when the visitor's key is that network's. `users.created_at` is stored
+    in the model's JSON form (an ISO string, see `MongoUserRepository`), so
+    the bound is written the same way and the comparison is lexical."""
     global _signups_last_hour, _signups_counted_at
     now = datetime.now(UTC)
     controls = await resolve(db)
     if controls.paused("signups", now):
         raise SignupsPaused()
+    control = controls.signups_control(now)
+    if control is not None and control.network is not None:
+        if network_key is None or network_key != control.network or control.value is None:
+            return
+        doc = await db[SIGNUP_NETWORK_COUNTS].find_one(
+            {"hour": hour_key(now), "key": control.network}, projection=["started"]
+        )
+        if doc is not None and int(doc.get("started", 0)) >= control.value:
+            raise SignupsPaused()
+        return
     ceiling = controls.signups_per_hour(now)
     if ceiling is None:
         return

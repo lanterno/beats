@@ -245,6 +245,27 @@ class DayFigure:
     value: float
 
 
+# The signal shows a group only at or above this size: below it, nothing.
+SIGNUP_NETWORK_MIN_GROUP = 5
+# How many of the same hour of the week make the "usual" figure.
+SIGNUP_BASELINE_WEEKS = 8
+
+
+@dataclass(frozen=True)
+class SignupWave:
+    """This hour's sign-ups against the usual for this hour of the week, and
+    the largest network's share — the key is opaque and day-scoped, the page
+    says "Network A", and no account is joined to it anywhere."""
+
+    hour: str
+    completed: int
+    usual: float
+    accounts_with_writes: int
+    largest_group: int | None
+    largest_key: str | None
+    groups: int
+
+
 @dataclass(frozen=True)
 class AbuseReport:
     coach_spend_per_account: list[AccountFigure]
@@ -254,6 +275,7 @@ class AbuseReport:
     webhook_domains: list[DomainFigure]
     devices_per_account: list[AccountFigure]
     signups_per_day: list[DayFigure]
+    signup_wave: SignupWave | None = None
 
 
 @dataclass(frozen=True)

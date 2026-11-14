@@ -9,6 +9,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from beats import platform_controls
+from beats.auth import signup_networks
 from beats.auth.session import SessionManager
 from beats.auth.storage import MongoCredentialStorage
 from beats.auth.webauthn import WebAuthnManager
@@ -158,7 +159,10 @@ async def register_start(
     """Start registration: create user and return WebAuthn options."""
     # The operator's pause on sign-ups (docs/backoffice.md § Controls),
     # before the user row exists. Never a sign-in or an added passkey.
-    await platform_controls.refuse_if_signups_closed(Database.get_db())
+    visitor = request.client.host if request.client else None
+    await platform_controls.refuse_if_signups_closed(
+        Database.get_db(), signup_networks.key_for(visitor)
+    )
     # Check if email is already taken. A user who exists but has zero
     # credentials is a previously-abandoned /register/start — let them
     # retry instead of locking them out with 409 (they can't log in
@@ -176,6 +180,9 @@ async def register_start(
         user = existing
     else:
         user = await user_repo.create(User(email=body.email, display_name=body.display_name))
+        # The network signal (docs/backoffice.md § Trust and safety): a
+        # counter per hour per hashed network, never the address.
+        await signup_networks.count_started(Database.get_db(), visitor)
 
     try:
         options = await webauthn.get_registration_options(user)
@@ -198,7 +205,10 @@ async def verify_registration(
 ) -> RegistrationVerifyResponse:
     """Verify registration response and store the credential."""
     # Checked here too: `start` leaves a row a script could finish later.
-    await platform_controls.refuse_if_signups_closed(Database.get_db())
+    visitor = request.client.host if request.client else None
+    await platform_controls.refuse_if_signups_closed(
+        Database.get_db(), signup_networks.key_for(visitor)
+    )
     # Get the pending registration user_id
     user_id = _session_manager.get_pending_registration_user_id("registration")
     if not user_id:
@@ -228,6 +238,7 @@ async def verify_registration(
             user=user,
             device_name=body.device_name,
         )
+        await signup_networks.count_completed(Database.get_db(), visitor)
         return RegistrationVerifyResponse(
             verified=result["verified"],
             token=result["token"],

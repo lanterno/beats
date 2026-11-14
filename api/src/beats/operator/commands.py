@@ -16,7 +16,7 @@ A command with a `window` is destructive and enqueues instead of executing
 """
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any, Literal, Protocol
 
 from pydantic import AfterValidator, BaseModel, Field, model_validator
@@ -342,6 +342,9 @@ class SetControlArgs(ControlArgs):
     until: datetime | None = None
     value: int | None = Field(default=None, ge=1)
     reason: str | None = Field(default=None, min_length=1, max_length=2000)
+    # `signups` only: slow one network, named by the opaque key the signal
+    # showed. Capped at the next UTC midnight, when the key stops matching.
+    network: str | None = Field(default=None, min_length=8, max_length=64)
 
     @model_validator(mode="after")
     def _shape(self) -> SetControlArgs:
@@ -363,6 +366,12 @@ class SetControlArgs(ControlArgs):
             raise ValueError(f"a pause lasts at most {MAX_PAUSE.days} days; set it again after")
         if self.value is not None and self.name != "signups":
             raise ValueError("only signups can be slowed to a value; the rest pause")
+        if self.network is not None:
+            if self.name != "signups" or self.value is None:
+                raise ValueError("a network is slowed, never blocked: signups with a value")
+            midnight = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=UTC)
+            if until > midnight:
+                raise ValueError("a network's key changes at UTC midnight; until can be no later")
         self.until = until
         return self
 
@@ -378,6 +387,7 @@ async def _control_state(ctx: CommandContext, name: str) -> dict[str, Any]:
         "until": control.until.isoformat() if control.until else None,
         "value": control.value,
         "set_by": control.set_by,
+        "network": control.network,
     }
 
 
@@ -416,6 +426,7 @@ class SetControl(_ControlCommand):
             value=args.value,
             reason=args.reason,
             set_by=ctx.operator.sub,
+            network=args.network,
         )
         return await _control_state(ctx, args.name)
 

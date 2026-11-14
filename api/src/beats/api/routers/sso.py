@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from beats import platform_controls
 from beats.api.routers.auth import UserRepoDep, _session_manager, limiter, refuse_suspended
+from beats.auth import signup_networks
 from beats.auth.oidc import (
     OIDCProvider,
     OIDCRegistry,
@@ -173,12 +174,15 @@ async def start_flow(
     return SSOStartResponse(authorize_url=url, state=state)
 
 
-async def _signups_closed() -> bool:
+async def _signups_closed(visitor: str | None) -> bool:
     """Whether the operator has paused or slowed sign-ups (docs/backoffice.md
-    § Controls). Asked before the exchange's outcome is known, and applied
-    only on the branch that would create an account."""
+    § Controls), for this visitor's network. Asked before the exchange's
+    outcome is known, and applied only on the branch that would create an
+    account."""
     try:
-        await platform_controls.refuse_if_signups_closed(Database.get_db())
+        await platform_controls.refuse_if_signups_closed(
+            Database.get_db(), signup_networks.key_for(visitor)
+        )
     except platform_controls.SignupsPaused:
         return True
     return False
@@ -266,11 +270,12 @@ async def complete(
             raise sso_error(status.HTTP_400_BAD_REQUEST, "SSO_LINK_FAILED", str(e)) from e
         return SSOCompleteResponse(intent="link", provider=provider.id)
 
+    visitor = request.client.host if request.client else None
     try:
         user, created = await accounts.sign_in(
             identity,
             allow_signup=provider.allow_signup,
-            signups_paused=await _signups_closed(),
+            signups_paused=await _signups_closed(visitor),
         )
     except SSOSignupClosed as e:
         raise sso_error(status.HTTP_403_FORBIDDEN, "SSO_SIGNUP_CLOSED", str(e)) from e
@@ -278,6 +283,8 @@ async def complete(
     # After the exchange, like the passkey doors: only someone the provider
     # vouched for learns that the account is suspended.
     refuse_suspended(user)
+    if created:
+        await signup_networks.count_completed(Database.get_db(), visitor)
 
     token = _session_manager.create_session_token(user.id or "", user.email)
     # Neither the provider nor the person. PRIVACY.md promises that nothing

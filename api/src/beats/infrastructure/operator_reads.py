@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 from bson import ObjectId
 from bson.errors import InvalidId
+from pydantic import TypeAdapter
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.operator.reads import (
@@ -24,6 +25,8 @@ from beats.operator.reads import (
     ACCOUNT_COACH_SPEND_DAYS,
     COACH_CAP_ATTENTION_FRACTION,
     ERASURE_REQUEST_ATTENTION_DAYS,
+    SIGNUP_BASELINE_WEEKS,
+    SIGNUP_NETWORK_MIN_GROUP,
     SUPERSEDED_ATTENTION_DAYS,
     AbuseReport,
     AccountDetail,
@@ -44,10 +47,11 @@ from beats.operator.reads import (
     OrgAuditRow,
     QueueKind,
     QueueRow,
+    SignupWave,
     queue_due,
 )
 from beats.platform_controls import COLLECTION as CONTROLS_COLLECTION
-from beats.platform_controls import PAUSES, control_from_doc
+from beats.platform_controls import PAUSES, SIGNUP_NETWORK_COUNTS, control_from_doc, hour_key
 
 # The collections the storage estimate sums, each keyed on `user_id` and led
 # by an index on it. What the account stores, never what it says.
@@ -373,6 +377,75 @@ class MongoOperatorReads:
 
         rows.sort(key=lambda r: r.due)
         return rows
+
+    async def _completed_between(self, start: datetime, end: datetime) -> list[str]:
+        """Ids of accounts created in the window that finished signing up —
+        a credential or a provider identity — so abandoned starts do not
+        inflate the figure. `created_at` is the model's JSON form."""
+        bound = TypeAdapter(datetime)
+        cursor = self._db.users.find(
+            {
+                "created_at": {
+                    "$gte": bound.dump_python(start, mode="json"),
+                    "$lt": bound.dump_python(end, mode="json"),
+                }
+            },
+            projection=["identities"],
+        )
+        created = {str(d["_id"]): bool(d.get("identities")) async for d in cursor}
+        if not created:
+            return []
+        with_credential = set(
+            await self._db.credentials.distinct("user_id", {"user_id": {"$in": list(created)}})
+        )
+        return [uid for uid, sso in created.items() if sso or uid in with_credential]
+
+    async def _signup_wave(self, now: datetime) -> SignupWave:
+        """This hour against the median of the same hour of the week over
+        the last weeks, and the largest network's share of the hour, shown
+        only at or above the minimum group size."""
+        start = now.replace(minute=0, second=0, microsecond=0)
+        end = start + timedelta(hours=1)
+        this_hour = await self._completed_between(start, end)
+        same_hours = sorted(
+            [
+                len(
+                    await self._completed_between(
+                        start - timedelta(weeks=w), end - timedelta(weeks=w)
+                    )
+                )
+                for w in range(1, SIGNUP_BASELINE_WEEKS + 1)
+            ]
+        )
+        mid = len(same_hours) // 2
+        usual = (
+            float(same_hours[mid])
+            if len(same_hours) % 2
+            else (same_hours[mid - 1] + same_hours[mid]) / 2
+        )
+        with_writes = 0
+        if this_hour:
+            with_writes = len(
+                await self._db.timeLogs.distinct("user_id", {"user_id": {"$in": this_hour}})
+            )
+        groups = (
+            await self._db[SIGNUP_NETWORK_COUNTS]
+            .find({"hour": hour_key(now)}, projection=["key", "completed"])
+            .sort("completed", -1)
+            .to_list()
+        )
+        largest = groups[0] if groups else None
+        size = int(largest.get("completed", 0)) if largest else 0
+        shown = largest is not None and size >= SIGNUP_NETWORK_MIN_GROUP
+        return SignupWave(
+            hour=hour_key(now),
+            completed=len(this_hour),
+            usual=usual,
+            accounts_with_writes=with_writes,
+            largest_group=size if shown else None,
+            largest_key=str(largest["key"]) if shown and largest else None,
+            groups=len(groups),
+        )
 
     # ── the operator's own records ──────────────────────────────────
 
@@ -738,6 +811,7 @@ class MongoOperatorReads:
             ),
             devices_per_account=await self._top_counts("device_registrations", {"revoked": False}),
             signups_per_day=[DayFigure(day=d, value=float(n)) for d, n in sorted(signups.items())],
+            signup_wave=await self._signup_wave(now),
         )
 
     async def capacity(self) -> CapacityReport:
