@@ -212,3 +212,22 @@ describe("the deploy commands", () => {
 		expect(commandSpec("deploy.unfreeze")?.subjectless).toBe(true);
 	});
 });
+
+describe("the status commands", () => {
+	it("show exactly what will go public, before and after", () => {
+		const rows = commandSpec("status.publish")?.changes(
+			{ published: true, state: "degraded", message: "Slow.", affected: ["coach"] },
+			{ state: "outage", message: "Down.", affected: "coach, api" },
+			"public",
+		);
+		expect(rows).toEqual([
+			{ what: "What customers see", now: "degraded: Slow.", after: "outage: Down." },
+			{ what: "Affected", now: "coach", after: "coach, api" },
+		]);
+	});
+
+	it("send no subject: the file is the platform's", () => {
+		expect(commandSpec("status.publish")?.subjectless).toBe(true);
+		expect(commandSpec("status.clear")?.subjectless).toBe(true);
+	});
+});
