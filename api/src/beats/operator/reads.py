@@ -274,6 +274,16 @@ class DayFigure:
 SIGNUP_NETWORK_MIN_GROUP = 5
 # How many of the same hour of the week make the "usual" figure.
 SIGNUP_BASELINE_WEEKS = 8
+# An hour is called above usual only from this many sign-ups, and only at
+# twice the usual or more: against a usual of none, one sign-up is more,
+# and is still nothing to look at.
+SIGNUP_WAVE_MIN = 5
+
+
+def signups_above_usual(completed: int, usual: float) -> bool:
+    """Whether this hour's sign-ups are worth the page's attention: at least
+    `SIGNUP_WAVE_MIN` of them, and at least twice the usual for the hour."""
+    return completed >= SIGNUP_WAVE_MIN and completed >= 2 * usual
 
 
 @dataclass(frozen=True)
@@ -289,6 +299,8 @@ class SignupWave:
     hour: str
     completed: int
     usual: float
+    # `signups_above_usual(completed, usual)`: the page judges nothing itself.
+    above_usual: bool
     accounts_with_writes: int
     largest_group: int | None
     largest_key: str | None

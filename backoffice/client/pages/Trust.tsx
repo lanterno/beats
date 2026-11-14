@@ -41,15 +41,15 @@ import {
 	Table,
 } from "@/shared/ui";
 
-/** The page's first sentence. Only the sign-up signal is judged: the table
- * is a ranking with nothing to hold it against, so the sentence never calls
- * it ordinary. */
+/** The page's first sentence. Only the sign-up signal is judged, and by the
+ * API (`above_usual`), never here: the table is a ranking with nothing to
+ * hold it against, so the sentence never calls it ordinary. */
 export function trustHeadline(wave: SignupWave | null | undefined): string {
 	if (!wave) return "Who is using far more than everyone else.";
 	if (wave.largest_group !== null && wave.largest_group !== undefined) {
 		return "One network stands out in this hour's sign-ups.";
 	}
-	if (wave.completed > wave.usual) return "More people are signing up than usual this hour.";
+	if (wave.above_usual) return "More people are signing up than usual this hour.";
 	return "This hour's sign-ups are ordinary.";
 }
 

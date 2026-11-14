@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrganisationSummary } from "@/shared/api/schema";
-import { deletionOf, deletionReady, highestRole, standing } from "./organisations";
+import { deletionOf, deletionReady, highestRole, projectsFact, standing } from "./organisations";
 
 const NOW = new Date("2026-11-14T12:00:00Z");
 
@@ -89,5 +89,15 @@ describe("deletionReady", () => {
 
 	it("never offers it for an organisation that is not closing", () => {
 		expect(deletionReady(null, NOW)).toBe(false);
+	});
+});
+
+describe("projectsFact", () => {
+	it("says none, the count alone, or how many members brought in", () => {
+		// It read "0, 0 by a connect".
+		expect(projectsFact(0, 0)).toBe("None");
+		expect(projectsFact(3, 0)).toBe("3");
+		expect(projectsFact(3, 1)).toBe("3, 1 brought in by a member");
+		expect(projectsFact(3, 2)).toBe("3, 2 brought in by members");
 	});
 });

@@ -2128,6 +2128,10 @@
       "SignupWave": {
         "description": "This hour's sign-ups against the usual for this hour of the week, and\nthe largest network's share \u2014 the key is opaque and day-scoped, the page\nsays \"Network A\", and no account is joined to it anywhere.\n\nNothing about a network below `SIGNUP_NETWORK_MIN_GROUP` is said, not\neven how many there are: a count of networks this hour, beside the\nhour's accounts, would tell small groups apart.",
         "properties": {
+          "above_usual": {
+            "title": "Above Usual",
+            "type": "boolean"
+          },
           "accounts_with_writes": {
             "title": "Accounts With Writes",
             "type": "integer"
@@ -2171,6 +2175,7 @@
           "hour",
           "completed",
           "usual",
+          "above_usual",
           "accounts_with_writes",
           "largest_group",
           "largest_key"

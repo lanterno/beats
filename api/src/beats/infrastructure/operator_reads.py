@@ -50,6 +50,7 @@ from beats.operator.reads import (
     QueueRow,
     SignupWave,
     queue_due,
+    signups_above_usual,
 )
 from beats.platform_controls import COLLECTION as CONTROLS_COLLECTION
 from beats.platform_controls import PAUSES, SIGNUP_NETWORK_COUNTS, control_from_doc, hour_key
@@ -454,6 +455,7 @@ class MongoOperatorReads:
             hour=hour_key(now),
             completed=len(this_hour),
             usual=usual,
+            above_usual=signups_above_usual(len(this_hour), usual),
             accounts_with_writes=with_writes,
             largest_group=size if shown else None,
             largest_key=str(largest["key"]) if shown and largest else None,

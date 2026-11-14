@@ -611,7 +611,11 @@ cannot keep.
   roadmaps/backoffice.md): the hour's finished sign-ups against the median of
   the same hour of the week over the last eight weeks, and the largest
   network's share of the hour, shown only at or above
-  `SIGNUP_NETWORK_MIN_GROUP` (5). The network is the visitor's address cut to
+  `SIGNUP_NETWORK_MIN_GROUP` (5). The API, not the page, says whether the
+  hour is above usual (`above_usual`, `signups_above_usual` in
+  `operator/reads.py`): from `SIGNUP_WAVE_MIN` (5) sign-ups and at twice the
+  usual or more, since against a usual of none a single sign-up is "more"
+  and the headline said so. The network is the visitor's address cut to
   its /24 (IPv4) or /48 (IPv6) and HMAC-hashed under a key derived for the UTC
   day — from `JWT_SECRET`, which the public API already holds and the operator
   deployment never does, so the operator can never compute a key and never
@@ -740,8 +744,8 @@ cannot keep.
   stage 8 of what was roadmaps/backoffice.md). A request that arrives by
   email gets a date the day it arrives (`erasure_request.log`: the day; a
   reference the operator chose, which is a ticket number or the mail's date
-  — a few letters at most, then digits — so neither a name nor an address
-  fits; and the account's whole id as `subject_id`, never `user_id`, or
+  — a few capital letters at most, then digits — so neither a name nor an
+  address fits, and "Jane-1" is refused; and the account's whole id as `subject_id`, never `user_id`, or
   erasure's sweep would take the record that it was asked for), so the legal
   month is visible before anything is queued. That month is a calendar
   month (GDPR Art. 12(3)): due on the same day of the next month, or on its

@@ -269,7 +269,7 @@ class TestErasureRequestLog:
             f"/api/operator/commands/{name}", json={"args": args}, headers=self.OWN
         )
 
-    def _log(self, operator_client, days_ago: int, user_id=None, reference="mail-1"):
+    def _log(self, operator_client, days_ago: int, user_id=None, reference="T-1"):
         received = (datetime.now(UTC) - timedelta(days=days_ago)).date().isoformat()
         done = self._run(
             operator_client,
@@ -314,7 +314,15 @@ class TestErasureRequestLog:
     def test_a_reference_is_a_ticket_or_a_date_never_a_name(self, operator_client, mongo):
         """The reference is kept a year after the request closes, so it is
         a ticket number or the mail's date and nothing a person is called."""
-        for typed in ("Jane Doe mail", "JaneDoe", "jane.doe.2026", "ana@example.test"):
+        for typed in (
+            "Jane Doe mail",
+            "JaneDoe",
+            "jane.doe.2026",
+            "ana@example.test",
+            # A name and a number read as a ticket until letters had to be capitals.
+            "Jane-1",
+            "t-1234",
+        ):
             refused = self._run(
                 operator_client,
                 "erasure_request.log",
@@ -382,7 +390,7 @@ class TestErasureRequestLog:
         argument it is: in the preview, before anything is logged, and in the
         act. A fragment once reached ObjectId() and answered 500."""
         for user_id in (str(ObjectId()), "6633f0a1"):
-            args = {"reference": "mail-1", "received_on": "2026-11-01", "user_id": user_id}
+            args = {"reference": "T-1", "received_on": "2026-11-01", "user_id": user_id}
             for path in ("erasure_request.log/preview", "erasure_request.log"):
                 refused = operator_client.post(
                     f"/api/operator/commands/{path}", json={"args": args}, headers=self.OWN

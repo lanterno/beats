@@ -24,18 +24,19 @@ if TYPE_CHECKING:
 
 
 # A reference is a ticket number or the mail's date — T-1234, #42,
-# 2026-11-14-2: a few letters at most, then digits. Never free text: the row
-# is kept a year after it closes and names the account by id, so neither a
-# name nor an address has anywhere to go.
-_REFERENCE = re.compile(r"[A-Za-z]{0,8}[-#]?[0-9][0-9-]*")
+# 2026-11-14-2: a few capital letters at most, then digits. Never free text:
+# the row is kept a year after it closes and names the account by id, so
+# neither a name nor an address has anywhere to go. Capitals only, because a
+# ticket's prefix is written that way and a name is not: "Jane-1" is refused.
+_REFERENCE = re.compile(r"[A-Z]{0,8}[-#]?[0-9][0-9-]*")
 
 
 def _a_reference(value: str) -> str:
     value = value.strip()
     if not _REFERENCE.fullmatch(value):
         raise ValueError(
-            "a ticket number or the mail's date, like T-1234 or 2026-11-14: a few letters"
-            " at most, then digits — never a name or an address"
+            "a ticket number or the mail's date, like T-1234 or 2026-11-14: a few capital"
+            " letters at most, then digits — never a name or an address"
         )
     return value
 
