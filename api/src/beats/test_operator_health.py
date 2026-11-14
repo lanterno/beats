@@ -12,6 +12,7 @@ from beats.operator.health import (
     GoogleMonitoring,
     HealthCache,
     HealthFigures,
+    busiest_now,
     by_label,
     latest_value,
     share,
@@ -48,6 +49,18 @@ class TestParsing:
             ]
         }
         assert total_value(body) == 15
+
+    def test_busiest_now_is_the_largest_series_at_the_newest_instant(self):
+        body = {
+            "timeSeries": [
+                # The revision a rollover replaced: busy earlier, gone now.
+                {"points": [_point(2, "2026-11-14T09:55:00Z")]},
+                {"points": [_point(1, "2026-11-14T10:00:00Z"), _point(1, "2026-11-14T09:55:00Z")]},
+                {"points": [_point(0, "2026-11-14T10:00:00Z")]},
+            ]
+        }
+        assert busiest_now(body) == 1
+        assert busiest_now({}) is None
 
     def test_a_share_tells_no_errors_from_no_data(self):
         assert share(None, 200) == 0.0
@@ -151,6 +164,45 @@ class TestGoogle:
         source = GoogleMonitoring("beats-api", transport=httpx.MockTransport(answer))
         figures = await asyncio.wait_for(source.read(), timeout=2)
         assert figures.availability is None
+
+    async def test_instances_are_the_busiest_revisions_active_ones_not_every_instance(self):
+        """The bug this pins, seen live as "Instances now: 3 of 2": every
+        revision's instances, idle and active, were added up and set against
+        the ceiling, which is one revision's. Monitoring is stood in for by
+        what it does with the query it is sent: drop what the filter drops,
+        then add up per group."""
+        now, earlier = "2026-11-14T10:00:00Z", "2026-11-14T09:55:00Z"
+        raw = [  # revision, state, value, end
+            ("rev-new", "active", 2, now),
+            ("rev-old", "idle", 1, now),
+            ("rev-old", "active", 2, earlier),
+        ]
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            if "project-id" in url:
+                return httpx.Response(200, text="proj-1")
+            if "token" in url:
+                return httpx.Response(200, json={"access_token": "t"})
+            f = request.url.params["filter"]
+            if "instance_count" not in f:
+                return httpx.Response(200, json={})
+            by_revision = "revision_name" in request.url.params.get("aggregation.groupByFields", "")
+            groups: dict[tuple[str, str], float] = {}
+            for revision, state, value, end in raw:
+                if 'metric.label.state="active"' in f and state != "active":
+                    continue
+                key = (revision if by_revision else "all", end)
+                groups[key] = groups.get(key, 0) + value
+            series: dict[str, list] = {}
+            for (group, end), value in groups.items():
+                series.setdefault(group, []).append(_point(value, end))
+            return httpx.Response(
+                200, json={"timeSeries": [{"points": p} for p in series.values()]}
+            )
+
+        figures = await GoogleMonitoring("beats-api", transport=httpx.MockTransport(answer)).read()
+        assert figures.instances == 2
 
     async def test_figures_are_read_off_the_answers(self):
         def answer(request: httpx.Request) -> httpx.Response:
