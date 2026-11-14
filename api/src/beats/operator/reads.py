@@ -27,6 +27,9 @@ ABSENCE_REQUEST_ATTENTION_DAYS = 14
 # An erasure request logged this long ago with no erasure queued needs
 # somebody: PRIVACY.md promises deletion seven days after queueing, inside
 # the legal month, so the risk is a mail forgotten before anything is queued.
+# The month is a calendar month (GDPR Art. 12(3); the back office's
+# `deadlineOf`), 28 days at its shortest: 14 here and the 7 of the window
+# are 21, inside it.
 ERASURE_REQUEST_ATTENTION_DAYS = 14
 
 # How much of one account's coach spend its page draws. Long enough to show
