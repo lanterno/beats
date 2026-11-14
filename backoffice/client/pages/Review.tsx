@@ -12,8 +12,8 @@
  * running the thing.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { OperatorApiError } from "@/shared/api/client";
 import { previewCommand, runCommand } from "@/shared/api/commands";
@@ -131,6 +131,14 @@ function Pick({ spec, subject, chosen }: { spec: CommandSpec; subject: string; c
 
 export function Review() {
 	const { command = "", subject = "" } = useParams();
+	// One review per command and subject. Moving to another (a Pick link)
+	// keeps this route mounted, and without the key its typed fields and its
+	// finished act would carry over to a command that has not run.
+	return <CommandReview key={`${command}/${subject}`} />;
+}
+
+function CommandReview() {
+	const { command = "", subject = "" } = useParams();
 	const spec = commandSpec(command);
 	const queryClient = useQueryClient();
 	// A page may hand a field's value in the URL (the Trust page hands the
@@ -162,6 +170,8 @@ export function Review() {
 		queryFn: () => previewCommand(command, { ...named, ...settledArgs }),
 		enabled: Boolean(spec && subject),
 		retry: false,
+		// The subject's "Now" stays on screen while the next preview loads.
+		placeholderData: keepPreviousData,
 	});
 
 	const act = useMutation({
@@ -184,6 +194,12 @@ export function Review() {
 		},
 	});
 
+	// Only the first preview blanks the page. A later one loads under the
+	// form, or the field being typed in would unmount, and lose focus, each
+	// time typing stops; `previewed` below keeps the act shut meanwhile.
+	const answered = useRef(false);
+	if (!preview.isPending) answered.current = true;
+
 	if (!spec) {
 		return (
 			<Page title="No such command" back={{ to: "/accounts", label: "Back to accounts" }}>
@@ -198,7 +214,7 @@ export function Review() {
 
 	const back = family.back(subject);
 
-	if (preview.isPending) return <Loading />;
+	if (preview.isPending && !answered.current) return <Loading />;
 	const incomplete = isIncomplete(preview.error);
 	if (preview.error && !incomplete) {
 		return (
@@ -220,7 +236,15 @@ export function Review() {
 	const queued = Boolean(done && "queued" in done);
 	const blocked = preview.data?.already_queued === true;
 	const needsTyping = preview.data?.confirmation_required === true;
-	const ready = !blocked && !done && !incomplete && (!needsTyping || typed.trim().length > 0);
+	// The act runs only what was reviewed: typing has settled, and the
+	// preview has answered for these arguments — not still loading, and not
+	// the previous one kept on screen meanwhile.
+	const previewed =
+		!preview.isPending &&
+		!preview.isPlaceholderData &&
+		JSON.stringify(sentArgs) === JSON.stringify(settledArgs);
+	const ready =
+		previewed && !blocked && !done && !incomplete && (!needsTyping || typed.trim().length > 0);
 
 	return (
 		<Page
