@@ -62,6 +62,8 @@ QueueKind = Literal[
     "absence_requests_pending",
     "account_near_coach_cap",
     "control_paused",
+    "control_slowed",
+    "control_slowed_network",
     "erasure_request_open",
 ]
 
@@ -73,7 +75,13 @@ class QueueRow:
     handled; it leaves when its condition clears.
 
     Superseded approvals and absence requests are one row per organisation
-    (`count` of them, `since` the oldest), with no member named."""
+    (`count` of them, `since` the oldest), with no member named.
+
+    A control in force is a row by what it does and to whom:
+    `control_paused` stops one kind of work for everyone, `control_slowed`
+    holds every sign-up to a ceiling, and `control_slowed_network` is the
+    networks slowed one by one — a single row, `count` of them and `since`
+    the soonest end, with no network named."""
 
     kind: QueueKind
     subject_id: str
@@ -91,7 +99,7 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
     due when its window ends, the last moment it can still be cancelled
     (`since` is its `run_after`). Everything else needs somebody now: a
     failed job, an organisation nobody can manage, a coach cap in reach.
-    A pause is due when it ends (`since` is its `until`): until then it
+    A control is due when it ends (`since` is its `until`): until then it
     stands on purpose, and the row says so. A condition with no stored date
     is due `now`."""
     if since is None:

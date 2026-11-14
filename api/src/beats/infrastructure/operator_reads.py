@@ -372,9 +372,19 @@ class MongoOperatorReads:
             if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
                 row("account_near_coach_cap", uid, None)
 
+        networks_slowed = []
         for control in await self._controls_in_force():
-            if control.name in PAUSES:
+            if control.name not in PAUSES:
+                continue
+            if control.network is not None:
+                networks_slowed.append(control)
+            elif control.name == "signups" and control.value is not None:
+                row("control_slowed", control.name, control.until)
+            else:
                 row("control_paused", control.name, control.until)
+        if networks_slowed:
+            ends = [c.until for c in networks_slowed if c.until is not None]
+            row("control_slowed_network", "signups", min(ends, default=None), len(networks_slowed))
 
         for request in await self.erasure_requests():
             if request.status == "open":
