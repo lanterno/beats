@@ -157,6 +157,14 @@ export function deletionReady(closesOn: string | null | undefined, now: Date): b
 	return closesOn <= new Date(now.getTime() + DAY).toISOString().slice(0, 10);
 }
 
+/** "3", "3, 1 brought in by a member", or "None". A project is brought in
+ * when a member connects their own; the rest the organisation made. */
+export function projectsFact(total: number, broughtIn: number): string {
+	if (total === 0) return "None";
+	if (broughtIn === 0) return String(total);
+	return `${total}, ${broughtIn} brought in by ${broughtIn === 1 ? "a member" : "members"}`;
+}
+
 /** "3 open, 5 submitted, 120 approved", or "None". */
 export function timesheets(byStatus: Record<string, number> | undefined): string {
 	const entries = Object.entries(byStatus ?? {}).filter(([, n]) => n > 0);
