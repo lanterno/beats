@@ -693,7 +693,7 @@ class TestSignupNetworks:
         wave = operator_client.get("/api/operator/abuse").json()["signup_wave"]
         assert wave["largest_group"] is None
         assert wave["largest_key"] is None
-        assert wave["groups"] == 1
+        assert "groups" not in wave, "below the minimum, not even how many networks"
 
         mongo.signup_network_counts.update_one({"key": key}, {"$inc": {"completed": 1}})
         wave = operator_client.get("/api/operator/abuse").json()["signup_wave"]
