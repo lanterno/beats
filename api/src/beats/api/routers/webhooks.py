@@ -107,14 +107,20 @@ async def dispatch_webhook_event(
     # silent. Suspension can be undone; so can this.
     if await _webhooks_disabled(user_id):
         return
-    # The operator's platform-wide pause drops too — there is no outbox to
-    # hold a delivery — with one line per event so the loss can be counted
-    # (docs/backoffice.md § Controls).
-    if await platform_controls.webhooks_paused(Database.get_db()):
-        logger.warning("WEBHOOKS_PAUSED_DROPPED event=%s account=%s", event, user_id)
-        return
     webhooks = await repo.list_by_event(event)
     if not webhooks:
+        return
+    # The operator's platform-wide pause drops too — there is no outbox to
+    # hold a delivery — with one line per event that had somewhere to go,
+    # and how many deliveries it lost, so the loss can be counted
+    # (docs/backoffice.md § Controls). An event with no webhook lost nothing.
+    if await platform_controls.webhooks_paused(Database.get_db()):
+        logger.warning(
+            "WEBHOOKS_PAUSED_DROPPED event=%s account=%s deliveries=%d",
+            event,
+            user_id,
+            len(webhooks),
+        )
         return
 
     body = {
