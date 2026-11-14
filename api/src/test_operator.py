@@ -648,3 +648,47 @@ class TestQueueRead:
 
     def test_an_empty_platform_has_an_empty_queue(self, operator_client):
         assert operator_client.get("/api/operator/queue").json() == []
+
+
+class TestOperatorHealthRoute:
+    """GET /api/operator/health over a fake of the port: the three states,
+    and that it is the operator's alone like every other read."""
+
+    @pytest.fixture(autouse=True)
+    def _fake(self, operator_client):
+        from beats.operator.health import HealthCache, HealthFigures
+
+        class _Fake:
+            fail = False
+
+            async def read(self):
+                if self.fail:
+                    raise RuntimeError("away")
+                return HealthFigures(
+                    availability=0.999, error_share=0.0, p95_latency_ms=300.0, instances=1
+                )
+
+        state = operator_client.app.state
+        was = (state.health_source, state.health_cache)
+        self.fake = _Fake()
+        state.health_source, state.health_cache = self.fake, HealthCache(seconds=0)
+        yield
+        state.health_source, state.health_cache = was
+
+    def test_live_figures_with_the_ceiling_and_the_target(self, operator_client):
+        body = operator_client.get("/api/operator/health").json()
+        assert body["state"] == "live"
+        assert body["figures"]["availability"] == 0.999
+        assert body["availability_target"] == 0.995
+
+    def test_a_failure_after_a_read_is_stale(self, operator_client):
+        operator_client.get("/api/operator/health")
+        self.fake.fail = True
+        body = operator_client.get("/api/operator/health").json()
+        assert body["state"] == "stale"
+        assert body["figures"] is not None
+
+    def test_never_read_is_unavailable(self, operator_client):
+        self.fake.fail = True
+        body = operator_client.get("/api/operator/health").json()
+        assert body == {**body, "state": "unavailable", "figures": None}
