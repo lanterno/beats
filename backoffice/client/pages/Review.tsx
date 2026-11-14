@@ -14,7 +14,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { OperatorApiError } from "@/shared/api/client";
 import { previewCommand, runCommand } from "@/shared/api/commands";
 import {
@@ -28,6 +28,7 @@ import {
 	startingArgs,
 } from "@/shared/commands";
 import { plainMessage } from "@/shared/lib/errors";
+import { handedOver } from "@/shared/lib/handover";
 import { useSettled } from "@/shared/lib/useSettled";
 import {
 	buttonClass,
@@ -165,6 +166,9 @@ function Fields({
 /** The acts available on this subject, so one can be swapped for another
  * without going back. */
 function Pick({ spec, subject, chosen }: { spec: CommandSpec; subject: string; chosen: string }) {
+	// What was handed over goes along: clearing one network's slow-down is
+	// not clearing everyone's.
+	const { search, state } = useLocation();
 	return (
 		// biome-ignore lint/a11y/useSemanticElements: a fieldset cannot be a rounded flex track across browsers
 		<div
@@ -175,7 +179,8 @@ function Pick({ spec, subject, chosen }: { spec: CommandSpec; subject: string; c
 			{familyOf(spec).map((other) => (
 				<Link
 					key={other.name}
-					to={`/review/${other.name}/${subject}`}
+					to={{ pathname: `/review/${other.name}/${subject}`, search }}
+					state={state}
 					aria-current={other.name === chosen ? "true" : undefined}
 					className={`inline-flex h-9 items-center rounded-full px-3.5 text-[14px] ${
 						other.name === chosen ? "bg-wash-strong font-bold" : "hover:bg-wash"
@@ -200,10 +205,14 @@ function CommandReview() {
 	const { command = "", subject = "" } = useParams();
 	const spec = commandSpec(command);
 	const queryClient = useQueryClient();
-	// A page may hand a box its value in the URL (the Trust page hands the
-	// network key to slow) — only a box marked `linked`, which names what is
-	// acted on; a crafted link fills nothing that is said or decided.
+	// A box marked `linked` may take its value from the URL (a device to
+	// revoke): it names what is acted on, and a crafted link fills nothing
+	// that is said or decided. The network key a sign-up slow-down covers
+	// may not be in a URL at all, so it is handed over in navigation state
+	// (shared/lib/handover.ts): it goes with the act as it came, and is not a
+	// box to edit.
 	const [search] = useSearchParams();
+	const handed = handedOver(search, useLocation().state);
 	const [args, setArgs] = useState<Record<string, unknown>>(() =>
 		spec ? startingArgs(spec, subject, (key) => search.get(key)) : {},
 	);
@@ -215,12 +224,12 @@ function CommandReview() {
 	// the route validates them exactly as the act will, so an unfilled field
 	// comes back 422 and that is the page's own "there is more to fill in",
 	// not a failure. Settled, or every keystroke would be a request.
-	const sentArgs = spec ? requestArgs(spec, subject, args) : {};
+	const sentArgs = spec ? { ...requestArgs(spec, subject, args), ...handed } : {};
 	const settledArgs = useSettled(sentArgs);
 	const preview = useQuery({
 		queryKey: ["preview", command, subject, settledArgs],
 		queryFn: () => previewCommand(command, settledArgs),
-		enabled: Boolean(spec && subject),
+		enabled: Boolean(spec && subject && handed),
 		retry: false,
 		// The subject's "Now" stays on screen while the next preview loads.
 		placeholderData: keepPreviousData,
@@ -268,6 +277,20 @@ function CommandReview() {
 	}
 
 	const back = family.back(subject);
+
+	if (handed === null) {
+		return (
+			<Page title="Start again from where you chose this" back={back}>
+				<Panel>
+					<Empty title="This page arrived without what it was handed.">
+						The network a sign-up slow-down covers is handed to this page by Trust and safety, or
+						access and controls, and is never in an address, so a new tab or a copied link arrives
+						without it. Choose it there again.
+					</Empty>
+				</Panel>
+			</Page>
+		);
+	}
 
 	if (preview.isPending && !answered.current) return <Loading />;
 	const refusal = refusalOf(preview.error, fields, args);
@@ -460,7 +483,7 @@ function CommandReview() {
 						<>
 							<Table
 								head={["What", "Now", "After"]}
-								rows={spec.changes(before, args, subject).map((row) => [
+								rows={spec.changes(before, { ...args, ...handed }, subject).map((row) => [
 									row.what,
 									<span key="now" className="text-ink-muted">
 										{known ? row.now : "—"}

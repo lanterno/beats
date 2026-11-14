@@ -62,6 +62,8 @@ QueueKind = Literal[
     "absence_requests_pending",
     "account_near_coach_cap",
     "control_paused",
+    "control_slowed",
+    "control_slowed_network",
     "erasure_request_open",
 ]
 
@@ -73,7 +75,13 @@ class QueueRow:
     handled; it leaves when its condition clears.
 
     Superseded approvals and absence requests are one row per organisation
-    (`count` of them, `since` the oldest), with no member named."""
+    (`count` of them, `since` the oldest), with no member named.
+
+    A control in force is a row by what it does and to whom:
+    `control_paused` stops one kind of work for everyone, `control_slowed`
+    holds every sign-up to a ceiling, and `control_slowed_network` is the
+    networks slowed one by one — a single row, `count` of them and `since`
+    the soonest end, with no network named."""
 
     kind: QueueKind
     subject_id: str
@@ -91,7 +99,7 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
     due when its window ends, the last moment it can still be cancelled
     (`since` is its `run_after`). Everything else needs somebody now: a
     failed job, an organisation nobody can manage, a coach cap in reach.
-    A pause is due when it ends (`since` is its `until`): until then it
+    A control is due when it ends (`since` is its `until`): until then it
     stands on purpose, and the row says so. A condition with no stored date
     is due `now`."""
     if since is None:
@@ -108,7 +116,14 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
 @dataclass(frozen=True)
 class ControlState:
     """One control as the Access page shows it. The operator's own text
-    (`reason`) is theirs to read back; a user never sees it."""
+    (`reason`) is theirs to read back; a user never sees it.
+
+    `network` is the opaque key of the one network a `signups` slow-down
+    covers, and None for a control that covers everyone; there may be any
+    number of the first beside the second. The page says "one network",
+    never the key, and hands the key back in a command's body to change or
+    lift that control alone — never in a URL, which Cloud Run logs, and
+    never into `operator_audit`, whose rows say `one_network` instead."""
 
     name: str
     in_force: bool
@@ -117,6 +132,7 @@ class ControlState:
     reason: str | None
     set_by: str | None
     set_at: datetime | None
+    network: str | None = None
 
 
 ErasureRequestStatus = Literal["open", "erasure_queued", "erasure_ran", "closed"]
@@ -258,7 +274,11 @@ SIGNUP_BASELINE_WEEKS = 8
 class SignupWave:
     """This hour's sign-ups against the usual for this hour of the week, and
     the largest network's share — the key is opaque and day-scoped, the page
-    says "Network A", and no account is joined to it anywhere."""
+    says "Network A", and no account is joined to it anywhere.
+
+    Nothing about a network below `SIGNUP_NETWORK_MIN_GROUP` is said, not
+    even how many there are: a count of networks this hour, beside the
+    hour's accounts, would tell small groups apart."""
 
     hour: str
     completed: int
@@ -266,7 +286,6 @@ class SignupWave:
     accounts_with_writes: int
     largest_group: int | None
     largest_key: str | None
-    groups: int
 
 
 @dataclass(frozen=True)

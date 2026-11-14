@@ -30,6 +30,7 @@ import jwt.algorithms
 import pytest
 from bson import ObjectId
 
+from api_helpers import arriving_from
 from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
     ACCOUNT_COACH_SPEND_DAYS,
@@ -340,29 +341,71 @@ class TestOperatorWall:
         self, operator_client, planted, mongo, test_client
     ):
         """The sign-up network signal keeps a counter per hashed network and
-        nothing else: the address, whole or cut to its /24, reaches no
-        operator page and no stored row."""
-        # The public API's client, seen as arriving from an address: the
-        # same client, since a fresh TestClient runs on a loop of its own.
-        transport = test_client._transport
-        was = transport.client
-        transport.client = ("203.0.113.77", 443)
+        nothing else: a visitor's address — IPv4 or IPv6, whole or cut to
+        its network — reaches no operator page and no stored row: not the
+        counters, not the account the start made, not the controls, and not
+        the four-year audit, which never holds the network's key either.
+        Each visitor's network is slowed through the commands, so the audit
+        and the controls have something to hold."""
+        from beats.auth.signup_networks import key_for
+
+        visitors = {
+            "203.0.113.77": ("203.0.113",),
+            "2001:db8:abcd:12::77": ("2001:db8:abcd", "2001:0db8:abcd"),
+        }
+        now = datetime.now(UTC)
+        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        until = (now + min(timedelta(minutes=10), (midnight - now) / 2)).isoformat()
+        keys = []
         try:
-            started = test_client.post(
-                "/api/auth/register/start",
-                json={"email": "wall-visitor@example.test", "display_name": "V"},
-            )
-        finally:
-            transport.client = was
-        assert started.status_code == 200, started.text
-        try:
-            for path, body in self._every_page(operator_client, planted):
-                assert "203.0.113" not in body, f"an address leaked on {path}"
-            for row in mongo.signup_network_counts.find({}):
-                assert "203.0.113" not in str(row)
+            for n, address in enumerate(visitors):
+                with arriving_from(test_client, address) as visitor:
+                    started = visitor.post(
+                        "/api/auth/register/start",
+                        json={"email": f"wall-visitor-{n}@example.test", "display_name": "V"},
+                    )
+                assert started.status_code == 200, started.text
+                key = key_for(address)
+                assert key is not None
+                keys.append(key)
+                slowed = operator_client.post(
+                    "/api/operator/commands/control.set",
+                    json={
+                        "args": {
+                            "name": "signups",
+                            "until": until,
+                            "reason": "a wave",
+                            "value": 3,
+                            "network": key,
+                        }
+                    },
+                    headers={"Origin": ORIGIN},
+                )
+                assert slowed.status_code == 200, slowed.text
+            assert mongo.signup_network_counts.count_documents({}) == 2
+
+            shown = [body for _, body in self._every_page(operator_client, planted)]
+            stored = {
+                name: [str(doc) for doc in mongo[name].find({})]
+                for name in (
+                    "signup_network_counts",
+                    "users",
+                    "platform_controls",
+                    "operator_audit",
+                )
+            }
+            for prefixes in visitors.values():
+                for prefix in prefixes:
+                    assert not [b for b in shown if prefix in b], f"{prefix} on an operator page"
+                    for name, docs in stored.items():
+                        assert not [d for d in docs if prefix in d], f"{prefix} in {name}"
+            for key in keys:
+                assert not [d for d in stored["operator_audit"] if key in d], "a key in the audit"
         finally:
             mongo.signup_network_counts.delete_many({})
-            mongo.users.delete_many({"email": "wall-visitor@example.test"})
+            mongo.platform_controls.delete_many({})
+            mongo.operator_audit.delete_many({"command": "control.set"})
+            mongo.users.delete_many({"email": {"$regex": "^wall-visitor"}})
 
     def test_the_lookup_is_case_insensitive_and_exact(self, operator_client, planted):
         own = {"Origin": ORIGIN}

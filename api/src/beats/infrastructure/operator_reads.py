@@ -230,7 +230,9 @@ class MongoOperatorReads:
     async def controls(self) -> list[ControlState]:
         """Every control document, in force or expired: an expired pause is
         open to the public API and still shown here as what it was, until
-        it is cleared or set again."""
+        it is cleared or set again. A network's slow-down goes by TTL when
+        it ends. By name; under one, the control for everyone first, then
+        each network's in the order they were set."""
         now = datetime.now(UTC)
         docs = await self._db[CONTROLS_COLLECTION].find({}, projection={"_id": False}).to_list()
         return [
@@ -242,8 +244,12 @@ class MongoOperatorReads:
                 reason=c.reason,
                 set_by=c.set_by,
                 set_at=c.set_at,
+                network=c.network,
             )
-            for c in sorted(map(control_from_doc, docs), key=lambda c: c.name)
+            for c in sorted(
+                map(control_from_doc, docs),
+                key=lambda c: (c.name, c.network is not None, c.set_at or now),
+            )
         ]
 
     async def erasure_requests(self) -> list[ErasureRequestState]:
@@ -366,9 +372,19 @@ class MongoOperatorReads:
             if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
                 row("account_near_coach_cap", uid, None)
 
+        networks_slowed = []
         for control in await self._controls_in_force():
-            if control.name in PAUSES:
+            if control.name not in PAUSES:
+                continue
+            if control.network is not None:
+                networks_slowed.append(control)
+            elif control.name == "signups" and control.value is not None:
+                row("control_slowed", control.name, control.until)
+            else:
                 row("control_paused", control.name, control.until)
+        if networks_slowed:
+            ends = [c.until for c in networks_slowed if c.until is not None]
+            row("control_slowed_network", "signups", min(ends, default=None), len(networks_slowed))
 
         for request in await self.erasure_requests():
             if request.status == "open":
@@ -428,13 +444,9 @@ class MongoOperatorReads:
             with_writes = len(
                 await self._db.timeLogs.distinct("user_id", {"user_id": {"$in": this_hour}})
             )
-        groups = (
-            await self._db[SIGNUP_NETWORK_COUNTS]
-            .find({"hour": hour_key(now)}, projection=["key", "completed"])
-            .sort("completed", -1)
-            .to_list()
+        largest = await self._db[SIGNUP_NETWORK_COUNTS].find_one(
+            {"hour": hour_key(now)}, projection=["key", "completed"], sort=[("completed", -1)]
         )
-        largest = groups[0] if groups else None
         size = int(largest.get("completed", 0)) if largest else 0
         shown = largest is not None and size >= SIGNUP_NETWORK_MIN_GROUP
         return SignupWave(
@@ -444,7 +456,6 @@ class MongoOperatorReads:
             accounts_with_writes=with_writes,
             largest_group=size if shown else None,
             largest_key=str(largest["key"]) if shown and largest else None,
-            groups=len(groups),
         )
 
     # ── the operator's own records ──────────────────────────────────

@@ -4,6 +4,7 @@ database cannot be read. The routes that refuse are test_account_controls.py;
 the commands that write are test_operator_commands.py.
 """
 
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
@@ -45,6 +46,30 @@ class TestReading:
         paused = controls_from_docs([_doc("signups", until=later)], NOW)
         assert paused.paused("signups", NOW) is True
         assert paused.signups_per_hour(NOW) is None
+
+    def test_a_networks_slow_down_stands_beside_the_control_for_everyone(self):
+        """One document each: a network's slow-down neither lifts the pause
+        for everyone nor another network's, whatever order they are read in."""
+        later = (NOW + timedelta(hours=1)).isoformat()
+        docs = [
+            _doc("signups", until=later, value=5, network="network-a"),
+            _doc("signups", until=later, value=2, network="network-b"),
+            _doc("signups", until=later),
+        ]
+        for order in (docs, docs[::-1]):
+            controls = controls_from_docs(order, NOW)
+            assert controls.paused("signups", NOW) is True
+            assert controls.network_per_hour("network-a", NOW) == 5
+            assert controls.network_per_hour("network-b", NOW) == 2
+            assert controls.network_per_hour("network-c", NOW) is None
+            assert controls.network_per_hour(None, NOW) is None
+
+    def test_a_network_is_slowed_and_never_paused(self):
+        later = (NOW + timedelta(hours=1)).isoformat()
+        controls = controls_from_docs([_doc("signups", until=later, network="network-a")], NOW)
+        assert controls.paused("signups", NOW) is False
+        assert controls.network_per_hour("network-a", NOW) is None
+        assert controls.signups_per_hour(NOW) is None
 
     def test_a_limit_is_a_setting_and_does_not_expire(self):
         controls = controls_from_docs([_doc("writes_per_minute_beats", value=120)], NOW)
@@ -96,14 +121,22 @@ class TestCache:
         yield
         platform_controls.clear()
 
-    async def test_a_failed_read_keeps_the_last_value(self):
+    @pytest.fixture
+    def clock(self, monkeypatch) -> list[float]:
+        """The process's monotonic clock, moved by hand: the bound is read
+        off it, so a test steps past it rather than waiting it out."""
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+        return clock
+
+    async def test_a_failed_read_keeps_the_last_value(self, clock):
         later = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
         col = _Collection([_doc("imports", until=later)])
         first = await platform_controls.resolve(_db(col))
         assert first.paused("imports", datetime.now(UTC)) is True
 
         col.fail = True
-        platform_controls._expires_at = 0.0  # the bound has passed
+        clock[0] += platform_controls.TTL_SECONDS + 1
         again = await platform_controls.resolve(_db(col))
         assert again.paused("imports", datetime.now(UTC)) is True, "the last value stands"
 
@@ -113,10 +146,15 @@ class TestCache:
         controls = await platform_controls.resolve(_db(_Collection(fail=True)))
         assert controls == PlatformControls()
 
-    async def test_the_bound_holds_between_reads(self):
+    async def test_the_bound_holds_between_reads_and_ends(self, clock):
         col = _Collection([])
         await platform_controls.resolve(_db(col))
         later = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
         col.docs = [_doc("coach", until=later)]
+        clock[0] += platform_controls.TTL_SECONDS - 1
         cached = await platform_controls.resolve(_db(col))
         assert cached.paused("coach", datetime.now(UTC)) is False, "not re-read inside the bound"
+
+        clock[0] += 2
+        fresh = await platform_controls.resolve(_db(col))
+        assert fresh.paused("coach", datetime.now(UTC)) is True, "re-read once it has passed"

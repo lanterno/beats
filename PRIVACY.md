@@ -37,14 +37,24 @@ I can suspend an account. A suspended account is refused everywhere it can act �
 
 Anything I do through the control plane is written to an audit record of its own, which nobody can edit and which holds ids, never names or addresses; it is kept four years, the platform's default retention, and then purged; where the act touches an organisation — only one left with no owner, and only when its members ask — it also lands in that organisation's own audit log, marked as the operator's act, so its admins can tell an act of mine from an act of theirs.
 
-To notice a burst of sign-ups from one place, LifePete keeps for 48 hours a
-count of sign-ups per hour per network, where the network is the first part of
-the visitor's address (the /24 for IPv4, the /48 for IPv6), hashed with a key
-that changes every day. The address itself is not stored, the hash cannot be
-reversed or matched against a guess after the day ends, and no account is ever
-linked to a network. The operator sees only how large the largest group in an
-hour is, and may slow sign-ups from it for the rest of the day; nobody is
-blocked, and nobody who has an account is affected.
+To notice a burst of sign-ups from one place, LifePete keeps a count of
+sign-ups per hour per network, where the network is the first part of the
+visitor's address (the /24 for IPv4, the /48 for IPv6), hashed together with
+the day's date under the API's own signing secret. The address itself is never
+stored, and no account is ever linked to a network. The hash is not a secret
+from everyone: whoever holds that signing secret can work out which network a
+hash stands for by hashing candidates and comparing — every IPv4 network in
+seconds, and any IPv6 network they can guess — for as long as the hash is kept,
+on the day it was made or any day after. The control plane I run the platform
+from never holds the signing secret, so it can neither make a hash nor test a
+guess against one; whoever runs the API's infrastructure can read the secret,
+and on lifepete.com that is me. So the hashes are kept briefly: the counts for
+48 hours, then deleted; a network's hash on a slow-down of sign-ups from that
+network, until the slow-down ends — at midnight UTC that day at the latest —
+then deleted too; and never in the record of what I do through the control
+plane, which says only that one network was slowed. The operator sees only how
+large the largest group in an hour is, and may slow sign-ups from it for the
+rest of the day; nobody is blocked, and nobody who has an account is affected.
 
 Beats also keeps, per account, the **day** a request last carried its credential — a date, never a time, written at most once a day — and per paired device the time it last authenticated, also at most once a day. That is what lets an operator see that an account is in use at all without reading when you work.
 
@@ -123,7 +133,7 @@ If you do not want any data leaving the Beats database, do not use the coach.
 
 - **Export**: anytime, via `/api/export` — your projects (contract included, archived ones too, and an organisation's projects as you see them), sessions, absences and balance adjustments, and your clients (archived ones and their contacts too), each project's billing, the sessions you marked billable or not and your billing budgets, as a JSON backup you can import again (report links are deliberately left out: a backup file would then carry live URLs to your hours), or your sessions as CSV. Plans, webhooks, signals, biometrics and coach history are not in it yet.
 - **Timesheet**: a day job's monthly timesheet, via `/api/projects/{id}/timesheet.csv`, is a CSV for your employer. It holds per day the hours worked and expected, any balance adjustment, the public holiday's name (a company holiday reads "company holiday"), the absence type and whether it was a half day (never the absence's note), and the balance.
-- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account. The deletion runs **seven days after I queue it** — well inside the GDPR's month — and your account is suspended for that week, telling whoever opens it the exact day and how to stop it, so that if the mail did not come from you, you find out in time; writing to the same address inside the window cancels it. Then every document associated with your user is deleted — projects, sessions, contracts, absences, balance adjustments, clients and their contacts, project billing, billable marks, billing budgets, report links, coach history, biometrics, flow signals and paired devices — and reply to confirm. **One exception**, for an organisation you were in: the entries and absences you tracked on *its* projects are its working-time record, which an employer may be bound by law to keep, and they stay — each entry's start, end, project and note, each absence's date, type and half day, the balance adjustments and contract terms behind a balance it read — under an id that is no account's, together with the name and email address it knew you by. Your tags on those entries, your notes on those absences, your goal and your local repository paths go with the rest. Nothing on your personal projects survives. That exception is itself bounded: an organisation keeps its record only for its retention period — a setting that can never go under the statutory floor of the organisation's country, and is four years where the law asks for no longer — after which a purge the operator runs removes what it kept of a deleted account, the name and address it knew you by and the contract behind the balance it read among them, and returns rows still on a living account to being purely their own. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
+- **Deletion**: email me at <ahmed.elghareeb@proton.me> from the address on your account. The deletion runs **seven days after I queue it** — well inside the GDPR's month — and your account is suspended for that week, telling whoever opens it the exact day and how to stop it, so that if the mail did not come from you, you find out in time; writing to the same address inside the window cancels it. So that your request is answered in time, I log it — your account's id, the date your mail arrived and a reference of my own, never your name or address — and the log entry closes when the deletion runs; it is kept while open and for a year after it closes. Then every document associated with your user is deleted — projects, sessions, contracts, absences, balance adjustments, clients and their contacts, project billing, billable marks, billing budgets, report links, coach history, biometrics, flow signals and paired devices — and reply to confirm. **One exception**, for an organisation you were in: the entries and absences you tracked on *its* projects are its working-time record, which an employer may be bound by law to keep, and they stay — each entry's start, end, project and note, each absence's date, type and half day, the balance adjustments and contract terms behind a balance it read — under an id that is no account's, together with the name and email address it knew you by. Your tags on those entries, your notes on those absences, your goal and your local repository paths go with the rest. Nothing on your personal projects survives. That exception is itself bounded: an organisation keeps its record only for its retention period — a setting that can never go under the statutory floor of the organisation's country, and is four years where the law asks for no longer — after which a purge the operator runs removes what it kept of a deleted account, the name and address it knew you by and the contract behind the balance it read among them, and returns rows still on a living account to being purely their own. Uninstalling an app or unpairing a device removes what it kept on that device but does not delete your account.
 
 ## Changes
 

@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from api_helpers import arriving_from
+
 
 class TestOAuthIntegrationRouters:
     """Cross-cutting tests for the four OAuth integration routers
@@ -322,6 +324,11 @@ class TestSSOAPI:
         mongo.sso_flows.delete_many({})
         yield
         app.dependency_overrides.pop(get_oidc_registry, None)
+        from beats import platform_controls
+
+        mongo.platform_controls.delete_many({})
+        mongo.signup_network_counts.delete_many({})
+        platform_controls.clear()
 
     def _start(self, client, provider: str, headers=None) -> dict:
         path = f"/api/account/sso/{provider}/link" if headers else f"/api/auth/sso/{provider}/start"
@@ -514,3 +521,68 @@ class TestSSOAPI:
         assert resp.status_code == 403, resp.text
         assert resp.json()["code"] == "ACCOUNT_SUSPENDED"
         assert CONTACT_EMAIL in resp.json()["detail"]
+
+    # -------- the operator's sign-up controls at this door --------
+
+    @staticmethod
+    def _signups(mongo, *, value=None, network=None) -> None:
+        """A sign-up control as `control.set` leaves it, ending in half an
+        hour — inside the network key's day, however near midnight."""
+        from beats import platform_controls
+
+        now = datetime.now(UTC)
+        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        until = now + min(timedelta(minutes=30), (midnight - now) / 2)
+        mongo.platform_controls.insert_one(
+            {
+                "name": "signups",
+                "until": until.isoformat(),
+                "value": value,
+                "network": network,
+                "reason": "test",
+            }
+        )
+        platform_controls.clear()
+
+    def test_paused_sign_ups_refuse_a_new_identity_and_let_a_known_one_in(self, client, mongo):
+        assert self._round_trip(client, self.open_idp, sub="known").json()["created"] is True
+        self._signups(mongo)
+
+        refused = self._round_trip(client, self.open_idp, sub="newcomer")
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "SIGNUPS_PAUSED"
+        assert mongo.users.count_documents({"identities.subject": "newcomer"}) == 0
+
+        known = self._round_trip(client, self.open_idp, sub="known")
+        assert known.status_code == 200, known.text
+        assert known.json()["created"] is False
+
+    def test_a_slowed_network_holds_accounts_a_provider_creates(self, client, mongo):
+        """A provider's sign-up counts against its network's ceiling, which
+        reads sign-ups started: with a ceiling of one, the second new
+        identity from the network waits, and nobody who has an account
+        does. Nothing counted a provider's sign-up as started, so a wave
+        through SSO went past any ceiling."""
+        from beats.auth.signup_networks import key_for
+
+        wave, elsewhere = "203.0.113.7", "198.51.100.4"
+        with arriving_from(client, wave) as visitor:
+            assert self._round_trip(visitor, self.open_idp, sub="before").status_code == 200
+        mongo.signup_network_counts.delete_many({})
+        self._signups(mongo, value=1, network=key_for(wave))
+
+        with arriving_from(client, wave) as visitor:
+            first = self._round_trip(visitor, self.open_idp, sub="first")
+            assert first.status_code == 200, first.text
+            assert first.json()["created"] is True
+            second = self._round_trip(visitor, self.open_idp, sub="second")
+            assert second.status_code == 409, second.text
+            assert second.json()["code"] == "SIGNUPS_PAUSED"
+            # Never a sign-in.
+            known = self._round_trip(visitor, self.open_idp, sub="before")
+            assert known.status_code == 200, known.text
+        with arriving_from(client, elsewhere) as other:
+            assert self._round_trip(other, self.open_idp, sub="other").status_code == 200
+
+        row = mongo.signup_network_counts.find_one({"key": key_for(wave)})
+        assert (row["started"], row["completed"]) == (1, 1)

@@ -54,6 +54,13 @@ interface Kind {
 
 const short = (id: string) => id.slice(-6);
 
+/** "Coach is", "Sign-ups are": a control's title and the verb it takes. */
+function controlIs(name: string): string {
+	const control = CONTROLS[name as ControlName];
+	if (!control) return `${name} is`;
+	return `${control.title} ${control.plural ? "are" : "is"}`;
+}
+
 export const KINDS: Record<QueueRow["kind"], Kind> = {
 	organisation_without_owner: {
 		title: (row) => `Organisation ${short(row.subject_id)} has no owner`,
@@ -106,10 +113,28 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		runbook: "organisation-waiting",
 	},
 	control_paused: {
-		title: (row) =>
-			`${CONTROLS[row.subject_id as ControlName]?.title ?? row.subject_id} is paused for everyone`,
+		title: (row) => `${controlIs(row.subject_id)} paused for everyone`,
 		label: "Control",
 		why: "You, or another operator, paused it on purpose. It lifts itself at the instant shown; clear it sooner from access and controls.",
+		next: "Open access and controls",
+		to: () => "/access",
+		runbook: "control-paused",
+	},
+	control_slowed: {
+		title: (row) => `${controlIs(row.subject_id)} slowed for everyone`,
+		label: "Control",
+		why: "New accounts past the ceiling an hour are refused, from anywhere; nobody with an account is kept out. It lifts itself at the instant shown; clear it sooner from access and controls.",
+		next: "Open access and controls",
+		to: () => "/access",
+		runbook: "control-paused",
+	},
+	control_slowed_network: {
+		title: (row) =>
+			row.count === 1
+				? "Sign-ups from one network are slowed"
+				: `Sign-ups from ${row.count} networks are slowed`,
+		label: "Control",
+		why: "Each network has its own ceiling an hour; everyone else signs up as usual, and nobody with an account is kept out. Each lifts itself by UTC midnight at the latest; the date shown is the soonest.",
 		next: "Open access and controls",
 		to: () => "/access",
 		runbook: "control-paused",

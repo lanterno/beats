@@ -129,7 +129,7 @@ describe("what will change", () => {
 describe("the control commands", () => {
 	// One control.set serves every control, so what it asks for depends on
 	// the subject: a limit a value, a pause an end and a reason, sign-ups
-	// either.
+	// either. The network a slow-down covers is handed over, never typed.
 	it("asks a pause for an end and a reason, and a limit for a value", () => {
 		expect(fields("control.set", "coach").map((f) => f.key)).toEqual(["until", "reason"]);
 		expect(fields("control.set", "writes_per_minute_beats").map((f) => f.key)).toEqual(["value"]);
@@ -137,7 +137,6 @@ describe("the control commands", () => {
 			"until",
 			"reason",
 			"value",
-			"network",
 		]);
 	});
 
@@ -157,6 +156,32 @@ describe("the control commands", () => {
 		expect(slowed.now).toContain("20");
 		expect(slowed.after).toContain("10");
 		expect(slowed.after).toContain("2026-11-16T00:00");
+	});
+
+	// The page hands the network over (shared/lib/handover.ts); the table
+	// must not read a network's slow-down as the control for everyone, nor
+	// show its key.
+	it("says a network's slow-down covers that network alone, and never shows its key", () => {
+		const network = "9f2c4e1a7b3d5f60";
+		const until = "2026-11-15T00:00:00Z";
+		const set = commandSpec("control.set");
+		const [one] =
+			set?.changes({ set: false, one_network: true }, { until, value: 5, network }, "signups") ??
+			[];
+		const [everyone] = set?.changes({ set: false }, { until, value: 5 }, "signups") ?? [];
+		expect(one.what).not.toBe(everyone.what);
+		expect(one.after).toContain("5");
+		expect(JSON.stringify(one)).not.toContain(network);
+
+		const clear = commandSpec("control.clear");
+		const slowed = { set: true, in_force: true, value: 5, until };
+		const [lift] = clear?.changes({ ...slowed, one_network: true }, { network }, "signups") ?? [];
+		const [liftAll] = clear?.changes(slowed, {}, "signups") ?? [];
+		expect(lift.what).toBe(one.what);
+		expect(liftAll.what).toBe(everyone.what);
+		// Lifting one network says nothing of everyone's sign-ups, which
+		// may still be paused.
+		expect(lift.after).not.toBe(liftAll.after);
 	});
 
 	// An expired pause is open to the API but its document is still there;
@@ -256,9 +281,14 @@ describe("startingArgs", () => {
 	});
 
 	it("fills the box that names what is acted on, and only that", () => {
+		expect(start("device.revoke", "u1", "device_id=d1&reason=forged")).toEqual({ device_id: "d1" });
+	});
+
+	// A network's key may not be in a URL (shared/lib/handover.ts), so no
+	// link can fill it, nor anything else in a slow-down.
+	it("fills no network from a link", () => {
 		const args = start("control.set", "signups", "network=k3y-0f-net&reason=forged&value=1");
-		expect(args.network).toBe("k3y-0f-net");
-		expect([args.reason, args.value, args.until]).toEqual(["", "", ""]);
+		expect(args).toEqual({ until: "", reason: "", value: "" });
 	});
 });
 

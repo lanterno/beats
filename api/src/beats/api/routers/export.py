@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from bson import ObjectId
-from fastapi import APIRouter, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import AfterValidator, BaseModel, Field, ValidationError
@@ -351,7 +351,18 @@ def _skip(
     )
 
 
-@router.post("/import", response_model=ImportResponse)
+async def _refuse_paused_imports() -> None:
+    """The operator's platform-wide pause (docs/backoffice.md § Controls).
+    A dependency of the route rather than the handler's first line: FastAPI
+    resolves it before calling the endpoint, and slowapi's decorator counts
+    the hit inside that call, so a refused import spends none of the
+    account's imports for the hour."""
+    await platform_controls.refuse_if_imports_paused(Database.get_db())
+
+
+@router.post(
+    "/import", response_model=ImportResponse, dependencies=[Depends(_refuse_paused_imports)]
+)
 @limiter.limit(imports_limit, key_func=account_key, exempt_when=imports_off)
 async def import_full_json(
     request: Request,
@@ -402,9 +413,6 @@ async def import_full_json(
     left out and listed under `skipped` with the code its route would
     answer. Billing, budgets included, is never skipped: its rules ran
     before the first write."""
-    # The operator's platform-wide pause (docs/backoffice.md § Controls),
-    # before the file is even read.
-    await platform_controls.refuse_if_imports_paused(Database.get_db())
     raw = await file.read()
     # The one record kept of how big a restore was: the Abuse page reads the
     # spread of these through the `import_bytes` metric in

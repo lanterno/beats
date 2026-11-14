@@ -46,16 +46,30 @@ class MongoAccountLimitsStore:
 
 class MongoPlatformControlsStore:
     """`platform_controls` (docs/backoffice.md § Controls): one document per
-    control, keyed on its name, written by `control.set` and `control.clear`
-    and nothing else. No `user_id` — it is the platform's, not anyone's — so
-    erasure's sweep never sees it."""
+    control, keyed on its name — and for `signups`, one more per network
+    slowed, keyed on the name and the network's key, so the control for
+    everyone and any number of network ones stand side by side and each is
+    set and cleared alone. Written by `control.set` and `control.clear` and
+    nothing else. No `user_id` — it is the platform's, not anyone's — so
+    erasure's sweep never sees it.
+
+    A network's document carries `expires_at`, its `until` as a date, and
+    the TTL index on it (`ensure_indexes`) takes the document within a
+    minute of its end: the key is a hash of a network, and it is kept no
+    longer than the control that needs it. The one for everyone has none,
+    and an expired one stays, read as open, until it is cleared or set
+    again."""
 
     def __init__(self, db: AsyncDatabase):
         self._col = db[CONTROLS_COLLECTION]
 
-    async def get(self, name: str) -> dict[str, Any] | None:
-        doc = await self._col.find_one({"name": name}, projection={"_id": False})
-        return doc
+    @staticmethod
+    def _key(name: str, network: str | None) -> dict[str, Any]:
+        # `network: None` matches a document whose field is null or absent.
+        return {"name": name, "network": network}
+
+    async def get(self, name: str, network: str | None = None) -> dict[str, Any] | None:
+        return await self._col.find_one(self._key(name, network), projection={"_id": False})
 
     async def all(self) -> list[dict[str, Any]]:
         return await self._col.find({}, projection={"_id": False}).to_list()
@@ -78,12 +92,13 @@ class MongoPlatformControlsStore:
             "set_by": set_by,
             "set_at": datetime.now(UTC).isoformat(),
             "network": network,
+            "expires_at": until if network is not None else None,
         }
-        await self._col.update_one({"name": name}, {"$set": doc}, upsert=True)
+        await self._col.update_one(self._key(name, network), {"$set": doc}, upsert=True)
         return doc
 
-    async def clear(self, name: str) -> bool:
-        result = await self._col.delete_one({"name": name})
+    async def clear(self, name: str, network: str | None = None) -> bool:
+        result = await self._col.delete_one(self._key(name, network))
         return result.deleted_count > 0
 
 

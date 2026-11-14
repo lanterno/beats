@@ -9,6 +9,8 @@ collect it.
 """
 
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 
 # A Monday, in the past: fixed dates keep the week tests independent of when
@@ -239,3 +241,18 @@ def _pair_device(client, auth_headers):
     resp = client.post("/api/device/pair/exchange", json={"code": code})
     data = resp.json()
     return data["device_token"], {"Authorization": f"Bearer {data['device_token']}"}
+
+
+@contextmanager
+def arriving_from(client, address: str) -> Generator:
+    """The session's TestClient, seen as arriving from `address` — what
+    `ProxyHeadersMiddleware` would resolve the visitor to. The same client,
+    not a second one: a fresh TestClient runs on an event loop of its own,
+    which the session's Mongo client refuses."""
+    transport = client._transport
+    was = transport.client
+    transport.client = (address, 443)
+    try:
+        yield client
+    finally:
+        transport.client = was

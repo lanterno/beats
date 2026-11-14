@@ -15,6 +15,7 @@ import { get } from "@/shared/api/client";
 import type { AccessEntry, ControlState } from "@/shared/api/schema";
 import { CONTROLS, type ControlName, isLimit, LIMITS, PAUSES } from "@/shared/commands";
 import { minuteOf } from "@/shared/lib/format";
+import { handOver } from "@/shared/lib/handover";
 import {
 	buttonClass,
 	Chip,
@@ -46,6 +47,34 @@ export function controlState(name: string, control: ControlState | undefined): s
 	return `Paused until ${minuteOf(control.until)}`;
 }
 
+export interface ControlRow {
+	name: ControlName;
+	control: ControlState | undefined;
+	/** The network a sign-up slow-down covers; null for the control for everyone. */
+	network: string | null;
+}
+
+/**
+ * A row per control for everyone, and under sign-ups a row per network
+ * slowed on its own. A network's slow-down is a record of its own
+ * (docs/backoffice.md § Controls): it never stands in for the control for
+ * everyone, and is cleared on its own.
+ */
+export function controlRows(names: readonly ControlName[], controls: ControlState[]): ControlRow[] {
+	return names.flatMap((name) => [
+		{ name, control: controls.find((c) => c.name === name && !c.network), network: null },
+		...controls
+			.filter((c) => c.name === name && c.network && c.in_force)
+			.map((c) => ({ name, control: c, network: c.network as string })),
+	]);
+}
+
+/** Where a row's buttons go: a network's key is handed over, never put in the URL. */
+const reviewOf = (command: string, { name, network }: ControlRow) =>
+	network
+		? handOver(`/review/${command}/${name}`, { network })
+		: { to: `/review/${command}/${name}` };
+
 function ControlRows({
 	names,
 	controls,
@@ -55,18 +84,25 @@ function ControlRows({
 }) {
 	return (
 		<ul className="px-6 pb-3">
-			{names.map((name) => {
-				const control = controls.find((c) => c.name === name);
+			{controlRows(names, controls).map((row, i) => {
+				const { name, control, network } = row;
 				const inForce = Boolean(control?.in_force);
 				const limit = isLimit(name);
 				return (
 					<li
-						key={name}
-						className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3 first:border-0"
+						// A network's key is no React key: nothing about it reaches the page.
+						key={network ? `${name}:${i}` : name}
+						className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-hairline py-3 first:border-0 ${network ? "pl-6" : ""}`}
 					>
 						<div className="min-w-[14rem] flex-1">
-							<p className="text-[15px] font-bold">{CONTROLS[name].title}</p>
-							<p className="text-[13px] text-ink-muted">{CONTROLS[name].note}</p>
+							<p className="text-[15px] font-bold">
+								{network ? "Sign-ups from one network" : CONTROLS[name].title}
+							</p>
+							<p className="text-[13px] text-ink-muted">
+								{network
+									? "Slowed for that network alone, until UTC midnight at the latest; everyone else signs up as usual. Which network is never shown."
+									: CONTROLS[name].note}
+							</p>
 							{control && inForce ? (
 								<p className="mt-1 text-[13px] text-ink-muted">
 									Set {minuteOf(control.set_at)} UTC by {control.set_by ?? "—"}
@@ -77,11 +113,11 @@ function ControlRows({
 						<Chip tone={inForce ? (limit ? "quiet" : "owed") : "good"}>
 							{controlState(name, control)}
 						</Chip>
-						<Link to={`/review/control.set/${name}`} className={buttonClass("secondary")}>
+						<Link {...reviewOf("control.set", row)} className={buttonClass("secondary")}>
 							{inForce ? "Change" : limit ? "Set a limit" : "Pause"}
 						</Link>
 						{control ? (
-							<Link to={`/review/control.clear/${name}`} className={buttonClass("secondary")}>
+							<Link {...reviewOf("control.clear", row)} className={buttonClass("secondary")}>
 								Clear
 							</Link>
 						) : null}

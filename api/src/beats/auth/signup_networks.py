@@ -15,9 +15,13 @@ log already does.
   logged and the sign-up goes on.
 
 The address is the one `ProxyHeadersMiddleware` resolved, so a change to
-`FORWARDED_ALLOW_IPS` or a new proxy changes this signal too. Behind a
-self-hosted nginx every visitor is one network, which only makes the signal
-quiet, never wrong about a person.
+`FORWARDED_ALLOW_IPS` or a new proxy changes this signal too. Self-hosted,
+that is still the visitor's: the bundled nginx passes it on in
+`X-Forwarded-For` (`ui/nginx.conf`) and `compose.selfhost.yml` names nginx in
+`FORWARDED_ALLOW_IPS`, so real networks are counted there as on lifepete.com.
+Only a proxy in front of nginx that the stack does not name — a load
+balancer, a tunnel, a CDN — makes every visitor that proxy's one network,
+which makes the signal quiet, never wrong about a person.
 """
 
 import hashlib
@@ -88,7 +92,9 @@ async def _count(db: AsyncDatabase, address: str | None, field: str) -> None:
 
 
 async def count_started(db: AsyncDatabase, address: str | None) -> None:
-    """`POST /register/start` created a user row — abandoned starts included."""
+    """`POST /register/start` created a user row — abandoned starts
+    included — or a provider created an account, which starts and finishes
+    a sign-up at once. A network's slow-down reads this count."""
     await _count(db, address, "started")
 
 

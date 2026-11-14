@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { accessHeadline, controlState } from "./Access";
+import { accessHeadline, controlRows, controlState } from "./Access";
 
 const control = (name: string, fields: Record<string, unknown>) => ({
 	name,
+	network: null,
 	in_force: true,
 	until: null,
 	value: null,
@@ -47,5 +48,40 @@ describe("controlState", () => {
 		expect(
 			controlState("signups", control("signups", { until: "2026-11-15T00:00:00+00:00" })),
 		).toBe("Paused until 2026-11-15 00:00");
+	});
+});
+
+describe("controlRows", () => {
+	const KEY = "9f2c4e1a7b3d5f60";
+	const network = (key: string, fields: Record<string, unknown> = {}) =>
+		control("signups", { network: key, value: 5, until: "2026-11-15T00:00:00+00:00", ...fields });
+
+	// The read sorts everyone's control first, but there may be none: a
+	// network's slow-down must not stand in for it, or its Clear would lift
+	// the wrong one.
+	it("never reads a network's slow-down as the control for everyone", () => {
+		const rows = controlRows(["signups"], [network(KEY)]);
+		expect(rows[0]).toEqual({ name: "signups", control: undefined, network: null });
+		expect(controlState("signups", rows[0].control)).toBe("Running");
+	});
+
+	it("gives everyone's control and each network in force a row of its own", () => {
+		const everyone = control("signups", { value: 50, until: "2026-11-20T00:00:00+00:00" });
+		const rows = controlRows(
+			["coach", "signups"],
+			[control("coach", { in_force: false }), everyone, network(KEY), network("0123456789abcdef")],
+		);
+		expect(rows.map((r) => [r.name, r.network])).toEqual([
+			["coach", null],
+			["signups", null],
+			["signups", KEY],
+			["signups", "0123456789abcdef"],
+		]);
+		expect(rows[1].control).toBe(everyone);
+	});
+
+	it("leaves out a network's slow-down that has ended", () => {
+		const rows = controlRows(["signups"], [network(KEY, { in_force: false })]);
+		expect(rows.map((r) => r.network)).toEqual([null]);
 	});
 });

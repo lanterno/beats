@@ -7,12 +7,11 @@ door's suspension test stays with TestSSOAPI's harness there.
 
 import logging
 import time
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from api_helpers import _billed_march, _mint_link, _read_report
+from api_helpers import _billed_march, _mint_link, _read_report, arriving_from
 
 
 class TestAccountSuspensionAPI:
@@ -423,21 +422,57 @@ class TestPlatformControlsAPI:
         from beats import platform_controls
 
         mongo.platform_controls.update_one(
-            {"name": name},
+            {"name": name, "network": None},
             {"$set": {"name": name, "until": until, "value": value, "reason": "test"}},
             upsert=True,
         )
         platform_controls.clear()
 
     @pytest.fixture(autouse=True)
-    def _clean(self, mongo):
+    def _clean(self, client, auth_headers, mongo):
         from beats import platform_controls
 
         platform_controls.clear()
         yield
+        client.post("/api/projects/stop", json={}, headers=auth_headers)
         mongo.platform_controls.delete_many({})
         mongo.account_limits.delete_many({})
+        mongo.webhooks.delete_many({})
         platform_controls.clear()
+
+    @staticmethod
+    def _deliveries(monkeypatch) -> list[str]:
+        """Where webhook deliveries went: the one way out of our servers is
+        httpx, so it is caught there rather than sent to a real host."""
+        import httpx
+
+        sent: list[str] = []
+
+        async def post(_client, url, **_kwargs):
+            sent.append(str(url))
+            return httpx.Response(204)
+
+        monkeypatch.setattr(httpx.AsyncClient, "post", post)
+        return sent
+
+    @staticmethod
+    def _project(client, headers, name: str) -> str:
+        resp = client.post("/api/projects/", json={"name": name}, headers=headers)
+        assert resp.status_code == 201, resp.text
+        return resp.json()["id"]
+
+    @staticmethod
+    def _webhook(client, headers) -> None:
+        resp = client.post(
+            "/api/webhooks/", json={"url": "https://hooks.example.test/in"}, headers=headers
+        )
+        assert resp.status_code == 201, resp.text
+
+    @staticmethod
+    def _start_and_stop(client, headers, project: str) -> None:
+        """A timer start and stop: two events the timer routes dispatch."""
+        assert client.post(f"/api/projects/{project}/start", json={}, headers=headers).is_success
+        assert client.post("/api/projects/stop", json={}, headers=headers).is_success
 
     @staticmethod
     def _soon() -> str:
@@ -464,11 +499,65 @@ class TestPlatformControlsAPI:
         self._control(mongo, "imports", until=self._passed())
         assert self._import(client, auth_headers).status_code != 409
 
-    def test_the_coach_refuses_while_paused(self, client, auth_headers, mongo):
+    def test_a_paused_import_spends_none_of_the_hours_imports(self, client, auth_headers, mongo):
+        """The pause refuses before the limiter counts: an account that tried
+        while imports were paused still has its imports for the hour once
+        the pause ends. With one import an hour, the second paused attempt
+        was a 429, and so was the first import after the pause."""
+        self._control(mongo, "imports_per_hour", value=1)
+        self._control(mongo, "imports", until=self._soon())
+        for _ in range(2):
+            refused = self._import(client, auth_headers)
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "IMPORTS_PAUSED"
+
+        self._control(mongo, "imports", until=self._passed())
+        assert self._import(client, auth_headers).status_code == 200
+        assert self._import(client, auth_headers).status_code == 429, "the hour's one import"
+
+    def test_the_coach_refuses_a_brief_while_paused_and_writes_one_after_expiry(
+        self, client, auth_headers, mongo, monkeypatch
+    ):
+        """Through the brief, which reaches the model through the gateway's
+        budget check: refused before any call while paused, made once the
+        pause has expired. The model is a stand-in at the gateway's one way
+        out to Anthropic."""
+        from types import SimpleNamespace
+
+        from anthropic.types import TextBlock
+
+        from beats.coach import gateway
+
+        calls: list[str] = []
+
+        class _Messages:
+            async def create(self, **_kwargs):
+                calls.append("create")
+                return SimpleNamespace(
+                    content=[TextBlock(type="text", text="Morning.", citations=None)],
+                    model="claude-opus-4-7",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=2,
+                        cache_creation_input_tokens=0,
+                        cache_read_input_tokens=0,
+                    ),
+                    stop_reason="end_turn",
+                )
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: SimpleNamespace(messages=_Messages()))
+        brief = "/api/coach/brief/generate"
+
         self._control(mongo, "coach", until=self._soon())
-        refused = client.post("/api/coach/memory/rewrite", headers=auth_headers)
+        refused = client.post(brief, params={"tz": "UTC"}, headers=auth_headers)
         assert refused.status_code == 409, refused.text
         assert refused.json()["code"] == "COACH_PAUSED"
+        assert calls == [], "refused before the model is called"
+
+        self._control(mongo, "coach", until=self._passed())
+        made = client.post(brief, params={"tz": "UTC"}, headers=auth_headers)
+        assert made.status_code == 200, made.text
+        assert calls == ["create"]
 
     def test_signups_refuse_while_paused_and_sign_in_still_works(self, client, mongo):
         self._control(mongo, "signups", until=self._soon())
@@ -482,6 +571,13 @@ class TestPlatformControlsAPI:
         assert verify.status_code == 409
         # Never a sign-in.
         assert client.get("/api/auth/login/options").status_code == 200
+
+        self._control(mongo, "signups", until=self._passed())
+        again = client.post(
+            "/api/auth/register/start", json={"email": "new@example.test", "display_name": "N"}
+        )
+        assert again.status_code == 200, again.text
+        mongo.users.delete_many({"email": "new@example.test"})
 
     def test_slowed_signups_refuse_once_the_hour_holds_the_ceiling(self, client, mongo):
         from datetime import datetime as dt
@@ -497,10 +593,9 @@ class TestPlatformControlsAPI:
         assert start.status_code == 409
         assert start.json()["code"] == "SIGNUPS_PAUSED"
 
-        from beats import platform_controls
-
+        # `_control` forgets what was read, the hour's count with the rest:
+        # it is cached a bound, like the controls.
         self._control(mongo, "signups", until=self._soon(), value=5)
-        platform_controls._signups_counted_at = 0.0
         assert (
             client.post(
                 "/api/auth/register/start", json={"email": "room@example.test", "display_name": "R"}
@@ -541,34 +636,71 @@ class TestPlatformControlsAPI:
         account_access.clear()
         assert self._post_beat(client, auth_headers, project).status_code == 201
 
-    def test_paused_webhooks_drop_with_a_line_per_event(self, auth_info, caplog):
-        """No outbox holds a delivery, so a pause drops it — and logs it, so
-        the loss can be counted. Pre-warmed like the per-account switch's
-        test, so no event loop reaches the database."""
-        import asyncio
-        import time
-
+    def test_the_control_caps_writes_beneath_the_deployments_setting(
+        self, client, auth_headers, mongo, monkeypatch
+    ):
+        """The middle of the order: the operator's control wins over the
+        deployment's setting, and the setting is what is left once the
+        control is cleared."""
         from beats import platform_controls
-        from beats.api.routers.webhooks import dispatch_webhook_event
-        from beats.auth import account_access
+        from beats.settings import settings
 
-        class _Repo:
-            asked = False
+        monkeypatch.setattr(settings, "writes_per_minute_beats", 5)
+        project = self._project(client, auth_headers, "Ceilings")
+        self._control(mongo, "writes_per_minute_beats", value=1)
+        assert self._post_beat(client, auth_headers, project).status_code == 201
+        assert self._post_beat(client, auth_headers, project).status_code == 429
 
-            async def list_by_event(self, event):
-                self.asked = True
-                return []
+        mongo.platform_controls.delete_many({})
+        platform_controls.clear()
+        assert self._post_beat(client, auth_headers, project).status_code == 201
 
-        platform_controls._state = platform_controls.controls_from_docs(
-            [{"name": "webhooks", "until": self._soon()}], datetime.now(UTC)
-        )
-        platform_controls._expires_at = time.monotonic() + 60
-        account_access.remember("u-open", account_access.AccountAccess(exists=True))
-        repo = _Repo()
+    def test_paused_webhooks_drop_what_had_somewhere_to_go(
+        self, client, auth_headers, mongo, caplog, monkeypatch
+    ):
+        """No outbox holds a delivery, so a pause drops it — and logs it, so
+        the loss can be counted: one line for an event that had a webhook,
+        none for an event that had nowhere to go. Through the timer routes,
+        which dispatch."""
+        sent = self._deliveries(monkeypatch)
+        project = self._project(client, auth_headers, "Hooks")
+        self._control(mongo, "webhooks", until=self._soon())
+
+        def dropped() -> list[str]:
+            return [
+                r.getMessage()
+                for r in caplog.records
+                if "WEBHOOKS_PAUSED_DROPPED" in r.getMessage()
+            ]
+
         with caplog.at_level(logging.WARNING, logger="beats.api.routers.webhooks"):
-            asyncio.run(dispatch_webhook_event("timer.start", {}, repo, "u-open"))  # ty: ignore[invalid-argument-type]
-        assert not repo.asked
-        assert any("WEBHOOKS_PAUSED_DROPPED event=timer.start" in r.message for r in caplog.records)
+            self._start_and_stop(client, auth_headers, project)
+            assert dropped() == [], "an event with no webhook lost nothing"
+
+            self._webhook(client, auth_headers)
+            self._start_and_stop(client, auth_headers, project)
+        assert len(dropped()) == 2
+        assert "event=timer.start" in dropped()[0]
+        assert "deliveries=1" in dropped()[0]
+        time.sleep(0.2)
+        assert sent == [], "nothing went out"
+
+    def test_webhooks_deliver_again_once_the_pause_has_expired(
+        self, client, auth_headers, mongo, monkeypatch
+    ):
+        sent = self._deliveries(monkeypatch)
+        project = self._project(client, auth_headers, "Hooks again")
+        self._webhook(client, auth_headers)
+        self._control(mongo, "webhooks", until=self._soon())
+        self._start_and_stop(client, auth_headers, project)
+
+        self._control(mongo, "webhooks", until=self._passed())
+        self._start_and_stop(client, auth_headers, project)
+        # Delivery is detached from the request, so it lands a moment later.
+        deadline = time.monotonic() + 5
+        while len(sent) < 2 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert sent == ["https://hooks.example.test/in"] * 2, "the start and the stop, no more"
 
 
 class TestSignupNetworks:
@@ -593,20 +725,6 @@ class TestSignupNetworks:
         platform_controls.clear()
 
     @staticmethod
-    @contextmanager
-    def _from(client, address: str):
-        """The class's TestClient, seen as arriving from `address`. The same
-        client, not a second one: a fresh TestClient runs on an event loop of
-        its own, which the session's Mongo client refuses."""
-        transport = client._transport
-        was = transport.client
-        transport.client = (address, 443)
-        try:
-            yield client
-        finally:
-            transport.client = was
-
-    @staticmethod
     def _key(address: str) -> str:
         from beats.auth.signup_networks import key_for
 
@@ -618,9 +736,9 @@ class TestSignupNetworks:
         return client.post("/api/auth/register/start", json={"email": email, "display_name": "W"})
 
     def test_a_start_is_one_counter_row_with_a_key_and_no_address(self, client, mongo):
-        with self._from(client, self.VISITOR) as visitor:
+        with arriving_from(client, self.VISITOR) as visitor:
             assert self._start(visitor, "wave-a@example.test").status_code == 200
-        with self._from(client, "203.0.113.9") as neighbour:
+        with arriving_from(client, "203.0.113.9") as neighbour:
             assert self._start(neighbour, "wave-b@example.test").status_code == 200
         rows = list(mongo.signup_network_counts.find({}))
         assert len(rows) == 1, "two addresses in one /24 are one network"
@@ -655,7 +773,7 @@ class TestSignupNetworks:
         wave = operator_client.get("/api/operator/abuse").json()["signup_wave"]
         assert wave["largest_group"] is None
         assert wave["largest_key"] is None
-        assert wave["groups"] == 1
+        assert "groups" not in wave, "below the minimum, not even how many networks"
 
         mongo.signup_network_counts.update_one({"key": key}, {"$inc": {"completed": 1}})
         wave = operator_client.get("/api/operator/abuse").json()["signup_wave"]
@@ -677,10 +795,38 @@ class TestSignupNetworks:
         )
         platform_controls.clear()
 
-        with self._from(client, self.VISITOR) as same:
+        with arriving_from(client, self.VISITOR) as same:
             assert self._start(same, "wave-g@example.test").status_code == 200
             verify = same.post("/api/auth/register/verify", json={"credential": {}})
             assert verify.json().get("code") != "SIGNUPS_PAUSED", verify.text
+
+    def test_a_networks_slow_down_and_the_pause_for_everyone_both_hold(self, client, mongo):
+        """Two documents, both read: the network's slow-down lifts no pause,
+        and lifting the pause leaves the slow-down."""
+        from beats import platform_controls
+
+        key = self._key(self.VISITOR)
+        until = (datetime.now(UTC) + timedelta(minutes=30)).isoformat()
+        # The network's last, so a cache keyed on the name alone would keep it.
+        mongo.platform_controls.insert_one(
+            {"name": "signups", "until": until, "value": None, "network": None, "reason": "all"}
+        )
+        mongo.platform_controls.insert_one(
+            {"name": "signups", "until": until, "value": 1, "network": key, "reason": "wave"}
+        )
+        platform_controls.clear()
+        with arriving_from(client, "198.51.100.4") as other:
+            refused = self._start(other, "wave-h@example.test")
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "SIGNUPS_PAUSED"
+
+        mongo.platform_controls.delete_one({"network": None})
+        platform_controls.clear()
+        with arriving_from(client, self.VISITOR) as same:
+            assert self._start(same, "wave-i@example.test").status_code == 200
+            assert self._start(same, "wave-j@example.test").status_code == 409
+        with arriving_from(client, "198.51.100.4") as other:
+            assert self._start(other, "wave-k@example.test").status_code == 200
 
     def test_a_slowed_network_is_refused_and_nobody_else(self, client, mongo):
         from beats import platform_controls
@@ -692,12 +838,12 @@ class TestSignupNetworks:
         )
         platform_controls.clear()
 
-        with self._from(client, self.VISITOR) as same:
+        with arriving_from(client, self.VISITOR) as same:
             assert self._start(same, "wave-d@example.test").status_code == 200
             refused = self._start(same, "wave-e@example.test")
             assert refused.status_code == 409, refused.text
             assert refused.json()["code"] == "SIGNUPS_PAUSED"
             # Never a sign-in.
             assert same.get("/api/auth/login/options").status_code == 200
-        with self._from(client, "198.51.100.4") as other:
+        with arriving_from(client, "198.51.100.4") as other:
             assert self._start(other, "wave-f@example.test").status_code == 200
