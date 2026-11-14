@@ -43,6 +43,11 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
   deletion or a retention purge (one day) — as the serialised command, who
   queued it, when it runs, and its state. The subject is an id here too, so
   an erasure cannot sweep the record of itself
+- **The database's size a day** (`database_sizes`): one document per UTC
+  day, kept by the job runner for the control plane's pace — per collection
+  its name, how many documents it holds and its size on disk, uncompressed
+  and in indexes, with when it was taken. Sizes and counts only: no account,
+  no content. Kept 400 days, then deleted by a TTL index
 - **Erasure requests** (`erasure_requests`): one per request to delete an
   account that arrived by mail, logged by the operator the day it arrives so
   the legal month shows before anything is queued — the day it arrived, the

@@ -99,8 +99,13 @@ thresholds are named constants there: they decide only what the operator is
 shown, never what a user is allowed. No pre-computed aggregates: a pipeline
 per request is fine at one operator's scale, and a nightly roll-up would be
 the first thing to widen the database user — decided deliberately when it
-comes, not slipped in with the page that wants it. Likewise deliberately
-absent: a message broker, a separate analytics store, GraphQL, tracing, event
+comes, not slipped in with the page that wants it. It came once, for
+Capacity's pace (decided 2026-11-14): the job runner keeps the database's
+size once a UTC day in `database_sizes`, because a pace needs two sizes and
+no source keeps one over time. Sizes and counts only — each collection's
+name, documents, and its size on disk, uncompressed and in indexes — and it
+widened the job's user by one action, `collStats`, since that user already
+writes every collection. Likewise deliberately absent: a message broker, a separate analytics store, GraphQL, tracing, event
 sourcing.
 
 ## Commands: objects, through one runner
@@ -216,6 +221,16 @@ has neither). The audit is written under the operator the command carries.
   before the window is widened.
 - **Rules run at run time, not queue time**: a deletion whose organisation
   gained an owner while it waited is refused then.
+- **The database's size** is kept after the queue is drained, on every run
+  (`keep_todays_size`, `infrastructure/database_sizes.py`): the first run of a
+  UTC day reads `$collStats` and keeps it under the day's id, and the day's
+  other runs find it there and read nothing. An upsert that only sets on
+  insert, so two overlapping runs keep one size, never a later one over the
+  first. A size that cannot be kept is logged at `WARNING`, which pages
+  nobody, and never fails the run: the queue it follows has already run, and
+  a missed day is a gap in a line, which the pace reads in days rather than
+  sizes kept. Kept 400 days (`SIZE_KEEP_DAYS`) by a TTL index that the public
+  API's `ensure_indexes` builds, since the job's user creates none.
 - **Failure**: after three attempts an entry is `failed`, shown on the
   landing page and logged at `ERROR`, which a log-based alert
   (`terraform/operator.tf`) sends to `var.alert_email` — a silently failing
@@ -665,22 +680,42 @@ cannot keep.
   `WRITES_PER_MINUTE_*` setting — the refusal signal counts nothing, which
   the page says.
 - **Capacity and cost** (rebuilt to the mock 2026-11-14, from what the API
-  serves): what the database takes up, as the page's sentence; three tiles —
-  the database's storage and what its indexes take besides, the coach's
-  spend this UTC month with its running total and where the month is heading
-  at the pace so far, and the busiest revision's active instances against
-  the ceiling, from live health; the coach's platform cost a day over the
-  last 7 or 30 days, with the cache's share of the input and the model most
-  of the bill went to; each collection's size, documents and indexes
-  (`$collStats`), largest first; refused writes per route, from live health;
-  and links to the restores in the log, the Monitoring dashboard, Cloud Run,
+  serves): how fast the database grows, as the page's sentence — the pace a
+  month between the newest size the job runner kept (§ Jobs) and the oldest
+  within 30 days before it (`GROWTH_PACE_DAYS`, `beats/operator/growth.py`),
+  over the days between them, so a missed run is a gap and not a shorter
+  month; the collection adding the most to it; and, before two sizes are
+  kept, what the database takes up now and the day the pace will show,
+  never a line it has not measured. Four tiles — the database's storage,
+  with the sizes kept as a sparkline, what it moved since the pace's first
+  day and what its indexes take besides; the coach's spend this UTC month
+  with its running total and where the month is heading at the pace so far;
+  the busiest revision's active instances against the ceiling, from live
+  health; and the cluster's connections against what it allows, from
+  `serverStatus` (`current` plus `available`, 500 on Atlas's free tier, which
+  keeps that section of the command for any user granted the
+  `serverStatus` action), saying which grant it needs when the cluster
+  refuses. The database's size a day, with the pace carried on dashed from
+  the newest size as far ahead as the history goes back, a month at least
+  and a year at most; the coach's platform cost a day over the last 7 or 30
+  days, stacked by model family, with the cache's share of the input, what
+  it saved at each model's own rates — reads net of the premium its writes
+  cost, from the price table in `coach/pricing.py` — and the model most of
+  the bill went to; each collection's size, documents, indexes and growth a
+  month, as a share of its size (a collection made inside the span is
+  "New"), largest first; refused writes per route, from live health; and
+  links to the restores in the log, the Monitoring dashboard, Cloud Run,
   billing and the Atlas cluster. The API sends the coach's cost a day and
   model for the last 31 UTC days, newest first (`COACH_COST_DAYS`, enough for
   any month to date): every day since launch grew without bound. Not drawn,
-  though the mock has them: the database's growth and its pace, and each
-  collection's growth, since nothing keeps a size over time and Capacity
-  stores no series; and the database's connections, which Monitoring does
-  not read from Atlas.
+  though the mock has them: the peak of instances today, since live health
+  reads instances now and a peak is a seventh Monitoring query that Today
+  would wait on too; the restores this month and the largest, which are
+  counted in Monitoring and never stored (above), and the link stands in;
+  and the mock's sentence that the cluster has no ceiling, which is false on
+  the free tier: Atlas allows 0.5 GB there, measured uncompressed with the
+  indexes, and how the page should learn that limit waits in
+  [roadmaps/database-ceiling.md](../roadmaps/database-ceiling.md).
 - **Live health** (shipped 2026-11-14, stage 4 of what was
   roadmaps/backoffice.md), on Today, and in Capacity's instances and refused
   writes, through `GET /api/operator/health`: availability over the last day
@@ -709,7 +744,9 @@ cannot keep.
   never a broken page. Nothing is stored. Not
   shown, on purpose: Google's open-alert list (`alerts.list`, in preview on
   2026-11-08; the console link stands in) and the job runner's last run (a
-  run that finds nothing writes nothing, so no source holds it).
+  run that finds nothing writes nothing but the day's size, so the nearest
+  any source holds is the day; Capacity says when the last size kept is
+  older than yesterday).
 - **Releases** (shipped 2026-11-14, stage 5 of what was
   roadmaps/backoffice.md; `GET /api/operator/releases`): when something
   breaks, what shipped just before it. The API's last ten builds from Cloud
