@@ -64,9 +64,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # The Flutter the Companion workflow tests with, so a release builds
+      # what CI passed (companion.yml says why it is pinned).
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       # flutter test builds the native assets for the host, so on this runner
       # tray_manager's C++ core is compiled for Linux and its build hook asks
       # pkg-config for gtk+-3.0, x11 and xi (the Android bundle itself needs

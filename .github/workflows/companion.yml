@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Every job sets up the Flutter named in companion/.fvmrc, not whatever stable
+# is that day. A new stable can stop the locked packages compiling with nothing
+# in the repo changed: 3.50 did, because the nativeapi that tray_manager 0.8
+# locks calls VM APIs that Dart 3.14 removed. The version moves in a PR of its
+# own (Renovate's fvm manager opens one), together with pubspec.yaml's
+# `flutter:` range.
 jobs:
   quality:
     name: Analyze & Test
@@ -20,7 +26,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       # flutter test builds the native assets for the host, so on this runner
       # tray_manager's C++ core is compiled for Linux and its build hook asks
       # pkg-config for gtk+-3.0, x11 and xi — headers the tests themselves
@@ -45,7 +51,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       - run: flutter pub get
       - run: flutter build web
       - uses: actions/upload-artifact@v7
@@ -68,7 +74,7 @@ jobs:
           java-version: 17
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       - run: flutter pub get
       # Release builds now require a real signing key (no debug fallback).
       # Generate a throwaway keystore so CI exercises the release-signing
@@ -138,7 +144,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
 
@@ -153,7 +159,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       - run: flutter pub get
       - run: flutter build macos --release
       - uses: actions/upload-artifact@v7
@@ -172,7 +178,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       - run: |
           sudo apt-get update -y
           # libx11-dev and libxi-dev are tray_manager's (the tray icon is a
@@ -197,7 +203,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: companion/.fvmrc
       - run: flutter pub get
       - run: flutter build windows --release
       - uses: actions/upload-artifact@v7

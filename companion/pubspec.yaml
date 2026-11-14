@@ -20,7 +20,11 @@ version: 1.0.0+1
 
 environment:
   sdk: ^3.13.0
-  flutter: ">=3.47.0"
+  # Below 3.50: the nativeapi that tray_manager 0.8 locks (0.5.2; every 0.5.x
+  # up to 0.5.10) calls VM APIs that Dart 3.14, Flutter 3.50's, removed, though
+  # its own constraint lets 3.14 in. tray_manager 0.9 is the 3.50 line. Lift
+  # this with it and with the Flutter in .fvmrc, which CI runs.
+  flutter: ">=3.47.0 <3.50.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
