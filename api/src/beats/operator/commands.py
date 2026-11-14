@@ -30,6 +30,15 @@ from beats.infrastructure.operator_store import MongoErasureRequests, MongoPlatf
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
 from beats.operator.settings import OperatorIdentity
+from beats.operator.status_page import (
+    MESSAGE_MAX,
+    Part,
+    State,
+    StatusStore,
+    StatusUnavailable,
+    publish,
+    state_of,
+)
 from beats.platform_controls import LIMITS, MAX_PAUSE, ControlName, control_from_doc
 
 
@@ -43,6 +52,8 @@ class CommandContext:
     # The deploy freeze's flag (operator/deploy_freeze.py); None where no
     # bucket is configured — the job runner, a local run.
     freeze: DeployFreeze | None = None
+    # The public status file (operator/status_page.py); None with no bucket.
+    status: StatusStore | None = None
 
 
 class OperatorCommand(Protocol):
@@ -637,6 +648,85 @@ class UnfreezeDeploys(_DeployCommand):
         return await _freeze_state(ctx)
 
 
+# ── telling customers what is happening ─────────────────────────────
+
+
+def _status_store(ctx: CommandContext) -> StatusStore:
+    if ctx.status is None:
+        raise StatusUnavailable()
+    return ctx.status
+
+
+class PublishStatusArgs(BaseModel):
+    """What goes public, whole. Nothing about a person: no account, no
+    organisation, no id, no count of those affected — the operator's words
+    are checked by the review, not by code, so the review shows them whole."""
+
+    state: State
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX)
+    affected: list[Part] = Field(default_factory=list, max_length=6)
+
+
+class ClearStatusArgs(BaseModel):
+    message: str = Field(
+        default="Everything is working again.", min_length=1, max_length=MESSAGE_MAX
+    )
+
+
+class _StatusCommand:
+    subject_kind = "status"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = NoArgs
+
+    def subject_id(self, args: Any) -> str:
+        return "public"
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        doc, _ = await _status_store(ctx).read()
+        return state_of(doc)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class PublishStatus(_StatusCommand):
+    name = "status.publish"
+    args_model = PublishStatusArgs
+
+    async def execute(self, ctx: CommandContext, args: PublishStatusArgs) -> dict[str, Any]:
+        doc = await publish(
+            _status_store(ctx),
+            state=args.state,
+            message=args.message,
+            affected=list(args.affected),
+            now=datetime.now(UTC),
+        )
+        return state_of(doc)
+
+
+class ClearStatus(_StatusCommand):
+    """Back to operational, as a post of its own, so the page says when."""
+
+    name = "status.clear"
+    args_model = ClearStatusArgs
+
+    async def execute(self, ctx: CommandContext, args: ClearStatusArgs) -> dict[str, Any]:
+        doc = await publish(
+            _status_store(ctx),
+            state="operational",
+            message=args.message,
+            affected=[],
+            now=datetime.now(UTC),
+        )
+        return state_of(doc)
+
+
 # ── the irreversible work: jobs with a window ────────────────────────
 
 
@@ -808,6 +898,8 @@ COMMANDS: dict[str, OperatorCommand] = {
         CloseErasureRequest(),
         FreezeDeploys(),
         UnfreezeDeploys(),
+        PublishStatus(),
+        ClearStatus(),
         GrantOwner(),
         BeginClosing(),
         CancelClosing(),

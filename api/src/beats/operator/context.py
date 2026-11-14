@@ -19,6 +19,7 @@ from beats.infrastructure.repositories import (
 from beats.operator.commands import CommandContext
 from beats.operator.deploy_freeze import DeployFreeze
 from beats.operator.settings import OperatorIdentity
+from beats.operator.status_page import StatusStore
 
 
 class RefusingBillingPresence:
@@ -31,7 +32,11 @@ class RefusingBillingPresence:
 
 
 def build_command_context(
-    db: AsyncDatabase, operator: OperatorIdentity, *, freeze: DeployFreeze | None = None
+    db: AsyncDatabase,
+    operator: OperatorIdentity,
+    *,
+    freeze: DeployFreeze | None = None,
+    status: StatusStore | None = None,
 ) -> CommandContext:
     """The services a command delegates to — each owning the rule the command
     invokes, so the rule never lives in two places."""
@@ -48,4 +53,5 @@ def build_command_context(
         ),
         devices=MongoDeviceRegistrationRepository(db.device_registrations),
         freeze=freeze,
+        status=status,
     )

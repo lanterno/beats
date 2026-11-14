@@ -59,7 +59,10 @@ def get_command_context(
     request: Request, db: OperatorDbDep, operator: CurrentOperator
 ) -> CommandContext:
     return build_command_context(
-        db, operator, freeze=getattr(request.app.state, "deploy_freeze", None)
+        db,
+        operator,
+        freeze=getattr(request.app.state, "deploy_freeze", None),
+        status=getattr(request.app.state, "status_store", None),
     )
 
 

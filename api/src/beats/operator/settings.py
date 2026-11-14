@@ -102,6 +102,8 @@ class OperatorSettings(BaseSettings):
     web_origin: str = Field(default="", validation_alias="OPERATOR_WEB_ORIGIN")
     # The deploy freeze's bucket (operator/deploy_freeze.py), set by Terraform.
     freeze_bucket: str = Field(default="", validation_alias="OPERATOR_FREEZE_BUCKET")
+    # The public status file's bucket (operator/status_page.py), set by Terraform.
+    status_bucket: str = Field(default="", validation_alias="OPERATOR_STATUS_BUCKET")
     github_repository: str = Field(
         default="lanterno/beats", validation_alias="OPERATOR_GITHUB_REPOSITORY"
     )

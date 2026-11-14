@@ -50,6 +50,7 @@ from beats.operator.health import GoogleMonitoring, HealthCache
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
 from beats.operator.releases import LiveReleases, ReleasesCache
 from beats.operator.settings import OperatorSettings
+from beats.operator.status_page import GcsStatusStore
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.releases_cache = ReleasesCache()
     app.state.deploy_freeze = (
         GcsDeployFreeze(settings.freeze_bucket) if settings.freeze_bucket else None
+    )
+    app.state.status_store = (
+        GcsStatusStore(settings.status_bucket) if settings.status_bucket else None
     )
     logger.info("Database connected.")
     yield

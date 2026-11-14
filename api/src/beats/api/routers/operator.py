@@ -36,6 +36,7 @@ from beats.operator.reads import (
 )
 from beats.operator.releases import ReleasesReport
 from beats.operator.runner import CommandPreview, preview_command, run_command
+from beats.operator.status_page import state_of
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
 
@@ -240,6 +241,26 @@ async def deploy_freeze(request: Request, operator: CurrentOperator) -> FreezeSt
     return FreezeState(
         available=True, frozen=True, until=flag.until, reason=flag.reason, set_by=flag.set_by
     )
+
+
+class PublicStatus(BaseModel):
+    available: bool
+    state: str
+    message: str
+    affected: list[str]
+    updated_at: str | None = None
+    published: bool = False
+
+
+@router.get("/status", response_model=PublicStatus)
+async def public_status(request: Request, operator: CurrentOperator) -> PublicStatus:
+    """What customers see on the status page right now, read back from the
+    same public file. Not available where no status bucket is configured."""
+    store = getattr(request.app.state, "status_store", None)
+    if store is None:
+        return PublicStatus(available=False, state="operational", message="", affected=[])
+    doc, _ = await store.read()
+    return PublicStatus(available=True, **state_of(doc))
 
 
 @router.get("/erasure-requests", response_model=list[ErasureRequestState])
