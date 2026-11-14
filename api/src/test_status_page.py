@@ -1,6 +1,7 @@
 """Telling customers what is happening (docs/status-page.md): the file's
 shape, a publish that leaves the old file intact when the write fails, the
-generation conflict, the commands' audit rows, and the read-back."""
+generation conflict between a review and its act, the commands' audit rows,
+and the read-back."""
 
 from datetime import UTC, datetime
 from typing import ClassVar
@@ -56,15 +57,24 @@ class TestPublish:
         )
         before = store.doc
         with pytest.raises(httpx.ConnectError):
-            await publish(store, state="outage", message="down", affected=["api"], now=NOW)
+            await publish(
+                store, state="outage", message="down", affected=["api"], now=NOW, reviewed=1
+            )
         assert store.doc == before
 
     async def test_two_writers_cannot_silently_lose_one(self):
         store = MemoryStatusStore()
         first, generation = await store.read()
         assert first is None
-        await publish(store, state="degraded", message="A", affected=[], now=NOW)
-        # A second writer that read before the first published must not win.
+        await publish(
+            store, state="degraded", message="A", affected=[], now=NOW, reviewed=generation
+        )
+        # A second writer that read before the first published must not win,
+        # however long ago it read.
+        with pytest.raises(StatusConflict):
+            await publish(
+                store, state="outage", message="B", affected=[], now=NOW, reviewed=generation
+            )
         with pytest.raises(StatusConflict):
             await store.write(
                 next_doc(None, state="outage", message="B", affected=[], now=NOW),
@@ -116,10 +126,23 @@ class TestStatusCommands:
     def _run(self, client, name, args):
         return client.post(f"/api/operator/commands/{name}", json={"args": args}, headers=self.OWN)
 
+    def _review(self, client, name, args) -> int:
+        """What the review page does first: the preview, whose `before`
+        carries the generation the act sends back."""
+        preview = client.post(
+            f"/api/operator/commands/{name}/preview", json={"args": args}, headers=self.OWN
+        )
+        assert preview.status_code == 200, preview.text
+        return preview.json()["before"]["generation"]
+
+    def _review_and_run(self, client, name, args):
+        generation = self._review(client, name, args)
+        return self._run(client, name, {**args, "generation": generation})
+
     def test_publish_writes_the_file_and_the_audit_and_clear_posts_the_recovery(
         self, operator_client
     ):
-        done = self._run(
+        done = self._review_and_run(
             operator_client,
             "status.publish",
             {"state": "degraded", "message": "The coach is slow.", "affected": ["coach"]},
@@ -134,10 +157,35 @@ class TestStatusCommands:
         read = operator_client.get("/api/operator/status").json()
         assert read == {**read, "available": True, "state": "degraded", "published": True}
 
-        cleared = self._run(operator_client, "status.clear", {})
+        cleared = self._review_and_run(operator_client, "status.clear", {})
         assert cleared.status_code == 200, cleared.text
         assert cleared.json()["after"]["state"] == "operational"
         assert [p.state for p in self.store.doc.posts] == ["operational", "degraded"]
+
+    def test_a_post_made_after_the_review_is_not_replaced_unseen(self, operator_client):
+        """The bug this pins: the check once covered only the milliseconds
+        between the act's own read and its write, so an operator whose
+        review showed an old "Now" replaced a colleague's newer post."""
+        args = {"state": "outage", "message": "Sign-in is down.", "affected": ["sign-in"]}
+        mine = self._review(operator_client, "status.publish", args)
+        # A colleague publishes while this review sits open.
+        colleague = self._review_and_run(
+            operator_client, "status.publish", {"state": "degraded", "message": "Slow."}
+        )
+        assert colleague.status_code == 200, colleague.text
+
+        late = self._run(operator_client, "status.publish", {**args, "generation": mine})
+        assert late.status_code == 409
+        assert late.json()["code"] == "STATUS_CONFLICT"
+        assert self.store.doc is not None
+        assert self.store.doc.message == "Slow."
+        assert [p.message for p in self.store.doc.posts] == ["Slow."]
+
+    def test_an_act_that_names_no_reviewed_version_is_refused(self, operator_client):
+        refused = self._run(operator_client, "status.publish", {"state": "outage", "message": "m"})
+        assert refused.status_code == 409
+        assert refused.json()["code"] == "STATUS_NOT_REVIEWED"
+        assert self.store.writes == 0
 
     def test_the_states_and_parts_are_fixed_lists_and_the_message_is_bounded(self, operator_client):
         for args in (
