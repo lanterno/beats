@@ -33,7 +33,6 @@ import {
 	Prose,
 	Table,
 } from "@/shared/ui";
-import { CommandForm } from "@/shared/ui/CommandForm";
 
 /** How much of the coach bar chart to draw: the month's shape, as the API's
  * own window (`ACCOUNT_COACH_SPEND_DAYS`). */
@@ -208,15 +207,14 @@ export function Account() {
 							{d.revoked ? "Revoked" : "Paired"}
 						</Chip>,
 						d.revoked ? null : (
-							<CommandForm
+							<Link
 								key={`revoke-${d.device_id}`}
-								inline
-								name="device.revoke"
-								label={`Revoke device ${d.device_id}`}
-								action="Revoke"
-								args={{ user_id: data.id, device_id: d.device_id }}
-								invalidates={["account"]}
-							/>
+								to={`/review/device.revoke/${data.id}?device_id=${encodeURIComponent(d.device_id)}`}
+								aria-label={`Revoke device ${d.device_id}`}
+								className="link"
+							>
+								Revoke
+							</Link>
 						),
 					])}
 					empty={
