@@ -19,3 +19,5 @@ export type CapacityReport = components["schemas"]["CapacityReport"];
 export type OperatorMe = components["schemas"]["OperatorMe"];
 /** What a command would do, answered without doing it. */
 export type CommandPreview = components["schemas"]["CommandPreview"];
+/** One row behind an Attention count: ids and dates, never a name. */
+export type QueueRow = components["schemas"]["QueueRow"];

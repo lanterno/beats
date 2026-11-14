@@ -22,6 +22,7 @@ import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
 import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
+import { Queue } from "@/pages/Queue";
 import { Review } from "@/pages/Review";
 import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
@@ -30,6 +31,7 @@ import { APP_NAME } from "@/shared/config/brand";
 import { applyHour, type Hour, readHour } from "@/shared/lib/hour";
 import { deployment } from "@/shared/lib/where";
 import {
+	BellIcon,
 	BrandMark,
 	BuildingIcon,
 	ClockIcon,
@@ -53,7 +55,15 @@ type Badge = (counts: AttentionCounts) => number;
 const GROUPS = [
 	{
 		label: "Now",
-		items: [{ to: "/", label: "Today", Icon: SunIcon }],
+		items: [
+			{ to: "/", label: "Today", Icon: SunIcon },
+			{
+				to: "/queue",
+				label: "Work queue",
+				Icon: BellIcon,
+				badge: ((counts) => Object.values(counts).reduce((sum, n) => sum + n, 0)) satisfies Badge,
+			},
+		],
 	},
 	{
 		label: "People",
@@ -222,6 +232,7 @@ function Shell() {
 					<Topbar />
 					<Routes>
 						<Route path="/" element={<Attention />} />
+						<Route path="/queue" element={<Queue />} />
 						<Route path="/accounts" element={<Accounts />} />
 						<Route path="/accounts/:id" element={<Account />} />
 						<Route path="/review/:command/:subject" element={<Review />} />
