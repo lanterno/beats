@@ -87,15 +87,16 @@ Every page of the site, the home page included, takes its two typefaces from Goo
 
 ## The status page
 
-When something is wrong, lifepete.com/status says so, and the app shows a
-line at the top saying the same. Both read one small public file that
+When something is wrong, lifepete.com/status says so, and the app and the
+home page show a line saying the same. Both read one small public file that
 LifePete's operator writes by hand, from Google Cloud Storage, so that the
-page keeps working while the app does not. Every page of the app, and the
-status page, asks Google for that file about once a minute, which shows
-Google your IP address — the same as the typefaces above. The file holds the
-state, a short message, what is affected and the last twenty updates, and
-never anything about a person: no account, no organisation, no count of who
-was affected. There is no email and no notification: look at the page.
+page keeps working while the app does not. Every page of the site, the home
+page and a report link included, asks Google for that file about once a
+minute, which shows Google your IP address — the same as the typefaces
+above. The file holds the state, a short message, what is affected and the
+last twenty updates, and never anything about a person: no account, no
+organisation, no count of who was affected. There is no email and no
+notification: look at the page.
 
 ## The phone apps
 
