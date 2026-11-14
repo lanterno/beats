@@ -81,7 +81,6 @@ export function Palette() {
 			>
 				<form onSubmit={submit} className="border-b border-hairline px-5 py-4">
 					<input
-						// biome-ignore lint/a11y/noAutofocus: a palette exists to be typed into
 						autoFocus
 						value={typed}
 						onChange={(e) => {

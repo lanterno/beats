@@ -107,6 +107,9 @@ export function Queue() {
 							<Link to={KINDS[selected.kind].to(selected)} className={buttonClass("primary")}>
 								{KINDS[selected.kind].next}
 							</Link>
+							<Link to={`/runbooks/${KINDS[selected.kind].runbook}`} className="link text-[14px]">
+								Read the runbook
+							</Link>
 							<p className="text-[13px] text-ink-muted">
 								There is nothing here to tick off. A row is the condition, not a note about it, so
 								it leaves this list when the thing itself is dealt with.

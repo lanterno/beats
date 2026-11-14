@@ -47,6 +47,8 @@ interface Kind {
 	why: string;
 	next: string;
 	to: (row: QueueRow) => string;
+	/** The runbook it fits, by id (shared/runbooks.ts). */
+	runbook: string;
 }
 
 const short = (id: string) => id.slice(-6);
@@ -58,6 +60,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "Nobody can manage its members or close it. You can step in only when the organisation asks.",
 		next: "Open the organisation",
 		to: (row) => `/organisations/${row.subject_id}`,
+		runbook: "organisation-owner",
 	},
 	organisation_all_owners_suspended: {
 		title: (row) => `Every owner of organisation ${short(row.subject_id)} is suspended`,
@@ -65,6 +68,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "Its owners are there but cannot sign in, so in practice nobody manages it.",
 		next: "Open the organisation",
 		to: (row) => `/organisations/${row.subject_id}`,
+		runbook: "organisation-owner",
 	},
 	job_failed: {
 		title: (row) => `Job ${short(row.subject_id)} failed three times`,
@@ -72,6 +76,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "It gave up after its third attempt and will not try again. Read its last error, then queue the command again or leave it.",
 		next: "Open the job queue",
 		to: () => "/jobs",
+		runbook: "job-failed",
 	},
 	job_queued: {
 		title: (row) => `Job ${short(row.subject_id)} is waiting out its window`,
@@ -79,6 +84,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "It runs when its window ends. Until then it can still be cancelled, which is the reason the window exists.",
 		next: "Open the job queue",
 		to: () => "/jobs",
+		runbook: "job-failed",
 	},
 	approvals_superseded: {
 		title: (row) =>
@@ -87,6 +93,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "A contract change moved figures inside an approved month. The organisation reopens it; this only says it has not, yet. No member is named here.",
 		next: "Open the organisation",
 		to: (row) => `/organisations/${row.subject_id}`,
+		runbook: "organisation-waiting",
 	},
 	absence_requests_pending: {
 		title: (row) =>
@@ -95,6 +102,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "Nobody there has decided them. Usually a decider is away; the organisation answers, not you. No member is named here.",
 		next: "Open the organisation",
 		to: (row) => `/organisations/${row.subject_id}`,
+		runbook: "organisation-waiting",
 	},
 	account_near_coach_cap: {
 		title: (row) => `Account ${short(row.subject_id)} is at 80% of its coach cap`,
@@ -102,6 +110,7 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		why: "The coach stops for them when they reach it, until the month turns. Decide whether that is what you want.",
 		next: "Open the account",
 		to: (row) => `/accounts/${row.subject_id}`,
+		runbook: "coach-cap",
 	},
 };
 

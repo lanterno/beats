@@ -24,6 +24,7 @@ import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
 import { Queue } from "@/pages/Queue";
 import { Review } from "@/pages/Review";
+import { RunbookPage, Runbooks } from "@/pages/Runbooks";
 import { Today } from "@/pages/Today";
 import { Trust } from "@/pages/Trust";
 import { get } from "@/shared/api/client";
@@ -35,6 +36,7 @@ import {
 	BellIcon,
 	BrandMark,
 	BuildingIcon,
+	ClipboardIcon,
 	ClockIcon,
 	DatabaseIcon,
 	LinesIcon,
@@ -93,6 +95,7 @@ const GROUPS = [
 		items: [
 			{ to: "/compliance", label: "Privacy and compliance", Icon: LockIcon },
 			{ to: "/audit", label: "Audit log", Icon: LinesIcon },
+			{ to: "/runbooks", label: "Runbooks", Icon: ClipboardIcon },
 		],
 	},
 ] as const;
@@ -245,6 +248,8 @@ function Shell() {
 						<Route path="/jobs" element={<Jobs />} />
 						<Route path="/compliance" element={<Compliance />} />
 						<Route path="/audit" element={<Audit />} />
+						<Route path="/runbooks" element={<Runbooks />} />
+						<Route path="/runbooks/:id" element={<RunbookPage />} />
 					</Routes>
 				</div>
 			</main>
