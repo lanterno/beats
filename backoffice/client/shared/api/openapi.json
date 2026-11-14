@@ -810,6 +810,58 @@
         "title": "ErasureRequestState",
         "type": "object"
       },
+      "FreezeState": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "frozen": {
+            "title": "Frozen",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "required": [
+          "available",
+          "frozen"
+        ],
+        "title": "FreezeState",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1981,6 +2033,28 @@
           }
         },
         "summary": "Controls",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/deploy-freeze": {
+      "get": {
+        "description": "Whether the API's deploys are frozen, until when and why. Not\navailable where no freeze bucket is configured.",
+        "operationId": "deploy_freeze_api_operator_deploy_freeze_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreezeState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Deploy Freeze",
         "tags": [
           "operator"
         ]

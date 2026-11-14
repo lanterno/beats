@@ -271,6 +271,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/deploy-freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deploy Freeze
+         * @description Whether the API's deploys are frozen, until when and why. Not
+         *     available where no freeze bucket is configured.
+         */
+        get: operations["deploy_freeze_api_operator_deploy_freeze_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/erasure-requests": {
         parameters: {
             query?: never;
@@ -761,6 +782,19 @@ export interface components {
             status: "open" | "erasure_queued" | "erasure_ran" | "closed";
             /** Subject Id */
             subject_id: string | null;
+        };
+        /** FreezeState */
+        FreezeState: {
+            /** Available */
+            available: boolean;
+            /** Frozen */
+            frozen: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Set By */
+            set_by?: string | null;
+            /** Until */
+            until?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1333,6 +1367,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ControlState"][];
+                };
+            };
+        };
+    };
+    deploy_freeze_api_operator_deploy_freeze_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreezeState"];
                 };
             };
         };
