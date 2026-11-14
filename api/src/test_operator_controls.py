@@ -97,7 +97,9 @@ class TestControlCommands:
         ):
             assert self._run(operator_client, "control.set", args).status_code == 422, args
 
-    def test_a_network_is_slowed_never_blocked_and_only_until_midnight(self, operator_client):
+    def test_a_network_is_slowed_never_blocked_and_only_until_midnight(
+        self, operator_client, mongo
+    ):
         soon = (datetime.now(UTC) + timedelta(minutes=10)).isoformat()
         key = "0123456789abcdef0123456789abcdef"
         ok = self._run(
@@ -106,7 +108,9 @@ class TestControlCommands:
             {"name": "signups", "until": soon, "reason": "a wave", "value": 5, "network": key},
         )
         assert ok.status_code == 200, ok.text
-        assert ok.json()["after"]["network"] == key
+        # The audit is kept four years: it says one network, never which.
+        assert ok.json()["after"]["one_network"] is True
+        assert key not in str(mongo.operator_audit.find_one({"command": "control.set"}))
         tomorrow_noon = (datetime.now(UTC) + timedelta(days=1)).replace(hour=12).isoformat()
         for args in (
             {"name": "signups", "until": soon, "reason": "r", "network": key},
