@@ -686,7 +686,7 @@
         "type": "object"
       },
       "ControlState": {
-        "description": "One control as the Access page shows it. The operator's own text\n(`reason`) is theirs to read back; a user never sees it.",
+        "description": "One control as the Access page shows it. The operator's own text\n(`reason`) is theirs to read back; a user never sees it.\n\n`network` is the opaque key of the one network a `signups` slow-down\ncovers, and None for a control that covers everyone; there may be any\nnumber of the first beside the second. The page says \"one network\",\nnever the key, and hands the key back in a command's body to change or\nlift that control alone \u2014 never in a URL, which Cloud Run logs, and\nnever into `operator_audit`, whose rows say `one_network` instead.",
         "properties": {
           "in_force": {
             "title": "In Force",
@@ -695,6 +695,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
           },
           "reason": {
             "anyOf": [
@@ -1542,7 +1553,7 @@
         "type": "object"
       },
       "QueueRow": {
-        "description": "One row behind an Attention count: what it is, which id, since when,\nand when it is due. Ids and dates only. Nothing stores that a row was\nhandled; it leaves when its condition clears.\n\nSuperseded approvals and absence requests are one row per organisation\n(`count` of them, `since` the oldest), with no member named.",
+        "description": "One row behind an Attention count: what it is, which id, since when,\nand when it is due. Ids and dates only. Nothing stores that a row was\nhandled; it leaves when its condition clears.\n\nSuperseded approvals and absence requests are one row per organisation\n(`count` of them, `since` the oldest), with no member named.\n\nA control in force is a row by what it does and to whom:\n`control_paused` stops one kind of work for everyone, `control_slowed`\nholds every sign-up to a ceiling, and `control_slowed_network` is the\nnetworks slowed one by one \u2014 a single row, `count` of them and `since`\nthe soonest end, with no network named.",
         "properties": {
           "count": {
             "default": 1,
@@ -1564,6 +1575,8 @@
               "absence_requests_pending",
               "account_near_coach_cap",
               "control_paused",
+              "control_slowed",
+              "control_slowed_network",
               "erasure_request_open"
             ],
             "title": "Kind",
@@ -1935,7 +1948,7 @@
         "type": "object"
       },
       "SignupWave": {
-        "description": "This hour's sign-ups against the usual for this hour of the week, and\nthe largest network's share \u2014 the key is opaque and day-scoped, the page\nsays \"Network A\", and no account is joined to it anywhere.",
+        "description": "This hour's sign-ups against the usual for this hour of the week, and\nthe largest network's share \u2014 the key is opaque and day-scoped, the page\nsays \"Network A\", and no account is joined to it anywhere.\n\nNothing about a network below `SIGNUP_NETWORK_MIN_GROUP` is said, not\neven how many there are: a count of networks this hour, beside the\nhour's accounts, would tell small groups apart.",
         "properties": {
           "accounts_with_writes": {
             "title": "Accounts With Writes",
@@ -1943,10 +1956,6 @@
           },
           "completed": {
             "title": "Completed",
-            "type": "integer"
-          },
-          "groups": {
-            "title": "Groups",
             "type": "integer"
           },
           "hour": {
@@ -1986,8 +1995,7 @@
           "usual",
           "accounts_with_writes",
           "largest_group",
-          "largest_key",
-          "groups"
+          "largest_key"
         ],
         "title": "SignupWave",
         "type": "object"
