@@ -17,7 +17,9 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.beats.beats_companion"
-    compileSdk = flutter.compileSdkVersion
+    // Not Flutter's default (36): flutter_local_notifications 23 depends on
+    // androidx.core 1.19, whose AAR metadata requires compiling against 37.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
