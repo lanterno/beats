@@ -7,7 +7,9 @@ answering, behind one narrow port (`ReleaseSource`):
 - **API builds**, newest first, from Cloud Build's `builds.list`, with the
   operator's `roles/cloudbuild.builds.viewer`. A build viewer can read every
   step's arguments; `api/cloudbuild.yaml` holds no secret in them, and a step
-  that gained one would hand it to the operator.
+  that gained one would hand it to the operator. A build the deploy freeze
+  held back fails in its own step, `deploy-frozen`, and reads as held, never
+  as a bad release; the one to re-run once the freeze lifts is named.
 - **The web app's live commit**, from the `version.json` its build writes
   (`ui/vite.config.ts`), fetched from the web origin.
 - **Commit subjects**, from GitHub's public API, cached per sha for good: a
@@ -38,7 +40,7 @@ import asyncio
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import httpx
@@ -50,6 +52,8 @@ GITHUB = "https://api.github.com"
 CACHE_SECONDS = 60.0
 BUILDS_SHOWN = 10
 _SHA = re.compile(r"^[0-9a-f]{7,40}$")
+# The step a build the deploy freeze held back fails in (api/cloudbuild.yaml).
+FROZEN_STEP = "deploy-frozen"
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,8 @@ class Build:
     created_at: datetime | None
     finished_at: datetime | None
     log_url: str | None
+    # Held back by the deploy freeze: red, but nothing went wrong.
+    held: bool = False
 
 
 @dataclass(frozen=True)
@@ -72,6 +78,19 @@ class ReleaseRow:
     # The commit the API was last deployed with. "As deployed": a revision
     # that never became ready is not caught here.
     live: bool
+    # Held back by the deploy freeze rather than failed: `status` is still
+    # Cloud Build's FAILURE, and a page must not call it a bad release.
+    held: bool = False
+
+
+@dataclass(frozen=True)
+class HeldBuild:
+    """The build to re-run once the freeze lifts (`to_rerun`)."""
+
+    sha: str
+    subject: str | None
+    created_at: datetime | None
+    log_url: str | None
 
 
 @dataclass(frozen=True)
@@ -83,6 +102,9 @@ class ReleasesReport:
     repository: str
     # Which sources did not answer this time: "builds", "web", "subjects".
     unavailable: list[str] = field(default_factory=list)
+    # A commit the freeze held back that nothing has deployed since, and the
+    # build of it to re-run; None when there is none.
+    rerun: HeldBuild | None = None
 
 
 class GitHubRateLimited(Exception):
@@ -138,6 +160,12 @@ def parse_builds(body: dict[str, Any]) -> list[Build]:
                 created_at=_when(b.get("createTime")),
                 finished_at=_when(b.get("finishTime")),
                 log_url=b.get("logUrl"),
+                # Cloud Build sets each step's status when the build ends.
+                held=any(
+                    step.get("id") == FROZEN_STEP and step.get("status") == "FAILURE"
+                    for step in b.get("steps") or []
+                    if isinstance(step, dict)
+                ),
             )
         )
     out.sort(key=lambda b: b.created_at.isoformat() if b.created_at else "", reverse=True)
@@ -172,6 +200,40 @@ def live_build(builds: list[Build], api_commit: str | None) -> Build | None:
     return next((b for b in builds if b.sha == api_commit and b.status == "SUCCESS"), None)
 
 
+_EARLIEST = datetime.min.replace(tzinfo=UTC)
+
+
+def to_rerun(builds: list[Build], api_commit: str | None) -> Build | None:
+    """The held build to re-run once the freeze lifts, or None.
+
+    A re-run deploys its own commit — `decide` in api/scripts/deploy_lock.sh
+    applies unless the live commit already contains it — and a commit on
+    main contains every commit before it, so the newest commit held back
+    carries all the others: re-running an older one would ship part of the
+    way and need the newer re-run after it. Commits are put in order by
+    their first build, since a re-run is a new build of an old commit. A
+    green build of that commit or a later one means it shipped already (a
+    merge after the lift, or this re-run), and so does the deployed commit
+    being that one or a later one: then there is nothing to re-run. Of the
+    commit's builds the newest is named, for its page's Retry.
+    """
+    first: dict[str, datetime] = {}
+    for b in builds:
+        when = b.created_at or _EARLIEST
+        first[b.sha] = min(first.get(b.sha, when), when)
+    held = {b.sha for b in builds if b.held}
+    if not held:
+        return None
+    newest = max(held, key=lambda sha: first[sha])
+    since = first[newest]
+    shipped = {b.sha for b in builds if b.status == "SUCCESS"} | (
+        {api_commit} if api_commit else set()
+    )
+    if any(first.get(sha, _EARLIEST) >= since for sha in shipped if sha in first):
+        return None
+    return next(b for b in builds if b.sha == newest)
+
+
 def assemble(
     builds: list[Build],
     *,
@@ -192,9 +254,11 @@ def assemble(
             finished_at=b.finished_at,
             log_url=b.log_url,
             live=b is live,
+            held=b.held,
         )
         for b in builds[:BUILDS_SHOWN]
     ]
+    held = to_rerun(builds, api_commit)
     return ReleasesReport(
         builds=rows,
         api_commit=api_commit,
@@ -202,6 +266,14 @@ def assemble(
         web_subject=subjects.get(web_commit) if web_commit else None,
         repository=repository,
         unavailable=unavailable,
+        rerun=HeldBuild(
+            sha=held.sha,
+            subject=subjects.get(held.sha),
+            created_at=held.created_at,
+            log_url=held.log_url,
+        )
+        if held
+        else None,
     )
 
 
@@ -319,7 +391,12 @@ class ReleasesCache:
                 unavailable.append("web")
             else:
                 self._web = web
-            wanted = {b.sha for b in self._builds[:BUILDS_SHOWN]} | {self._web, api_commit}
+            rerun = to_rerun(self._builds, api_commit)
+            wanted = {b.sha for b in self._builds[:BUILDS_SHOWN]} | {
+                self._web,
+                api_commit,
+                rerun.sha if rerun else None,
+            }
             todo = sorted(s for s in wanted if s and s not in self._subjects)
             if todo and time.time() < self._github_quiet_until:
                 unavailable.append("subjects")
