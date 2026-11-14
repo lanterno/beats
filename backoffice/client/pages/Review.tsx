@@ -44,46 +44,103 @@ import {
 	TextField,
 } from "@/shared/ui";
 
+/** A 422 from the preview: the arguments do not parse yet. It is the form
+ * talking, not a failure, so the form stays and says what is wrong. */
+const isRefusal = (error: unknown): boolean =>
+	error instanceof OperatorApiError && error.statusCode === 422;
+
+/** What a refused preview says, sorted by where the page shows it. */
+export interface Refusal {
+	/** The API's reason, in its own words, beside each box it names. */
+	byField: Record<string, string>;
+	/** Reasons that name no box here: a rule on the arguments as a whole
+	 * (a pause's end too far out), or an argument the form has no box for. */
+	general: string[];
+	/** A required box is still empty. Only then does the page ask to "fill
+	 * in the fields above": pydantic's "Field required" beside an empty box
+	 * says less. */
+	incomplete: boolean;
+}
+
+const blank = (value: unknown): boolean =>
+	value === undefined || value === null || String(value).trim() === "";
+
 /**
- * A 422 from the preview means the arguments do not parse yet — a reason not
- * written, a limit left as text. It is the form talking, not a failure, so
- * the page asks for the rest instead of showing an error.
+ * Reads the envelope's `fields` (api/src/beats/api/errors.py) against the
+ * form: a path's first part is the argument, so `affected.1` is the
+ * affected box. Anything but a 422 is not a refusal of the arguments and
+ * reads as none.
  */
-export function isIncomplete(error: unknown): boolean {
-	return error instanceof OperatorApiError && error.statusCode === 422;
+export function refusalOf(
+	error: unknown,
+	fields: CommandField[],
+	args: Record<string, unknown>,
+): Refusal {
+	const refusal: Refusal = { byField: {}, general: [], incomplete: false };
+	if (!(error instanceof OperatorApiError) || error.statusCode !== 422) return refusal;
+	if (error.fields.length === 0) {
+		refusal.general.push(error.message);
+		return refusal;
+	}
+	const declared = new Set(fields.map((field) => field.key));
+	for (const problem of error.fields) {
+		const key = problem.path.split(".")[0] ?? "";
+		if (!declared.has(key)) refusal.general.push(problem.message);
+		else if (problem.type === "missing" && blank(args[key])) refusal.incomplete = true;
+		else refusal.byField[key] ??= problem.message;
+	}
+	return refusal;
 }
 
 /** A day and minute, as the operator reads an instant. */
 const minute = (iso: string | null | undefined): string =>
 	typeof iso === "string" && iso ? iso.slice(0, 16).replace("T", " ") : "—";
 
+/** The API's reason for one box, under it. */
+function Problem({ id, message }: { id: string; message: string | undefined }) {
+	return message ? (
+		<p id={id} className="mt-1 text-[13px] text-persimmon-ink">
+			{message}
+		</p>
+	) : null;
+}
+
 function Fields({
 	fields,
 	args,
+	problems,
 	onChange,
 }: {
 	fields: CommandField[];
 	args: Record<string, unknown>;
+	problems: Record<string, string>;
 	onChange: (key: string, value: unknown) => void;
 }) {
 	return (
 		<div className="flex flex-wrap items-start gap-4 px-6 pb-5">
-			{fields.map((field) =>
-				field.kind === "checkbox" ? (
-					<label key={field.key} className="flex max-w-[22rem] items-start gap-2 text-[14px]">
-						<input
-							type="checkbox"
-							checked={Boolean(args[field.key])}
-							onChange={(e) => onChange(field.key, e.target.checked)}
-							className="mt-0.5 size-4 accent-[var(--leaf)]"
-						/>
-						<span>
-							{field.label}
-							{field.hint ? (
-								<span className="block text-[13px] text-ink-muted">{field.hint}</span>
-							) : null}
-						</span>
-					</label>
+			{fields.map((field) => {
+				const problem = problems[field.key];
+				const said = `problem-${field.key}`;
+				return field.kind === "checkbox" ? (
+					<div key={field.key} className="max-w-[22rem]">
+						<label className="flex items-start gap-2 text-[14px]">
+							<input
+								type="checkbox"
+								checked={Boolean(args[field.key])}
+								onChange={(e) => onChange(field.key, e.target.checked)}
+								aria-invalid={problem ? true : undefined}
+								aria-describedby={problem ? said : undefined}
+								className="mt-0.5 size-4 accent-[var(--leaf)]"
+							/>
+							<span>
+								{field.label}
+								{field.hint ? (
+									<span className="block text-[13px] text-ink-muted">{field.hint}</span>
+								) : null}
+							</span>
+						</label>
+						<Problem id={said} message={problem} />
+					</div>
 				) : (
 					<div
 						key={field.key}
@@ -94,11 +151,14 @@ function Fields({
 							value={String(args[field.key] ?? "")}
 							inputMode={field.kind === "number" ? "numeric" : undefined}
 							onChange={(e) => onChange(field.key, e.target.value)}
+							aria-invalid={problem ? true : undefined}
+							aria-describedby={problem ? said : undefined}
 						/>
 						{field.hint ? <p className="mt-1 text-[13px] text-ink-muted">{field.hint}</p> : null}
+						<Problem id={said} message={problem} />
 					</div>
-				),
-			)}
+				);
+			})}
 		</div>
 	);
 }
@@ -215,8 +275,9 @@ function CommandReview() {
 	const back = family.back(subject);
 
 	if (preview.isPending && !answered.current) return <Loading />;
-	const incomplete = isIncomplete(preview.error);
-	if (preview.error && !incomplete) {
+	const refused = isRefusal(preview.error);
+	const refusal = refusalOf(preview.error, fields, args);
+	if (preview.error && !refused) {
 		return (
 			<Page title={spec.title} back={back} lead="Nothing has happened.">
 				<Failed error={preview.error} onRetry={() => preview.refetch()} />
@@ -244,7 +305,7 @@ function CommandReview() {
 		!preview.isPlaceholderData &&
 		JSON.stringify(sentArgs) === JSON.stringify(settledArgs);
 	const ready =
-		previewed && !blocked && !done && !incomplete && (!needsTyping || typed.trim().length > 0);
+		previewed && !blocked && !done && !refused && (!needsTyping || typed.trim().length > 0);
 
 	return (
 		<Page
@@ -271,6 +332,7 @@ function CommandReview() {
 							<Fields
 								fields={fields}
 								args={args}
+								problems={refusal.byField}
 								onChange={(key, value) => setArgs({ ...args, [key]: value })}
 							/>
 						) : null}
@@ -350,7 +412,7 @@ function CommandReview() {
 									<Link to={back.to} className={buttonClass("secondary")}>
 										Leave it as it is
 									</Link>
-									{incomplete ? (
+									{refusal.incomplete ? (
 										<span className="text-[14px] text-ink-muted">
 											Fill in the fields above first.
 										</span>
@@ -358,6 +420,11 @@ function CommandReview() {
 										<span className="text-[14px] text-ink-muted">Type it to confirm.</span>
 									) : null}
 								</div>
+								{refusal.general.map((reason) => (
+									<p key={reason} className="mt-3 text-[14px] text-persimmon-ink">
+										{reason}
+									</p>
+								))}
 								{act.error ? (
 									<p role="alert" className="mt-3 text-[14px] text-persimmon-ink">
 										{plainMessage(act.error)}

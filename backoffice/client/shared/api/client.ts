@@ -6,11 +6,22 @@
  * here can or should add one.
  */
 
+/** One entry of the envelope's `fields` (api/src/beats/api/errors.py): the
+ * argument it is about, dot-joined (empty for the arguments as a whole),
+ * the validator's own sentence, and pydantic's kind of failure. */
+export interface FieldProblem {
+	path: string;
+	message: string;
+	type: string;
+}
+
 export class OperatorApiError extends Error {
 	constructor(
 		public readonly statusCode: number,
 		message: string,
 		public readonly code?: string,
+		/** Only on a 422: what was wrong with each argument. */
+		public readonly fields: FieldProblem[] = [],
 	) {
 		super(message);
 		this.name = "OperatorApiError";
@@ -28,6 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 			response.status,
 			body.detail || `Request failed: ${response.statusText}`,
 			body.code,
+			Array.isArray(body.fields) ? body.fields : [],
 		);
 	}
 	return response.json();
