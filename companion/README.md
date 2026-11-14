@@ -72,9 +72,14 @@ workflow, and the console's answers.
 
 ## Running
 
-The Flutter it builds with is the one in `.fvmrc`, which every CI job installs;
-`pubspec.yaml`'s `flutter:` range refuses 3.50 and later, and says why, until the
-tray packages move to that line. A local SDK on another 3.47 patch works.
+The Flutter it builds with is the one in `.fvmrc`, which every CI job installs and
+`pubspec.lock` is resolved on; a local SDK should be the same. CI never takes
+`channel: stable` instead: a new stable can stop the locked packages compiling with
+nothing in the repo changed. Flutter 3.50 did, on 2026-11-11, because the `nativeapi`
+that `tray_manager` 0.8 locked called VM APIs that Dart 3.14 removed, while its own
+constraint let 3.14 in. So the version moves only in a PR of its own (Renovate's fvm
+manager opens one), and `pubspec.yaml`'s `flutter:` floor rises with it when a
+package needs the newer SDK.
 
 A build names the server it pairs with, from `config/`: `local.json` (the API on
 :7999, the web app on :8080) or `lifepete.json` (lifepete.com). A build
