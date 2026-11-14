@@ -5,7 +5,18 @@
  * a figure Google had no points for reads as "no data", never as zero.
  */
 
+import { useQuery } from "@tanstack/react-query";
+import { get } from "@/shared/api/client";
 import type { HealthReport } from "@/shared/api/schema";
+
+/** The live figures, read again each minute; Today and Capacity share the read. */
+export function useHealth() {
+	return useQuery({
+		queryKey: ["health"],
+		queryFn: () => get<HealthReport>("/api/operator/health"),
+		refetchInterval: 60_000,
+	});
+}
 
 /** 0.9983 → "99.83%"; null → "no data". */
 export function percent(value: number | null | undefined, digits = 2): string {

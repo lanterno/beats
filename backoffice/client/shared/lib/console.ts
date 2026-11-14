@@ -55,6 +55,8 @@ export interface ConsoleLinks {
 	monitoring: string;
 	/** Cloud Run's services, which say whether a revision became ready. */
 	cloudRun: string;
+	/** The billing account the project is charged to. */
+	billing: string;
 	/** The API's own log lines carrying a marker, over the last `days` days. */
 	apiLog: (marker: string, days: number) => string;
 	/** One of the API's log-based metrics, by the name after the service's. */
@@ -70,6 +72,7 @@ export function consoleLinks(deployment: Deployment): ConsoleLinks | null {
 	return {
 		monitoring: `${CONSOLE}/monitoring/dashboards?${scope}`,
 		cloudRun: `${CONSOLE}/run?${scope}`,
+		billing: `${CONSOLE}/billing/linkedaccount?${scope}`,
 		apiLog: (marker, days) => logsQuery(project, `${log}\ntextPayload:"${marker}"`, days),
 		// The metrics are named under the service (terraform/monitoring.tf).
 		apiMetric: (name) => metricChart(project, `${service}/${name}`),
