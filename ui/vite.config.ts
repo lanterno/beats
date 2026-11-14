@@ -33,6 +33,22 @@ export default defineConfig(() => ({
 				handler: (html: string) => html.split("%APP_NAME%").join(APP_NAME),
 			},
 		},
+		// /version.json: the commit this bundle was built from, so the back
+		// office can say which web release is live (docs/backoffice.md § The
+		// pages, Releases). Written only when VITE_GIT_SHA is set (CI); a local
+		// build ships none, which the back office reads as "unknown".
+		{
+			name: "version-json",
+			generateBundle() {
+				const sha = process.env.VITE_GIT_SHA;
+				if (!sha) return;
+				this.emitFile({
+					type: "asset",
+					fileName: "version.json",
+					source: `${JSON.stringify({ sha })}\n`,
+				});
+			},
+		},
 		VitePWA({
 			registerType: "autoUpdate",
 			includeAssets: [
