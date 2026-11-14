@@ -84,6 +84,7 @@ class _Source:
     def __init__(self):
         self.fail: set[str] = set()
         self.subject_calls = 0
+        self.asked: list[str] = []
 
     async def builds(self):
         if "builds" in self.fail:
@@ -97,6 +98,7 @@ class _Source:
 
     async def subject(self, sha):
         self.subject_calls += 1
+        self.asked.append(sha)
         if "subjects" in self.fail:
             raise httpx.ConnectError("rate limited")
         return f"subject of {sha[:1]}"
@@ -127,6 +129,17 @@ class TestCache:
         calls = source.subject_calls
         await cache.report(source, api_commit=A, repository="o/r")
         assert source.subject_calls == calls
+
+    async def test_a_deployed_tag_that_is_not_a_sha_is_unknown_and_never_asked(self):
+        """A hand `terraform apply` leaves container_image_tag at `latest`:
+        the headline must not say "deployed at latest", and GitHub must not
+        be asked for `commits/latest` every minute on a shared address."""
+        source, cache = _Source(), ReleasesCache(seconds=0)
+        for _ in range(2):
+            report = await cache.report(source, api_commit="latest", repository="o/r")
+            assert report.api_commit is None
+            assert not any(r.live for r in report.builds)
+        assert "latest" not in source.asked
 
 
 class TestLive:
@@ -164,6 +177,27 @@ class TestLive:
         )
         assert "web" in report.unavailable
         assert "builds" in report.unavailable
+
+    async def test_a_commit_github_answers_422_for_is_unknown_and_asked_once(self):
+        """GitHub answers 422 ("No commit found for SHA"), not 404, for a ref
+        the repository does not have. Taken for a failure, it was asked again
+        on every refresh."""
+        calls: list[str] = []
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            calls.append(request.url.path)
+            return httpx.Response(422, json={"message": f"No commit found for SHA: {A}"})
+
+        source = LiveReleases(
+            web_origin="", repository="o/r", transport=httpx.MockTransport(answer)
+        )
+        assert await source.subject(A) is None
+        cache = ReleasesCache(seconds=0)
+        for _ in range(2):
+            report = await cache.report(source, api_commit=A, repository="o/r")
+            assert "subjects" not in report.unavailable
+        github = [c for c in calls if c.startswith("/repos/")]
+        assert github == [f"/repos/o/r/commits/{A}"] * 2, "once by hand, once by the cache"
 
     async def test_a_subject_is_the_first_line_of_the_message(self):
         def answer(request: httpx.Request) -> httpx.Response:
