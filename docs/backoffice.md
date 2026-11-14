@@ -134,6 +134,7 @@ either is the signal it was put in the wrong place.
 | `device.revoke` | inline | — | the device repository |
 | `control.set` / `control.clear` | inline | — | `MongoPlatformControlsStore` (§ Controls) |
 | `erasure_request.log` / `close` | inline | — | `MongoErasureRequests` (*Privacy and compliance*) |
+| `deploy.freeze` / `unfreeze` | inline | — | the freeze flag's bucket (§ Deploy freeze) |
 | `account.erase` | job, **7 days** | the email | `erasure.erase_account` |
 | `organisation.grant_owner` | inline | the name | the operator twin of `set_role` |
 | `organisation.begin_closing` / `cancel_closing` | inline | the name / — | the twins (start or move / cancel) |
@@ -284,6 +285,39 @@ controls*, each through its own review and the runner like every mutation.
   per-account rate those routes see in the request log, because the SPA's
   sync engine retries a 429 and a default that refuses a real client is a
   storm.
+
+## Deploy freeze
+
+Shipped 2026-11-14 (stage 6 of what was roadmaps/backoffice.md). During an
+incident, the operator stops a merge from shipping on top of it, from
+*Releases*, through `deploy.freeze` (a required `until`, at most 7 days, and
+a reason) and `deploy.unfreeze` — the runner and the audit like every act.
+
+- **The flag is one object**, `freeze`, in its own small private bucket,
+  `<project>-deploy-freeze` (`terraform/operator.tf`, gated on
+  `operator_enabled`; `roles/storage.objectUser` for the operator on that
+  bucket alone, `objectViewer` for Cloud Build's account). **Never the
+  Terraform state bucket**, which holds `JWT_SECRET`. Lines of `key=value`
+  (`operator/deploy_freeze.py`): `until_epoch` is what the build compares,
+  and the reason is kept to one line so it cannot forge a key. An expired
+  flag reads as no freeze, so nothing clears it.
+- **The build's check** is the first thing `decide` does in
+  `api/scripts/deploy_lock.sh`, holding the mutex, when
+  `DEPLOY_FREEZE_OBJECT` is set (`api/cloudbuild.yaml` sets it). In force: the
+  decision is `frozen`, the apply is skipped, the lock is released as always,
+  and **the build goes red** — green reads as "deployed", and this commit was
+  not. A missing bucket or object is no freeze, so a deployment without the
+  operator builds as before; a flag that cannot be read for any other reason
+  fails the build rather than deploy blind into what may be an incident.
+- **After a lift, the frozen commit does not deploy by itself**: re-run the
+  newest build, which *Releases* names.
+- **The web app is not held.** It ships from the `deploy` job in
+  `.github/workflows/ui.yml`, with credentials that cannot see the bucket; the
+  page and the review both say "the web app can still ship". Holding it too
+  would need `firebase-deployer` read on the bucket and a check in that job.
+- Off Google Cloud, or with no bucket (`OPERATOR_FREEZE_BUCKET`, set by
+  Terraform), the commands answer 409 `FREEZE_UNAVAILABLE` and the panel says
+  the builds cannot be held back from here.
 
 ## Authentication
 
