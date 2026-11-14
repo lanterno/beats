@@ -1,6 +1,6 @@
 """Persistence for beats, projects and the approved month's lock.
 
-Split out of `repositories.py` at the ceiling in roadmaps/file-sizes.md.
+Split out of `repositories.py` at the size ceiling (CLAUDE.md § Conventions).
 `MongoProjectRepository` is the one user-scoped repository whose scope is
 wider than `user_id`: it merges in the organisation projects the member is
 assigned to (docs/organisations.md).

@@ -1,6 +1,6 @@
 """The day job read against its contract — the project page's one service.
 
-Split out of `services.py` at the ceiling in roadmaps/file-sizes.md; it sits
+Split out of `services.py` at the size ceiling (CLAUDE.md § Conventions); it sits
 beside the `contracts.py` arithmetic it reads. The shared project guards
 (`refuse_locked`, `_refuse_managed`, `organisation_stamp_for_day`) and
 `worked_by_local_day` stay in `services.py`, which also writes contracts

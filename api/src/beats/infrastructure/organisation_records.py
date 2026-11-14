@@ -1,6 +1,6 @@
 """The organisation's read of its working-time record — the wall, in SQL terms.
 
-Split out of `organisations.py` at the ceiling in roadmaps/file-sizes.md. The
+Split out of `organisations.py` at the size ceiling (CLAUDE.md § Conventions). The
 two classes were already independent: the store writes the organisation's own
 collections, this one reads beats and absences by the organisation's stamp and
 touches no other collection (docs/organisations.md, rule 3).

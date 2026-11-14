@@ -8,7 +8,7 @@
  * anything, it is in `localStorage` rather than the database, and nobody but
  * this operator on this machine can read it.
  *
- * Reads are not audited (roadmaps/backoffice.md § Not decided), so this must
+ * Reads are not audited (docs/backoffice.md § Not decided), so this must
  * not grow into a log that says who looked at whom. If that decision is ever
  * taken, it belongs in the audit, not here.
  */

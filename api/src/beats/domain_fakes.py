@@ -1,6 +1,6 @@
 """Fakes and factories the domain suites share — no tests of their own.
 
-`test_domain.py` grew past the ceiling in roadmaps/file-sizes.md and split
+`test_domain.py` grew past the size ceiling (CLAUDE.md § Conventions) and split
 by the domain module under test; the in-memory repository fakes and the
 small model factories are used by more than one of those files. Not
 `test_`-prefixed, so pytest does not collect it.

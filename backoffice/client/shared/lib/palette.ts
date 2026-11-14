@@ -2,7 +2,7 @@
  * The palette's rules, apart from its dialog so they can be tested.
  *
  * It goes to pages, opens a command's review, and finds one account by exact
- * address or id (roadmaps/backoffice.md, stage 1). A command never runs from
+ * address or id (docs/backoffice.md, stage 1). A command never runs from
  * it. Pages and commands are a short static list, so they are filtered by what
  * was typed; **people are not**: an account is found only by a whole address,
  * through the same POST the Accounts page makes, or by a whole id. A fragment

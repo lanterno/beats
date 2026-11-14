@@ -1,7 +1,7 @@
 """What the coach is told: the system block, the messages and the user
 context.
 
-Split out of `test_coach.py` at the ceiling in roadmaps/file-sizes.md;
+Split out of `test_coach.py` at the size ceiling (CLAUDE.md § Conventions);
 the shared fakes and factories are `coach_fakes.py`'s.
 """
 

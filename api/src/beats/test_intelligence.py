@@ -1,6 +1,6 @@
 """The productivity score and the pattern detectors.
 
-Split out of `test_domain.py` at the ceiling in roadmaps/file-sizes.md;
+Split out of `test_domain.py` at the size ceiling (CLAUDE.md § Conventions);
 the shared fakes and factories are `domain_fakes.py`'s.
 """
 

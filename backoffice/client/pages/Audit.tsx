@@ -7,7 +7,7 @@
  *
  * What the mock shows and this does not: a "why" and a reference per row,
  * and lookups among the rows. Neither is kept: a reason on a command and an
- * audit of each read are undecided records (roadmaps/backoffice.md § Not
+ * audit of each read are undecided records (docs/backoffice.md § Not
  * decided), and a column of blanks would read as "nobody said why" rather
  * than "nobody is asked".
  */

@@ -1,6 +1,6 @@
 """Fakes and factories the auth suites share — no tests of their own.
 
-`test_auth.py` grew past the ceiling in roadmaps/file-sizes.md and split
+`test_auth.py` grew past the size ceiling (CLAUDE.md § Conventions) and split
 into its session and WebAuthn halves; the fixed secret, the session
 manager factory and the in-memory credential and user stores are used by
 both. Not `test_`-prefixed, so pytest does not collect it.

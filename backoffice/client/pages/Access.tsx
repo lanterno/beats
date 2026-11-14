@@ -6,7 +6,7 @@
  *
  * The access review the mock drew as a checklist is here as a list to read
  * down: nothing records that you did it, by the "not decided" list in
- * roadmaps/backoffice.md, and a box that stored nothing would only pretend.
+ * docs/backoffice.md, and a box that stored nothing would only pretend.
  */
 
 import { useQuery } from "@tanstack/react-query";

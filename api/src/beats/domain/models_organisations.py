@@ -1,6 +1,6 @@
 """Organisations and employment (docs/organisations.md).
 
-Split out of `models.py` at the ceiling in roadmaps/file-sizes.md and
+Split out of `models.py` at the size ceiling (CLAUDE.md § Conventions) and
 re-exported from it, so every import site still names `beats.domain.models`.
 """
 

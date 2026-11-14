@@ -1,7 +1,7 @@
 """Domain models - pure business entities with no external dependencies.
 
 The vocabulary is one name — `beats.domain.models` — however many files it
-is written in. Past the ceiling in roadmaps/file-sizes.md, three sections
+is written in. Past the size ceiling (CLAUDE.md § Conventions), three sections
 moved to modules of their own and are re-exported here, so no import site
 changed: goals and work contracts (`models_contracts.py`), billing
 (`models_billing.py`) and organisations (`models_organisations.py`). The
@@ -44,7 +44,7 @@ from beats.domain.models_billing import (
 
 # The domain vocabulary is one name — `beats.domain.models` — however many
 # files it is written in. Contracts, billing and organisations each have
-# their own module (roadmaps/file-sizes.md); re-exported here with the
+# their own module (the size ceiling, CLAUDE.md § Conventions); re-exported here with the
 # explicit `X as X` form, so every import site is unchanged and the
 # re-export is a declaration rather than an unused import.
 from beats.domain.models_contracts import (

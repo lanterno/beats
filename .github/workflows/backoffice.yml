@@ -1,4 +1,4 @@
-# The control plane's UI (roadmaps/backoffice.md). Like ui.yml's quality job:
+# The control plane's UI (docs/backoffice.md). Like ui.yml's quality job:
 # runs on pull requests that touch backoffice/ or api/src/ (the generated
 # types follow the operator API's schema), and on pushes that touch
 # backoffice/. No deploy job — Cloud Build ships it inside the API image.

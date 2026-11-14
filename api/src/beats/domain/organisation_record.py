@@ -2,7 +2,7 @@
 
 The result types and the two reads that fill them — one month over a set
 of projects, and one person's own archive of what they shared — split out
-of `organisations.py` at the ceiling in roadmaps/file-sizes.md. They take
+of `organisations.py` at the size ceiling (CLAUDE.md § Conventions). They take
 the store and the record reader as arguments rather than a service, in
 the same spirit as `ledger.py` and `timesheet.py`: the assembly is a
 function of what it was given. Who may ask is still the service's

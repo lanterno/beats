@@ -483,7 +483,7 @@ class TestIAPVerifier:
 
 
 class TestOneAccountsReads:
-    """The two reads behind the account page (roadmaps/backoffice.md, stage
+    """The two reads behind the account page (docs/backoffice.md, stage
     1): what the back office has done to this account, and where its coach
     money went. Both answer about one account and must not widen into a way
     to read the platform."""

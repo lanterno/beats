@@ -4,7 +4,7 @@
  * The API answers what a command *would* change (`describe()`, through the
  * preview). It cannot answer who notices or whether the act can be taken
  * back without running it, so those are fixed text per command, written here
- * (roadmaps/backoffice.md, stage 1 — "Who notices" and "Can you undo it" are
+ * (docs/backoffice.md, stage 1 — "Who notices" and "Can you undo it" are
  * fixed text per command).
  *
  * This is copy, not rules. A guard written here would be a second opinion

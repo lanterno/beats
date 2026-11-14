@@ -1,6 +1,6 @@
 """Billing and public-report schemas (docs/billing.md).
 
-Split out of `schemas.py` at the ceiling in roadmaps/file-sizes.md and
+Split out of `schemas.py` at the size ceiling (CLAUDE.md § Conventions) and
 re-exported from it, so every router still imports `beats.api.schemas`.
 """
 

@@ -1,6 +1,6 @@
 """Persistence for what the ambient daemon and the companion record.
 
-Split out of `repositories.py` at the ceiling in roadmaps/file-sizes.md:
+Split out of `repositories.py` at the size ceiling (CLAUDE.md § Conventions):
 flow windows, signal summaries, the coach's pending suggestions and the
 day's biometrics.
 """

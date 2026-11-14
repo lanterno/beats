@@ -1,7 +1,7 @@
 """A day job's work contract over HTTP: the contract itself and the week
 (docs/work-contracts.md).
 
-Split out of `test_api.py` at the ceiling in roadmaps/file-sizes.md; the
+Split out of `test_api.py` at the size ceiling (CLAUDE.md § Conventions); the
 harness is `conftest.py`'s and the shared fixtures `api_helpers.py`'s.
 """
 

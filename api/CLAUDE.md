@@ -85,7 +85,7 @@ uv run --group dev pytest src/ -v   # Tests (auto-starts MongoDB via testcontain
 
 Fifty-four test files cover different layers; the full run takes about 30
 seconds, and the root CLAUDE.md carries the count. Four of them were carved
-into the rest on 2026-11-06 at the size ceiling in roadmaps/file-sizes.md
+into the rest on 2026-11-06 at the size ceiling (root CLAUDE.md § Conventions)
 (`test_api.py`, `test_domain.py`, `test_coach.py`, `test_organisations.py`),
 and what they shared went to four modules that are deliberately **not**
 `test_`-prefixed, so pytest does not collect them and no suite imports

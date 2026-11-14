@@ -1,7 +1,7 @@
 """The public report links: the read with no Authorization header, and
 what a link cannot reach (docs/billing.md, phase 1c).
 
-Split out of `test_api.py` at the ceiling in roadmaps/file-sizes.md; the
+Split out of `test_api.py` at the size ceiling (CLAUDE.md § Conventions); the
 harness is `conftest.py`'s and the shared fixtures `api_helpers.py`'s.
 """
 
