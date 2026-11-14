@@ -515,11 +515,49 @@ class TestPlatformControlsAPI:
         assert self._import(client, auth_headers).status_code == 200
         assert self._import(client, auth_headers).status_code == 429, "the hour's one import"
 
-    def test_the_coach_refuses_while_paused(self, client, auth_headers, mongo):
+    def test_the_coach_refuses_a_brief_while_paused_and_writes_one_after_expiry(
+        self, client, auth_headers, mongo, monkeypatch
+    ):
+        """Through the brief, which reaches the model through the gateway's
+        budget check: refused before any call while paused, made once the
+        pause has expired. The model is a stand-in at the gateway's one way
+        out to Anthropic."""
+        from types import SimpleNamespace
+
+        from anthropic.types import TextBlock
+
+        from beats.coach import gateway
+
+        calls: list[str] = []
+
+        class _Messages:
+            async def create(self, **_kwargs):
+                calls.append("create")
+                return SimpleNamespace(
+                    content=[TextBlock(type="text", text="Morning.", citations=None)],
+                    model="claude-opus-4-7",
+                    usage=SimpleNamespace(
+                        input_tokens=10,
+                        output_tokens=2,
+                        cache_creation_input_tokens=0,
+                        cache_read_input_tokens=0,
+                    ),
+                    stop_reason="end_turn",
+                )
+
+        monkeypatch.setattr(gateway, "_get_client", lambda: SimpleNamespace(messages=_Messages()))
+        brief = "/api/coach/brief/generate"
+
         self._control(mongo, "coach", until=self._soon())
-        refused = client.post("/api/coach/memory/rewrite", headers=auth_headers)
+        refused = client.post(brief, params={"tz": "UTC"}, headers=auth_headers)
         assert refused.status_code == 409, refused.text
         assert refused.json()["code"] == "COACH_PAUSED"
+        assert calls == [], "refused before the model is called"
+
+        self._control(mongo, "coach", until=self._passed())
+        made = client.post(brief, params={"tz": "UTC"}, headers=auth_headers)
+        assert made.status_code == 200, made.text
+        assert calls == ["create"]
 
     def test_signups_refuse_while_paused_and_sign_in_still_works(self, client, mongo):
         self._control(mongo, "signups", until=self._soon())
@@ -533,6 +571,13 @@ class TestPlatformControlsAPI:
         assert verify.status_code == 409
         # Never a sign-in.
         assert client.get("/api/auth/login/options").status_code == 200
+
+        self._control(mongo, "signups", until=self._passed())
+        again = client.post(
+            "/api/auth/register/start", json={"email": "new@example.test", "display_name": "N"}
+        )
+        assert again.status_code == 200, again.text
+        mongo.users.delete_many({"email": "new@example.test"})
 
     def test_slowed_signups_refuse_once_the_hour_holds_the_ceiling(self, client, mongo):
         from datetime import datetime as dt
@@ -621,6 +666,23 @@ class TestPlatformControlsAPI:
         assert "deliveries=1" in dropped()[0]
         time.sleep(0.2)
         assert sent == [], "nothing went out"
+
+    def test_webhooks_deliver_again_once_the_pause_has_expired(
+        self, client, auth_headers, mongo, monkeypatch
+    ):
+        sent = self._deliveries(monkeypatch)
+        project = self._project(client, auth_headers, "Hooks again")
+        self._webhook(client, auth_headers)
+        self._control(mongo, "webhooks", until=self._soon())
+        self._start_and_stop(client, auth_headers, project)
+
+        self._control(mongo, "webhooks", until=self._passed())
+        self._start_and_stop(client, auth_headers, project)
+        # Delivery is detached from the request, so it lands a moment later.
+        deadline = time.monotonic() + 5
+        while len(sent) < 2 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert sent == ["https://hooks.example.test/in"] * 2, "the start and the stop, no more"
 
 
 class TestSignupNetworks:
