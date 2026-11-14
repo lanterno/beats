@@ -1,7 +1,8 @@
 """The platform's switches and global write limits (docs/backoffice.md
 § Controls).
 
-One document per control in `platform_controls`, written only by the
+One document per control in `platform_controls` — and for `signups`, one
+more per network slowed, beside the one for everyone — written only by the
 operator's `control.set` and `control.clear` commands, read by the public API
 through a short-lived process-local cache in the shape of
 `auth/account_access.py`, and with the same bound: a pause lands within
@@ -92,8 +93,9 @@ class Control:
     set_by: str | None = None
     set_at: datetime | None = None
     # `signups` only: the opaque network key the ceiling applies to, from the
-    # sign-up network signal. The key is derived for the UTC day, so such a
-    # control is capped at the next midnight, when it would stop matching.
+    # sign-up network signal — a document of its own beside the one for
+    # everyone. The key is derived for the UTC day, so such a control is
+    # capped at the next midnight, when it would stop matching.
     network: str | None = None
 
     def in_force(self, now: datetime) -> bool:
@@ -105,30 +107,34 @@ class Control:
 @dataclass(frozen=True)
 class PlatformControls:
     """Every control as it stands, with the expired ones already read as
-    open."""
+    open. `controls` holds what stands for everyone, by name; `networks` the
+    sign-up slow-downs that each cover one network, by the network's key.
+    Both apply: a visitor is held by the one for everyone and by their own
+    network's."""
 
     controls: dict[str, Control] = field(default_factory=dict)
+    networks: dict[str, Control] = field(default_factory=dict)
 
     def paused(self, name: str, now: datetime) -> bool:
-        """Whether the kind of work `name` stands for is stopped outright.
-        `signups` with a `value` is slowed, not paused."""
+        """Whether the kind of work `name` stands for is stopped outright,
+        for everyone. `signups` with a `value` is slowed, not paused."""
         control = self.controls.get(name)
         if control is None or not control.in_force(now):
             return False
-        slowed = control.value is not None or control.network is not None
-        return not (name == "signups" and slowed)
-
-    def signups_control(self, now: datetime) -> Control | None:
-        """The `signups` control in force, whatever its state."""
-        control = self.controls.get("signups")
-        if control is None or not control.in_force(now):
-            return None
-        return control
+        return not (name == "signups" and control.value is not None)
 
     def signups_per_hour(self, now: datetime) -> int | None:
         """The ceiling on sign-ups an hour while *every* sign-up is slowed."""
-        control = self.signups_control(now)
-        if control is None or control.network is not None:
+        control = self.controls.get("signups")
+        if control is None or not control.in_force(now):
+            return None
+        return control.value
+
+    def network_per_hour(self, key: str | None, now: datetime) -> int | None:
+        """The ceiling on sign-ups started an hour from the network `key`,
+        while that one network is slowed."""
+        control = self.networks.get(key) if key is not None else None
+        if control is None or not control.in_force(now):
             return None
         return control.value
 
@@ -167,19 +173,30 @@ def control_from_doc(doc: dict) -> Control:
 def controls_from_docs(docs: list[dict], now: datetime) -> PlatformControls:
     """The documents as the public API reads them: a name it does not know
     is ignored, and one no longer in force is left out, so an expired pause
-    is open without anybody clearing it."""
+    is open without anybody clearing it. A network's document counts only
+    as a slow-down on sign-ups — a network is slowed, never blocked, and
+    the command refuses anything else."""
     controls: dict[str, Control] = {}
+    networks: dict[str, Control] = {}
     for doc in docs:
         control = control_from_doc(doc)
-        if control.name in CONTROL_NAMES and control.in_force(now):
+        if control.name not in CONTROL_NAMES or not control.in_force(now):
+            continue
+        if control.network is None:
             controls[control.name] = control
-    return PlatformControls(controls)
+        elif control.name == "signups" and control.value is not None:
+            networks[control.network] = control
+    return PlatformControls(controls, networks)
 
 
 # ── the cache ────────────────────────────────────────────────────────
 
 _state: PlatformControls = OPEN
 _expires_at = 0.0
+# Sign-ups in the last hour, counted at most once a bound: the ceiling is a
+# brake on a wave, and a wave is not measured to the request.
+_signups_last_hour = 0
+_signups_counted_at = 0.0
 
 
 def current() -> PlatformControls:
@@ -205,11 +222,14 @@ async def resolve(db: AsyncDatabase) -> PlatformControls:
 
 
 def clear() -> None:
-    """Forget what was read. Used by tests, and by nothing else: the
-    operator deployment is another process and cannot reach this."""
-    global _state, _expires_at
+    """Forget what was read — the controls, and the last hour's sign-ups the
+    slow-down counted. Used by tests, and by nothing else: the operator
+    deployment is another process and cannot reach this."""
+    global _state, _expires_at, _signups_last_hour, _signups_counted_at
     _state = OPEN
     _expires_at = 0.0
+    _signups_last_hour = 0
+    _signups_counted_at = 0.0
 
 
 # ── the refusals ─────────────────────────────────────────────────────
@@ -250,12 +270,6 @@ async def webhooks_paused(db: AsyncDatabase) -> bool:
     return (await resolve(db)).paused("webhooks", datetime.now(UTC))
 
 
-# Sign-ups in the last hour, counted at most once a bound: the ceiling is a
-# brake on a wave, and a wave is not measured to the request.
-_signups_last_hour = 0
-_signups_counted_at = 0.0
-
-
 async def refuse_if_signups_paused(db: AsyncDatabase) -> None:
     """Paused outright: refused. What `/register/verify` checks, so a row a
     script started before the pause cannot be finished during it. Not the
@@ -268,33 +282,31 @@ async def refuse_if_signups_paused(db: AsyncDatabase) -> None:
 
 
 async def refuse_if_signups_closed(db: AsyncDatabase, network_key: str | None = None) -> None:
-    """Paused: refused. Slowed: refused once the hour holds `value` sign-ups
-    already. Slowed for one network: refused once *that network* started
-    `value` sign-ups this hour, read off the signal's own counter, and only
-    when the visitor's key is that network's. `users.created_at` is stored
-    in the model's JSON form (an ISO string, see `MongoUserRepository`), so
-    the bound is written the same way and the comparison is lexical."""
+    """Paused: refused. Slowed for everyone: refused once the last hour
+    holds `value` sign-ups already. Slowed for the visitor's network:
+    refused once *that network* started `value` sign-ups this hour, read off
+    the signal's own counter. The two slow-downs are separate documents and
+    both apply, so a network slowed beneath a platform-wide ceiling is held
+    by whichever it reaches first. `users.created_at` is stored in the
+    model's JSON form (an ISO string, see `MongoUserRepository`), so the
+    bound is written the same way and the comparison is lexical."""
     global _signups_last_hour, _signups_counted_at
     now = datetime.now(UTC)
     controls = await resolve(db)
     if controls.paused("signups", now):
         raise SignupsPaused()
-    control = controls.signups_control(now)
-    if control is not None and control.network is not None:
-        if network_key is None or network_key != control.network or control.value is None:
-            return
-        doc = await db[SIGNUP_NETWORK_COUNTS].find_one(
-            {"hour": hour_key(now), "key": control.network}, projection=["started"]
-        )
-        if doc is not None and int(doc.get("started", 0)) >= control.value:
-            raise SignupsPaused()
-        return
     ceiling = controls.signups_per_hour(now)
-    if ceiling is None:
-        return
-    if _signups_counted_at + TTL_SECONDS <= time.monotonic():
-        since = _iso.dump_python(now - timedelta(hours=1), mode="json")
-        _signups_last_hour = await db.users.count_documents({"created_at": {"$gte": since}})
-        _signups_counted_at = time.monotonic()
-    if _signups_last_hour >= ceiling:
-        raise SignupsPaused()
+    if ceiling is not None:
+        if _signups_counted_at + TTL_SECONDS <= time.monotonic():
+            since = _iso.dump_python(now - timedelta(hours=1), mode="json")
+            _signups_last_hour = await db.users.count_documents({"created_at": {"$gte": since}})
+            _signups_counted_at = time.monotonic()
+        if _signups_last_hour >= ceiling:
+            raise SignupsPaused()
+    network_ceiling = controls.network_per_hour(network_key, now)
+    if network_ceiling is not None:
+        doc = await db[SIGNUP_NETWORK_COUNTS].find_one(
+            {"hour": hour_key(now), "key": network_key}, projection=["started"]
+        )
+        if doc is not None and int(doc.get("started", 0)) >= network_ceiling:
+            raise SignupsPaused()

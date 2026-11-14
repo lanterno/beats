@@ -304,22 +304,34 @@ class RevokeDevice(_AccountCommand):
 
 
 class ControlArgs(BaseModel):
+    """Which control. `network` names one of the sign-up slow-downs that
+    each cover one network, by the opaque key the signal showed; without it,
+    the control is the one for everyone. Both stand side by side, so each is
+    set and cleared on its own. The key travels in this body only: the
+    audit's subject is the control's name, and its before and after say
+    `one_network`, never which."""
+
     name: ControlName
+    network: str | None = Field(default=None, min_length=8, max_length=64)
+
+    @model_validator(mode="after")
+    def _one_network_is_signups(self) -> ControlArgs:
+        if self.network is not None and self.name != "signups":
+            raise ValueError("only sign-ups are slowed for one network")
+        return self
 
 
 class SetControlArgs(ControlArgs):
     """A pause needs `until` (inside MAX_PAUSE) and a `reason` for the
     operator's own page; a limit needs a `value` and takes neither. `signups`
     may carry a `value` too — a ceiling an hour — and is then slowed rather
-    than paused, until `until`. The sentence a user sees is fixed text; the
-    reason never reaches them."""
+    than paused, until `until`. With a `network`, it slows that network
+    alone, capped at the next UTC midnight, when the key stops matching. The
+    sentence a user sees is fixed text; the reason never reaches them."""
 
     until: datetime | None = None
     value: int | None = Field(default=None, ge=1)
     reason: str | None = Field(default=None, min_length=1, max_length=2000)
-    # `signups` only: slow one network, named by the opaque key the signal
-    # showed. Capped at the next UTC midnight, when the key stops matching.
-    network: str | None = Field(default=None, min_length=8, max_length=64)
 
     @model_validator(mode="after")
     def _shape(self) -> SetControlArgs:
@@ -351,10 +363,12 @@ class SetControlArgs(ControlArgs):
         return self
 
 
-async def _control_state(ctx: CommandContext, name: str) -> dict[str, Any]:
-    doc = await MongoPlatformControlsStore(ctx.db).get(name)
+async def _control_state(ctx: CommandContext, args: ControlArgs) -> dict[str, Any]:
+    doc = await MongoPlatformControlsStore(ctx.db).get(args.name, args.network)
     if doc is None:
-        return {"set": False}
+        # Which one is not set: a network's control, cleared, says so, so
+        # the audit tells lifting one network from lifting everyone's.
+        return {"set": False, **({"one_network": True} if args.network is not None else {})}
     control = control_from_doc(doc)
     return {
         "set": True,
@@ -385,7 +399,7 @@ class _ControlCommand:
         return None
 
     async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        return await _control_state(ctx, args.name)
+        return await _control_state(ctx, args)
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         raise NotImplementedError
@@ -407,15 +421,18 @@ class SetControl(_ControlCommand):
             set_by=ctx.operator.sub,
             network=args.network,
         )
-        return await _control_state(ctx, args.name)
+        return await _control_state(ctx, args)
 
 
 class ClearControl(_ControlCommand):
+    """Lifts one control: the one for everyone, or with `network` that
+    network's slow-down alone. Whichever it is not stands."""
+
     name = "control.clear"
 
     async def execute(self, ctx: CommandContext, args: ControlArgs) -> dict[str, Any]:
-        await MongoPlatformControlsStore(ctx.db).clear(args.name)
-        return await _control_state(ctx, args.name)
+        await MongoPlatformControlsStore(ctx.db).clear(args.name, args.network)
+        return await _control_state(ctx, args)
 
 
 # ── the deploy freeze ────────────────────────────────────────────────
