@@ -746,12 +746,24 @@ class RetentionPurge:
         return await _organisation_name(ctx, args.organisation_id)
 
     async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        """The dry run, summed: rows past their period that would go, and
+        living members' rows that would lose the stamp and stay theirs. An
+        organisation with nothing past its period is read, not touched."""
         from beats.infrastructure.retention import purge_expired_records
 
         report = await purge_expired_records(
             ctx.db, apply=False, organisation_id=args.organisation_id
         )
-        return {"would_touch_organisations": len(report.organisations)}
+        counts = [o.counts for o in report.organisations]
+        one = report.organisations[0] if args.organisation_id and report.organisations else None
+        return {
+            "would_touch_organisations": sum(1 for c in counts if any(c.values())),
+            "rows_deleted": sum(n for c in counts for k, n in c.items() if k.endswith("_deleted")),
+            "rows_unstamped": sum(
+                n for c in counts for k, n in c.items() if k.endswith("_unstamped")
+            ),
+            "cutoff": one.cutoff.isoformat() if one else None,
+        }
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         from beats.infrastructure.retention import purge_expired_records
@@ -759,7 +771,9 @@ class RetentionPurge:
         report = await purge_expired_records(
             ctx.db, apply=True, actor_kind="operator", organisation_id=args.organisation_id
         )
-        return {"purged_organisations": len(report.organisations)}
+        return {
+            "purged_organisations": sum(1 for o in report.organisations if any(o.counts.values()))
+        }
 
     async def on_queued(self, ctx: CommandContext, args: Any) -> None:
         return None
