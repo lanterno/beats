@@ -14,9 +14,9 @@ switches with the global limits, sign-ups from one network and the erasure
 request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
 pages* and § *Controls*; no other stage has started.
 
-**The owner's inputs were decided on 2026-11-14**, so no stage below waits
-on a decision; each says what was decided and why, and what is still done by
-hand.
+**The owner's inputs were decided on 2026-11-14**, so no stage in this file
+waits on a decision; each says what was decided and why, and what is still
+done by hand. Stage 7 lives in its own file and keeps its own open question.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
@@ -28,9 +28,9 @@ hand.
 | – | Reasons on commands, incidents, restrictions in force, an audit of lookups | No answer given | [Below](#not-decided-the-new-records) | The decision |
 
 The numbers are a suggested order. Apart from what the table says, any stage
-can be picked up alone. Stage 1's screens are built; the rows below marked
-"then 3 and 4 add to it" are what later stages add to a built page. Five
-smaller items from before the redesign are at the end of *Work*.
+can be picked up alone. Every screen in § *The design* marked "Built" exists;
+what a later stage adds to one is named in its row. Five smaller items from
+before the redesign are at the end of *Work*.
 
 **By hand, before stages 2 and 8 are used in production:** add
 `platform_controls` and `erasure_requests` to the `beatsOperator` Atlas
@@ -40,17 +40,21 @@ affected. The limit values are set from the page, not in code: 120 beat
 writes and 60 signal writes a minute and 10 imports an hour are the
 recommendation, after reading the per-account rate in the request log.
 
-**A rule for every stage left, decided 2026-11-14: no new variable, secret
-or hand-made step for anyone deploying this.** LifePete should start with
-great defaults and nothing to configure beyond what it already asks for.
-Stage 3 was built that way — its day key is derived from `JWT_SECRET`, which
-the public API already holds, rather than from a new secret — and stages 4
-to 6 must be too: a figure read from Google is configured from the metadata
-server the service already runs on (project, region, service name), never
-from a variable, and a deployment that is not on Google Cloud shows
-"unavailable" and a link, never a broken page. The one thing that cannot be
-avoided, an IAM grant in `terraform/`, is gated on `operator_enabled` like
-the rest, so a self-hosted install never sees it.
+**A preference for every stage left, set 2026-11-14: great defaults over new
+configuration.** The goal is that LifePete is easy to start for someone new:
+it may be customisable, but it should run well with nothing set beyond what it
+already asks for. So a stage avoids a new environment variable, secret or
+hand-made step **where it reasonably can** — this is encouraged, not a hard
+rule, and a stage that genuinely needs one adds it, with a working default
+where a default is possible and a sentence in its docs saying why. Stage 3
+shows the preferred shape: its day key is derived from `JWT_SECRET`, which the
+public API already holds, rather than from a new secret. For stages 4 to 6,
+prefer what the service can learn for itself (project, region and service
+name from the metadata server), have a value Terraform already knows set by
+Terraform rather than by a person, and make a deployment that is not on Google
+Cloud show "unavailable" and a link, never a broken page. IAM grants in
+`terraform/` stay gated on `operator_enabled`, so a self-hosted install never
+sees them.
 
 ## The design
 
@@ -60,17 +64,17 @@ figure, person and organisation in it is invented.
 
 | Mock screen | Replaces | Stage |
 |---|---|---|
-| `Main` (Today) | `backoffice/client/pages/Attention.tsx` | 1, then 4 and 5 add to it |
-| `Queue` | Nothing | 1 |
-| `Palette` (⌘K) | Nothing | 1 |
-| `Runbooks` | Nothing | 1 |
-| `Accounts`, `Account` | `pages/Accounts.tsx` | 1 |
-| `Review` (review before acting) | `shared/ui/CommandForm.tsx`, inline | 1 |
-| `Orgs`, `Org` | `pages/Organisations.tsx` | 1 |
-| `Trust` | `pages/Abuse.tsx` | Built, 1 and 3; 4 adds to it |
-| `Capacity` | `pages/Capacity.tsx` | 1, then 4 adds to it |
-| `Jobs`, `Audit`, `Compliance` | `pages/Compliance.tsx`, split in three | Built, 1 and 8 |
-| `Access` (access and controls) | Nothing | Built, 2 |
+| `Main` (Today) | `pages/Today.tsx` | Built, 1; 4 and 5 add to it |
+| `Queue` | `pages/Queue.tsx` | Built, 1 |
+| `Palette` (⌘K) | `app/Palette.tsx` | Built, 1 |
+| `Runbooks` | `pages/Runbooks.tsx` | Built, 1 |
+| `Accounts`, `Account` | `pages/Accounts.tsx`, `pages/Account.tsx` | Built, 1 |
+| `Review` (review before acting) | `pages/Review.tsx` | Built, 1; serves account, control and erasure-request commands |
+| `Orgs`, `Org` | `pages/Organisations.tsx` | Built, 1 |
+| `Trust` | `pages/Trust.tsx` | Built, 1 and 3; 4 adds to it |
+| `Capacity` | `pages/Capacity.tsx` | Built, 1; 4 adds to it |
+| `Jobs`, `Audit`, `Compliance` | `pages/Jobs.tsx`, `Audit.tsx`, `Compliance.tsx` | Built, 1 and 8 |
+| `Access` (access and controls) | `pages/Access.tsx` | Built, 2 |
 | `Releases` | Nothing | 5 and 6 |
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
 | `Phone`, `States`, `Dusk` | Not screens to build: narrow width, empty and error states, and the dusk hour, in every stage | All |
@@ -215,7 +219,7 @@ one links to the runbook for reverting on `main`.
 | What | From | Grant on `beats-operator` |
 |---|---|---|
 | API builds, newest first, with their commit | Cloud Build `builds.list` | `roles/cloudbuild.builds.viewer` |
-| The API's commit | The operator's own image tag, passed in as an env. `terraform/operator.tf` gives both services `var.container_image_tag` in one apply | None |
+| The API's commit | The operator's own image tag, set by Terraform as an env (`terraform/operator.tf` gives both services `var.container_image_tag` in one apply), so nobody deploying sets it by hand; unset reads as "unknown" | None |
 | The web app's live commit | A `version.json` written by the build from `VITE_GIT_SHA`, fetched from `lifepete.com` | None |
 | Web releases over time | Firebase Hosting's release list | `roles/firebasehosting.viewer` |
 | Commit subjects | GitHub's public REST API, cached per sha for good | None; the repo is public |
@@ -294,7 +298,7 @@ Its own file, because it is not an operator feature: [status-page.md](status-pag
 - **The landing page's deploy-state row** waits on
   [secret-manager.md](secret-manager.md): the API's Cloud Run spec carries
   `JWT_SECRET` and the DSN as plain environment values, so reading the
-  service is reading them. Until then the Attention page links to the Cloud
+  service is reading them. Until then the Today page links to the Cloud
   Run console. When it lands, the reads are what `deploy_lock.sh` reads —
   the API service and its revisions, the Artifact Registry tags, and
   `beats/deploy.lock` alone as an object get under a `resource.name`
@@ -341,6 +345,6 @@ decision would replace.
 |---|---|---|
 | A required reason and reference on every command | `MongoOperatorAudit.record` has no such field; only `SuspendArgs` has a reason. Add them to the `POST /commands/{name}` body rather than to each command's `args_model`, and let the runner write them | `Review` asks for the typed confirmation alone and says the record is you, the command, the subject and the two sides; `Audit` shows before and after |
 | Incidents and write-ups | A new collection, its commands, and the Atlas grant | `Incidents` and `IncidentRoom` are drawn and unscheduled; stage 7 stands without them, and `Main`'s hero is the first thing on the queue |
-| Restrictions in force | The list itself is derivable from `users.suspended_at` and `account_limits`, ids only, and `Trust` now shows exactly that. "Look again on" and the reference are the new part — check either against docs/backoffice.md's refusal of a browsable account list | `Trust` lists what is in force and says nothing records why, or when to look again |
+| Restrictions in force | The list itself is derivable from `users.suspended_at` and `account_limits`, ids only; no page lists it yet, and showing it is the cheap half. "Look again on" and the reference are the new part — check either against docs/backoffice.md's refusal of a browsable account list | Each account's page shows its own suspension and limits; nothing lists them across accounts, or records why, or when to look again |
 | An audit of each lookup | A write on a read path, which the audit does not do today, and which a required reason would make slower to use. Needs a retention figure | `Accounts` says plainly that opening an account is a read and reads are not recorded; the recent list is ids in `localStorage`, visible to nobody else |
 | Snoozing or finishing a queue item | Stored state per row, so a row can no longer simply leave when its condition clears | `Queue` says there is nothing to tick off: a row is the condition, and it leaves when the condition does |
