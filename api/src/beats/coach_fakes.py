@@ -1,6 +1,6 @@
 """Fakes and factories the coach suites share — no tests of their own.
 
-`test_coach.py` grew past the ceiling in roadmaps/file-sizes.md and split
+`test_coach.py` grew past the size ceiling (CLAUDE.md § Conventions) and split
 by surface; the gateway responses, the in-memory repos, the fixed dates and
 the small factories are used by more than one of those files. Not
 `test_`-prefixed, so pytest does not collect it.

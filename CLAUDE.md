@@ -52,10 +52,11 @@ pieces that grew out of it have roadmaps of their own, because none is an
 organisations feature: SSO per organisation and SCIM
 ([roadmaps/organisation_sso.md](roadmaps/organisation_sso.md)),
 the operator's control plane ([docs/backoffice.md](docs/backoffice.md), shipped
-2026-11-04 — operator routes in this API, mounted only by a second deployment
-behind IAP, which also serves a UI of its own; operational metadata, never
-user content; what it still owes is
-[roadmaps/backoffice.md](roadmaps/backoffice.md)),
+2026-11-04 and redesigned in full by 2026-11-14 — operator routes in this API,
+mounted only by a second deployment behind IAP, which also serves a UI of its
+own; operational metadata, never user content; the one thing it still owes
+waits in [roadmaps/secret-manager.md](roadmaps/secret-manager.md)), the
+public status page ([docs/status-page.md](docs/status-page.md)),
 several verified addresses on an account
 ([roadmaps/account-emails.md](roadmaps/account-emails.md)), server push
 ([roadmaps/server-push.md](roadmaps/server-push.md)) and collecting the
@@ -274,6 +275,14 @@ nothing.
 
 ## Conventions
 
+- Size: a Python file above 1000 lines is too big; a frontend file above 5000 is
+  (stated 2026-11-06). The fix is carving at an existing seam, never adding a
+  layer — a test file by the router or module under test, a module by the
+  section its docstring already names — and the shared fixtures of a carved
+  test file go in a helper module beside `conftest.py` that is deliberately not
+  `test_`-prefixed. One file stands 9% over by decision: `domain/organisations.py`,
+  whose operator twins sit beside the member methods they twin, and moving them
+  would cost a mixin the type checker cannot see or a fourth class in the chain.
 - Python: Ruff for linting/formatting, ty for type checking, line length 100.
   Repository interfaces are `Protocol`s in `infrastructure/repositories.py`; the
   Mongo classes inherit them for a nominal check while test fakes satisfy them
@@ -523,7 +532,7 @@ changing anything both ends share.
 | `/api/account` | User account management (me, refresh, credentials — including `/credentials/start` and `/verify`, the ceremony that puts another passkey on a signed-in account — logout, linking SSO identities) |
 | `/api/auth` | WebAuthn registration + login (public) |
 | `/api/auth/sso` | Single sign-on: the providers offered, start and complete a sign-in (public) |
-| `/api/operator` | **Mounted only by `operator_server`, never by this app** (docs/backoffice.md): the control plane's reads (attention, accounts by exact email in a POST body, organisations with their detail-less audit, abuse, capacity, the operator audit and job queue) and `POST /commands/{name}`, the one path a mutation takes. Behind IAP; operational metadata, never user content |
+| `/api/operator` | **Mounted only by `operator_server`, never by this app** (docs/backoffice.md): the control plane's reads (attention, live `/health`, `/releases`, the `/deploy-freeze` and the `/queue` of rows behind it, accounts by exact email in a POST body, one account's `/coach` spend a day and `/audit` of what was done to it, organisations with their detail-less audit, abuse, capacity, the operator audit and job queue, `/controls`, the read-only `/access` allowlist, the public `/status` read back and the `/erasure-requests` log), `POST /commands/{name}/preview` (what an act would change, writing nothing) and `POST /commands/{name}`, the one path a mutation takes. Behind IAP; operational metadata, never user content |
 | `/api/organisations` | Organisations (docs/organisations.md): my memberships and invitations; create; `/join` (GET to preview, POST to take, the token in `X-Invite-Token` rather than the path); per organisation its settings, `/close` (notice, then `DELETE /{id}` hands members their projects back), `/members` (five roles: owner ≥ admin ≥ manager ≥ viewer ≥ member), `/leave`, `/invites`, `/requests`, `/projects` with `/members/{uid}` assignments and `/{pid}/merge`, `/connect`, `/record` (readers; a manager their teams), `/visible`(+`.csv`), `/archive`(+`.csv`). Employment (stages 3–4): `/teams`, `…/members/{uid}/contract` (the employer's, `managed`), `…/adjustments`, `…/entries` (admin-entered time, `entered_by`), `/absence-requests`(+`/{rid}/decision`), `/timesheets` (submit; `/{tid}/decision` approves and freezes the month, locking its days — 409 PERIOD_APPROVED everywhere after; `/{tid}/reopen` with a reason), `/audit`, `/record.csv`, `/compliance.csv`. No device token |
 | `/api/reports` | **Public.** `GET` with the link's token in `X-Report-Token`, never in the path (Cloud Run logs every URL for 30 days): one client's billable work over a report link's frozen range, to a reader with no account. Rate-limited, `no-store`, `noindex`; one 404 for every way a token fails. No device token |
 | `/api/meta` | Static reference data: holiday regions for the contract picker, one region's holidays for a year, and the currencies a client may be billed in, with their minor units (cacheable, still behind auth) |

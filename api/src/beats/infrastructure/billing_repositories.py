@@ -1,6 +1,6 @@
 """Persistence for the billing collections (docs/billing.md).
 
-Split out of `repositories.py` at the ceiling in roadmaps/file-sizes.md.
+Split out of `repositories.py` at the size ceiling (CLAUDE.md § Conventions).
 Billing is never a field of `Project` or `Beat`: clients, project billing,
 billable overrides, billing budgets and report links are their own
 collections, and so their own repositories.

@@ -38,6 +38,16 @@
             "title": "Sessions Created 7D Per Account",
             "type": "array"
           },
+          "signup_wave": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignupWave"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "signups_per_day": {
             "items": {
               "$ref": "#/components/schemas/DayFigure"
@@ -63,6 +73,24 @@
           "signups_per_day"
         ],
         "title": "AbuseReport",
+        "type": "object"
+      },
+      "AccessEntry": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "AccessEntry",
         "type": "object"
       },
       "AccountDetail": {
@@ -336,6 +364,14 @@
             "title": "Approvals Superseded Over 30D",
             "type": "integer"
           },
+          "controls_paused": {
+            "title": "Controls Paused",
+            "type": "integer"
+          },
+          "erasure_requests_overdue": {
+            "title": "Erasure Requests Overdue",
+            "type": "integer"
+          },
           "jobs_failed": {
             "title": "Jobs Failed",
             "type": "integer"
@@ -355,12 +391,14 @@
         },
         "required": [
           "organisations_without_owner",
+          "controls_paused",
           "organisations_all_owners_suspended",
           "jobs_queued",
           "jobs_failed",
           "approvals_superseded_over_30d",
           "absence_requests_pending_over_14d",
-          "accounts_near_coach_cap"
+          "accounts_near_coach_cap",
+          "erasure_requests_overdue"
         ],
         "title": "AttentionCounts",
         "type": "object"
@@ -450,6 +488,71 @@
         "title": "CollectionSize",
         "type": "object"
       },
+      "CommandPreview": {
+        "description": "What a command would do, answered without doing any of it.\n\nThe operator sees this before the act (docs/backoffice.md \u00a7 Commands:\nthe dangerous act must not be the easiest thing on the page). It calls\n`describe()` \u2014 a read \u2014 and never `execute()` or `on_queued()`, so\nnothing is written and nothing is queued by asking.",
+        "properties": {
+          "already_queued": {
+            "title": "Already Queued",
+            "type": "boolean"
+          },
+          "before": {
+            "additionalProperties": true,
+            "title": "Before",
+            "type": "object"
+          },
+          "command": {
+            "title": "Command",
+            "type": "string"
+          },
+          "confirmation_required": {
+            "title": "Confirmation Required",
+            "type": "boolean"
+          },
+          "runs_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs After"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          },
+          "subject_kind": {
+            "title": "Subject Kind",
+            "type": "string"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Days"
+          }
+        },
+        "required": [
+          "command",
+          "subject_kind",
+          "subject_id",
+          "before",
+          "confirmation_required",
+          "window_days",
+          "runs_after",
+          "already_queued"
+        ],
+        "title": "CommandPreview",
+        "type": "object"
+      },
       "CommandRequest": {
         "properties": {
           "args": {
@@ -470,6 +573,87 @@
           }
         },
         "title": "CommandRequest",
+        "type": "object"
+      },
+      "ControlState": {
+        "description": "One control as the Access page shows it. The operator's own text\n(`reason`) is theirs to read back; a user never sees it.",
+        "properties": {
+          "in_force": {
+            "title": "In Force",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "set_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set At"
+          },
+          "set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "in_force",
+          "until",
+          "value",
+          "reason",
+          "set_by",
+          "set_at"
+        ],
+        "title": "ControlState",
         "type": "object"
       },
       "DayFigure": {
@@ -553,6 +737,131 @@
         "title": "DomainFigure",
         "type": "object"
       },
+      "ErasureRequestState": {
+        "description": "One logged erasure request: the day it arrived, the operator's\nreference, the account by id or none, and where it stands \u2014 read off\nthe job queue, never stored.",
+        "properties": {
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "closed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "received_on": {
+            "format": "date",
+            "title": "Received On",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "erasure_queued",
+              "erasure_ran",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "received_on",
+          "subject_id",
+          "status",
+          "closed_at",
+          "closed_reason"
+        ],
+        "title": "ErasureRequestState",
+        "type": "object"
+      },
+      "FreezeState": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "frozen": {
+            "title": "Frozen",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "required": [
+          "available",
+          "frozen"
+        ],
+        "title": "FreezeState",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -564,6 +873,141 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthFigures": {
+        "description": "What Monitoring answered. A figure Google had no points for is None,\nnever zero: an empty series is \"no data\", not \"no errors\".",
+        "properties": {
+          "availability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability"
+          },
+          "error_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Share"
+          },
+          "instances": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instances"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "refused_writes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteFigure"
+            },
+            "title": "Refused Writes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "availability",
+          "error_share",
+          "p95_latency_ms",
+          "instances"
+        ],
+        "title": "HealthFigures",
+        "type": "object"
+      },
+      "HealthReport": {
+        "properties": {
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Seconds"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "availability_target": {
+            "default": 0.995,
+            "title": "Availability Target",
+            "type": "number"
+          },
+          "figures": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthFigures"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_instances": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Instances"
+          },
+          "state": {
+            "enum": [
+              "live",
+              "stale",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "as_of",
+          "age_seconds",
+          "figures",
+          "max_instances"
+        ],
+        "title": "HealthReport",
         "type": "object"
       },
       "MembershipSummary": {
@@ -794,6 +1238,331 @@
         "title": "OrganisationSummary",
         "type": "object"
       },
+      "PreviewRequest": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          }
+        },
+        "title": "PreviewRequest",
+        "type": "object"
+      },
+      "PublicStatus": {
+        "properties": {
+          "affected": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected",
+            "type": "array"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "published": {
+            "default": false,
+            "title": "Published",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "available",
+          "state",
+          "message",
+          "affected"
+        ],
+        "title": "PublicStatus",
+        "type": "object"
+      },
+      "QueueRow": {
+        "description": "One row behind an Attention count: what it is, which id, since when,\nand when it is due. Ids and dates only. Nothing stores that a row was\nhandled; it leaves when its condition clears.\n\nSuperseded approvals and absence requests are one row per organisation\n(`count` of them, `since` the oldest), with no member named.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "title": "Count",
+            "type": "integer"
+          },
+          "due": {
+            "format": "date-time",
+            "title": "Due",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "organisation_without_owner",
+              "organisation_all_owners_suspended",
+              "job_failed",
+              "job_queued",
+              "approvals_superseded",
+              "absence_requests_pending",
+              "account_near_coach_cap",
+              "control_paused",
+              "erasure_request_open"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "subject_id",
+          "since",
+          "due"
+        ],
+        "title": "QueueRow",
+        "type": "object"
+      },
+      "ReleaseRow": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "log_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Url"
+          },
+          "sha": {
+            "title": "Sha",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "sha",
+          "subject",
+          "status",
+          "created_at",
+          "finished_at",
+          "log_url",
+          "live"
+        ],
+        "title": "ReleaseRow",
+        "type": "object"
+      },
+      "ReleasesReport": {
+        "properties": {
+          "api_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Commit"
+          },
+          "builds": {
+            "items": {
+              "$ref": "#/components/schemas/ReleaseRow"
+            },
+            "title": "Builds",
+            "type": "array"
+          },
+          "repository": {
+            "title": "Repository",
+            "type": "string"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable",
+            "type": "array"
+          },
+          "web_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Commit"
+          },
+          "web_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Subject"
+          }
+        },
+        "required": [
+          "builds",
+          "api_commit",
+          "web_commit",
+          "web_subject",
+          "repository"
+        ],
+        "title": "ReleasesReport",
+        "type": "object"
+      },
+      "RouteFigure": {
+        "properties": {
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "route",
+          "value"
+        ],
+        "title": "RouteFigure",
+        "type": "object"
+      },
+      "SignupWave": {
+        "description": "This hour's sign-ups against the usual for this hour of the week, and\nthe largest network's share \u2014 the key is opaque and day-scoped, the page\nsays \"Network A\", and no account is joined to it anywhere.",
+        "properties": {
+          "accounts_with_writes": {
+            "title": "Accounts With Writes",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "groups": {
+            "title": "Groups",
+            "type": "integer"
+          },
+          "hour": {
+            "title": "Hour",
+            "type": "string"
+          },
+          "largest_group": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Group"
+          },
+          "largest_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Key"
+          },
+          "usual": {
+            "title": "Usual",
+            "type": "number"
+          }
+        },
+        "required": [
+          "hour",
+          "completed",
+          "usual",
+          "accounts_with_writes",
+          "largest_group",
+          "largest_key",
+          "groups"
+        ],
+        "title": "SignupWave",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -860,6 +1629,32 @@
           }
         },
         "summary": "Abuse",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/access": {
+      "get": {
+        "description": "Who can reach this back office, read off the allowlist the deployment\nwas started with. Read-only: the list is an environment value, and\nchanging it is a deploy (terraform/README.md \u00a7 Operator Deployment).",
+        "operationId": "access_api_operator_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccessEntry"
+                  },
+                  "title": "Response Access Api Operator Access Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Access",
         "tags": [
           "operator"
         ]
@@ -949,6 +1744,113 @@
           }
         },
         "summary": "Account",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/accounts/{user_id}/audit": {
+      "get": {
+        "description": "What the back office has done to this account. The operator's own\naudit filtered to one subject, so the account page does not read the\nwhole log to find three rows.",
+        "operationId": "account_audit_api_operator_accounts__user_id__audit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Account Audit Api Operator Accounts  User Id  Audit Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Audit",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/accounts/{user_id}/coach": {
+      "get": {
+        "description": "One account's coach cost a day, for the shape of a month running\naway. The cost of the calls, never a word of what was in them.",
+        "operationId": "account_coach_spend_api_operator_accounts__user_id__coach_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DayFigure"
+                  },
+                  "title": "Response Account Coach Spend Api Operator Accounts  User Id  Coach Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Account Coach Spend",
         "tags": [
           "operator"
         ]
@@ -1099,6 +2001,155 @@
           }
         },
         "summary": "Run",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/commands/{name}/preview": {
+      "post": {
+        "description": "What the command would do, before it does any of it.\n\nA POST because it carries the same arguments the act does, an account's\nid among them, and because the operator's credential is IAP's cookie:\nevery state-changing shape is a POST with an Origin the app checks, and\nthis one is shaped like the act it previews. It writes nothing, queues\nnothing, and takes the same role \u2014 a `viewer` gets the same 403 here as\non the act, because a preview it could read would be a way to probe\nwhether an id exists.",
+        "operationId": "preview_api_operator_commands__name__preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/controls": {
+      "get": {
+        "description": "The platform's switches and global limits as they stand\n(docs/backoffice.md \u00a7 Controls). Written only through `control.set` and\n`control.clear`.",
+        "operationId": "controls_api_operator_controls_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ControlState"
+                  },
+                  "title": "Response Controls Api Operator Controls Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Controls",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/deploy-freeze": {
+      "get": {
+        "description": "Whether the API's deploys are frozen, until when and why. Not\navailable where no freeze bucket is configured.",
+        "operationId": "deploy_freeze_api_operator_deploy_freeze_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreezeState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Deploy Freeze",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/erasure-requests": {
+      "get": {
+        "description": "The erasure request log: when each mail arrived and where it stands.\nA reference and an id, never an address.",
+        "operationId": "erasure_requests_api_operator_erasure_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ErasureRequestState"
+                  },
+                  "title": "Response Erasure Requests Api Operator Erasure Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Erasure Requests",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/health": {
+      "get": {
+        "description": "Whether the product is healthy, from Cloud Monitoring: availability,\nthe share of 5xx, p95 latency, instances against their ceiling and\nrefused writes per route. Cached a minute; a Google failure answers the\nlast figures and their age, and off Google Cloud it answers\n\"unavailable\" \u2014 never an invented number.",
+        "operationId": "health_api_operator_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
         "tags": [
           "operator"
         ]
@@ -1298,6 +2349,76 @@
           }
         },
         "summary": "Organisation Audit",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/queue": {
+      "get": {
+        "description": "The rows behind the Attention counts, soonest due first: ids and\ndates, never a member's name. Nothing stores that a row was handled; it\nleaves when its condition clears.",
+        "operationId": "queue_api_operator_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QueueRow"
+                  },
+                  "title": "Response Queue Api Operator Queue Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Queue",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/releases": {
+      "get": {
+        "description": "What shipped: the API's builds newest first with their commits, the\ncommit the API was deployed with, and the web app's live commit. Each\nsource answers on its own, and one that fails is named rather than\nbreaking the rest. Nothing here moves traffic.",
+        "operationId": "releases_api_operator_releases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleasesReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Releases",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/status": {
+      "get": {
+        "description": "What customers see on the status page right now, read back from the\nsame public file. Not available where no status bucket is configured.",
+        "operationId": "public_status_api_operator_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Public Status",
         "tags": [
           "operator"
         ]

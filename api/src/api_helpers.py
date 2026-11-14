@@ -1,6 +1,6 @@
 """Helpers the HTTP suites share — no tests of their own.
 
-`test_api.py` grew past the ceiling in roadmaps/file-sizes.md and split by
+`test_api.py` grew past the size ceiling (CLAUDE.md § Conventions) and split by
 router area; several of those files, and `test_account_controls.py`, build
 the same fixtures (a day job with a contract, a billed freelance project, a
 report link). They live here rather than in one of the suites, so no suite

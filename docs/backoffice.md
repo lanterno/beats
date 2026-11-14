@@ -132,6 +132,9 @@ either is the signal it was put in the wrong place.
 | `account.sign_out_everywhere` | inline | — | the same: `sessions_valid_after` |
 | `account.set_limits` / `clear_limits` | inline | — | the same: `account_limits`, the whole document at once |
 | `device.revoke` | inline | — | the device repository |
+| `control.set` / `control.clear` | inline | — | `MongoPlatformControlsStore` (§ Controls) |
+| `erasure_request.log` / `close` | inline | — | `MongoErasureRequests` (*Privacy and compliance*) |
+| `deploy.freeze` / `unfreeze` | inline | — | the freeze flag's bucket (§ Deploy freeze) |
 | `account.erase` | job, **7 days** | the email | `erasure.erase_account` |
 | `organisation.grant_owner` | inline | the name | the operator twin of `set_role` |
 | `organisation.begin_closing` / `cancel_closing` | inline | the name / — | the twins (start or move / cancel) |
@@ -186,6 +189,14 @@ has neither). The audit is written under the operator the command carries.
   runs cannot take the same entry, and re-runs are safe command by command:
   erasure tombstones before it deletes, the purge is idempotent by decision
   30, and a deletion's hand-back takes the assignment with it (#414).
+  **A job running past the hour is reclaimed and run a second time,
+  concurrently** — `claim()` cannot tell a dead run from a slow one, and the
+  re-run safety above is sequential: two concurrent deletions could both read
+  a project's holders before either deletes the assignments. Accepted
+  (2026-11-14): no command comes within two orders of magnitude of an hour
+  at this platform's scale. If a purge or deletion ever approaches it, the
+  runner needs a claim heartbeat (refresh `claimed_at` while executing)
+  before the window is widened.
 - **Rules run at run time, not queue time**: a deletion whose organisation
   gained an owner while it waited is refused then.
 - **Failure**: after three attempts an entry is `failed`, shown on the
@@ -224,6 +235,134 @@ has neither). The audit is written under the operator the command carries.
   case-insensitive match for an address and stops — the old exact `find_one`
   could miss the account a mail came from.
 
+## Controls: the switches and the global limits
+
+Shipped 2026-11-14 (stage 2 of what was roadmaps/backoffice.md). In an
+incident or a cost spike the operator can stop one kind of work for everyone,
+and set the three write limits, without a deploy — from *Access and
+controls*, each through its own review and the runner like every mutation.
+
+- **One collection, `platform_controls`**, one document per control keyed on
+  its name: four pauses (`coach`, `webhooks`, `imports`, `signups`) and three
+  limits (`writes_per_minute_beats`, `writes_per_minute_signals`,
+  `imports_per_hour`). Written only by `control.set` and `control.clear`
+  (`MongoPlatformControlsStore`, `infrastructure/operator_store.py`). No
+  `user_id`: it is the platform's, and erasure's sweep never sees it. It is on
+  the `beatsOperator` Atlas role's write list (terraform/README.md).
+- **Every pause expires.** `control.set` requires an `until`, at most
+  `MAX_PAUSE` (7 days) ahead, and a `reason` for the operator's own page.
+  An expired document reads as open, so no job clears it. `signups` has a
+  third state: with a `value`, sign-ups are *slowed* to that many an hour
+  (counted off `users.created_at` for the last hour, cached a bound) until
+  `until`. The limits are settings and do not expire.
+- **The public API reads through a cache** (`beats/platform_controls.py`, the
+  shape of `auth/account_access.py`, the same 30-second bound, refreshed by
+  the auth middleware on every authenticated request): a pause lands within
+  30 seconds, and the page says so. **An absent document means open**, which
+  is what makes a self-hosted install work with no operator at all. **A
+  failed read keeps the last value**, and open if there is none: the switches
+  are not a way for a database blip to turn the product off. The module
+  imports no settings and nothing under `beats.auth`, because the operator's
+  root loads it too.
+- **Where each is enforced:** `coach` in `UsageTracker.enforce_budget`, which
+  the gateway calls before every model call (inside the chat stream the
+  refusal rides as an error event, status gone); `imports` first thing in
+  `POST /api/export/import`; `webhooks` beside the per-account switch in
+  `dispatch_webhook_event`, where it **drops** — there is no outbox — with
+  one `WEBHOOKS_PAUSED_DROPPED` line per event so the loss can be counted;
+  `signups` at `POST /register/start` before the user row exists, at
+  `/register/verify` (start leaves a row a script could finish later) and on
+  the branch of `SSOAccountService.sign_in` that would create an account —
+  never a sign-in or an added passkey. The three limits sit in `_ceiling`
+  (`api/rate_limits.py`): the account's override, then the control, then the
+  setting, which stays for self-hosted.
+- **Refusals are 409** with `COACH_PAUSED`, `IMPORTS_PAUSED` or
+  `SIGNUPS_PAUSED` and fixed text, never the operator's reason. Not 503,
+  which would page the owner the moment they pause something on purpose; not
+  403 or 429, which `api_rejections` counts. Every client already shows the
+  API's `detail` for a code it does not know (docs/account-controls.md § What
+  each client does with a refusal), so an old SPA against this API reads the
+  sentence.
+- **Attention counts anything paused** (`controls_paused`), the queue has a
+  row for it due when it ends (`control_paused`, with a runbook), and *Access
+  and controls* shows the allowlist read-only beside the switches: the list
+  is an environment value, and changing it is a deploy.
+- **The limit values** are not in code. The owner's guidance, on the page:
+  120 beat writes and 60 signal writes a minute and 10 imports an hour, as
+  `api/src/beats/settings.py` recommends — set only after reading the
+  per-account rate those routes see in the request log, because the SPA's
+  sync engine retries a 429 and a default that refuses a real client is a
+  storm.
+
+## Deploy freeze
+
+Shipped 2026-11-14 (stage 6 of what was roadmaps/backoffice.md). During an
+incident, the operator stops a merge from shipping on top of it, from
+*Releases*, through `deploy.freeze` (a required `until`, at most 7 days, and
+a reason) and `deploy.unfreeze` — the runner and the audit like every act.
+
+- **The flag is one object**, `freeze`, in its own small private bucket,
+  `<project>-deploy-freeze` (`terraform/operator.tf`, gated on
+  `operator_enabled`; `roles/storage.objectUser` for the operator on that
+  bucket alone, `objectViewer` for Cloud Build's account). **Never the
+  Terraform state bucket**, which holds `JWT_SECRET`. Lines of `key=value`
+  (`operator/deploy_freeze.py`): `until_epoch` is what the build compares,
+  and the reason is kept to one line so it cannot forge a key. An expired
+  flag reads as no freeze, so nothing clears it.
+- **The build's check** is the first thing `decide` does in
+  `api/scripts/deploy_lock.sh`, holding the mutex, when
+  `DEPLOY_FREEZE_OBJECT` is set (`api/cloudbuild.yaml` sets it). In force: the
+  decision is `frozen`, the apply is skipped, the lock is released as always,
+  and **the build goes red** — green reads as "deployed", and this commit was
+  not. A missing bucket or object is no freeze, so a deployment without the
+  operator builds as before; a flag that cannot be read for any other reason
+  fails the build rather than deploy blind into what may be an incident.
+- **After a lift, the frozen commit does not deploy by itself**: re-run the
+  newest build, which *Releases* names.
+- **The web app is not held.** It ships from the `deploy` job in
+  `.github/workflows/ui.yml`, with credentials that cannot see the bucket; the
+  page and the review both say "the web app can still ship". Holding it too
+  would need `firebase-deployer` read on the bucket and a check in that job.
+- Off Google Cloud, or with no bucket (`OPERATOR_FREEZE_BUCKET`, set by
+  Terraform), the commands answer 409 `FREEZE_UNAVAILABLE` and the panel says
+  the builds cannot be held back from here.
+
+## Decided against, or postponed
+
+The redesign's last open questions were answered on 2026-11-14, when its last
+stage shipped and its roadmap went. None of these is built, each on purpose,
+and a screen that offered one would be the same bug as a control the API
+cannot serve.
+
+- **Rolling a release back from the back office** — postponed by the owner on
+  2026-11-08. A rollback stays what it is: revert on `main`. A build never
+  rolls back, because `deploy_lock.sh` skips a commit the live one already
+  contains. It would take `run.services.update` on the operator's account,
+  which holds nothing like it, and a way to square a moved traffic split with
+  Terraform, whose next apply owns the service and would move it straight
+  back. Reopen it only if a real incident shows that reverting on `main` was
+  too slow, measured from the merge to the live revision.
+- **A required reason and reference on every command** — no. The record is
+  you, the command, the subject and the two sides; a reason that had to be
+  typed would be typed badly, and the one command whose reason matters
+  (suspension) already asks for it. The deploy freeze, a pause and a status
+  post carry theirs because somebody else reads them.
+- **Incidents and write-ups** — no, not as a record here. The status page
+  tells customers; a write-up is prose, and belongs in the repository's
+  history with the fix. If one is ever kept, it can prefill a status post.
+- **A list of restrictions in force across accounts** — no. Each account's
+  page shows its own suspension and limits, and a list across accounts is
+  the browsable account list the line refuses; nothing records why, or when
+  to look again, for the same reason.
+- **An audit of each lookup** — no. Opening an account is a read, and reads
+  are not recorded: a write on every read path would slow the one thing the
+  operator does most, and a log of who looked at whom is a record about
+  people the control plane deliberately does not keep. The recent list is
+  ids in `localStorage`, visible to nobody else.
+- **Snoozing or finishing a queue item** — no. A row is the condition, and
+  it leaves when the condition does; stored state per row would let a row be
+  ticked off while the thing itself still stands.
+
 ## Authentication
 
 Google IAP is in front, on the Cloud Run service; the app verifies the signed
@@ -243,6 +382,12 @@ so an IAM grant made by mistake reaches a 403. Locally
 `BEATS_TEST_ENV` stands in for testcontainers: exactly one of it and the
 audience may be set, or the settings refuse to load — a stand-in left in a
 deployment stops the deploy instead of replacing the wall.
+
+**Before a second person goes on the allowlist**, even as a `viewer`,
+PRIVACY.md's "I … am the only operator" sentence names them, and the DPA's
+confidentiality term (roadmaps/legal/dpa.md) says who else sees an
+organisation's members. The allowlist is read-only on the Access page for the
+same reason: adding someone is a deploy, and the privacy text goes first.
 
 The browser's credential is IAP's cookie, which a request another site's page
 starts would carry too. So every command is a POST with a JSON body, no GET
@@ -306,17 +451,53 @@ on by them on 2026-11-08.
 
 ## The pages, by the job they serve
 
-- **Attention**, the landing page: a count per row, and one link — the
-  accounts a per-account write limit refused, which is a log query because
-  nothing stores a refusal (see *Abuse* below). The counts are
-  organisations with no owner, and those
-  whose every owner is suspended (the operator doesn't act for the latter —
-  they have an owner — but somebody should know); queued jobs inside their
-  window and failed jobs; approvals superseded and never reopened for more
-  than 30 days; absence requests pending more than 14 days; accounts at 80%
-  of their coach cap. Erasure requests are deliberately not counted:
-  PRIVACY.md has a person ask by email, and counting them would take an
-  in-app request — a product change, not a control-plane page.
+The pages were reorganised around the work on 2026-11-14 (the mock they were
+drawn from is in [backoffice-mock/](backoffice-mock/)). A page appears in the sidebar only once it is
+built: a nav entry to a screen that does not exist is a promise the API
+cannot keep.
+
+- **Today**, the landing page: one sentence saying what matters, read off the
+  queue; the next few rows due, each with the way to it; the jobs waiting out
+  a window; the back office's last few commands; storage and this month's
+  coach spend; and one link — the accounts a per-account write limit refused,
+  which is a log query because nothing stores a refusal (see *Trust and
+  safety* below). The deploy-state card links to the Cloud Run console until
+  roadmaps/secret-manager.md lands.
+- **Work queue** (`GET /api/operator/queue`): the rows behind the Attention
+  counts (`GET /api/operator/attention`, which still badges the sidebar),
+  ids and dates only, each with a due date from the constants in
+  `operator/reads.py` (`queue_due`). The conditions are organisations with no
+  owner, and those whose every owner is suspended (the operator doesn't act
+  for the latter — they have an owner — but somebody should know); failed
+  jobs, and queued jobs, due when their window ends; approvals superseded and
+  never reopened, due 30 days after; absence requests pending, due 14 days
+  after; accounts at 80% of their coach cap. The last two kinds are one row
+  per organisation, with a count and no member named, and are listed before
+  they are due. A row with no stored date is due when it is read and shows as
+  today, never overdue. **Nothing is stored**: there is no snooze and no
+  "done"; a row is the condition, and leaves when it clears. An erasure
+  request the operator logged (see *Privacy and compliance*) is a row too,
+  due 14 days after the mail arrived, until an erasure is queued for its
+  account or it is closed; a paused control is a row due when it ends.
+- **The palette** (⌘K, in the top bar): goes to a page, opens a command's
+  review for an account named by its whole id, and finds one account by its
+  whole address through the same `POST /accounts/lookup`. Pages are filtered
+  by what is typed; people never are — a fragment finds no one. A command
+  never runs from it, and an address is forgotten when the dialog closes.
+- **Review** (`/review/{command}/{subject}`): every account command is carried
+  out from a page of its own, showing what it would change
+  (`POST /commands/{name}/preview`, which writes nothing and refuses a
+  `viewer` as the act does), who notices and whether it can be undone (fixed
+  text per command, `client/shared/commands.ts`), and the typed confirmation.
+- **Access and controls**: the switches and the global limits (§ Controls),
+  each thrown from its review page; who can get in, read off the allowlist;
+  what each role can do; and the access review as a list to read down, since
+  nothing records that it was done.
+- **Runbooks**: static pages in the bundle (`client/shared/runbooks.ts`), each
+  with a `reviewed_on` and marked stale after six months, linked from the
+  queue rows they fit. The alert runbooks restate the `documentation` blocks
+  in `terraform/alerts.tf`, and change with them. A bad release's says to
+  revert on `main`. Nothing records when one was last used.
 - **Accounts**: found by exact email (case-insensitive — sign-up stores an
   address as typed under a unique index with no collation, so `Ana@` and
   `ana@` can be two accounts and a mail from either spelling must find both)
@@ -333,12 +514,37 @@ on by them on 2026-11-08.
 - **Organisations**: rosters, states, timesheet counts, and the audit without
   each event's `details`; the three acts, offered only while no owner is
   left.
-- **Abuse**: outliers rather than guessed thresholds — coach spend, flow
+- **Trust and safety**: outliers rather than guessed thresholds — coach spend, flow
   windows today, sessions created, report links minted (the only public path
   serving a user's data), webhook destinations by domain (outbound HTTP from
   our servers is ours to answer for), devices per account, signups per day.
   Abuse that shows in requests rather than accounts is already counted and
   alerted on in Cloud Monitoring.
+
+  **Sign-ups from one network** (shipped 2026-11-14, stage 3 of what was
+  roadmaps/backoffice.md): the hour's finished sign-ups against the median
+  of the same hour of the week over the last eight weeks, and the largest
+  network's share of the hour, shown only at or above `SIGNUP_NETWORK_MIN_GROUP`
+  (5). The network is the visitor's address cut to its /24 (IPv4) or /48
+  (IPv6) and HMAC-hashed under a key derived for the UTC day — from
+  `JWT_SECRET`, which the public API already holds and the operator
+  deployment never does, so the operator can never compute a key and never
+  test a guess, and **no new secret or setting is needed**: a deployment that
+  can sign a session runs the signal (`auth/signup_networks.py`). Only a
+  counter is stored (`signup_network_counts`: hour, key, `started`,
+  `completed`, 48-hour TTL), written best-effort from the two passkey doors
+  and the SSO branch that creates an account. The page says "Network A",
+  never the key, and says in words that offices, universities, carrier
+  networks and an organisation onboarding its staff all look like this. The
+  action is the `signups` control with the key as its `network`: a ceiling an
+  hour for that network alone, read off the signal's own counter, that slows
+  and never blocks and ends at the next UTC midnight at the latest, when the
+  key stops matching. Why stored, when the two signals below are "logged and
+  counted, never stored": those are facts about one account's request; this
+  holds no account at all, and logging it would show the operator raw
+  addresses or need a metric label per network. PRIVACY.md and DATA.md say
+  what is kept, for how long and why. Behind a self-hosted nginx every
+  visitor is one network, which only makes the signal quiet.
 
   Two of its signals are **logged and counted, never stored** (decided
   2026-11-07). A per-account write limit's refusal
@@ -354,14 +560,69 @@ on by them on 2026-11-08.
   row — the shape Capacity already uses for latency. The account is in the
   line and in no metric label: per-account labels are unbounded
   cardinality, and "which accounts, this week" is the log query the
-  Attention page links to. The address-keyed doors in `routers/auth.py` are
+  Today page links to. The address-keyed doors in `routers/auth.py` are
   deliberately out of both: scanners exhaust them all day, and
   `api_rejections` already counts them. Until a `WRITES_PER_MINUTE_*`
   ceiling is set, the refusal signal counts nothing, which the page says.
 - **Capacity**: documents and storage per collection (`$collStats`), the
-  coach's platform cost by day and model with the cache-read inputs. Latency,
-  error rates and instance counts are Cloud Monitoring's — linked, not
-  rebuilt.
-- **Compliance**: the job queue with cancel, the platform-wide retention
-  purge behind the typed word `all`, and the operator audit — readable,
-  filterable, editable by nobody, kept four years.
+  coach's platform cost by day and model with the cache-read inputs, and
+  live health with refused writes per route.
+- **Live health** (shipped 2026-11-14, stage 4 of what was
+  roadmaps/backoffice.md), on Today and Capacity through `GET
+  /api/operator/health`: availability over the last day (the uptime checks)
+  against the **99.5% a month target** (decided 2026-11-14: one region,
+  30-second cold starts and one operator make 99.9% a budget the first bad
+  deploy would spend), the share of 5xx and p95 latency over the last hour,
+  instances against their ceiling, and refused writes per route. Read by
+  `GoogleMonitoring` (`operator/health.py`) over plain `httpx`, behind the
+  `MonitoringSource` port, with `roles/monitoring.viewer` on the operator's
+  account (gated on `operator_enabled`). **Nothing to configure**: the
+  project and the token come from the metadata server, and the service name
+  and ceiling (`OPERATOR_API_SERVICE`, `OPERATOR_API_MAX_INSTANCES`) are set
+  by Terraform, with defaults. Cached a minute in the process; a Google
+  failure answers the last figures and their age, a failure is cached too,
+  and off Google Cloud the panel says "unavailable" with the console link —
+  never an invented number, never a broken page. Nothing is stored. Not
+  shown, on purpose: Google's open-alert list (`alerts.list`, in preview on
+  2026-11-08; the console link stands in) and the job runner's last run (a
+  run that finds nothing writes nothing, so no source holds it).
+- **Releases** (shipped 2026-11-14, stage 5 of what was
+  roadmaps/backoffice.md; `GET /api/operator/releases`): when something
+  breaks, what shipped just before it. The API's last ten builds from Cloud
+  Build's `builds.list` (`roles/cloudbuild.builds.viewer`, gated on
+  `operator_enabled`), each with its commit and GitHub subject; the commit
+  the API was deployed with, the operator's own image tag set by Terraform
+  (`OPERATOR_API_COMMIT`) and labelled "as deployed", since a revision that
+  failed to become ready leaves the previous one serving; and the web app's
+  live commit, from the `version.json` its build writes (`ui/vite.config.ts`,
+  only when `VITE_GIT_SHA` is set), fetched from `OPERATOR_WEB_ORIGIN`. A
+  web app on another commit than the API is normal and said so. Each source
+  answers on its own, cached a minute (`ReleasesCache`): one that fails keeps
+  its last answer and is named, and subjects are cached for good. Nothing
+  moves traffic, and nothing reads the API's Cloud Run service; a bad build
+  links to the runbook for reverting on `main`. A build viewer can read every
+  step's arguments, so `api/cloudbuild.yaml` must never put a secret in one.
+  Firebase's own release list is deliberately not read: `version.json`
+  already says what is live, without another grant or a site id. Today says
+  what each half is running.
+- **Jobs and windows**: the job queue with cancel. A failed job has no
+  re-run: three attempts is terminal, and the way back is to queue the
+  command again.
+- **Privacy and compliance**: the platform-wide retention purge behind the
+  typed word `all`, and **the erasure request log** (shipped 2026-11-14,
+  stage 8 of what was roadmaps/backoffice.md). A request that arrives by
+  email gets a date the day it arrives (`erasure_request.log`: the day, a
+  reference the operator chose, the account by `subject_id` — never
+  `user_id`, or erasure's sweep would take the record that it was asked for
+  — and never an address, which the command refuses), so the legal month is
+  visible before anything is queued. Its state is read off the job queue,
+  never stored: open, erasure queued, erasure ran, closed. A request open
+  with nothing queued for `ERASURE_REQUEST_ATTENTION_DAYS` (14) counts on
+  Attention and sits on the queue; `erasure_request.close` ends it with a
+  reason (erased, no account, withdrawn), and a closed row goes a year later
+  by TTL (`MongoErasureRequests`, `erasure_requests` on the Atlas grant). The
+  earlier reason for not counting requests — that it would take an in-app
+  request — does not hold for a log the operator keeps.
+- **Audit log**: the operator audit — readable, filterable, editable by
+  nobody, kept four years. It holds what ran: the runner writes the row after
+  a command succeeds, so a refused or failed command is not in it.

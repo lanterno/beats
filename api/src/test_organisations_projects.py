@@ -5,7 +5,7 @@ backup carries.
 Same harness as test_api.py (conftest.py): a TestClient over real Mongo
 and one test user per class (`auth_headers`); every other person in a test
 is minted by `_new_user`, since an organisation is about more than one.
-Split at the ceiling in roadmaps/file-sizes.md; the shared fixtures are
+Split at the size ceiling (CLAUDE.md § Conventions); the shared fixtures are
 `organisation_helpers.py`'s.
 """
 

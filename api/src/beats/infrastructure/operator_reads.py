@@ -17,11 +17,16 @@ from urllib.parse import urlparse
 
 from bson import ObjectId
 from bson.errors import InvalidId
+from pydantic import TypeAdapter
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
+    ACCOUNT_COACH_SPEND_DAYS,
     COACH_CAP_ATTENTION_FRACTION,
+    ERASURE_REQUEST_ATTENTION_DAYS,
+    SIGNUP_BASELINE_WEEKS,
+    SIGNUP_NETWORK_MIN_GROUP,
     SUPERSEDED_ATTENTION_DAYS,
     AbuseReport,
     AccountDetail,
@@ -31,14 +36,22 @@ from beats.operator.reads import (
     CapacityReport,
     CoachCostDay,
     CollectionSize,
+    ControlState,
     DayFigure,
     DeviceSummary,
     DomainFigure,
+    ErasureRequestState,
     MembershipSummary,
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
+    QueueKind,
+    QueueRow,
+    SignupWave,
+    queue_due,
 )
+from beats.platform_controls import COLLECTION as CONTROLS_COLLECTION
+from beats.platform_controls import PAUSES, SIGNUP_NETWORK_COUNTS, control_from_doc, hour_key
 
 # The collections the storage estimate sums, each keyed on `user_id` and led
 # by an index on it. What the account stores, never what it says.
@@ -188,31 +201,274 @@ class MongoOperatorReads:
             if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
                 near_cap += 1
 
+        paused = sum(1 for c in await self._controls_in_force() if c.name in PAUSES)
+
+        overdue_before = (now - timedelta(days=ERASURE_REQUEST_ATTENTION_DAYS)).date()
+        erasure_overdue = sum(
+            1
+            for r in await self.erasure_requests()
+            if r.status == "open" and r.received_on <= overdue_before
+        )
+
         return AttentionCounts(
             organisations_without_owner=without_owner,
+            controls_paused=paused,
             organisations_all_owners_suspended=all_suspended,
             jobs_queued=jobs_queued,
             jobs_failed=jobs_failed,
             approvals_superseded_over_30d=superseded,
             absence_requests_pending_over_14d=pending,
             accounts_near_coach_cap=near_cap,
+            erasure_requests_overdue=erasure_overdue,
+        )
+
+    async def _controls_in_force(self):
+        now = datetime.now(UTC)
+        docs = await self._db[CONTROLS_COLLECTION].find({}, projection={"_id": False}).to_list()
+        return [c for c in map(control_from_doc, docs) if c.in_force(now)]
+
+    async def controls(self) -> list[ControlState]:
+        """Every control document, in force or expired: an expired pause is
+        open to the public API and still shown here as what it was, until
+        it is cleared or set again."""
+        now = datetime.now(UTC)
+        docs = await self._db[CONTROLS_COLLECTION].find({}, projection={"_id": False}).to_list()
+        return [
+            ControlState(
+                name=c.name,
+                in_force=c.in_force(now),
+                until=c.until,
+                value=c.value,
+                reason=c.reason,
+                set_by=c.set_by,
+                set_at=c.set_at,
+            )
+            for c in sorted(map(control_from_doc, docs), key=lambda c: c.name)
+        ]
+
+    async def erasure_requests(self) -> list[ErasureRequestState]:
+        """Every logged request, newest first, with its state read off the
+        job queue: an erasure queued or run for its account is a fact the
+        queue holds, so the log never repeats it."""
+        from beats.infrastructure.operator_store import MongoErasureRequests
+
+        docs = await MongoErasureRequests(self._db).all()
+        subjects = sorted({d["subject_id"] for d in docs if d.get("subject_id")})
+        jobs: dict[str, str] = {}
+        if subjects:
+            cursor = self._db.operator_jobs.find(
+                {"command": "account.erase", "subject_id": {"$in": subjects}},
+                projection=["subject_id", "state"],
+            )
+            async for job in cursor:
+                # done outranks a later queued one, queued outranks nothing
+                state = jobs.get(job["subject_id"])
+                if job["state"] == "done" or (
+                    state is None and job["state"] in ("queued", "running")
+                ):
+                    jobs[job["subject_id"]] = job["state"]
+        out = []
+        for d in docs:
+            if d.get("closed_at"):
+                status = "closed"
+            else:
+                job_state = jobs.get(d.get("subject_id") or "")
+                status = (
+                    "erasure_ran"
+                    if job_state == "done"
+                    else "erasure_queued"
+                    if job_state in ("queued", "running")
+                    else "open"
+                )
+            received = _as_date(d.get("received_on"))
+            if received is None:
+                continue
+            out.append(
+                ErasureRequestState(
+                    id=d["id"],
+                    reference=str(d.get("reference", "")),
+                    received_on=received,
+                    subject_id=d.get("subject_id"),
+                    status=status,
+                    closed_at=_as_datetime(d.get("closed_at")),
+                    closed_reason=d.get("closed_reason"),
+                )
+            )
+        return out
+
+    async def queue(self) -> list[QueueRow]:
+        """The rows behind the Attention counts, soonest due first. Ids and
+        dates only; a row is the condition itself, so nothing here is stored
+        and a row leaves when its condition clears.
+
+        Superseded approvals and pending absence requests are read whatever
+        their age, so the queue can show them before they are due; they are
+        grouped per organisation, with no member named."""
+        now = datetime.now(UTC)
+        rows: list[QueueRow] = []
+
+        def row(kind: QueueKind, subject: str, since: datetime | None, count: int = 1) -> None:
+            rows.append(QueueRow(kind, subject, since, queue_due(kind, since, now), count))
+
+        owners = await self._owners_by_org()
+        org_ids = [str(doc["_id"]) async for doc in self._db.organisations.find({}, projection=[])]
+        suspended = await self._suspended_of(sorted({u for ids in owners.values() for u in ids}))
+        for org in org_ids:
+            if not owners.get(org):
+                row("organisation_without_owner", org, None)
+            elif all(u in suspended for u in owners[org]):
+                row("organisation_all_owners_suspended", org, None)
+
+        cursor = self._db.operator_jobs.find(
+            {"state": {"$in": ["queued", "failed"]}},
+            projection=["state", "run_after", "finished_at"],
+        )
+        async for doc in cursor:
+            if doc["state"] == "failed":
+                row("job_failed", str(doc["_id"]), _as_datetime(doc.get("finished_at")))
+            else:
+                row("job_queued", str(doc["_id"]), _as_datetime(doc.get("run_after")))
+
+        for kind, collection, match, date_field in (
+            (
+                "approvals_superseded",
+                "org_timesheets",
+                {"status": "approved", "superseded_at": {"$ne": None}},
+                "superseded_at",
+            ),
+            (
+                "absence_requests_pending",
+                "org_absence_requests",
+                {"status": "pending"},
+                "requested_at",
+            ),
+        ):
+            grouped = await self._db[collection].aggregate(
+                [
+                    {"$match": match},
+                    {
+                        "$group": {
+                            "_id": "$organisation_id",
+                            "oldest": {"$min": f"${date_field}"},
+                            "count": {"$sum": 1},
+                        }
+                    },
+                ]
+            )
+            async for doc in grouped:
+                row(kind, str(doc["_id"]), _as_datetime(doc["oldest"]), int(doc["count"]))
+
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        spend = await self._coach_spend_by_user(month_start)
+        budgets = await self._coach_budgets()
+        for uid, spent in spend.items():
+            budget = budgets.get(uid, self._coach_default_budget)
+            if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
+                row("account_near_coach_cap", uid, None)
+
+        for control in await self._controls_in_force():
+            if control.name in PAUSES:
+                row("control_paused", control.name, control.until)
+
+        for request in await self.erasure_requests():
+            if request.status == "open":
+                received = datetime.combine(request.received_on, datetime.min.time(), tzinfo=UTC)
+                row("erasure_request_open", request.id, received)
+
+        rows.sort(key=lambda r: r.due)
+        return rows
+
+    async def _completed_between(self, start: datetime, end: datetime) -> list[str]:
+        """Ids of accounts created in the window that finished signing up —
+        a credential or a provider identity — so abandoned starts do not
+        inflate the figure. `created_at` is the model's JSON form."""
+        bound = TypeAdapter(datetime)
+        cursor = self._db.users.find(
+            {
+                "created_at": {
+                    "$gte": bound.dump_python(start, mode="json"),
+                    "$lt": bound.dump_python(end, mode="json"),
+                }
+            },
+            projection=["identities"],
+        )
+        created = {str(d["_id"]): bool(d.get("identities")) async for d in cursor}
+        if not created:
+            return []
+        with_credential = set(
+            await self._db.credentials.distinct("user_id", {"user_id": {"$in": list(created)}})
+        )
+        return [uid for uid, sso in created.items() if sso or uid in with_credential]
+
+    async def _signup_wave(self, now: datetime) -> SignupWave:
+        """This hour against the median of the same hour of the week over
+        the last weeks, and the largest network's share of the hour, shown
+        only at or above the minimum group size."""
+        start = now.replace(minute=0, second=0, microsecond=0)
+        end = start + timedelta(hours=1)
+        this_hour = await self._completed_between(start, end)
+        same_hours = sorted(
+            [
+                len(
+                    await self._completed_between(
+                        start - timedelta(weeks=w), end - timedelta(weeks=w)
+                    )
+                )
+                for w in range(1, SIGNUP_BASELINE_WEEKS + 1)
+            ]
+        )
+        mid = len(same_hours) // 2
+        usual = (
+            float(same_hours[mid])
+            if len(same_hours) % 2
+            else (same_hours[mid - 1] + same_hours[mid]) / 2
+        )
+        with_writes = 0
+        if this_hour:
+            with_writes = len(
+                await self._db.timeLogs.distinct("user_id", {"user_id": {"$in": this_hour}})
+            )
+        groups = (
+            await self._db[SIGNUP_NETWORK_COUNTS]
+            .find({"hour": hour_key(now)}, projection=["key", "completed"])
+            .sort("completed", -1)
+            .to_list()
+        )
+        largest = groups[0] if groups else None
+        size = int(largest.get("completed", 0)) if largest else 0
+        shown = largest is not None and size >= SIGNUP_NETWORK_MIN_GROUP
+        return SignupWave(
+            hour=hour_key(now),
+            completed=len(this_hour),
+            usual=usual,
+            accounts_with_writes=with_writes,
+            largest_group=size if shown else None,
+            largest_key=str(largest["key"]) if shown and largest else None,
+            groups=len(groups),
         )
 
     # ── the operator's own records ──────────────────────────────────
 
-    async def _own_rows(self, collection: str, sort_field: str, limit: int) -> list[dict]:
+    async def _own_rows(
+        self, collection: str, sort_field: str, limit: int, where: dict | None = None
+    ) -> list[dict]:
         """operator_audit / operator_jobs, newest first. Only the control
         plane writes them, and it writes ids, never addresses or content
         (§ Jobs), so returning the documents whole is inside the line."""
-        cursor = self._db[collection].find({}).sort(sort_field, -1).limit(limit)
+        cursor = self._db[collection].find(where or {}).sort(sort_field, -1).limit(limit)
         out = []
         async for doc in cursor:
             doc["id"] = str(doc.pop("_id"))
             out.append(doc)
         return out
 
-    async def audit_log(self, limit: int = 200) -> list[dict]:
-        return await self._own_rows("operator_audit", "at", limit)
+    async def audit_log(self, limit: int = 200, subject_id: str | None = None) -> list[dict]:
+        """Every command the runner carried out, newest first, or only those
+        against one subject — what the account and organisation pages ask
+        for. `subject_id` is matched whole: it is an id the operator already
+        holds, and a prefix match here would be a way to browse."""
+        where = {} if subject_id is None else {"subject_id": subject_id}
+        return await self._own_rows("operator_audit", "at", limit, where)
 
     async def jobs(self, limit: int = 200) -> list[dict]:
         return await self._own_rows("operator_jobs", "queued_at", limit)
@@ -240,6 +496,33 @@ class MongoOperatorReads:
             )
             async for doc in cursor
         ]
+
+    async def account_coach_spend(
+        self, user_id: str, days: int = ACCOUNT_COACH_SPEND_DAYS
+    ) -> list[DayFigure]:
+        """One account's coach cost a day, oldest first, for the page's bars.
+
+        Only the days it spent something: a gap is a day with no call, and
+        the page draws the calendar. The money is the platform's cost, which
+        is operational metadata — what was said to the coach is not here and
+        is not in `llm_usage` to begin with."""
+        try:
+            ObjectId(user_id)
+        except InvalidId:
+            return []
+        since = datetime.now(UTC) - timedelta(days=days)
+        pipeline = [
+            {"$match": {"user_id": user_id, "ts": {"$gte": since}}},
+            {
+                "$group": {
+                    "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$ts"}},
+                    "total": {"$sum": "$cost_usd"},
+                }
+            },
+            {"$sort": {"_id": 1}},
+        ]
+        cursor = await self._db.llm_usage.aggregate(pipeline)
+        return [DayFigure(day=d["_id"], value=round(float(d["total"]), 4)) async for d in cursor]
 
     async def account(self, user_id: str) -> AccountDetail | None:
         try:
@@ -528,6 +811,7 @@ class MongoOperatorReads:
             ),
             devices_per_account=await self._top_counts("device_registrations", {"revoked": False}),
             signups_per_day=[DayFigure(day=d, value=float(n)) for d, n in sorted(signups.items())],
+            signup_wave=await self._signup_wave(now),
         )
 
     async def capacity(self) -> CapacityReport:

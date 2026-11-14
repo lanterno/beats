@@ -1,7 +1,7 @@
 """Brief generation and the briefs read back, the feedback lines, the
 formatters, and the contract section as the project page reads it.
 
-Split out of `test_coach.py` at the ceiling in roadmaps/file-sizes.md;
+Split out of `test_coach.py` at the size ceiling (CLAUDE.md § Conventions);
 the shared fakes and factories are `coach_fakes.py`'s.
 """
 

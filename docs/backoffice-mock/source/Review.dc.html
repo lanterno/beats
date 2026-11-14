@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Review before acting</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="accounts" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph" style="margin-top: 10px">
+        <div class="ph-t">
+          <a class="back" href="Account.dc.html"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 6l-6 6 6 6"></path></svg>Back to u_6f1c9a</a>
+          <h1 class="h1">Check what will change, then do it.</h1>
+          <p class="lead">Acting on <span class="id b">u_6f1c9a</span>, maya@example.com. Nothing has happened yet.</p>
+        </div>
+      </header>
+
+      <sc-if value="{{ran}}" hint-placeholder-val="{{false}}">
+        <section class="p up" role="status" style="padding: 22px; margin-bottom: 14px">
+          <div class="bar-row" style="margin-bottom: 6px"><span class="chip {{c.doneTone}}">{{c.doneChip}}</span><span class="cap">Recorded in the audit, 09:12</span></div>
+          <h2 style="font: 800 21px/1.3 var(--display); margin: 0">{{c.doneTitle}}</h2>
+          <p class="p-t" style="margin-top: 4px">{{c.doneNote}}</p>
+          <div class="bar-row" style="margin-top: 14px">
+            <button type="button" class="btn dark" onClick="{{undo}}">{{c.undoLabel}}</button>
+            <a class="btn" href="Account.dc.html">Back to the account</a>
+            <a class="btn" href="Audit.dc.html">See the audit entry</a>
+          </div>
+        </section>
+      </sc-if>
+
+      <div class="lean">
+        <div class="wide stack">
+          <section class="p">
+            <div class="p-h"><h2>What do you want to do?</h2></div>
+            <div class="p-b">
+              <div class="seg" role="group" aria-label="Choose a command">
+                <sc-for list="{{commands}}" as="o" hint-placeholder-count="4">
+                  <button type="button" class="{{o.on}}" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}">{{o.label}}</button>
+                </sc-for>
+              </div>
+              <p class="p-t" style="margin-top: 12px">{{c.say}}</p>
+              <sc-if value="{{isCap}}" hint-placeholder-val="{{true}}">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px">
+                  <label class="lab" style="flex: 1 1 180px">New cap, dollars a month<input class="in" inputmode="numeric" value="{{cap}}" onChange="{{onCap}}"></label>
+                  <label class="lab" style="flex: 1 1 180px">Look at this again on<input class="in" value="1 December" readonly></label>
+                </div>
+              </sc-if>
+              <sc-if value="{{isErase}}" hint-placeholder-val="{{false}}">
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px">
+                  <label class="lab" style="flex: 1 1 220px">The day their request arrived<input class="in" value="28 October" readonly></label>
+                  <label class="check" style="flex: 1 1 280px; align-self: flex-end"><input type="checkbox" checked="{{asked}}" onChange="{{onAsked}}"><span>They asked for this themselves, from the address on the account.</span></label>
+                </div>
+              </sc-if>
+            </div>
+          </section>
+
+          <section class="p up">
+            <div class="p-h" style="padding-top: 18px"><h2>Do it</h2></div>
+            <div class="p-b">
+              <sc-if value="{{c.typed}}" hint-placeholder-val="{{false}}">
+                <label class="lab" style="margin-bottom: 12px">Type maya@example.com to confirm
+                  <input class="in" autocomplete="off" spellcheck="false" value="{{typed}}" onChange="{{onTyped}}" style="height: 48px; font-size: 16px">
+                </label>
+              </sc-if>
+              <div class="bar-row">
+                <button type="button" class="btn {{c.btn}}" style="min-height: 48px" disabled="{{blocked}}" onClick="{{run}}">{{runLabel}}</button>
+                <a class="btn" href="Account.dc.html" style="min-height: 48px">Leave it as it is</a>
+                <span class="cap" style="margin-left: 4px">{{blockNote}}</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside class="p narrow" aria-label="What will change">
+          <div class="p-h" style="padding-top: 18px"><h2>What will change</h2></div>
+          <div class="tb" style="padding-bottom: 4px">
+            <div class="t" role="table">
+              <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">What</div><div role="columnheader" class="th">Now</div><div role="columnheader" class="th">After</div></div></div>
+              <div class="tg" role="rowgroup">
+                <sc-for list="{{c.changes}}" as="x" hint-placeholder-count="3">
+                  <div role="row" class="tr"><div role="cell" class="td">{{x.what}}</div><div role="cell" class="td cap">{{x.now}}</div><div role="cell" class="td b">{{x.after}}</div></div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div class="p-b" style="padding-top: 6px">
+            <div class="fact"><span>When</span><span>{{c.when}}</span></div>
+            <div class="fact"><span>Who notices</span><span>{{c.notices}}</span></div>
+            <div class="fact"><span>Can you undo it</span><span>{{c.undo}}</span></div>
+            <div class="fact"><span>On the record</span><span>You, the command, the subject, before and after</span></div>
+          </div>
+        </aside>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1220}}'>
+class Component extends DCLogic {
+  state = { cmd: 'erase', cap: '75', typed: '', asked: false, ran: false };
+  renderVals() {
+    const s = this.state;
+    const x = (what, now, after) => ({ what, now, after });
+    const defs = {
+      cap: { label: 'Change the coach cap', say: 'Coach keeps working up to the new amount. The cap goes back to the default next month unless you keep it.',
+        changes: [x('Coach cap', '$50.00 a month', '$' + (s.cap || '0') + '.00 a month'), x('Left this month', '$3.90', '$' + ((+s.cap || 0) - 46.1).toFixed(2))],
+        when: 'At once', notices: 'Nobody, coach simply carries on', undo: 'Yes, any time', typed: false, btn: 'sun', run: 'Set the cap to $' + (s.cap || '0'),
+        doneChip: 'Done', doneTone: 'good', doneTitle: 'The coach cap is now $' + (s.cap || '0') + ' a month.', doneNote: 'You will be reminded to look at it again on 1 December.', undoLabel: 'Put it back to $50' },
+      signout: { label: 'Sign out everywhere', say: 'Ends every browser session. Paired devices keep working, because they use their own tokens.',
+        changes: [x('Signed-in browsers', '3', '0'), x('Paired devices', '3', '3, untouched')],
+        when: 'At once', notices: 'They are asked to sign in again', undo: 'No, but they can sign straight back in', typed: false, btn: 'sun', run: 'Sign out all 3 browsers',
+        doneChip: 'Done', doneTone: 'good', doneTitle: 'Every browser has been signed out.', doneNote: 'Paired devices were left alone.', undoLabel: 'Close this' },
+      suspend: { label: 'Suspend', say: 'Stops sign-in and every device until you lift it. Nothing is deleted.',
+        changes: [x('State', 'Active', 'Suspended'), x('Sign-in', 'Allowed', 'Refused'), x('Devices', '3 working', '3 refused'), x('Role in Quay Collective', 'Admin', 'Admin, cannot act')],
+        when: 'At once', notices: 'They find out at next sign-in. LifePete does not email them', undo: 'Yes, by lifting the suspension', typed: true, btn: 'sun', run: 'Suspend this account',
+        doneChip: 'Suspended', doneTone: 'warn', doneTitle: 'This account is suspended.', doneNote: 'It stays that way until you lift it, and it will appear under restrictions in force.', undoLabel: 'Lift the suspension' },
+      erase: { label: 'Erase', say: 'Deletes this person from LifePete. It waits seven days so a mistake can still be caught.',
+        changes: [x('State', 'Active', 'Suspended, erasure wording'), x('Projects, sessions, coach, devices', 'Kept', 'Deleted on 16 November'), x('Hours on organisation projects', 'Kept', 'Kept without a name'), x('This audit', 'Has the id', 'Keeps the id, no address')],
+        when: 'Job runs from 16 November, 09:15', notices: 'They cannot sign in from now on', undo: 'Yes until the job runs, then never', typed: true, btn: 'danger', run: 'Queue this erasure',
+        doneChip: 'Queued', doneTone: 'warn', doneTitle: 'The erasure is queued for 16 November.', doneNote: 'The account is suspended until then. Cancelling lifts only that suspension.', undoLabel: 'Cancel this erasure' }
+    };
+    const order = ['cap', 'signout', 'suspend', 'erase'];
+    const c = defs[s.cmd];
+    const matches = s.typed.trim().toLowerCase() === 'maya@example.com';
+    let blockNote = '';
+    if (s.cmd === 'erase' && !s.asked) blockNote = 'Confirm they asked for this first.';
+    else if (c.typed && !matches) blockNote = 'Type the address to confirm.';
+    const blocked = !!blockNote || s.ran;
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      c,
+      ran: s.ran,
+      commands: order.map((k) => ({ label: defs[k].label, on: k === s.cmd ? 'on' : '', pressed: k === s.cmd ? 'true' : 'false', pick: () => this.setState({ cmd: k, typed: '', ran: false }) })),
+      isCap: s.cmd === 'cap',
+      isErase: s.cmd === 'erase',
+      cap: s.cap, onCap: (e) => this.setState({ cap: e.target.value.replace(/[^0-9]/g, '') }),
+      asked: s.asked, onAsked: () => this.setState({ asked: !s.asked }),
+      typed: s.typed, onTyped: (e) => this.setState({ typed: e.target.value }),
+      blocked, blockNote,
+      runLabel: s.ran ? 'Done' : c.run,
+      run: () => this.setState({ ran: true }),
+      undo: () => this.setState({ ran: false, typed: '' })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -19,6 +19,15 @@
 				]
 			},
 			{
+				"source": "/version.json",
+				"headers": [
+					{
+						"key": "Cache-Control",
+						"value": "no-cache"
+					}
+				]
+			},
+			{
 				"source": "/sw.js",
 				"headers": [
 					{

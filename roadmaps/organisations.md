@@ -18,8 +18,8 @@ by hand any more; everything left is a decision, a reading, or a wait.
 Five things that used to live here now have roadmaps of their own, because
 none is an organisations feature: SSO per organisation and SCIM
 ([organisation_sso.md](organisation_sso.md)), the operator's back office
-([docs/backoffice.md](../docs/backoffice.md); its open ends in
-[backoffice.md](backoffice.md)), several verified addresses on an account
+([docs/backoffice.md](../docs/backoffice.md); its one open end in
+[secret-manager.md](secret-manager.md)), several verified addresses on an account
 ([account-emails.md](account-emails.md)), server push
 ([server-push.md](server-push.md)) and taking the money
 ([subscriptions.md](subscriptions.md)).

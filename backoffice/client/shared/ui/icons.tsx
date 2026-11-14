@@ -1,7 +1,7 @@
 /**
  * The handful of icons the back office draws, and the app's mark. Written
  * out rather than pulled from an icon package: a privileged surface takes
- * on no dependency for twelve shapes. All decorative; the words beside them,
+ * on no dependency for a dozen shapes. All decorative; the words beside them,
  * or a button's `aria-label`, are the label.
  */
 
@@ -79,6 +79,36 @@ export function ClipboardIcon(props: IconProps) {
 		<Icon {...props}>
 			<rect x="5" y="4" width="14" height="17" rx="2" />
 			<path d="M9 3h6v3H9zM9 13l2 2 4-4" />
+		</Icon>
+	);
+}
+
+/** Jobs and windows: work that waits out a clock. */
+export function ClockIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<circle cx="12" cy="12" r="9" />
+			<path d="M12 7v5l3 2" />
+		</Icon>
+	);
+}
+
+/** Privacy and compliance: what is promised about someone's data. */
+export function LockIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<rect x="5" y="11" width="14" height="10" rx="2" />
+			<path d="M8 11V7a4 4 0 0 1 8 0v4" />
+		</Icon>
+	);
+}
+
+/** The audit log: a page of lines, read and never edited. */
+export function LinesIcon(props: IconProps) {
+	return (
+		<Icon {...props}>
+			<rect x="5" y="3" width="14" height="18" rx="2" />
+			<path d="M9 8h6M9 12h6M9 16h3" />
 		</Icon>
 	);
 }

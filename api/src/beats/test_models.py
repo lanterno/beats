@@ -2,7 +2,7 @@
 `ExpectedBeat`, `Project`, the exception hierarchy, goal overrides and
 their resolution, the contract's hold on the goal, and `BiometricDay`.
 
-Split out of `test_domain.py` at the ceiling in roadmaps/file-sizes.md;
+Split out of `test_domain.py` at the size ceiling (CLAUDE.md § Conventions);
 the shared fakes and factories are `domain_fakes.py`'s.
 """
 

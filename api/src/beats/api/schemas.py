@@ -1,7 +1,7 @@
 """API request and response schemas.
 
 One name for the wire vocabulary, however many files it is written in: past
-the ceiling in roadmaps/file-sizes.md the billing and public-report schemas
+the size ceiling (CLAUDE.md § Conventions) the billing and public-report schemas
 moved to `schemas_billing.py` and the organisation schemas to
 `schemas_organisations.py`, re-exported here so no router changed.
 """

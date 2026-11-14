@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Jobs and windows</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="jobs" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">{{title}}</h1>
+          <p class="lead">Anything that cannot be undone waits here before it runs, so a mistake can still be caught. The rules are checked again when it runs, not only when it was queued.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <div class="bar-row">
+          <div class="seg" role="group" aria-label="Filter jobs">
+            <sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+              <button type="button" class="{{f.on}}" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{snack}}" hint-placeholder-val="{{false}}">
+            <div class="snack" role="status">{{snack}} <button type="button" onClick="{{undo}}">Undo</button></div>
+          </sc-if>
+          <span class="chip solid push">Runner ticked at 09:00, next at 09:15</span>
+        </div>
+
+        <div class="lean">
+          <section class="p wide" aria-label="Jobs">
+            <div class="tb" style="padding-top: 8px">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">Job</div><div role="columnheader" class="th">On</div><div role="columnheader" class="th">State</div><div role="columnheader" class="th">Runs</div><div role="columnheader" class="th" style="text-align: right">Tries</div></div></div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+                    <div role="row" class="tr row {{r.sel}}">
+                      <div role="cell" class="td"><button type="button" class="lkb lk b" onClick="{{r.pick}}">{{r.name}}</button></div>
+                      <div role="cell" class="td id">{{r.on}}</div>
+                      <div role="cell" class="td"><span class="chip {{r.tone}}">{{r.state}}</span></div>
+                      <div role="cell" class="td d">{{r.runs}}</div>
+                      <div role="cell" class="td n">{{r.tries}}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside class="p up narrow" aria-label="Job detail">
+            <div class="p-h" style="padding-top: 18px"><h2>{{sel.name}}</h2></div>
+            <div class="p-b">
+              <div class="bar-row" style="margin-bottom: 8px"><span class="chip {{sel.tone}}">{{sel.state}}</span><span class="id">{{sel.on}}</span></div>
+              <p class="p-t">{{sel.say}}</p>
+              <div style="margin: 12px 0">
+                <div class="fact"><span>Queued by</span><span>{{sel.by}}</span></div>
+                <div class="fact"><span>Waiting period</span><span>{{sel.wait}}</span></div>
+              </div>
+              <sc-if value="{{sel.error}}" hint-placeholder-val="{{false}}">
+                <p class="cap" style="margin: 0 0 4px">The error it stopped on</p>
+                <p class="id" style="margin: 0 0 12px; font-size: 13px; line-height: 1.6">{{sel.error}}</p>
+              </sc-if>
+              <div class="stack" style="gap: 8px">
+                <sc-if value="{{sel.canCancel}}" hint-placeholder-val="{{true}}">
+                  <button type="button" class="btn" onClick="{{cancel}}">Cancel this job</button>
+                </sc-if>
+                <a class="btn {{sel.bookTone}}" href="Runbooks.dc.html">Read the runbook</a>
+                <sc-if value="{{sel.stuck}}" hint-placeholder-val="{{true}}">
+                  <p class="cap" style="margin: 2px 0 0; line-height: 1.6">Nothing re-runs a failed job, and it can no longer be cancelled. Once you know why it stopped, queue the command again: the new job goes through the same runner and waits out the same window.</p>
+                </sc-if>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', sel: 'purge', over: {}, lastId: null, snack: null };
+  renderVals() {
+    const s = this.state;
+    const base = [
+      { id: 'purge', name: 'Retention purge', on: 'all', status: 'failed', state: 'Failed', tone: 'owed', runs: 'Stopped 07:04', tries: '3 of 3', say: 'It stopped after three tries, having removed 12,400 rows on the way. Queueing it again is safe: the purge picks up whatever is left.', by: 'You, 7 November', wait: '1 day', error: 'ServerSelectionTimeoutError: timed out after 30s' },
+      { id: 'tern', name: 'Delete organisation', on: 'Tern Labs', status: 'waiting', state: 'Waiting', tone: 'warn', runs: '10 Nov, 03:15', tries: '0 of 3', say: 'Runs in 18 hours, unless someone becomes its owner first. Then the job refuses by itself.', by: 'You, today', wait: '1 day', error: '' },
+      { id: 'erase', name: 'Erase account', on: 'u_77aa10', status: 'waiting', state: 'Waiting', tone: 'warn', runs: '13 Nov, 20:15', tries: '0 of 3', say: 'Runs in 4 days and 11 hours. The account stays suspended until then. Cancelling lifts only that suspension.', by: 'You, 6 November', wait: '7 days', error: '' },
+      { id: 'done1', name: 'Erase account', on: 'u_2a91f0', status: 'done', state: 'Done', tone: 'good', runs: '3 Nov, 12:00', tries: '1 of 3', say: 'Finished at the first try. The audit keeps the id and never the address.', by: 'You, 27 October', wait: '7 days', error: '' },
+      { id: 'done2', name: 'Retention purge', on: 'Quay Collective', status: 'done', state: 'Done', tone: 'good', runs: '1 Nov, 04:00', tries: '1 of 3', say: 'Finished at the first try.', by: 'You, 31 October', wait: '1 day', error: '' },
+      { id: 'gone', name: 'Delete organisation', on: 'Wren Analytics', status: 'cancelled', state: 'Cancelled', tone: '', runs: '20 Oct, 09:00', tries: '0 of 3', say: 'Cancelled before it ran, because the organisation found a new owner.', by: 'You, 19 October', wait: '1 day', error: '' }
+    ];
+    const jobs = base.map((j) => ({ ...j, ...(s.over[j.id] || {}) }));
+    const n = (st) => jobs.filter((j) => j.status === st).length;
+    const opts = [['all', 'All', jobs.length], ['failed', 'Failed', n('failed')], ['waiting', 'Waiting', n('waiting')], ['done', 'Done', n('done')], ['cancelled', 'Cancelled', n('cancelled')]];
+    const shown = jobs.filter((j) => s.filter === 'all' || j.status === s.filter);
+    const sel = shown.find((j) => j.id === s.sel) || shown[0] || jobs[0];
+    const failedCount = n('failed');
+    const waitingCount = n('waiting');
+    const number = ['No', 'One', 'Two', 'Three'];
+    const apply = (patch, message) => this.setState({ over: { ...s.over, [sel.id]: patch }, lastId: sel.id, snack: message });
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      title: (failedCount ? number[failedCount] + ' job has failed and needs you. ' : 'Nothing has failed. ') + number[waitingCount] + (waitingCount === 1 ? ' is' : ' are') + ' waiting out a window.',
+      filters: opts.map(([id, label, c]) => ({ label: label + ' ' + c, on: s.filter === id ? 'on' : '', pressed: s.filter === id ? 'true' : 'false', pick: () => this.setState({ filter: id }) })),
+      rows: shown.map((j) => ({ ...j, sel: j.id === sel.id ? 'sel' : '', pick: () => this.setState({ sel: j.id }) })),
+      sel: { ...sel, canCancel: sel.status === 'waiting', stuck: sel.status === 'failed', bookTone: sel.status === 'failed' ? 'sun' : '' },
+      cancel: () => apply({ status: 'cancelled', state: 'Cancelled', tone: '', tries: '0 of 3', say: 'Cancelled before it ran.', error: '' }, 'Job cancelled.'),
+      snack: s.snack,
+      undo: () => { const o = { ...s.over }; delete o[s.lastId]; this.setState({ over: o, lastId: null, snack: null }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -7,7 +7,9 @@
  */
 
 import { post } from "./client";
+import type { CommandPreview } from "./schema";
 
+/** What an inline command answers: the row the runner wrote. */
 export interface AuditEntry {
 	id: string;
 	at: string;
@@ -18,13 +20,37 @@ export interface AuditEntry {
 	after: Record<string, unknown>;
 }
 
+/**
+ * What a windowed command answers instead: the job now waiting. Its audit
+ * row is written when it runs, by the same runner.
+ */
+export interface QueuedJob {
+	queued: true;
+	job: Record<string, unknown>;
+}
+
+export type CommandResult = AuditEntry | QueuedJob;
+
 export function runCommand(
 	name: string,
 	args: Record<string, unknown>,
 	confirmation?: string,
-): Promise<AuditEntry> {
-	return post<AuditEntry>(`/api/operator/commands/${name}`, {
+): Promise<CommandResult> {
+	return post<CommandResult>(`/api/operator/commands/${name}`, {
 		args,
 		confirmation: confirmation || null,
 	});
+}
+
+/**
+ * What the command would do, from the runner's own gates: the subject as it
+ * stands, whether it will ask for the subject typed back, and when it would
+ * run. It writes nothing — the review page reads it before anything is
+ * typed, so a mistyped id or an already-queued window is answered first.
+ */
+export function previewCommand(
+	name: string,
+	args: Record<string, unknown>,
+): Promise<CommandPreview> {
+	return post<CommandPreview>(`/api/operator/commands/${name}/preview`, { args });
 }

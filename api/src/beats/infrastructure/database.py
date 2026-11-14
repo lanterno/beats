@@ -121,6 +121,15 @@ async def ensure_indexes(db: AsyncDatabase) -> None:
     await db.account_limits.create_index("user_id", unique=True)
     await db.operator_jobs.create_index([("state", 1), ("run_after", 1)])
     await db.operator_audit.create_index("at")
+    # The erasure request log (docs/backoffice.md § The pages, Compliance):
+    # a closed request goes a year after it was closed, by `expires_at` set
+    # on close. The operator deployment creates no index, so this one is the
+    # public API's, like the rest.
+    await db.erasure_requests.create_index("expires_at", expireAfterSeconds=0)
+    # The sign-up network signal's hourly counters (auth/signup_networks.py):
+    # 48 hours, by the TTL on `expires_at`; one row per hour and network.
+    await db.signup_network_counts.create_index("expires_at", expireAfterSeconds=0)
+    await db.signup_network_counts.create_index([("hour", 1), ("key", 1)], unique=True)
 
 
 class Database:

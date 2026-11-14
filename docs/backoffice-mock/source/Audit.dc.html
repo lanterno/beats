@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit log</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./backoffice.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&amp;family=Zen+Maru+Gothic:wght@400;500;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="bo" data-hour="{{hour}}">
+  <div class="shell">
+    <div class="side"><dc-import name="Sidebar" active="audit" hint-size="100%,860px"></dc-import></div>
+    <main class="main"><div class="wrap">
+      <dc-import name="Topbar" hint-size="100%,44px"></dc-import>
+      <header class="ph">
+        <div class="ph-t">
+          <h1 class="h1">Everything done from here, and who did it.</h1>
+          <p class="lead">The runner writes a row around every command it carries out, so nothing it ran is missing. It names whoever was touched by id and never by address, it is kept four years, and nobody can edit it, including you.</p>
+        </div>
+      </header>
+
+      <div class="stack">
+        <div class="bar-row">
+          <div class="seg" role="group" aria-label="Filter the audit log">
+            <sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+              <button type="button" class="{{f.on}}" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button>
+            </sc-for>
+          </div>
+          <label class="push" style="flex: 0 1 280px">
+            <span style="position: absolute; left: -9999px">Show one account or organisation, by exact id or name</span>
+            <input class="in" value="{{subject}}" onChange="{{onSubject}}" placeholder="Exact id or organisation" style="background: var(--panel); box-shadow: var(--shadow)">
+          </label>
+        </div>
+
+        <section class="p" aria-label="Audit entries">
+          <sc-if value="{{hasRows}}" hint-placeholder-val="{{true}}">
+            <div class="tb" style="padding-top: 8px">
+              <div class="t" role="table">
+                <div class="tg" role="rowgroup"><div role="row" class="tr"><div role="columnheader" class="th">When</div><div role="columnheader" class="th">Operator</div><div role="columnheader" class="th">Command</div><div role="columnheader" class="th">Subject</div><div role="columnheader" class="th">Result</div></div></div>
+                <div class="tg" role="rowgroup">
+                  <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+                    <div role="row" class="tr row {{r.sel}}">
+                      <div role="cell" class="td d">{{r.when}}</div>
+                      <div role="cell" class="td">{{r.who}}</div>
+                      <div role="cell" class="td"><button type="button" class="lkb lk b" aria-expanded="{{r.expanded}}" onClick="{{r.toggle}}">{{r.what}}</button></div>
+                      <div role="cell" class="td id">{{r.on}}</div>
+                      <div role="cell" class="td"><span class="chip {{r.tone}}">{{r.result}}</span></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+            <sc-if value="{{openRow}}" hint-placeholder-val="{{true}}">
+              <div style="margin: 2px 20px 18px; padding: 14px 16px; border-radius: 16px; background: var(--wash)">
+                <div class="b" style="margin-bottom: 8px">{{openRow.what}}, {{openRow.when}}</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px">
+                  <div><div class="cap">Before</div><div>{{openRow.before}}</div></div>
+                  <div><div class="cap">After</div><div class="b">{{openRow.after}}</div></div>
+                </div>
+              </div>
+            </sc-if>
+            <p class="cap" style="padding: 0 20px 16px; line-height: 1.6">A refused command leaves no row: the runner writes this after a command has run, so what is here is what happened. A job that fails after it was queued shows on Jobs and windows.</p>
+          </sc-if>
+          <sc-if value="{{noRows}}" hint-placeholder-val="{{false}}">
+            <div style="padding: 40px 24px; text-align: center">
+              <p style="font: 700 17px var(--display); margin: 0">Nothing has been done to that.</p>
+              <p class="cap" style="margin: 4px 0 0; font-size: 14px">This field matches a whole id or an organisation's whole name.</p>
+            </div>
+          </sc-if>
+        </section>
+      </div>
+    </div></main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"hour":{"editor":"enum","options":["afternoon","dusk"],"default":"afternoon"},"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  state = { filter: 'all', subject: '', open: 'limits' };
+  renderVals() {
+    const s = this.state;
+    const e = (id, when, what, on, result, tone, kind, before, after) => ({ id, when, who: 'you@example.com', what, on, result, tone, kind, before, after });
+    const all = [
+      e('limits', 'Today 08:10', 'account.set_limits', 'u_a0b7f3', 'Done', 'good', 'account', 'No limits', 'Beat writes 20 a minute, webhooks off'),
+      e('tern', 'Today 03:12', 'organisation.delete', 'Tern Labs', 'Queued', 'warn', 'organisation', 'Active, no owner', 'Deletes on 10 November, 03:15'),
+      e('owner', '8 Nov 16:40', 'organisation.grant_owner', 'Harbour & Co', 'Done', 'good', 'organisation', 'No owner', 'ana@example.com is the owner'),
+      e('purge', '7 Nov 11:05', 'retention.purge', 'all', 'Queued', 'warn', 'organisation', 'About 31,000 rows expired', 'Runs after 8 November, 11:05'),
+      e('erase', '6 Nov 20:15', 'account.erase', 'u_77aa10', 'Queued', 'warn', 'account', 'Active', 'Suspended, erases on 13 November'),
+      e('device', '5 Nov 10:22', 'device.revoke', 'u_c2e491', 'Done', 'good', 'account', '4 devices', '3 devices'),
+      e('cancel', '2 Nov 09:40', 'job.cancel', 'job_5f0a12', 'Done', 'good', 'job', 'Erasure queued for 9 November', 'Cancelled, the suspension lifted')
+    ];
+    const n = (k) => all.filter((r) => r.kind === k).length;
+    const opts = [['all', 'All', all.length], ['account', 'Accounts', n('account')], ['organisation', 'Organisations', n('organisation')], ['job', 'Jobs', n('job')]];
+    const subject = s.subject.trim().toLowerCase();
+    const rows = all.filter((r) => (s.filter === 'all' || r.kind === s.filter) && (!subject || r.on.toLowerCase() === subject));
+    return {
+      hour: this.props.hour ?? 'afternoon',
+      subject: s.subject,
+      onSubject: (ev) => this.setState({ subject: ev.target.value }),
+      filters: opts.map(([id, label, c]) => ({ label: label + ' ' + c, on: s.filter === id ? 'on' : '', pressed: s.filter === id ? 'true' : 'false', pick: () => this.setState({ filter: id }) })),
+      rows: rows.map((r) => ({ ...r, isOpen: s.open === r.id, sel: s.open === r.id ? 'sel' : '', expanded: s.open === r.id ? 'true' : 'false', toggle: () => this.setState({ open: s.open === r.id ? null : r.id }) })),
+      openRow: rows.find((r) => r.id === s.open) || null,
+      hasRows: rows.length > 0,
+      noRows: rows.length === 0
+    };
+  }
+}
+</script>
+</body>
+</html>

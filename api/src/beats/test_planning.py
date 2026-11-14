@@ -1,7 +1,7 @@
 """What the coach's week is assembled from: the weekly digest, the
 observation and the suggested daily plan.
 
-Split out of `test_domain.py` at the ceiling in roadmaps/file-sizes.md;
+Split out of `test_domain.py` at the size ceiling (CLAUDE.md § Conventions);
 the shared fakes and factories are `domain_fakes.py`'s.
 """
 

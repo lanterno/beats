@@ -16,18 +16,30 @@ A command with a `window` is destructive and enqueues instead of executing
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
-from typing import Any, Literal, Protocol
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Annotated, Any, Literal, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
 from beats.domain.exceptions import DomainException, OrganisationNotFound
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
+from beats.infrastructure.operator_store import MongoErasureRequests, MongoPlatformControlsStore
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
+from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
 from beats.operator.settings import OperatorIdentity
+from beats.operator.status_page import (
+    MESSAGE_MAX,
+    Part,
+    State,
+    StatusStore,
+    StatusUnavailable,
+    publish,
+    state_of,
+)
+from beats.platform_controls import LIMITS, MAX_PAUSE, ControlName, control_from_doc
 
 
 @dataclass
@@ -37,6 +49,11 @@ class CommandContext:
     accounts: AccountService
     organisations: OrganisationService
     devices: MongoDeviceRegistrationRepository
+    # The deploy freeze's flag (operator/deploy_freeze.py); None where no
+    # bucket is configured — the job runner, a local run.
+    freeze: DeployFreeze | None = None
+    # The public status file (operator/status_page.py); None with no bucket.
+    status: StatusStore | None = None
 
 
 class OperatorCommand(Protocol):
@@ -323,6 +340,393 @@ class CancelClosing(_OrganisationCommand):
         return await _organisation_state(ctx, args.organisation_id)
 
 
+# ── the platform's switches and limits ───────────────────────────────
+
+
+class ControlArgs(BaseModel):
+    name: ControlName
+
+
+class SetControlArgs(ControlArgs):
+    """A pause needs `until` (inside MAX_PAUSE) and a `reason` for the
+    operator's own page; a limit needs a `value` and takes neither. `signups`
+    may carry a `value` too — a ceiling an hour — and is then slowed rather
+    than paused, until `until`. The sentence a user sees is fixed text; the
+    reason never reaches them."""
+
+    until: datetime | None = None
+    value: int | None = Field(default=None, ge=1)
+    reason: str | None = Field(default=None, min_length=1, max_length=2000)
+    # `signups` only: slow one network, named by the opaque key the signal
+    # showed. Capped at the next UTC midnight, when the key stops matching.
+    network: str | None = Field(default=None, min_length=8, max_length=64)
+
+    @model_validator(mode="after")
+    def _shape(self) -> SetControlArgs:
+        if self.name in LIMITS:
+            if self.value is None:
+                raise ValueError("a limit needs a value")
+            if self.until is not None or self.reason is not None:
+                raise ValueError("a limit is a setting: it takes no until and no reason")
+            return self
+        if self.until is None:
+            raise ValueError("a pause needs an until: every pause expires")
+        if self.reason is None:
+            raise ValueError("a pause needs a reason, for your own record")
+        now = datetime.now(UTC)
+        until = self.until if self.until.tzinfo else self.until.replace(tzinfo=UTC)
+        if until <= now:
+            raise ValueError("until is already past")
+        if until > now + MAX_PAUSE:
+            raise ValueError(f"a pause lasts at most {MAX_PAUSE.days} days; set it again after")
+        if self.value is not None and self.name != "signups":
+            raise ValueError("only signups can be slowed to a value; the rest pause")
+        if self.network is not None:
+            if self.name != "signups" or self.value is None:
+                raise ValueError("a network is slowed, never blocked: signups with a value")
+            midnight = datetime.combine(now.date() + timedelta(days=1), time.min, tzinfo=UTC)
+            if until > midnight:
+                raise ValueError("a network's key changes at UTC midnight; until can be no later")
+        self.until = until
+        return self
+
+
+async def _control_state(ctx: CommandContext, name: str) -> dict[str, Any]:
+    doc = await MongoPlatformControlsStore(ctx.db).get(name)
+    if doc is None:
+        return {"set": False}
+    control = control_from_doc(doc)
+    return {
+        "set": True,
+        "in_force": control.in_force(datetime.now(UTC)),
+        "until": control.until.isoformat() if control.until else None,
+        "value": control.value,
+        "set_by": control.set_by,
+        "network": control.network,
+    }
+
+
+class _ControlCommand:
+    """Inline, no window, no typed confirmation: a switch is thrown in an
+    incident and is reversible by the twin command."""
+
+    subject_kind = "control"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = ControlArgs
+
+    def subject_id(self, args: Any) -> str:
+        return args.name
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        return await _control_state(ctx, args.name)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class SetControl(_ControlCommand):
+    name = "control.set"
+    args_model = SetControlArgs
+
+    async def execute(self, ctx: CommandContext, args: SetControlArgs) -> dict[str, Any]:
+        await MongoPlatformControlsStore(ctx.db).set(
+            args.name,
+            until=args.until,
+            value=args.value,
+            reason=args.reason,
+            set_by=ctx.operator.sub,
+            network=args.network,
+        )
+        return await _control_state(ctx, args.name)
+
+
+class ClearControl(_ControlCommand):
+    name = "control.clear"
+
+    async def execute(self, ctx: CommandContext, args: ControlArgs) -> dict[str, Any]:
+        await MongoPlatformControlsStore(ctx.db).clear(args.name)
+        return await _control_state(ctx, args.name)
+
+
+# ── the erasure request log ──────────────────────────────────────────
+
+
+def _no_address(value: str) -> str:
+    # The log never holds an address: a request outlives the account, and
+    # the account is named by id. A reference with an @ is refused outright.
+    if "@" in value:
+        raise ValueError("a reference must not be an address; name the account by its id")
+    return value
+
+
+class LogErasureRequestArgs(BaseModel):
+    reference: Annotated[str, AfterValidator(_no_address)] = Field(min_length=1, max_length=200)
+    received_on: date
+    user_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+    @model_validator(mode="after")
+    def _not_in_the_future(self) -> LogErasureRequestArgs:
+        if self.received_on > datetime.now(UTC).date():
+            raise ValueError("received_on is in the future")
+        return self
+
+
+class LogErasureRequest:
+    """A request that arrived by mail gets a date, so the deadline is
+    visible before anything is queued (docs/backoffice.md § The pages,
+    Compliance). The subject is the operator's reference; the account, when
+    there is one, is named by id in the row."""
+
+    name = "erasure_request.log"
+    subject_kind = "erasure_request"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = LogErasureRequestArgs
+
+    def subject_id(self, args: Any) -> str:
+        return args.reference
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        if args.user_id is None:
+            return {"account": None}
+        user = await ctx.accounts.find(args.user_id)
+        if user is None:
+            raise AccountNotFound()
+        return {"account": "exists", "suspended": user.suspended}
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        row = await MongoErasureRequests(ctx.db).log(
+            reference=args.reference,
+            received_on=args.received_on.isoformat(),
+            subject_id=args.user_id,
+            logged_by=ctx.operator.sub,
+        )
+        return {"request_id": row["id"], "received_on": row["received_on"]}
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class ErasureRequestNotFound(DomainException):
+    status_code = 404
+    message = "No open erasure request with that id"
+    code = "ERASURE_REQUEST_NOT_FOUND"
+
+
+class CloseErasureRequestArgs(BaseModel):
+    request_id: str = Field(min_length=1, max_length=64)
+    # erased: the job ran. no_account: nothing to erase. withdrawn: they
+    # asked again, the other way.
+    reason: Literal["erased", "no_account", "withdrawn"]
+
+
+class CloseErasureRequest:
+    name = "erasure_request.close"
+    subject_kind = "erasure_request"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = CloseErasureRequestArgs
+
+    def subject_id(self, args: Any) -> str:
+        return args.request_id
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        row = await MongoErasureRequests(ctx.db).get(args.request_id)
+        if row is None or row.get("closed_at"):
+            raise ErasureRequestNotFound()
+        return {"received_on": row["received_on"], "closed": False}
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        row = await MongoErasureRequests(ctx.db).close(
+            args.request_id, reason=args.reason, closed_by=ctx.operator.sub
+        )
+        if row is None:
+            raise ErasureRequestNotFound()
+        return {"received_on": row["received_on"], "closed": True, "reason": args.reason}
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+# ── the deploy freeze ────────────────────────────────────────────────
+
+
+class FreezeArgs(BaseModel):
+    """Every freeze ends: `until` is required and capped like a pause."""
+
+    until: datetime
+    reason: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def _ends(self) -> FreezeArgs:
+        now = datetime.now(UTC)
+        until = self.until if self.until.tzinfo else self.until.replace(tzinfo=UTC)
+        if until <= now:
+            raise ValueError("until is already past")
+        if until > now + MAX_PAUSE:
+            raise ValueError(f"a freeze lasts at most {MAX_PAUSE.days} days; set it again after")
+        self.until = until
+        return self
+
+
+def _freeze_store(ctx: CommandContext) -> DeployFreeze:
+    if ctx.freeze is None:
+        raise FreezeUnavailable()
+    return ctx.freeze
+
+
+async def _freeze_state(ctx: CommandContext) -> dict[str, Any]:
+    flag = await _freeze_store(ctx).get()
+    if flag is None or not flag.in_force(datetime.now(UTC)):
+        return {"frozen": False}
+    return {"frozen": True, "until": flag.until.isoformat(), "set_by": flag.set_by}
+
+
+class NoArgs(BaseModel):
+    """A command whose subject is fixed and that takes nothing else."""
+
+
+class _DeployCommand:
+    subject_kind = "deploy"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = NoArgs
+
+    def subject_id(self, args: Any) -> str:
+        return "api"
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        return await _freeze_state(ctx)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class FreezeDeploys(_DeployCommand):
+    """Holds back the API's builds until `until`: a frozen build skips its
+    apply and goes red. The web app ships from its own workflow and is not
+    held."""
+
+    name = "deploy.freeze"
+    args_model = FreezeArgs
+
+    async def execute(self, ctx: CommandContext, args: FreezeArgs) -> dict[str, Any]:
+        await _freeze_store(ctx).set(
+            Freeze(
+                until=args.until,
+                reason=args.reason,
+                set_by=ctx.operator.sub,
+                set_at=datetime.now(UTC),
+            )
+        )
+        return await _freeze_state(ctx)
+
+
+class UnfreezeDeploys(_DeployCommand):
+    """Lifts the freeze. A build held back does not deploy by itself: re-run
+    the newest one."""
+
+    name = "deploy.unfreeze"
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        await _freeze_store(ctx).clear()
+        return await _freeze_state(ctx)
+
+
+# ── telling customers what is happening ─────────────────────────────
+
+
+def _status_store(ctx: CommandContext) -> StatusStore:
+    if ctx.status is None:
+        raise StatusUnavailable()
+    return ctx.status
+
+
+class PublishStatusArgs(BaseModel):
+    """What goes public, whole. Nothing about a person: no account, no
+    organisation, no id, no count of those affected — the operator's words
+    are checked by the review, not by code, so the review shows them whole."""
+
+    state: State
+    message: str = Field(min_length=1, max_length=MESSAGE_MAX)
+    affected: list[Part] = Field(default_factory=list, max_length=6)
+
+
+class ClearStatusArgs(BaseModel):
+    message: str = Field(
+        default="Everything is working again.", min_length=1, max_length=MESSAGE_MAX
+    )
+
+
+class _StatusCommand:
+    subject_kind = "status"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = NoArgs
+
+    def subject_id(self, args: Any) -> str:
+        return "public"
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        doc, _ = await _status_store(ctx).read()
+        return state_of(doc)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class PublishStatus(_StatusCommand):
+    name = "status.publish"
+    args_model = PublishStatusArgs
+
+    async def execute(self, ctx: CommandContext, args: PublishStatusArgs) -> dict[str, Any]:
+        doc = await publish(
+            _status_store(ctx),
+            state=args.state,
+            message=args.message,
+            affected=list(args.affected),
+            now=datetime.now(UTC),
+        )
+        return state_of(doc)
+
+
+class ClearStatus(_StatusCommand):
+    """Back to operational, as a post of its own, so the page says when."""
+
+    name = "status.clear"
+    args_model = ClearStatusArgs
+
+    async def execute(self, ctx: CommandContext, args: ClearStatusArgs) -> dict[str, Any]:
+        doc = await publish(
+            _status_store(ctx),
+            state="operational",
+            message=args.message,
+            affected=[],
+            now=datetime.now(UTC),
+        )
+        return state_of(doc)
+
+
 # ── the irreversible work: jobs with a window ────────────────────────
 
 
@@ -488,6 +892,14 @@ COMMANDS: dict[str, OperatorCommand] = {
         SetLimits(),
         ClearLimits(),
         RevokeDevice(),
+        SetControl(),
+        ClearControl(),
+        LogErasureRequest(),
+        CloseErasureRequest(),
+        FreezeDeploys(),
+        UnfreezeDeploys(),
+        PublishStatus(),
+        ClearStatus(),
         GrantOwner(),
         BeginClosing(),
         CancelClosing(),

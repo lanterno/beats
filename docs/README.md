@@ -22,9 +22,11 @@ mistake to fix, not a section to maintain.
 | [billing.md](billing.md) | Clients a freelancer bills: rates, billable marks, the month's figures, billing budgets, and the report links a client reads with no account |
 | [organisations.md](organisations.md) | One account, one timeline, many employers: the four rules, the decisions, the data model, employment and scale |
 | [pricing.md](pricing.md) | What an organisation pays, and the market it was priced against |
+| [status-page.md](status-page.md) | Telling customers what is happening: a public page and a banner off one file, which still work when the API is down, written from the back office |
 | [companion-offline.md](companion-offline.md) | The companion's offline queue: what is queued, in what order, and what a replay may and may not do |
 | [account-controls.md](account-controls.md) | Suspension, sign-out everywhere, the day last seen and per-account limits: what the API enforces about an account itself, and what each client does with a refusal |
-| [backoffice.md](backoffice.md) | The operator's control plane: the line (operational metadata, never user content), the two composition roots, the commands and their runner, the job queue, IAP, and the deployment |
+| [backoffice.md](backoffice.md) | The operator's control plane: the line (operational metadata, never user content), the two composition roots, the commands and their runner, the job queue, the switches and global limits, the deploy freeze, IAP, the deployment, and every page — Today, the queue, the palette, review before acting, live health, releases, trust and safety with the network signal, the erasure request log, runbooks — with what was decided against |
+| [backoffice-mock/](backoffice-mock/) | The back office's design as the owner reviewed it: a picture and the source of every screen, readable without Claude |
 | [images/](images/) | The README's screenshot, and the social preview with the command that renders it |
 
 Documents outside this folder, because they are read by people who are not

@@ -37,6 +37,15 @@ I can suspend an account. A suspended account is refused everywhere it can act �
 
 Anything I do through the control plane is written to an audit record of its own, which nobody can edit and which holds ids, never names or addresses; it is kept four years, the platform's default retention, and then purged; where the act touches an organisation — only one left with no owner, and only when its members ask — it also lands in that organisation's own audit log, marked as the operator's act, so its admins can tell an act of mine from an act of theirs.
 
+To notice a burst of sign-ups from one place, LifePete keeps for 48 hours a
+count of sign-ups per hour per network, where the network is the first part of
+the visitor's address (the /24 for IPv4, the /48 for IPv6), hashed with a key
+that changes every day. The address itself is not stored, the hash cannot be
+reversed or matched against a guess after the day ends, and no account is ever
+linked to a network. The operator sees only how large the largest group in an
+hour is, and may slow sign-ups from it for the rest of the day; nobody is
+blocked, and nobody who has an account is affected.
+
 Beats also keeps, per account, the **day** a request last carried its credential — a date, never a time, written at most once a day — and per paired device the time it last authenticated, also at most once a day. That is what lets an operator see that an account is in use at all without reading when you work.
 
 ## Third-party integrations (all optional)
@@ -65,6 +74,18 @@ The script sets no cookie and stores nothing on your device. Cloudflare sees you
 Nothing else on the site loads the script: not the app once you are signed in, not a report link or an invitation, and not the page a sign-in provider sends you back to. It loads only when you come to the home page from outside the site. It does not load when the app itself sends you there, for example when you sign out. When you sign in from the home page, the page reloads into the app, so the script is gone before you get there. If your browser sends Do Not Track or Global Privacy Control, the script is not loaded at all. A LifePete you host yourself does not load it.
 
 Every page of the site, the home page included, takes its two typefaces from Google Fonts, which shows Google your IP address. The home page also asks GitHub's API for the project's star count and latest commits, which shows GitHub your IP address too.
+
+## The status page
+
+When something is wrong, lifepete.com/status says so, and the app shows a
+line at the top saying the same. Both read one small public file that
+LifePete's operator writes by hand, from Google Cloud Storage, so that the
+page keeps working while the app does not. Every page of the app, and the
+status page, asks Google for that file about once a minute, which shows
+Google your IP address — the same as the typefaces above. The file holds the
+state, a short message, what is affected and the last twenty updates, and
+never anything about a person: no account, no organisation, no count of who
+was affected. There is no email and no notification: look at the page.
 
 ## The phone apps
 

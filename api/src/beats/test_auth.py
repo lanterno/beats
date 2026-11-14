@@ -1,7 +1,7 @@
 """The session manager: JWT session and device tokens, revocation,
 refresh, `auth_time`, and the WebAuthn challenge slots.
 
-Split from the WebAuthn half at the ceiling in roadmaps/file-sizes.md.
+Split from the WebAuthn half at the size ceiling (CLAUDE.md § Conventions).
 """
 
 from __future__ import annotations

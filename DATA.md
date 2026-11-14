@@ -15,6 +15,7 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 | Web app  | Firebase Hosting                                                           | nginx in the same stack, one origin with the API                         | Static assets only                                   |
 | Secrets  | GCP Secret Manager                                                         | `api/.env` and the environment on the host                               | OAuth client secrets, Anthropic API key, infra creds |
 | Logs     | Google Cloud Logging                                                       | Container logs (`just logs`)                                             | Request logs (no request bodies)                     |
+| Status   | A public JSON file in Google Cloud Storage (`<project>-status/status.json`) | None: the route and the banner only exist where `VITE_STATUS_URL` is set | The current state, a message, what is affected, the last twenty posts; nothing about a person |
 | Backups  | None configured in this repo                                               | `just backup <dir>`: a gzipped mongodump archive, taken on demand        | The database                                         |
 
 ## What's stored, by domain
@@ -219,6 +220,11 @@ Kept only as long as it takes to finish one request, then deleted by a TTL index
   asked. Taken when the browser comes back; otherwise ten minutes.
 - **Pairing codes** (`pairing_codes`): the hash of a code shown once to pair a device, and
   your account id. Taken when used; otherwise five minutes.
+- **Sign-up network counts** (`signup_network_counts`): per hour, per network — the
+  visitor's address cut to its /24 (IPv4) or /48 (IPv6) and HMAC-hashed with a key derived
+  for the UTC day from the server's own secret — how many sign-ups were started and how
+  many finished. No address, no account id, and nothing that joins an account to a
+  network. 48 hours.
 
 ## Encryption
 

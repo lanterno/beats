@@ -4,7 +4,7 @@ the idempotency replay, and the isolation between two accounts.
 The router areas each have a file of their own (`test_api_*.py`); what is
 left here belongs to no one router.
 
-Split out of `test_api.py` at the ceiling in roadmaps/file-sizes.md; the
+Split out of `test_api.py` at the size ceiling (CLAUDE.md § Conventions); the
 harness is `conftest.py`'s and the shared fixtures `api_helpers.py`'s.
 """
 

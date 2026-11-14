@@ -3,7 +3,7 @@ the second passkey on a signed-in account, and the Mongo credential
 storage; plus the two settings validators the auth layer depends on
 (`JWT_SECRET`'s length and `FORWARDED_ALLOW_IPS`).
 
-Split from the session half at the ceiling in roadmaps/file-sizes.md.
+Split from the session half at the size ceiling (CLAUDE.md § Conventions).
 """
 
 from __future__ import annotations

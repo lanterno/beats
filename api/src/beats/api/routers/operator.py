@@ -13,21 +13,30 @@ in the **body** — an address in a URL is in Cloud Run's request log for 30
 days, the reason `/api/reports` takes its token in a header.
 """
 
-from fastapi import APIRouter, HTTPException, Query, status
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from beats.operator.dependencies import CommandContextDep, CurrentOperator, OperatorReadsDep
+from beats.operator.health import HealthReport
 from beats.operator.reads import (
     AbuseReport,
     AccountDetail,
     AccountMatch,
     AttentionCounts,
     CapacityReport,
+    ControlState,
+    DayFigure,
+    ErasureRequestState,
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
+    QueueRow,
 )
-from beats.operator.runner import run_command
+from beats.operator.releases import ReleasesReport
+from beats.operator.runner import CommandPreview, preview_command, run_command
+from beats.operator.status_page import state_of
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
 
@@ -57,6 +66,14 @@ async def me(operator: CurrentOperator) -> OperatorMe:
 async def attention(operator: CurrentOperator, reads: OperatorReadsDep) -> AttentionCounts:
     """The landing page's counts: the reason to open the control plane."""
     return await reads.attention()
+
+
+@router.get("/queue", response_model=list[QueueRow])
+async def queue(operator: CurrentOperator, reads: OperatorReadsDep) -> list[QueueRow]:
+    """The rows behind the Attention counts, soonest due first: ids and
+    dates, never a member's name. Nothing stores that a row was handled; it
+    leaves when its condition clears."""
+    return await reads.queue()
 
 
 @router.post("/accounts/lookup", response_model=list[AccountMatch])
@@ -102,6 +119,28 @@ async def account(
     return detail
 
 
+@router.get("/accounts/{user_id}/coach", response_model=list[DayFigure])
+async def account_coach_spend(
+    user_id: str, operator: CurrentOperator, reads: OperatorReadsDep
+) -> list[DayFigure]:
+    """One account's coach cost a day, for the shape of a month running
+    away. The cost of the calls, never a word of what was in them."""
+    return await reads.account_coach_spend(user_id)
+
+
+@router.get("/accounts/{user_id}/audit")
+async def account_audit(
+    user_id: str,
+    operator: CurrentOperator,
+    reads: OperatorReadsDep,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[dict]:
+    """What the back office has done to this account. The operator's own
+    audit filtered to one subject, so the account page does not read the
+    whole log to find three rows."""
+    return await reads.audit_log(limit, subject_id=user_id)
+
+
 @router.get("/organisations", response_model=list[OrganisationSummary])
 async def organisations(
     operator: CurrentOperator, reads: OperatorReadsDep
@@ -129,6 +168,108 @@ async def organisation_audit(
     """The organisation's log without each event's `details`, which carry
     what the organisation wrote."""
     return await reads.organisation_audit(organisation_id, limit)
+
+
+@router.get("/controls", response_model=list[ControlState])
+async def controls(operator: CurrentOperator, reads: OperatorReadsDep) -> list[ControlState]:
+    """The platform's switches and global limits as they stand
+    (docs/backoffice.md § Controls). Written only through `control.set` and
+    `control.clear`."""
+    return await reads.controls()
+
+
+class AccessEntry(BaseModel):
+    email: str
+    role: str
+
+
+@router.get("/access", response_model=list[AccessEntry])
+async def access(request: Request, operator: CurrentOperator) -> list[AccessEntry]:
+    """Who can reach this back office, read off the allowlist the deployment
+    was started with. Read-only: the list is an environment value, and
+    changing it is a deploy (terraform/README.md § Operator Deployment)."""
+    allowlist = request.app.state.operator_settings.allowlist
+    return [AccessEntry(email=i.email, role=i.role) for i in allowlist]
+
+
+@router.get("/health", response_model=HealthReport)
+async def health(request: Request, operator: CurrentOperator) -> HealthReport:
+    """Whether the product is healthy, from Cloud Monitoring: availability,
+    the share of 5xx, p95 latency, instances against their ceiling and
+    refused writes per route. Cached a minute; a Google failure answers the
+    last figures and their age, and off Google Cloud it answers
+    "unavailable" — never an invented number."""
+    state = request.app.state
+    return await state.health_cache.report(
+        state.health_source, state.operator_settings.api_max_instances
+    )
+
+
+@router.get("/releases", response_model=ReleasesReport)
+async def releases(request: Request, operator: CurrentOperator) -> ReleasesReport:
+    """What shipped: the API's builds newest first with their commits, the
+    commit the API was deployed with, and the web app's live commit. Each
+    source answers on its own, and one that fails is named rather than
+    breaking the rest. Nothing here moves traffic."""
+    state = request.app.state
+    settings = state.operator_settings
+    return await state.releases_cache.report(
+        state.release_source,
+        api_commit=settings.api_commit or None,
+        repository=settings.github_repository,
+    )
+
+
+class FreezeState(BaseModel):
+    available: bool
+    frozen: bool
+    until: datetime | None = None
+    reason: str | None = None
+    set_by: str | None = None
+
+
+@router.get("/deploy-freeze", response_model=FreezeState)
+async def deploy_freeze(request: Request, operator: CurrentOperator) -> FreezeState:
+    """Whether the API's deploys are frozen, until when and why. Not
+    available where no freeze bucket is configured."""
+    store = getattr(request.app.state, "deploy_freeze", None)
+    if store is None:
+        return FreezeState(available=False, frozen=False)
+    flag = await store.get()
+    if flag is None or not flag.in_force(datetime.now(UTC)):
+        return FreezeState(available=True, frozen=False)
+    return FreezeState(
+        available=True, frozen=True, until=flag.until, reason=flag.reason, set_by=flag.set_by
+    )
+
+
+class PublicStatus(BaseModel):
+    available: bool
+    state: str
+    message: str
+    affected: list[str]
+    updated_at: str | None = None
+    published: bool = False
+
+
+@router.get("/status", response_model=PublicStatus)
+async def public_status(request: Request, operator: CurrentOperator) -> PublicStatus:
+    """What customers see on the status page right now, read back from the
+    same public file. Not available where no status bucket is configured."""
+    store = getattr(request.app.state, "status_store", None)
+    if store is None:
+        return PublicStatus(available=False, state="operational", message="", affected=[])
+    doc, _ = await store.read()
+    return PublicStatus(available=True, **state_of(doc))
+
+
+@router.get("/erasure-requests", response_model=list[ErasureRequestState])
+async def erasure_requests(
+    operator: CurrentOperator, reads: OperatorReadsDep
+) -> list[ErasureRequestState]:
+    """The erasure request log: when each mail arrived and where it stands.
+    A reference and an id, never an address."""
+    return await reads.erasure_requests()
 
 
 @router.get("/abuse", response_model=AbuseReport)
@@ -161,6 +302,24 @@ class CommandRequest(BaseModel):
     # What the operator typed back — the account's email, the organisation's
     # name — compared by the runner against the subject, never stored.
     confirmation: str | None = None
+
+
+class PreviewRequest(BaseModel):
+    args: dict = Field(default_factory=dict)
+
+
+@router.post("/commands/{name}/preview", response_model=CommandPreview)
+async def preview(name: str, body: PreviewRequest, ctx: CommandContextDep) -> CommandPreview:
+    """What the command would do, before it does any of it.
+
+    A POST because it carries the same arguments the act does, an account's
+    id among them, and because the operator's credential is IAP's cookie:
+    every state-changing shape is a POST with an Origin the app checks, and
+    this one is shaped like the act it previews. It writes nothing, queues
+    nothing, and takes the same role — a `viewer` gets the same 403 here as
+    on the act, because a preview it could read would be a way to probe
+    whether an id exists."""
+    return await preview_command(ctx, name, body.args)
 
 
 @router.post("/commands/{name}")

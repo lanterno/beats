@@ -28,6 +28,8 @@ import ProjectsIndex from "@/pages/projects-index";
 import Report from "@/pages/report";
 import Settings from "@/pages/settings";
 import SsoCallback from "@/pages/sso-callback";
+import { Status } from "@/pages/status/Status";
+import { config } from "@/shared/config";
 import { leaveLanding, rememberReturnTo, takeReturnTo, useSuspensionNotice } from "@/shared/lib";
 import { Toaster, TooltipProvider } from "@/shared/ui";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -143,6 +145,9 @@ export function App() {
 								    with no account, so it sits outside ProtectedRoute and
 								    outside Layout — there is nothing here to navigate to. */}
 								<Route path="/r/:token" element={<Report />} />
+								{/* The status page (docs/status-page.md): public, and only where a
+								    deployment names its status file. */}
+								{config.statusUrl ? <Route path="/status" element={<Status />} /> : null}
 								{/* Protected routes with persistent layout */}
 								<Route
 									element={

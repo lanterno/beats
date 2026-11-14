@@ -1,79 +1,132 @@
 /**
- * The operator's own records: the audit (editable by nobody, kept four
- * years) and the job queue, erasures first — where every command the runner
- * executed shows, and where a queued window is waited out or cancelled.
+ * Privacy and compliance: what was promised about other people's data, and
+ * the one control that keeps the promise — the platform-wide retention
+ * purge, never scheduled, because PRIVACY.md and the DPA say an operator
+ * runs it.
+ *
+ * The line itself is on this page because it is a promise and not a
+ * feature: an operator reading it should be able to tell, before opening
+ * any other page, which questions this surface will refuse to answer.
+ *
+ * The erasure request log lives here too: a mail gets a date the day it
+ * arrives, so the legal month is visible before anything is queued. What the
+ * mock shows and this does not: backup and restore-drill dates, and a
+ * documents checklist. No route answers them, and a date with no source is
+ * worse here than on any other page.
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import { minuteOf } from "@/shared/lib/format";
-import { Chip, day, Empty, Failed, Id, Loading, Page, Panel, Table } from "@/shared/ui";
+import type { ErasureRequestState } from "@/shared/api/schema";
+import { dayOf } from "@/shared/lib/format";
+import {
+	buttonClass,
+	Chip,
+	Empty,
+	Failed,
+	Id,
+	Loading,
+	Page,
+	Pair,
+	Panel,
+	Prose,
+	Table,
+} from "@/shared/ui";
 import { CommandForm } from "@/shared/ui/CommandForm";
 
-type Row = Record<string, unknown>;
+/** How many days from the mail the law allows, and the day it runs out. */
+export const LEGAL_MONTH_DAYS = 30;
 
-const text = (value: unknown): string =>
-	value === undefined || value === null ? "—" : String(value);
-
-function JobState({ state }: { state: unknown }) {
-	if (state === "failed") return <Chip tone="owed">Failed</Chip>;
-	if (state === "done") return <Chip tone="good">Done</Chip>;
-	const name = text(state);
-	return <Chip>{name.charAt(0).toUpperCase() + name.slice(1)}</Chip>;
+export function deadlineOf(received: string): string {
+	const day = new Date(`${received}T00:00:00Z`);
+	day.setUTCDate(day.getUTCDate() + LEGAL_MONTH_DAYS);
+	return day.toISOString().slice(0, 10);
 }
 
-export function Compliance() {
-	const audit = useQuery({
-		queryKey: ["operator-audit"],
-		queryFn: () => get<Row[]>("/api/operator/audit"),
-	});
-	const jobs = useQuery({
-		queryKey: ["operator-jobs"],
-		queryFn: () => get<Row[]>("/api/operator/jobs"),
-	});
+/** Where a request stands, in words: the status, and the days it has waited. */
+export function requestState(row: ErasureRequestState, today: string): string {
+	if (row.status === "closed") return `Closed: ${row.closed_reason ?? "—"}`;
+	if (row.status === "erasure_ran") return "Erasure ran — close it";
+	if (row.status === "erasure_queued") return "Erasure queued";
+	const waited = Math.floor(
+		(Date.parse(`${today}T00:00:00Z`) - Date.parse(`${row.received_on}T00:00:00Z`)) / 86_400_000,
+	);
+	return `Open, day ${waited + 1} of ${LEGAL_MONTH_DAYS}`;
+}
 
+function ErasureRequests() {
+	const requests = useQuery({
+		queryKey: ["erasure-requests"],
+		queryFn: () => get<ErasureRequestState[]>("/api/operator/erasure-requests"),
+	});
+	if (requests.error)
+		return <Failed bare error={requests.error} onRetry={() => requests.refetch()} />;
+	if (!requests.data) return <Loading />;
+	const today = new Date().toISOString().slice(0, 10);
+	const open = requests.data.filter((r) => r.status !== "closed");
+	return (
+		<>
+			<Table
+				head={["Reference", "Received", "Deadline", "Account", "State", ""]}
+				rows={open.map((r) => [
+					r.reference,
+					dayOf(r.received_on),
+					deadlineOf(r.received_on),
+					r.subject_id ? (
+						<Link key="a" to={`/accounts/${r.subject_id}`} className="link">
+							<Id>{r.subject_id}</Id>
+						</Link>
+					) : (
+						"None"
+					),
+					<Chip key="s" tone={r.status === "open" ? "owed" : "quiet"}>
+						{requestState(r, today)}
+					</Chip>,
+					<Link
+						key="c"
+						to={`/review/erasure_request.close/${r.id}`}
+						className={buttonClass("secondary")}
+					>
+						Close
+					</Link>,
+				])}
+				empty={
+					<Empty title="No open request.">
+						Log one the day its mail arrives, so the deadline is visible before anything is queued.
+					</Empty>
+				}
+			/>
+			<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
+				<Link to="/review/erasure_request.log/new" className={buttonClass("primary")}>
+					Log a request
+				</Link>
+				<span className="text-[13px] text-ink-muted">
+					{requests.data.length - open.length} closed, kept a year each.
+				</span>
+			</div>
+		</>
+	);
+}
+
+/** docs/backoffice.md § The line, as the operator reads it. */
+const LINE: Array<[sees: string, never: string]> = [
+	["Account id, address, created, the day last seen, state", "Sessions, their times, their notes"],
+	["Counts of projects, sessions, devices and organisations", "Project names, tags, absence notes"],
+	["Which integrations are connected", "Any integration's token or what it fetched"],
+	["Webhook destinations, by domain", "A webhook's full URL, or what was sent to it"],
+	["Coach spend, tokens and model", "Any coach conversation or memory"],
+	["Organisation name, settings, members, roles", "Clients, rates, amounts, report contents"],
+	["An organisation's audit: what, by whom, to whom, when", "The details of one of its events"],
+	["How many biometric rows exist", "Any biometric value"],
+];
+
+export function Compliance() {
 	return (
 		<Page
-			title="Compliance"
-			lead="Your own records: the work waiting out its window, and everything the back office has run. Times are UTC."
+			title="Privacy and compliance"
+			lead="What was promised about other people's data, and the one act that keeps it."
 		>
-			<Panel
-				raised
-				title="Jobs"
-				note="Each one waits out its window, and can be cancelled until it ends."
-			>
-				{jobs.error ? <Failed bare error={jobs.error} onRetry={() => jobs.refetch()} /> : null}
-				{jobs.data ? (
-					<Table
-						head={[day("Queued"), "Command", "Subject", day("Runs after"), "State", ""]}
-						rows={jobs.data.map((r) => [
-							minuteOf(r.queued_at),
-							text(r.command),
-							<Id key="subject">{text(r.subject_id)}</Id>,
-							minuteOf(r.run_after),
-							<JobState key="state" state={r.state} />,
-							r.state === "queued" ? (
-								<CommandForm
-									key={`cancel-${r.id}`}
-									inline
-									name="job.cancel"
-									label={`Cancel ${text(r.command)} for ${text(r.subject_id)}`}
-									action="Cancel"
-									args={{ job_id: r.id }}
-									invalidates={["operator-jobs", "attention"]}
-								/>
-							) : null,
-						])}
-						empty={
-							<Empty title="Nothing is queued.">
-								An erasure or a deletion waits here until its window ends.
-							</Empty>
-						}
-					/>
-				) : jobs.error ? null : (
-					<Loading />
-				)}
-			</Panel>
 			<Panel
 				danger
 				title="Retention purge, platform-wide"
@@ -82,34 +135,61 @@ export function Compliance() {
 				<CommandForm
 					name="retention.purge"
 					label="Purge every organisation"
-					about="It also trims the operator audit at its four-year retention."
+					about="Every organisation's records past its own retention period, and this back office's audit past four years."
 					action="Queue the purge"
-					done="Queued. Cancel it from the jobs above."
+					done="Queued. Cancel it from Jobs and windows until its window ends."
 					args={{ organisation_id: null }}
 					confirmHint='Type "all" to confirm'
-					invalidates={["operator-jobs"]}
+					invalidates={["operator-jobs", "attention"]}
 				/>
 			</Panel>
 			<Panel
-				title="Operator audit"
-				note="Every command the back office has run. Nobody can edit it."
+				title="What this back office may see"
+				note="The line between running the service and reading someone's life. It is held by construction and by a test that plants a sentinel in every right-hand thing and greps every page for it."
 			>
-				{audit.error ? <Failed bare error={audit.error} onRetry={() => audit.refetch()} /> : null}
-				{audit.data ? (
-					<Table
-						head={[day("When"), "Command", "Operator", "Subject"]}
-						rows={audit.data.map((r) => [
-							minuteOf(r.at),
-							text(r.command),
-							<Id key="operator">{text(r.operator_sub)}</Id>,
-							<Id key="subject">{text(r.subject_id)}</Id>,
-						])}
-						empty={<Empty title="No commands have been run yet." />}
-					/>
-				) : audit.error ? null : (
-					<Loading />
-				)}
+				<div className="overflow-x-auto pb-3">
+					<table className="w-full text-[14px]">
+						<thead>
+							<tr className="text-left text-[13px]">
+								<th scope="col" className="px-2.5 py-1.5 pl-6 font-medium text-leaf-ink">
+									It sees
+								</th>
+								<th scope="col" className="px-2.5 py-1.5 pr-6 font-medium text-persimmon-ink">
+									It never sees
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{LINE.map(([sees, never]) => (
+								<tr key={sees} className="border-t border-hairline">
+									<td className="w-1/2 px-2.5 py-[7px] pl-6 align-top">{sees}</td>
+									<td className="w-1/2 px-2.5 py-[7px] pr-6 align-top">{never}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
 			</Panel>
+			<Panel
+				title="Erasure requests"
+				note="They arrive by email at the address in PRIVACY.md. The clock runs from the mail: a request with nothing queued after 14 days is on the queue. A reference and an id, never an address."
+			>
+				<ErasureRequests />
+			</Panel>
+			<Pair>
+				<Panel title="Reading a document in the database">
+					<Prose>
+						Nothing above stops it, and PRIVACY.md says so rather than pretending otherwise. The
+						point of these pages is that the question is answered here instead.
+					</Prose>
+				</Panel>
+				<Panel title="Queued erasures">
+					<Prose>
+						An erasure you have queued is on Jobs and windows, where its seven-day window is
+						running; the state column above reads it from there.
+					</Prose>
+				</Panel>
+			</Pair>
 		</Page>
 	);
 }

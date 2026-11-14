@@ -1,6 +1,6 @@
 """Helpers the organisation suites share — no tests of their own.
 
-`test_organisations.py` grew past the ceiling in roadmaps/file-sizes.md and
+`test_organisations.py` grew past the size ceiling (CLAUDE.md § Conventions) and
 split on the stage seam; both halves mint people, organisations, projects
 and assignments the same way. Not `test_`-prefixed, so pytest does not
 collect it.

@@ -140,6 +140,44 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         name  = "COACH_MONTHLY_BUDGET_USD"
         value = tostring(var.coach_monthly_budget_usd)
       }
+
+      # Live health (api/src/beats/operator/health.py): which service's
+      # figures to read, and the ceiling its instances are drawn against.
+      # The project and the token come from the metadata server.
+      env {
+        name  = "OPERATOR_API_SERVICE"
+        value = var.api_service_name
+      }
+
+      env {
+        name  = "OPERATOR_API_MAX_INSTANCES"
+        value = tostring(var.max_instances)
+      }
+
+      # Release history (api/src/beats/operator/releases.py): the commit both
+      # services were deployed with in this apply, and where the web app's
+      # version.json is served.
+      env {
+        name  = "OPERATOR_API_COMMIT"
+        value = var.container_image_tag
+      }
+
+      env {
+        name  = "OPERATOR_WEB_ORIGIN"
+        value = var.webauthn_origin
+      }
+
+      # The deploy freeze's bucket (api/src/beats/operator/deploy_freeze.py).
+      env {
+        name  = "OPERATOR_FREEZE_BUCKET"
+        value = google_storage_bucket.deploy_freeze[0].name
+      }
+
+      # The public status file's bucket (api/src/beats/operator/status_page.py).
+      env {
+        name  = "OPERATOR_STATUS_BUCKET"
+        value = google_storage_bucket.status[0].name
+      }
     }
   }
 
@@ -149,6 +187,58 @@ resource "google_cloud_run_v2_service" "beats_operator" {
     google_project_service.iap,
     google_secret_manager_secret_iam_member.operator_dsn_reader,
   ]
+}
+
+# Live health: reading time series and alert policies, nothing else. The
+# viewer role writes nothing and reads no log entry or secret.
+resource "google_project_iam_member" "operator_monitoring_viewer" {
+  count = var.operator_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/monitoring.viewer"
+  member  = "serviceAccount:${google_service_account.beats_operator[0].email}"
+}
+
+# Release history: Cloud Build's build list, read-only. A build viewer can
+# read every step's arguments, so api/cloudbuild.yaml must never put a secret
+# in one.
+resource "google_project_iam_member" "operator_build_viewer" {
+  count = var.operator_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/cloudbuild.builds.viewer"
+  member  = "serviceAccount:${google_service_account.beats_operator[0].email}"
+}
+
+# The deploy freeze: one flag object in a small private bucket of its own —
+# never the Terraform state bucket, which holds JWT_SECRET. The operator writes
+# it; the API's build reads it in deploy_lock.sh's decide. Its name is fixed
+# because api/cloudbuild.yaml names it too.
+resource "google_storage_bucket" "deploy_freeze" {
+  count = var.operator_enabled ? 1 : 0
+
+  project                     = var.project_id
+  name                        = "${var.project_id}-deploy-freeze"
+  location                    = var.region
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = true
+}
+
+resource "google_storage_bucket_iam_member" "operator_freeze_writer" {
+  count = var.operator_enabled ? 1 : 0
+
+  bucket = google_storage_bucket.deploy_freeze[0].name
+  role   = "roles/storage.objectUser"
+  member = "serviceAccount:${google_service_account.beats_operator[0].email}"
+}
+
+resource "google_storage_bucket_iam_member" "cloudbuild_freeze_reader" {
+  count = var.operator_enabled ? 1 : 0
+
+  bucket = google_storage_bucket.deploy_freeze[0].name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.cloudbuild.email}"
 }
 
 # IAP's service agent is the only invoker: no allUsers, and nothing reaches

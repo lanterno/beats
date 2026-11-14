@@ -15,8 +15,8 @@ not a review comment.
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
-from typing import Protocol
+from datetime import date, datetime, timedelta
+from typing import Literal, Protocol
 
 # The landing page's thresholds. They decide only what the operator is shown,
 # never what a user is allowed, so constants are enough; changing one is a
@@ -24,6 +24,15 @@ from typing import Protocol
 COACH_CAP_ATTENTION_FRACTION = 0.8
 SUPERSEDED_ATTENTION_DAYS = 30
 ABSENCE_REQUEST_ATTENTION_DAYS = 14
+# An erasure request logged this long ago with no erasure queued needs
+# somebody: PRIVACY.md promises deletion seven days after queueing, inside
+# the legal month, so the risk is a mail forgotten before anything is queued.
+ERASURE_REQUEST_ATTENTION_DAYS = 14
+
+# How much of one account's coach spend its page draws. Long enough to show
+# the shape of a month that is running away, short enough that the answer
+# stays one small list.
+ACCOUNT_COACH_SPEND_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -31,12 +40,98 @@ class AttentionCounts:
     """The landing page: each count links to the thing."""
 
     organisations_without_owner: int
+    controls_paused: int
     organisations_all_owners_suspended: int
     jobs_queued: int
     jobs_failed: int
     approvals_superseded_over_30d: int
     absence_requests_pending_over_14d: int
     accounts_near_coach_cap: int
+    erasure_requests_overdue: int
+
+
+QueueKind = Literal[
+    "organisation_without_owner",
+    "organisation_all_owners_suspended",
+    "job_failed",
+    "job_queued",
+    "approvals_superseded",
+    "absence_requests_pending",
+    "account_near_coach_cap",
+    "control_paused",
+    "erasure_request_open",
+]
+
+
+@dataclass(frozen=True)
+class QueueRow:
+    """One row behind an Attention count: what it is, which id, since when,
+    and when it is due. Ids and dates only. Nothing stores that a row was
+    handled; it leaves when its condition clears.
+
+    Superseded approvals and absence requests are one row per organisation
+    (`count` of them, `since` the oldest), with no member named."""
+
+    kind: QueueKind
+    subject_id: str
+    since: datetime | None
+    due: datetime
+    count: int = 1
+
+
+def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetime:
+    """When a queue row is due, from the same constants Attention counts by.
+
+    A superseded approval is due `SUPERSEDED_ATTENTION_DAYS` after it was
+    superseded and an absence request `ABSENCE_REQUEST_ATTENTION_DAYS` after
+    it was made — the moment Attention starts counting it. A queued job is
+    due when its window ends, the last moment it can still be cancelled
+    (`since` is its `run_after`). Everything else needs somebody now: a
+    failed job, an organisation nobody can manage, a coach cap in reach.
+    A pause is due when it ends (`since` is its `until`): until then it
+    stands on purpose, and the row says so. A condition with no stored date
+    is due `now`."""
+    if since is None:
+        return now
+    if kind == "approvals_superseded":
+        return since + timedelta(days=SUPERSEDED_ATTENTION_DAYS)
+    if kind == "absence_requests_pending":
+        return since + timedelta(days=ABSENCE_REQUEST_ATTENTION_DAYS)
+    if kind == "erasure_request_open":
+        return since + timedelta(days=ERASURE_REQUEST_ATTENTION_DAYS)
+    return since
+
+
+@dataclass(frozen=True)
+class ControlState:
+    """One control as the Access page shows it. The operator's own text
+    (`reason`) is theirs to read back; a user never sees it."""
+
+    name: str
+    in_force: bool
+    until: datetime | None
+    value: int | None
+    reason: str | None
+    set_by: str | None
+    set_at: datetime | None
+
+
+ErasureRequestStatus = Literal["open", "erasure_queued", "erasure_ran", "closed"]
+
+
+@dataclass(frozen=True)
+class ErasureRequestState:
+    """One logged erasure request: the day it arrived, the operator's
+    reference, the account by id or none, and where it stands — read off
+    the job queue, never stored."""
+
+    id: str
+    reference: str
+    received_on: date
+    subject_id: str | None
+    status: ErasureRequestStatus
+    closed_at: datetime | None
+    closed_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -150,6 +245,27 @@ class DayFigure:
     value: float
 
 
+# The signal shows a group only at or above this size: below it, nothing.
+SIGNUP_NETWORK_MIN_GROUP = 5
+# How many of the same hour of the week make the "usual" figure.
+SIGNUP_BASELINE_WEEKS = 8
+
+
+@dataclass(frozen=True)
+class SignupWave:
+    """This hour's sign-ups against the usual for this hour of the week, and
+    the largest network's share — the key is opaque and day-scoped, the page
+    says "Network A", and no account is joined to it anywhere."""
+
+    hour: str
+    completed: int
+    usual: float
+    accounts_with_writes: int
+    largest_group: int | None
+    largest_key: str | None
+    groups: int
+
+
 @dataclass(frozen=True)
 class AbuseReport:
     coach_spend_per_account: list[AccountFigure]
@@ -159,6 +275,7 @@ class AbuseReport:
     webhook_domains: list[DomainFigure]
     devices_per_account: list[AccountFigure]
     signups_per_day: list[DayFigure]
+    signup_wave: SignupWave | None = None
 
 
 @dataclass(frozen=True)
@@ -188,7 +305,11 @@ class OperatorReads(Protocol):
     """The aggregates the operator's pages read, and nothing else."""
 
     async def attention(self) -> AttentionCounts: ...
-    async def audit_log(self, limit: int = 200) -> list[dict]: ...
+    async def queue(self) -> list[QueueRow]: ...
+    async def controls(self) -> list[ControlState]: ...
+    async def erasure_requests(self) -> list[ErasureRequestState]: ...
+    async def audit_log(self, limit: int = 200, subject_id: str | None = None) -> list[dict]: ...
+    async def account_coach_spend(self, user_id: str, days: int = 30) -> list[DayFigure]: ...
     async def jobs(self, limit: int = 200) -> list[dict]: ...
     async def find_accounts(self, email: str) -> list[AccountMatch]: ...
     async def account(self, user_id: str) -> AccountDetail | None: ...

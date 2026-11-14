@@ -25,6 +25,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Access
+         * @description Who can reach this back office, read off the allowlist the deployment
+         *     was started with. Read-only: the list is an environment value, and
+         *     changing it is a deploy (terraform/README.md § Operator Deployment).
+         */
+        get: operations["access_api_operator_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/accounts/lookup": {
         parameters: {
             query?: never;
@@ -63,6 +85,49 @@ export interface paths {
          *     grow out of this page.
          */
         get: operations["account_api_operator_accounts__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/accounts/{user_id}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Account Audit
+         * @description What the back office has done to this account. The operator's own
+         *     audit filtered to one subject, so the account page does not read the
+         *     whole log to find three rows.
+         */
+        get: operations["account_audit_api_operator_accounts__user_id__audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/accounts/{user_id}/coach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Account Coach Spend
+         * @description One account's coach cost a day, for the shape of a month running
+         *     away. The cost of the calls, never a word of what was in them.
+         */
+        get: operations["account_coach_spend_api_operator_accounts__user_id__coach_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -150,6 +215,122 @@ export interface paths {
          *     the job when one was queued.
          */
         post: operations["run_api_operator_commands__name__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/commands/{name}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview
+         * @description What the command would do, before it does any of it.
+         *
+         *     A POST because it carries the same arguments the act does, an account's
+         *     id among them, and because the operator's credential is IAP's cookie:
+         *     every state-changing shape is a POST with an Origin the app checks, and
+         *     this one is shaped like the act it previews. It writes nothing, queues
+         *     nothing, and takes the same role — a `viewer` gets the same 403 here as
+         *     on the act, because a preview it could read would be a way to probe
+         *     whether an id exists.
+         */
+        post: operations["preview_api_operator_commands__name__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Controls
+         * @description The platform's switches and global limits as they stand
+         *     (docs/backoffice.md § Controls). Written only through `control.set` and
+         *     `control.clear`.
+         */
+        get: operations["controls_api_operator_controls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/deploy-freeze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deploy Freeze
+         * @description Whether the API's deploys are frozen, until when and why. Not
+         *     available where no freeze bucket is configured.
+         */
+        get: operations["deploy_freeze_api_operator_deploy_freeze_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/erasure-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Erasure Requests
+         * @description The erasure request log: when each mail arrived and where it stands.
+         *     A reference and an id, never an address.
+         */
+        get: operations["erasure_requests_api_operator_erasure_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health
+         * @description Whether the product is healthy, from Cloud Monitoring: availability,
+         *     the share of 5xx, p95 latency, instances against their ceiling and
+         *     refused writes per route. Cached a minute; a Google failure answers the
+         *     last figures and their age, and off Google Cloud it answers
+         *     "unavailable" — never an invented number.
+         */
+        get: operations["health_api_operator_health_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -251,6 +432,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Queue
+         * @description The rows behind the Attention counts, soonest due first: ids and
+         *     dates, never a member's name. Nothing stores that a row was handled; it
+         *     leaves when its condition clears.
+         */
+        get: operations["queue_api_operator_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Releases
+         * @description What shipped: the API's builds newest first with their commits, the
+         *     commit the API was deployed with, and the web app's live commit. Each
+         *     source answers on its own, and one that fails is named rather than
+         *     breaking the rest. Nothing here moves traffic.
+         */
+        get: operations["releases_api_operator_releases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public Status
+         * @description What customers see on the status page right now, read back from the
+         *     same public file. Not available where no status bucket is configured.
+         */
+        get: operations["public_status_api_operator_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -267,10 +514,18 @@ export interface components {
             report_links_per_account: components["schemas"]["AccountFigure"][];
             /** Sessions Created 7D Per Account */
             sessions_created_7d_per_account: components["schemas"]["AccountFigure"][];
+            signup_wave?: components["schemas"]["SignupWave"] | null;
             /** Signups Per Day */
             signups_per_day: components["schemas"]["DayFigure"][];
             /** Webhook Domains */
             webhook_domains: components["schemas"]["DomainFigure"][];
+        };
+        /** AccessEntry */
+        AccessEntry: {
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
         };
         /** AccountDetail */
         AccountDetail: {
@@ -389,6 +644,10 @@ export interface components {
             accounts_near_coach_cap: number;
             /** Approvals Superseded Over 30D */
             approvals_superseded_over_30d: number;
+            /** Controls Paused */
+            controls_paused: number;
+            /** Erasure Requests Overdue */
+            erasure_requests_overdue: number;
             /** Jobs Failed */
             jobs_failed: number;
             /** Jobs Queued */
@@ -429,6 +688,35 @@ export interface components {
             /** Storage Bytes */
             storage_bytes: number;
         };
+        /**
+         * CommandPreview
+         * @description What a command would do, answered without doing any of it.
+         *
+         *     The operator sees this before the act (docs/backoffice.md § Commands:
+         *     the dangerous act must not be the easiest thing on the page). It calls
+         *     `describe()` — a read — and never `execute()` or `on_queued()`, so
+         *     nothing is written and nothing is queued by asking.
+         */
+        CommandPreview: {
+            /** Already Queued */
+            already_queued: boolean;
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** Command */
+            command: string;
+            /** Confirmation Required */
+            confirmation_required: boolean;
+            /** Runs After */
+            runs_after: string | null;
+            /** Subject Id */
+            subject_id: string;
+            /** Subject Kind */
+            subject_kind: string;
+            /** Window Days */
+            window_days: number | null;
+        };
         /** CommandRequest */
         CommandRequest: {
             /** Args */
@@ -437,6 +725,27 @@ export interface components {
             };
             /** Confirmation */
             confirmation?: string | null;
+        };
+        /**
+         * ControlState
+         * @description One control as the Access page shows it. The operator's own text
+         *     (`reason`) is theirs to read back; a user never sees it.
+         */
+        ControlState: {
+            /** In Force */
+            in_force: boolean;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /** Set At */
+            set_at: string | null;
+            /** Set By */
+            set_by: string | null;
+            /** Until */
+            until: string | null;
+            /** Value */
+            value: number | null;
         };
         /** DayFigure */
         DayFigure: {
@@ -467,10 +776,88 @@ export interface components {
             /** Value */
             value: number;
         };
+        /**
+         * ErasureRequestState
+         * @description One logged erasure request: the day it arrived, the operator's
+         *     reference, the account by id or none, and where it stands — read off
+         *     the job queue, never stored.
+         */
+        ErasureRequestState: {
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed Reason */
+            closed_reason: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Reference */
+            reference: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "erasure_queued" | "erasure_ran" | "closed";
+            /** Subject Id */
+            subject_id: string | null;
+        };
+        /** FreezeState */
+        FreezeState: {
+            /** Available */
+            available: boolean;
+            /** Frozen */
+            frozen: boolean;
+            /** Reason */
+            reason?: string | null;
+            /** Set By */
+            set_by?: string | null;
+            /** Until */
+            until?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HealthFigures
+         * @description What Monitoring answered. A figure Google had no points for is None,
+         *     never zero: an empty series is "no data", not "no errors".
+         */
+        HealthFigures: {
+            /** Availability */
+            availability: number | null;
+            /** Error Share */
+            error_share: number | null;
+            /** Instances */
+            instances: number | null;
+            /** P95 Latency Ms */
+            p95_latency_ms: number | null;
+            /** Refused Writes */
+            refused_writes?: components["schemas"]["RouteFigure"][];
+        };
+        /** HealthReport */
+        HealthReport: {
+            /** Age Seconds */
+            age_seconds: number | null;
+            /** As Of */
+            as_of: string | null;
+            /**
+             * Availability Target
+             * @default 0.995
+             */
+            availability_target: number;
+            figures: components["schemas"]["HealthFigures"] | null;
+            /** Max Instances */
+            max_instances: number | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "live" | "stale" | "unavailable";
         };
         /** MembershipSummary */
         MembershipSummary: {
@@ -550,6 +937,122 @@ export interface components {
             /** Retention Years */
             retention_years: number | null;
         };
+        /** PreviewRequest */
+        PreviewRequest: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+        };
+        /** PublicStatus */
+        PublicStatus: {
+            /** Affected */
+            affected: string[];
+            /** Available */
+            available: boolean;
+            /** Message */
+            message: string;
+            /**
+             * Published
+             * @default false
+             */
+            published: boolean;
+            /** State */
+            state: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * QueueRow
+         * @description One row behind an Attention count: what it is, which id, since when,
+         *     and when it is due. Ids and dates only. Nothing stores that a row was
+         *     handled; it leaves when its condition clears.
+         *
+         *     Superseded approvals and absence requests are one row per organisation
+         *     (`count` of them, `since` the oldest), with no member named.
+         */
+        QueueRow: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /**
+             * Due
+             * Format: date-time
+             */
+            due: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "organisation_without_owner" | "organisation_all_owners_suspended" | "job_failed" | "job_queued" | "approvals_superseded" | "absence_requests_pending" | "account_near_coach_cap" | "control_paused" | "erasure_request_open";
+            /** Since */
+            since: string | null;
+            /** Subject Id */
+            subject_id: string;
+        };
+        /** ReleaseRow */
+        ReleaseRow: {
+            /** Created At */
+            created_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Live */
+            live: boolean;
+            /** Log Url */
+            log_url: string | null;
+            /** Sha */
+            sha: string;
+            /** Status */
+            status: string;
+            /** Subject */
+            subject: string | null;
+        };
+        /** ReleasesReport */
+        ReleasesReport: {
+            /** Api Commit */
+            api_commit: string | null;
+            /** Builds */
+            builds: components["schemas"]["ReleaseRow"][];
+            /** Repository */
+            repository: string;
+            /** Unavailable */
+            unavailable?: string[];
+            /** Web Commit */
+            web_commit: string | null;
+            /** Web Subject */
+            web_subject: string | null;
+        };
+        /** RouteFigure */
+        RouteFigure: {
+            /** Route */
+            route: string;
+            /** Value */
+            value: number;
+        };
+        /**
+         * SignupWave
+         * @description This hour's sign-ups against the usual for this hour of the week, and
+         *     the largest network's share — the key is opaque and day-scoped, the page
+         *     says "Network A", and no account is joined to it anywhere.
+         */
+        SignupWave: {
+            /** Accounts With Writes */
+            accounts_with_writes: number;
+            /** Completed */
+            completed: number;
+            /** Groups */
+            groups: number;
+            /** Hour */
+            hour: string;
+            /** Largest Group */
+            largest_group: number | null;
+            /** Largest Key */
+            largest_key: string | null;
+            /** Usual */
+            usual: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -588,6 +1091,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AbuseReport"];
+                };
+            };
+        };
+    };
+    access_api_operator_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessEntry"][];
                 };
             };
         };
@@ -643,6 +1166,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    account_audit_api_operator_accounts__user_id__audit_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    account_coach_spend_api_operator_accounts__user_id__coach_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayFigure"][];
                 };
             };
             /** @description Validation Error */
@@ -762,6 +1351,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_operator_commands__name__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    controls_api_operator_controls_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlState"][];
+                };
+            };
+        };
+    };
+    deploy_freeze_api_operator_deploy_freeze_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreezeState"];
+                };
+            };
+        };
+    };
+    erasure_requests_api_operator_erasure_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErasureRequestState"][];
+                };
+            };
+        };
+    };
+    health_api_operator_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthReport"];
                 };
             };
         };
@@ -899,6 +1603,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    queue_api_operator_queue_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueRow"][];
+                };
+            };
+        };
+    };
+    releases_api_operator_releases_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleasesReport"];
+                };
+            };
+        };
+    };
+    public_status_api_operator_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicStatus"];
                 };
             };
         };

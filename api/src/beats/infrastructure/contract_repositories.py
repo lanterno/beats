@@ -1,6 +1,6 @@
 """Persistence for a day job's absences and balance adjustments.
 
-Split out of `repositories.py` at the ceiling in roadmaps/file-sizes.md.
+Split out of `repositories.py` at the size ceiling (CLAUDE.md § Conventions).
 Their only readers are the week, the ledger and the vacation year
 (docs/work-contracts.md).
 """

@@ -2,7 +2,7 @@
 rhythm and the untracked gaps — plus the chronotype detector, which
 reads the same shape of day.
 
-Split out of `test_domain.py` at the ceiling in roadmaps/file-sizes.md;
+Split out of `test_domain.py` at the size ceiling (CLAUDE.md § Conventions);
 the shared fakes and factories are `domain_fakes.py`'s.
 """
 

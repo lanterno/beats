@@ -20,8 +20,9 @@ import os
 import subprocess
 import sys
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 
 import httpx
 import jwt
@@ -29,6 +30,12 @@ import jwt.algorithms
 import pytest
 from bson import ObjectId
 
+from beats.operator.reads import (
+    ABSENCE_REQUEST_ATTENTION_DAYS,
+    ACCOUNT_COACH_SPEND_DAYS,
+    SUPERSEDED_ATTENTION_DAYS,
+    queue_due,
+)
 from conftest import OPERATOR_ORIGIN as ORIGIN
 from conftest import OPERATOR_SUB
 
@@ -271,8 +278,14 @@ class TestOperatorWall:
         pages = [
             ("GET", "/api/operator/me", None),
             ("GET", "/api/operator/attention", None),
+            ("GET", "/api/operator/queue", None),
+            ("GET", "/api/operator/controls", None),
+            ("GET", "/api/operator/access", None),
+            ("GET", "/api/operator/erasure-requests", None),
             ("POST", "/api/operator/accounts/lookup", {"email": "wall@example.test"}),
             ("GET", f"/api/operator/accounts/{planted['user_id']}", None),
+            ("GET", f"/api/operator/accounts/{planted['user_id']}/coach", None),
+            ("GET", f"/api/operator/accounts/{planted['user_id']}/audit", None),
             ("GET", "/api/operator/organisations", None),
             ("GET", f"/api/operator/organisations/{planted['org_id']}", None),
             ("GET", f"/api/operator/organisations/{planted['org_id']}/audit", None),
@@ -322,6 +335,34 @@ class TestOperatorWall:
         audit = operator_client.get(f"/api/operator/organisations/{planted['org_id']}/audit").json()
         assert audit[0]["event"] == "timesheet.reopened"
         assert "details" not in audit[0]
+
+    def test_a_visitors_address_is_in_no_response_and_no_document(
+        self, operator_client, planted, mongo, test_client
+    ):
+        """The sign-up network signal keeps a counter per hashed network and
+        nothing else: the address, whole or cut to its /24, reaches no
+        operator page and no stored row."""
+        # The public API's client, seen as arriving from an address: the
+        # same client, since a fresh TestClient runs on a loop of its own.
+        transport = test_client._transport
+        was = transport.client
+        transport.client = ("203.0.113.77", 443)
+        try:
+            started = test_client.post(
+                "/api/auth/register/start",
+                json={"email": "wall-visitor@example.test", "display_name": "V"},
+            )
+        finally:
+            transport.client = was
+        assert started.status_code == 200, started.text
+        try:
+            for path, body in self._every_page(operator_client, planted):
+                assert "203.0.113" not in body, f"an address leaked on {path}"
+            for row in mongo.signup_network_counts.find({}):
+                assert "203.0.113" not in str(row)
+        finally:
+            mongo.signup_network_counts.delete_many({})
+            mongo.users.delete_many({"email": "wall-visitor@example.test"})
 
     def test_the_lookup_is_case_insensitive_and_exact(self, operator_client, planted):
         own = {"Origin": ORIGIN}
@@ -439,3 +480,246 @@ class TestIAPVerifier:
         verifier = IAPVerifier(AUDIENCE, transport=httpx.MockTransport(down))
         with pytest.raises(IAPUnavailable):
             await verifier.verify(_assertion(key))
+
+
+class TestOneAccountsReads:
+    """The two reads behind the account page (docs/backoffice.md § The
+    pages): what the back office has done to this account, and where its
+    coach money went. Both answer about one account and must not widen into a way
+    to read the platform."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        mongo.operator_audit.delete_many({})
+        mongo.llm_usage.delete_many({})
+
+    def _audit(self, mongo, subject_id: str, command: str, at: datetime):
+        mongo.operator_audit.insert_one(
+            {
+                "at": at.isoformat(),
+                "command": command,
+                "operator_sub": "test-operator",
+                "operator_email": "op@example.test",
+                "subject_kind": "account",
+                "subject_id": subject_id,
+                "before": {},
+                "after": {},
+            }
+        )
+
+    def test_the_audit_answers_one_subject_newest_first(self, operator_client, mongo):
+        now = datetime.now(UTC)
+        mine, theirs = str(ObjectId()), str(ObjectId())
+        self._audit(mongo, mine, "account.suspend", now - timedelta(days=2))
+        self._audit(mongo, mine, "account.unsuspend", now - timedelta(hours=1))
+        self._audit(mongo, theirs, "device.revoke", now)
+
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/audit").json()
+        assert [r["command"] for r in rows] == ["account.unsuspend", "account.suspend"]
+        assert {r["subject_id"] for r in rows} == {mine}
+
+    def test_the_audit_matches_a_whole_subject_and_not_a_prefix(self, operator_client, mongo):
+        """A prefix match would turn the account page into a way to sweep
+        the audit for ids nobody typed."""
+        subject = str(ObjectId())
+        self._audit(mongo, subject, "account.suspend", datetime.now(UTC))
+        assert operator_client.get(f"/api/operator/accounts/{subject[:12]}/audit").json() == []
+
+    def test_an_account_nothing_was_done_to_reads_empty(self, operator_client, mongo):
+        self._audit(mongo, str(ObjectId()), "account.suspend", datetime.now(UTC))
+        assert operator_client.get(f"/api/operator/accounts/{ObjectId()}/audit").json() == []
+
+    def _usage(self, mongo, user_id: str, ts: datetime, cost: float):
+        mongo.llm_usage.insert_one({"user_id": user_id, "ts": ts, "cost_usd": cost})
+
+    @staticmethod
+    def _midday() -> datetime:
+        """Noon UTC today, to hang the calls off.
+
+        Two calls an hour either side of `now` are the same day only if the
+        suite is not running near midnight; grouping is by UTC day, so the
+        fixture has to be anchored inside one rather than measured back from
+        the clock.
+        """
+        return datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+
+    def test_coach_spend_is_summed_a_day_oldest_first(self, operator_client, mongo):
+        midday = self._midday()
+        mine = str(ObjectId())
+        self._usage(mongo, mine, midday - timedelta(days=2), 1.5)
+        self._usage(mongo, mine, midday - timedelta(days=2, hours=1), 0.25)
+        self._usage(mongo, mine, midday, 4.0)
+
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
+        assert [r["value"] for r in rows] == [1.75, 4.0]
+        assert rows[0]["day"] < rows[1]["day"]
+
+    def test_coach_spend_is_one_accounts_only(self, operator_client, mongo):
+        midday = self._midday()
+        mine, theirs = str(ObjectId()), str(ObjectId())
+        self._usage(mongo, mine, midday, 2.0)
+        self._usage(mongo, theirs, midday, 99.0)
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
+        assert [r["value"] for r in rows] == [2.0]
+
+    def test_coach_spend_stops_at_the_window(self, operator_client, mongo):
+        """Older calls are the platform's history, on Capacity. This read is
+        the shape of a month that is running away."""
+        midday = self._midday()
+        mine = str(ObjectId())
+        self._usage(mongo, mine, midday - timedelta(days=ACCOUNT_COACH_SPEND_DAYS + 1), 50.0)
+        self._usage(mongo, mine, midday, 1.0)
+        rows = operator_client.get(f"/api/operator/accounts/{mine}/coach").json()
+        assert [r["value"] for r in rows] == [1.0]
+
+    def test_an_id_that_is_not_an_id_reads_empty_rather_than_erroring(self, operator_client, mongo):
+        """A mistyped id reaches these the same way it reaches the account
+        itself, and neither should answer 500."""
+        assert operator_client.get("/api/operator/accounts/not-an-id/coach").json() == []
+        assert operator_client.get("/api/operator/accounts/not-an-id/audit").json() == []
+
+
+class TestQueueDue:
+    """The queue's due dates, at the boundaries Attention counts by."""
+
+    NOW = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
+
+    def test_a_superseded_approval_is_due_when_attention_starts_counting_it(self):
+        since = self.NOW - timedelta(days=SUPERSEDED_ATTENTION_DAYS)
+        assert queue_due("approvals_superseded", since, self.NOW) == self.NOW
+        later = since + timedelta(seconds=1)
+        assert queue_due("approvals_superseded", later, self.NOW) > self.NOW
+
+    def test_an_absence_request_is_due_after_its_own_window(self):
+        since = self.NOW - timedelta(days=ABSENCE_REQUEST_ATTENTION_DAYS)
+        assert queue_due("absence_requests_pending", since, self.NOW) == self.NOW
+
+    def test_a_queued_job_is_due_when_its_window_ends(self):
+        run_after = self.NOW + timedelta(days=7)
+        assert queue_due("job_queued", run_after, self.NOW) == run_after
+
+    def test_a_condition_with_no_date_is_due_now(self):
+        assert queue_due("organisation_without_owner", None, self.NOW) == self.NOW
+        assert queue_due("approvals_superseded", None, self.NOW) == self.NOW
+
+
+class TestQueueRead:
+    """The rows behind the Attention counts, over HTTP."""
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        for name in ("operator_jobs", "org_timesheets", "org_absence_requests", "organisations"):
+            mongo[name].delete_many({})
+
+    def test_rows_are_soonest_due_first_and_grouped_per_organisation(self, operator_client, mongo):
+        now = datetime.now(UTC)
+        org = str(ObjectId())
+        mongo.org_absence_requests.insert_many(
+            [
+                {
+                    "organisation_id": org,
+                    "user_id": SENTINEL,
+                    "status": "pending",
+                    "requested_at": (now - timedelta(days=d)).isoformat(),
+                }
+                for d in (20, 2)
+            ]
+        )
+        mongo.org_absence_requests.insert_one(
+            {"organisation_id": org, "status": "approved", "requested_at": now.isoformat()}
+        )
+        failed = mongo.operator_jobs.insert_one(
+            {"state": "failed", "finished_at": now.isoformat(), "command": "x"}
+        ).inserted_id
+        mongo.operator_jobs.insert_one(
+            {"state": "done", "finished_at": now.isoformat(), "command": "x"}
+        )
+
+        rows = operator_client.get("/api/operator/queue").json()
+        assert [(r["kind"], r["subject_id"], r["count"]) for r in rows] == [
+            ("absence_requests_pending", org, 2),
+            ("job_failed", str(failed), 1),
+        ]
+        assert SENTINEL not in str(rows), "no member is named"
+
+    def test_an_empty_platform_has_an_empty_queue(self, operator_client):
+        assert operator_client.get("/api/operator/queue").json() == []
+
+
+class TestOperatorHealthRoute:
+    """GET /api/operator/health over a fake of the port: the three states,
+    and that it is the operator's alone like every other read."""
+
+    @pytest.fixture(autouse=True)
+    def _fake(self, operator_client):
+        from beats.operator.health import HealthCache, HealthFigures
+
+        class _Fake:
+            fail = False
+
+            async def read(self):
+                if self.fail:
+                    raise RuntimeError("away")
+                return HealthFigures(
+                    availability=0.999, error_share=0.0, p95_latency_ms=300.0, instances=1
+                )
+
+        state = operator_client.app.state
+        was = (state.health_source, state.health_cache)
+        self.fake = _Fake()
+        state.health_source, state.health_cache = self.fake, HealthCache(seconds=0)
+        yield
+        state.health_source, state.health_cache = was
+
+    def test_live_figures_with_the_ceiling_and_the_target(self, operator_client):
+        body = operator_client.get("/api/operator/health").json()
+        assert body["state"] == "live"
+        assert body["figures"]["availability"] == 0.999
+        assert body["availability_target"] == 0.995
+
+    def test_a_failure_after_a_read_is_stale(self, operator_client):
+        operator_client.get("/api/operator/health")
+        self.fake.fail = True
+        body = operator_client.get("/api/operator/health").json()
+        assert body["state"] == "stale"
+        assert body["figures"] is not None
+
+    def test_never_read_is_unavailable(self, operator_client):
+        self.fake.fail = True
+        body = operator_client.get("/api/operator/health").json()
+        assert body == {**body, "state": "unavailable", "figures": None}
+
+
+class TestOperatorReleasesRoute:
+    """GET /api/operator/releases over a fake of the port."""
+
+    def test_the_report_names_the_live_build_and_what_did_not_answer(self, operator_client):
+        from beats.operator.releases import Build, ReleasesCache
+
+        sha = "d" * 40
+
+        class _Fake:
+            async def builds(self):
+                return [Build(sha, "SUCCESS", None, None, None)]
+
+            async def web_commit(self):
+                raise RuntimeError("away")
+
+            async def subject(self, s):
+                return "api: the change"
+
+        state = operator_client.app.state
+        was = (state.release_source, state.releases_cache, state.operator_settings.api_commit)
+        state.release_source, state.releases_cache = _Fake(), ReleasesCache(seconds=0)
+        state.operator_settings.api_commit = sha
+        try:
+            body = operator_client.get("/api/operator/releases").json()
+        finally:
+            state.release_source, state.releases_cache, state.operator_settings.api_commit = was
+        assert body["builds"][0]["live"] is True
+        assert body["builds"][0]["subject"] == "api: the change"
+        assert body["unavailable"] == ["web"]

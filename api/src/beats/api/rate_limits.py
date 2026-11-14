@@ -21,6 +21,7 @@ How the pieces fit slowapi:
 
 from fastapi import Request
 
+from beats import platform_controls
 from beats.auth import account_access
 from beats.settings import settings
 
@@ -41,10 +42,16 @@ def account_key(request: Request) -> str:
 
 
 def _ceiling(user_id: str, override: str, default: int | None) -> int | None:
-    """The account's own ceiling when one is set, else the global default."""
+    """The account's own ceiling when one is set, else the operator's
+    platform-wide one (`platform_controls`, set without a deploy), else the
+    setting — which stays, for a self-hosted install with no operator. Both
+    caches were filled by the middleware on the way in."""
     access = account_access.get(user_id)
     value: int | None = getattr(access, override, None) if access is not None else None
-    return value if value is not None else default
+    if value is not None:
+        return value
+    control = platform_controls.current().limit(override)
+    return control if control is not None else default
 
 
 def beats_writes_limit(key: str) -> str:

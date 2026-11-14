@@ -11,12 +11,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // (operator_server.py mounts the build), so the bundle names no API origin:
 // every call is same-origin. Locally Vite serves it on :8081 and proxies
 // /api/operator to `just run-operator-locally` on :7998.
+//
+// Both are overridable, because two checkouts of this repo on one machine
+// otherwise fight over the pair — and the operator API refuses a write whose
+// Origin is not its own, so a dev server that silently moved to :8082 reads
+// fine and cannot act. Set OPERATOR_ORIGIN to match when you move the port.
+const PORT = Number(process.env.BACKOFFICE_PORT ?? 8081);
+const OPERATOR_API = process.env.BACKOFFICE_OPERATOR_API ?? "http://localhost:7998";
+
 export default defineConfig(() => ({
 	server: {
 		host: "::",
-		port: 8081,
+		// Rather than stepping to the next free port, which the API's Origin
+		// check would then refuse every write from.
+		strictPort: true,
+		port: PORT,
 		proxy: {
-			"/api/operator": "http://localhost:7998",
+			"/api/operator": OPERATOR_API,
 		},
 	},
 	build: {

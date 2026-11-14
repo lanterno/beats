@@ -13,5 +13,24 @@ export type OrganisationSummary = components["schemas"]["OrganisationSummary"];
 export type OrganisationDetail = components["schemas"]["OrganisationDetail"];
 export type OrgAuditRow = components["schemas"]["OrgAuditRow"];
 export type AbuseReport = components["schemas"]["AbuseReport"];
+/** A day and a figure: signups a day, one account's coach cost a day. */
+export type DayFigure = components["schemas"]["DayFigure"];
 export type CapacityReport = components["schemas"]["CapacityReport"];
 export type OperatorMe = components["schemas"]["OperatorMe"];
+/** What a command would do, answered without doing it. */
+export type CommandPreview = components["schemas"]["CommandPreview"];
+/** The hour's sign-ups against the usual, and the largest network's share. */
+export type SignupWave = components["schemas"]["SignupWave"];
+/** One platform control as it stands (docs/backoffice.md § Controls). */
+export type ControlState = components["schemas"]["ControlState"];
+/** One person on the operator allowlist, as the deployment was started. */
+export type AccessEntry = components["schemas"]["AccessEntry"];
+/** One logged erasure request: a reference and an id, never an address. */
+export type ErasureRequestState = components["schemas"]["ErasureRequestState"];
+/** One row behind an Attention count: ids and dates, never a name. */
+export type QueueRow = components["schemas"]["QueueRow"];
+/** Live health from Cloud Monitoring: live, stale (with its age) or unavailable. */
+export type HealthReport = components["schemas"]["HealthReport"];
+/** What shipped: the API's builds, the commit deployed, the web app's live commit. */
+export type ReleasesReport = components["schemas"]["ReleasesReport"];
+export type ReleaseRow = components["schemas"]["ReleaseRow"];
