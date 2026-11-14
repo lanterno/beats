@@ -839,6 +839,7 @@ class EraseAccount(_AccountCommand):
         return {
             "deleted": sum(report.deleted.values()),
             "retained": sum(report.retained.values()),
+            "requests_closed": report.requests_closed,
         }
 
 

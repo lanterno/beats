@@ -161,6 +161,26 @@ class MongoErasureRequests:
         )
         return self._out(doc) if doc else None
 
+    async def close_erased(self, subject_id: str) -> int:
+        """Every open request naming this account, closed `erased` by the
+        erasure itself as it finishes, so a request's year starts the day
+        it was answered rather than never. `closed_by` stays empty: nobody
+        closed it by hand, and the audit of `account.erase` names who queued
+        it. Closes nothing on a re-run."""
+        now = datetime.now(UTC)
+        result = await self._col.update_many(
+            {"subject_id": subject_id, "closed_at": None},
+            {
+                "$set": {
+                    "closed_at": now.isoformat(),
+                    "closed_reason": "erased",
+                    "closed_by": None,
+                    "expires_at": now + timedelta(days=ERASURE_REQUEST_RETENTION_DAYS),
+                }
+            },
+        )
+        return result.modified_count
+
     async def all(self) -> list[dict[str, Any]]:
         docs = await self._col.find({}).sort("received_on", -1).to_list()
         return [self._out(d) for d in docs]

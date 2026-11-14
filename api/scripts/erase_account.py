@@ -55,6 +55,8 @@ async def erase(user_id: str) -> int:
         print(f"  deleted {count:>6}  {name}")
     for name, count in sorted(report.retained.items()):
         print(f"  kept    {count:>6}  {name}  (an organisation's record)")
+    if report.requests_closed:
+        print(f"  closed  {report.requests_closed:>6}  erasure_requests  (as erased)")
     return 0
 
 
