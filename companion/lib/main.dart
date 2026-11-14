@@ -33,6 +33,21 @@ Window? _findAppWindow() {
   return _appWindow ??= WindowManager.instance.getCurrent();
 }
 
+/// Holds the first window of ours that takes focus. Windows answers "the
+/// current window" with the foreground one, so a tray click while the app is
+/// in the background would find none, and nothing at startup asks: the
+/// runner shows the window on the first frame, after main() has run. Focus
+/// events are only ever the app's own windows (nativeapi filters the
+/// system-wide foreground hook by process), and the runner focuses the
+/// window when it shows it.
+void _holdAppWindowWhenFocused() {
+  WindowManager.instance.addListener((event) {
+    if (_appWindow == null && event is WindowFocusedEvent) {
+      _appWindow = WindowManager.instance.get(event.windowId);
+    }
+  });
+}
+
 /// Brings the app's window forward, out of the Dock if it was minimized.
 void _showAppWindow() {
   final window = _findAppWindow();
@@ -44,6 +59,7 @@ void _showAppWindow() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (Platform.isWindows) _holdAppWindowWhenFocused();
   if (Platform.isMacOS) {
     // The sky runs under a hidden title bar; the traffic lights stay and sit
     // in the sidebar's top corner. A debug build opened with LIFEPETE_PHONE=1
