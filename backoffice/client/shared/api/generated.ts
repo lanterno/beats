@@ -1329,6 +1329,8 @@ export interface components {
          *     hour's accounts, would tell small groups apart.
          */
         SignupWave: {
+            /** Above Usual */
+            above_usual: boolean;
             /** Accounts With Writes */
             accounts_with_writes: number;
             /** Completed */
