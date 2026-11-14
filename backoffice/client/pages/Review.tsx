@@ -215,13 +215,11 @@ function CommandReview() {
 	// the route validates them exactly as the act will, so an unfilled field
 	// comes back 422 and that is the page's own "there is more to fill in",
 	// not a failure. Settled, or every keystroke would be a request.
-	const sentArgs = sent(fields, args);
+	const sentArgs = spec ? requestArgs(spec, subject, args) : {};
 	const settledArgs = useSettled(sentArgs);
-	// A subjectless command makes its subject; the route's is a placeholder.
-	const named = spec?.subjectless ? {} : { [family.subjectKey]: subject };
 	const preview = useQuery({
 		queryKey: ["preview", command, subject, settledArgs],
-		queryFn: () => previewCommand(command, { ...named, ...settledArgs }),
+		queryFn: () => previewCommand(command, settledArgs),
 		enabled: Boolean(spec && subject),
 		retry: false,
 		// The subject's "Now" stays on screen while the next preview loads.
@@ -229,7 +227,7 @@ function CommandReview() {
 	});
 
 	const act = useMutation({
-		mutationFn: () => runCommand(command, { ...named, ...sentArgs }, typed || undefined),
+		mutationFn: () => runCommand(command, sentArgs, typed || undefined),
 		onSuccess: () => {
 			// Not the preview: once the act has run, "Now" is the state it
 			// found, and re-reading it would make the change table claim the
@@ -242,6 +240,9 @@ function CommandReview() {
 				"controls",
 				"operator-queue",
 				"erasure-requests",
+				"organisation",
+				"organisations",
+				"organisation-audit",
 			]) {
 				queryClient.invalidateQueries({ queryKey: [key] });
 			}
@@ -371,7 +372,7 @@ function CommandReview() {
 							</div>
 						) : blocked ? (
 							<div className="px-6 pb-5">
-								<p className="text-[15px] font-bold">This is already queued for this account.</p>
+								<p className="text-[15px] font-bold">This is already queued.</p>
 								<p className="mt-1 text-[14px] text-ink-muted">
 									One window at a time, by design. Cancel the one waiting before queueing another.
 								</p>
@@ -384,7 +385,7 @@ function CommandReview() {
 								{needsTyping ? (
 									<div className="mb-3 max-w-[26rem]">
 										<TextField
-											label={family.typedLabel}
+											label={family.typedLabel(subject)}
 											value={typed}
 											onChange={(e) => setTyped(e.target.value)}
 											autoComplete="off"
@@ -491,6 +492,18 @@ function CommandReview() {
 			</div>
 		</Page>
 	);
+}
+
+/** Everything the review sends for a command: the arguments that name its
+ * subject — none for a subjectless command, which makes its subject and
+ * whose route's is a placeholder — and its own fields as `sent` reads them. */
+export function requestArgs(
+	spec: CommandSpec,
+	subject: string,
+	args: Record<string, unknown>,
+): Record<string, unknown> {
+	const named = spec.subjectless ? {} : FAMILIES[spec.family].named(subject);
+	return { ...named, ...sent(fieldsOf(spec, subject), args) };
 }
 
 /** Only the fields this command declares, with empty boxes left out so the

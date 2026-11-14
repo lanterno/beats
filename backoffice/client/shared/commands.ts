@@ -13,6 +13,8 @@
  * terms, and nothing here decides anything.
  */
 
+import { APP_NAME } from "@/shared/config/brand";
+
 /** A field beyond the subject, for the command's own arguments. */
 export interface CommandField {
 	key: string;
@@ -38,48 +40,101 @@ export interface Change {
 
 /** Which page a command belongs to, and how its subject is named. */
 export interface Family {
-	/** The argument the subject travels as. */
-	subjectKey: "user_id" | "name" | "request_id";
+	/** The arguments the subject travels as: one, or none for a subject
+	 * that is the whole platform (a purge of `all`). */
+	named: (subject: string) => Record<string, unknown>;
 	/** Where "back" goes, for a subject. */
 	back: (subject: string) => { to: string; label: string };
 	/** The confirmation field's label, when a command asks for one. */
-	typedLabel: string;
+	typedLabel: (subject: string) => string;
 	/** What the page says when `describe()` answers {exists: false}. */
 	missing: string;
 }
 
-export const FAMILIES: Record<"account" | "control" | "erasure" | "deploy" | "status", Family> = {
+/** The subject as one argument. */
+const as =
+	(key: string) =>
+	(subject: string): Record<string, unknown> => ({ [key]: subject });
+const nothing = () => ({});
+const typeIt = () => "Type it to confirm";
+/** The platform-wide purge's subject, typed back to confirm it. */
+export const EVERY_ORGANISATION = "all";
+
+export const FAMILIES: Record<
+	| "account"
+	| "device"
+	| "control"
+	| "erasure"
+	| "deploy"
+	| "status"
+	| "organisation"
+	| "retention"
+	| "job",
+	Family
+> = {
 	status: {
-		subjectKey: "name",
+		named: nothing,
 		back: () => ({ to: "/", label: "Back to Today" }),
-		typedLabel: "Type it to confirm",
+		typedLabel: typeIt,
 		missing: "There is nothing to act on.",
 	},
 	deploy: {
 		// The subject is fixed ("api") and sent as nothing: both deploy
 		// commands are subjectless on the wire.
-		subjectKey: "name",
+		named: nothing,
 		back: () => ({ to: "/releases", label: "Back to releases" }),
-		typedLabel: "Type it to confirm",
+		typedLabel: typeIt,
 		missing: "There is nothing to act on.",
 	},
 	erasure: {
-		subjectKey: "request_id",
+		named: as("request_id"),
 		back: () => ({ to: "/compliance", label: "Back to privacy and compliance" }),
-		typedLabel: "Type the reference to confirm",
+		typedLabel: () => "Type the reference to confirm",
 		missing: "There is no open request with that id.",
 	},
 	account: {
-		subjectKey: "user_id",
+		named: as("user_id"),
 		back: (subject) => ({ to: `/accounts/${subject}`, label: "Back to the account" }),
-		typedLabel: "Type the account's email to confirm",
+		typedLabel: () => "Type the account's email to confirm",
+		missing: "There is no account with that id.",
+	},
+	// The account is the subject; which of its devices is the one field.
+	device: {
+		named: as("user_id"),
+		back: (subject) => ({ to: `/accounts/${subject}`, label: "Back to the account" }),
+		typedLabel: typeIt,
 		missing: "There is no account with that id.",
 	},
 	control: {
-		subjectKey: "name",
+		named: as("name"),
 		back: () => ({ to: "/access", label: "Back to access and controls" }),
-		typedLabel: "Type the control's name to confirm",
+		typedLabel: () => "Type the control's name to confirm",
 		missing: "There is no control by that name.",
+	},
+	organisation: {
+		named: as("organisation_id"),
+		back: (subject) => ({ to: `/organisations/${subject}`, label: "Back to the organisation" }),
+		typedLabel: () => "Type the organisation's name to confirm",
+		missing: "There is no organisation with that id.",
+	},
+	// One organisation, from its page, or every one, from compliance.
+	retention: {
+		named: (subject) => (subject === EVERY_ORGANISATION ? {} : { organisation_id: subject }),
+		back: (subject) =>
+			subject === EVERY_ORGANISATION
+				? { to: "/compliance", label: "Back to privacy and compliance" }
+				: { to: `/organisations/${subject}`, label: "Back to the organisation" },
+		typedLabel: (subject) =>
+			subject === EVERY_ORGANISATION
+				? `Type ${EVERY_ORGANISATION} to confirm`
+				: "Type the organisation's name to confirm",
+		missing: "There is no organisation with that id.",
+	},
+	job: {
+		named: as("job_id"),
+		back: () => ({ to: "/jobs", label: "Back to jobs and windows" }),
+		typedLabel: typeIt,
+		missing: "There is no job with that id.",
 	},
 };
 
@@ -275,6 +330,236 @@ export const ACCOUNT_COMMANDS: CommandSpec[] = [
 				what: "This back office's audit",
 				now: "Holds the id",
 				after: "Keeps the id, never an address",
+			},
+		],
+	},
+];
+
+/** A count from the preview, or a dash before it has one. */
+const count = (value: unknown): string => (typeof value === "number" ? String(value) : "—");
+/** An instant from the preview, to the minute. */
+const instant = (value: unknown): string =>
+	typeof value === "string" && value ? value.slice(0, 16).replace("T", " ") : "—";
+const capital = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1);
+
+/** One device of an account, named by its id: the account page links each
+ * device's own review, so the id is handed over in the link. */
+export const DEVICE_COMMANDS: CommandSpec[] = [
+	{
+		family: "device",
+		name: "device.revoke",
+		title: "Revoke a device",
+		action: "Revoke this device",
+		about:
+			"This one device stops working and has to be paired again. The account's other devices, its sessions and its passkeys are untouched.",
+		notices:
+			"They do, when the device next reaches the API, within 30 seconds: it asks to be paired again.",
+		undo: "Not as such, but they can pair it again in a minute.",
+		fields: [
+			{
+				key: "device_id",
+				label: "Device id",
+				kind: "text",
+				hint: "From the account's list of devices.",
+				linked: true,
+			},
+		],
+		changes: (before) => [
+			{
+				what: "The device",
+				now:
+					before.revoked === true
+						? "Revoked"
+						: before.revoked === false
+							? "Paired"
+							: "Not one of this account's",
+				after: "Revoked",
+			},
+		],
+	},
+];
+
+/**
+ * What the operator may do for an organisation with no owner, and only
+ * when someone there asked (docs/backoffice.md § The operator's
+ * organisation acts). Each is refused with ORGANISATION_HAS_OWNER the moment
+ * an owner exists, a suspended one included; nothing here checks that.
+ */
+export const ORGANISATION_COMMANDS: CommandSpec[] = [
+	{
+		family: "organisation",
+		name: "organisation.grant_owner",
+		title: "Make the requester owner",
+		action: "Make them owner",
+		about:
+			"Gives the owner role to the member who asked, by mail from the address on their account. Nobody else can be given it, and only if no active member outranks them. Once it has an owner, nothing here can act on the organisation again.",
+		notices: `The requester, who can run it again, and its admins, in its audit log, where it reads as done by ${APP_NAME} — never by you.`,
+		undo: "Not from here. The new owner can hand the role on.",
+		fields: [
+			{
+				key: "user_id",
+				label: "The requester's account id",
+				kind: "text",
+				hint: "Find their account by the address the mail came from, and copy its id.",
+			},
+		],
+		changes: (before) => [
+			{
+				what: "Owners",
+				now: before.owners === 0 ? "None" : count(before.owners),
+				after: "The requester",
+			},
+			{
+				what: "The requester's role",
+				now:
+					typeof before.requester_role === "string"
+						? capital(before.requester_role)
+						: "Not an active member",
+				after: "Owner",
+			},
+			{
+				what: "The highest role held",
+				now: typeof before.highest_role === "string" ? capital(before.highest_role) : "Nobody",
+				after: "Owner",
+			},
+		],
+	},
+	{
+		family: "organisation",
+		name: "organisation.begin_closing",
+		title: "Start or move the closing",
+		action: "Set the closing day",
+		about:
+			"Gives every member notice that the organisation closes, so each can take their projects with them first. At least 30 days out, or any day later than a notice already running.",
+		notices: "Every member: the organisation shows the day it closes.",
+		undo: "Yes, until that day: cancel the closing.",
+		fields: [
+			{
+				key: "closes_on",
+				label: "Closes on",
+				kind: "text",
+				hint: "YYYY-MM-DD. Empty: 60 days from today, in the organisation's timezone.",
+			},
+		],
+		changes: (before, args) => [
+			{
+				what: "Closing",
+				now: typeof before.closes_on === "string" ? `On ${before.closes_on}` : "Not closing",
+				after: args.closes_on ? `On ${String(args.closes_on)}` : "60 days from today",
+			},
+		],
+	},
+	{
+		family: "organisation",
+		name: "organisation.cancel_closing",
+		title: "Cancel the closing",
+		action: "Cancel the closing",
+		about: "Withdraws the notice. The organisation stays as it is.",
+		notices: "Every member: the closing day goes.",
+		undo: "Yes. Start closing again, with a fresh notice of at least 30 days.",
+		changes: (before) => [
+			{
+				what: "Closing",
+				now: typeof before.closes_on === "string" ? `On ${before.closes_on}` : "Not closing",
+				after: "Not closing",
+			},
+		],
+	},
+	{
+		family: "organisation",
+		name: "organisation.delete",
+		title: "Delete the organisation",
+		action: "Queue the deletion",
+		about:
+			"Once its closing day has passed: each member is handed a personal copy of every project they hold rows or a contract on, then the organisation goes, with its projects, memberships, timesheets and audit log. It waits a day first, and is refused when it runs if the day has not come or it has an owner again.",
+		notices:
+			"Every member: it leaves their list, and its projects come back as their own. Its admins lose its audit log with it.",
+		undo: "Yes, until it runs a day from now: cancel it on Jobs and windows. After that, never.",
+		grave: true,
+		changes: (before) => [
+			{
+				what: "Closing day",
+				now: typeof before.closes_on === "string" ? before.closes_on : "Not closing",
+				after: "Deleted when it runs",
+			},
+			{
+				what: "Projects",
+				now: count(before.projects),
+				after: "Handed back to whoever holds rows on them",
+			},
+			{ what: "Active members", now: count(before.members), after: "None" },
+			{
+				what: "Its audit log",
+				now: "Kept",
+				after: "Deleted. This back office's record of the act stays",
+			},
+		],
+	},
+];
+
+/**
+ * The retention purge (decision 30 in docs/organisations.md): never
+ * scheduled, because PRIVACY.md and the DPA promise an operator runs it.
+ * One organisation from its page, or every one from compliance.
+ */
+export const RETENTION_COMMANDS: CommandSpec[] = [
+	{
+		family: "retention",
+		name: "retention.purge",
+		title: "Purge records past their period",
+		action: "Queue the purge",
+		about:
+			"Rows past their organisation's retention period: a former member's go, a current member's lose the organisation's stamp and stay theirs, and expired timesheets, decided requests and audit events go. Across every organisation, this back office's own audit past four years goes too. It waits a day first.",
+		notices: "Nobody is told. Each organisation's admins see one line in its audit log.",
+		undo: "Yes, until it runs a day from now: cancel it on Jobs and windows. After that, what went is gone.",
+		grave: true,
+		changes: (before) => [
+			{
+				what: "Organisations",
+				now: `${count(before.would_touch_organisations)} with rows past their period`,
+				after: before.would_touch_organisations === 0 ? "Nothing to purge" : "Purged when it runs",
+			},
+			{
+				what:
+					typeof before.cutoff === "string"
+						? `Rows dated before ${before.cutoff}`
+						: "Rows past their period",
+				now: `${count(before.rows_deleted)} kept`,
+				after: "Deleted",
+			},
+			{
+				what: "Current members' rows past it",
+				now: `${count(before.rows_unstamped)} on the record`,
+				after: "Theirs, off the record",
+			},
+		],
+	},
+];
+
+/** A queued job's second thoughts (docs/backoffice.md § Jobs). */
+export const JOB_COMMANDS: CommandSpec[] = [
+	{
+		family: "job",
+		name: "job.cancel",
+		title: "Cancel this job",
+		action: "Cancel the job",
+		about:
+			"Stops a queued command before its window ends. Cancelling an erasure also lifts the suspension queueing it put on the account, and never a suspension for anything else.",
+		notices: "Whoever it was for, if it was an erasure: they can sign in again.",
+		undo: "Queue the command again. It waits a new window.",
+		changes: (before) => [
+			{
+				what: typeof before.command === "string" ? before.command : "The job",
+				now:
+					before.state === "queued"
+						? `Waiting, runs from ${instant(before.run_after)} UTC`
+						: capital(String(before.state ?? "—")),
+				after: "Cancelled",
+			},
+			{
+				what: "Its subject",
+				now: typeof before.subject_id === "string" ? before.subject_id : "—",
+				after: "Untouched, but for an erasure's own suspension",
 			},
 		],
 	},
@@ -627,6 +912,10 @@ export const STATUS_COMMANDS: CommandSpec[] = [
 
 const EVERY_COMMAND = [
 	...ACCOUNT_COMMANDS,
+	...DEVICE_COMMANDS,
+	...ORGANISATION_COMMANDS,
+	...RETENTION_COMMANDS,
+	...JOB_COMMANDS,
 	...CONTROL_COMMANDS,
 	...ERASURE_COMMANDS,
 	...DEPLOY_COMMANDS,
