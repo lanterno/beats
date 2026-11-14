@@ -1,6 +1,14 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type FieldProblem, OperatorApiError } from "@/shared/api/client";
-import { type CommandField, commandSpec, fieldsOf, startingArgs } from "@/shared/commands";
+import {
+	type CommandField,
+	type CommandSpec,
+	commandSpec,
+	EVERY_ORGANISATION,
+	fieldsOf,
+	startingArgs,
+} from "@/shared/commands";
 import { refusalOf, requestArgs, sent } from "./Review";
 
 const limits = () => commandSpec("account.set_limits");
@@ -290,5 +298,131 @@ describe("what a subject that is not there reads as", () => {
 		const now = (role: unknown) =>
 			commandSpec("organisation.grant_owner")?.changes({ requester_role: role }, {}, "o")[1].now;
 		expect(now(null)).not.toBe(now("member"));
+	});
+});
+
+/**
+ * The operator API's own schema for each command's arguments
+ * (`x-command-args` in the generated openapi.json, which `pnpm
+ * gen:types:check` keeps in step with the API). A key the model does not
+ * have is dropped by pydantic without a word, and a box of the wrong kind is
+ * refused only when the operator presses the button; both are a spec
+ * disagreeing with the runner, and both show here.
+ */
+interface Schema {
+	$ref?: string;
+	type?: string;
+	enum?: unknown[];
+	anyOf?: Schema[];
+	items?: Schema;
+	properties?: Record<string, Schema>;
+	required?: string[];
+	minLength?: number;
+	maxLength?: number;
+	minimum?: number;
+	format?: string;
+}
+
+const openapi = JSON.parse(
+	readFileSync(new URL("../shared/api/openapi.json", import.meta.url), "utf8"),
+) as { "x-command-args": Record<string, Schema>; components: { schemas: Record<string, Schema> } };
+
+const resolve = (schema: Schema): Schema =>
+	schema.$ref
+		? resolve(openapi.components.schemas[schema.$ref.split("/").pop() ?? ""] ?? {})
+		: schema;
+
+/** Why `value` does not hold to `schema`, or null when it does: only the
+ * keywords the argument models use. */
+function problem(value: unknown, at: Schema): string | null {
+	const schema = resolve(at);
+	if (schema.anyOf) {
+		return schema.anyOf.some((s) => problem(value, s) === null) ? null : "fits none of its shapes";
+	}
+	if (schema.enum && !schema.enum.includes(value)) return `${JSON.stringify(value)} is not offered`;
+	if (schema.minimum !== undefined && typeof value === "number" && value < schema.minimum) {
+		return "below its minimum";
+	}
+	switch (schema.type) {
+		case "null":
+			return value === null ? null : "not null";
+		case "boolean":
+			return typeof value === "boolean" ? null : "not a flag";
+		case "integer":
+			return Number.isInteger(value) ? null : "not a whole number";
+		case "number":
+			return typeof value === "number" ? null : "not a number";
+		case "array":
+			if (!Array.isArray(value)) return "not a list";
+			return value.map((item) => problem(item, schema.items ?? {})).find(Boolean) ?? null;
+		case "string":
+			if (typeof value !== "string") return "not text";
+			if (value.length < (schema.minLength ?? 0)) return "too short";
+			if (value.length > (schema.maxLength ?? Number.POSITIVE_INFINITY)) return "too long";
+			if (schema.format === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return "not a day";
+			if (schema.format === "date-time" && Number.isNaN(Date.parse(value))) return "not an instant";
+			return null;
+		default:
+			return null;
+	}
+}
+
+/** A box filled the way its argument takes it: one of its choices, a day or
+ * an instant where it wants one, a number for a number box. */
+function filled(field: CommandField, property: Schema | undefined): unknown {
+	if (field.kind === "checkbox") return true;
+	if (field.kind === "number") return "20";
+	const shapes = property ? (resolve(property).anyOf ?? [resolve(property)]) : [];
+	for (const shape of shapes) {
+		const one = shape.type === "array" ? resolve(shape.items ?? {}) : shape;
+		if (one.enum) return String(one.enum[0]);
+		if (one.format === "date") return "2026-12-30";
+		if (one.format === "date-time") return "2026-11-20T09:00:00Z";
+	}
+	return ID;
+}
+
+const ID = "6730f1a2b3c4d5e6f7a8b9c0";
+
+/** The subjects a review of `spec` can be opened on. */
+function subjectsOf(spec: CommandSpec, model: Schema): string[] {
+	if (spec.subjectless) return ["x"];
+	if (spec.family === "control") return (resolve(model).properties?.name?.enum ?? []).map(String);
+	if (spec.family === "retention") return [EVERY_ORGANISATION, ID];
+	return [ID];
+}
+
+describe("what a review sends, against the API's schema", () => {
+	const commands = Object.entries(openapi["x-command-args"]);
+
+	it("has a review for every command the API runs", () => {
+		expect(commands.length).toBeGreaterThan(0);
+		for (const [name] of commands) expect(commandSpec(name), name).toBeDefined();
+	});
+
+	it("sends, with every box filled, only arguments the command takes, each of its kind", () => {
+		for (const [name, ref] of commands) {
+			const spec = commandSpec(name);
+			if (!spec) continue;
+			const model = resolve(ref);
+			for (const subject of subjectsOf(spec, model)) {
+				const boxes = Object.fromEntries(
+					fieldsOf(spec, subject).map((f) => [f.key, filled(f, model.properties?.[f.key])]),
+				);
+				const args = requestArgs(spec, subject, boxes);
+				const wrong = [
+					...(model.required ?? [])
+						.filter((key) => !(key in args))
+						.map((key) => `${key} is required and never sent`),
+					...Object.entries(args).flatMap(([key, value]) => {
+						const property = model.properties?.[key];
+						if (!property) return [`${key} is not an argument, and would be dropped`];
+						const why = problem(value, property);
+						return why ? [`${key}: ${why}`] : [];
+					}),
+				];
+				expect(wrong, `${name} on ${subject}`).toEqual([]);
+			}
+		}
 	});
 });
