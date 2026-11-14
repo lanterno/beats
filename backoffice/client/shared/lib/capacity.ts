@@ -8,7 +8,13 @@
 import type { CapacityReport } from "@/shared/api/schema";
 import { everyDay } from "./format";
 
-type CoachCost = CapacityReport["coach_cost"];
+/** A day and model's coach cost, as far as this arithmetic reads it. */
+type CoachCost = ReadonlyArray<
+	Pick<
+		CapacityReport["coach_cost"][number],
+		"day" | "model" | "cost_usd" | "input_tokens" | "cache_read_tokens"
+	>
+>;
 
 const DAY_MS = 86_400_000;
 

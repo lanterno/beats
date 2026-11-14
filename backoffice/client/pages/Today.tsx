@@ -49,8 +49,13 @@ export function todayHeadline(rows: QueueRow[], now: Date): string {
 	return rows.length === 1 ? "One thing needs you." : `${rows.length} things need you.`;
 }
 
-/** The coach's cost since the 1st of this UTC month. */
-export function monthSpend(capacity: CapacityReport, now: Date): number {
+/** The coach's cost since the 1st of this UTC month, from each row's day and cost alone. */
+export function monthSpend(
+	capacity: {
+		coach_cost: ReadonlyArray<Pick<CapacityReport["coach_cost"][number], "day" | "cost_usd">>;
+	},
+	now: Date,
+): number {
 	const month = now.toISOString().slice(0, 7);
 	return capacity.coach_cost
 		.filter((c) => c.day.startsWith(month))
