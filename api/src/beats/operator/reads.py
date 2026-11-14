@@ -24,6 +24,10 @@ from typing import Literal, Protocol
 COACH_CAP_ATTENTION_FRACTION = 0.8
 SUPERSEDED_ATTENTION_DAYS = 30
 ABSENCE_REQUEST_ATTENTION_DAYS = 14
+# An erasure request logged this long ago with no erasure queued needs
+# somebody: PRIVACY.md promises deletion seven days after queueing, inside
+# the legal month, so the risk is a mail forgotten before anything is queued.
+ERASURE_REQUEST_ATTENTION_DAYS = 14
 
 # How much of one account's coach spend its page draws. Long enough to show
 # the shape of a month that is running away, short enough that the answer
@@ -43,6 +47,7 @@ class AttentionCounts:
     approvals_superseded_over_30d: int
     absence_requests_pending_over_14d: int
     accounts_near_coach_cap: int
+    erasure_requests_overdue: int
 
 
 QueueKind = Literal[
@@ -54,6 +59,7 @@ QueueKind = Literal[
     "absence_requests_pending",
     "account_near_coach_cap",
     "control_paused",
+    "erasure_request_open",
 ]
 
 
@@ -91,6 +97,8 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
         return since + timedelta(days=SUPERSEDED_ATTENTION_DAYS)
     if kind == "absence_requests_pending":
         return since + timedelta(days=ABSENCE_REQUEST_ATTENTION_DAYS)
+    if kind == "erasure_request_open":
+        return since + timedelta(days=ERASURE_REQUEST_ATTENTION_DAYS)
     return since
 
 
@@ -106,6 +114,24 @@ class ControlState:
     reason: str | None
     set_by: str | None
     set_at: datetime | None
+
+
+ErasureRequestStatus = Literal["open", "erasure_queued", "erasure_ran", "closed"]
+
+
+@dataclass(frozen=True)
+class ErasureRequestState:
+    """One logged erasure request: the day it arrived, the operator's
+    reference, the account by id or none, and where it stands — read off
+    the job queue, never stored."""
+
+    id: str
+    reference: str
+    received_on: date
+    subject_id: str | None
+    status: ErasureRequestStatus
+    closed_at: datetime | None
+    closed_reason: str | None
 
 
 @dataclass(frozen=True)
@@ -259,6 +285,7 @@ class OperatorReads(Protocol):
     async def attention(self) -> AttentionCounts: ...
     async def queue(self) -> list[QueueRow]: ...
     async def controls(self) -> list[ControlState]: ...
+    async def erasure_requests(self) -> list[ErasureRequestState]: ...
     async def audit_log(self, limit: int = 200, subject_id: str | None = None) -> list[dict]: ...
     async def account_coach_spend(self, user_id: str, days: int = 30) -> list[DayFigure]: ...
     async def jobs(self, limit: int = 200) -> list[dict]: ...

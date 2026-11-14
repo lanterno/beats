@@ -25,6 +25,7 @@ from beats.operator.reads import (
     CapacityReport,
     ControlState,
     DayFigure,
+    ErasureRequestState,
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
@@ -184,6 +185,15 @@ async def access(request: Request, operator: CurrentOperator) -> list[AccessEntr
     changing it is a deploy (terraform/README.md § Operator Deployment)."""
     allowlist = request.app.state.operator_settings.allowlist
     return [AccessEntry(email=i.email, role=i.role) for i in allowlist]
+
+
+@router.get("/erasure-requests", response_model=list[ErasureRequestState])
+async def erasure_requests(
+    operator: CurrentOperator, reads: OperatorReadsDep
+) -> list[ErasureRequestState]:
+    """The erasure request log: when each mail arrived and where it stands.
+    A reference and an id, never an address."""
+    return await reads.erasure_requests()
 
 
 @router.get("/abuse", response_model=AbuseReport)

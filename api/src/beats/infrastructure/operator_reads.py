@@ -23,6 +23,7 @@ from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
     ACCOUNT_COACH_SPEND_DAYS,
     COACH_CAP_ATTENTION_FRACTION,
+    ERASURE_REQUEST_ATTENTION_DAYS,
     SUPERSEDED_ATTENTION_DAYS,
     AbuseReport,
     AccountDetail,
@@ -36,6 +37,7 @@ from beats.operator.reads import (
     DayFigure,
     DeviceSummary,
     DomainFigure,
+    ErasureRequestState,
     MembershipSummary,
     OrganisationDetail,
     OrganisationSummary,
@@ -197,6 +199,13 @@ class MongoOperatorReads:
 
         paused = sum(1 for c in await self._controls_in_force() if c.name in PAUSES)
 
+        overdue_before = (now - timedelta(days=ERASURE_REQUEST_ATTENTION_DAYS)).date()
+        erasure_overdue = sum(
+            1
+            for r in await self.erasure_requests()
+            if r.status == "open" and r.received_on <= overdue_before
+        )
+
         return AttentionCounts(
             organisations_without_owner=without_owner,
             controls_paused=paused,
@@ -206,6 +215,7 @@ class MongoOperatorReads:
             approvals_superseded_over_30d=superseded,
             absence_requests_pending_over_14d=pending,
             accounts_near_coach_cap=near_cap,
+            erasure_requests_overdue=erasure_overdue,
         )
 
     async def _controls_in_force(self):
@@ -231,6 +241,56 @@ class MongoOperatorReads:
             )
             for c in sorted(map(control_from_doc, docs), key=lambda c: c.name)
         ]
+
+    async def erasure_requests(self) -> list[ErasureRequestState]:
+        """Every logged request, newest first, with its state read off the
+        job queue: an erasure queued or run for its account is a fact the
+        queue holds, so the log never repeats it."""
+        from beats.infrastructure.operator_store import MongoErasureRequests
+
+        docs = await MongoErasureRequests(self._db).all()
+        subjects = sorted({d["subject_id"] for d in docs if d.get("subject_id")})
+        jobs: dict[str, str] = {}
+        if subjects:
+            cursor = self._db.operator_jobs.find(
+                {"command": "account.erase", "subject_id": {"$in": subjects}},
+                projection=["subject_id", "state"],
+            )
+            async for job in cursor:
+                # done outranks a later queued one, queued outranks nothing
+                state = jobs.get(job["subject_id"])
+                if job["state"] == "done" or (
+                    state is None and job["state"] in ("queued", "running")
+                ):
+                    jobs[job["subject_id"]] = job["state"]
+        out = []
+        for d in docs:
+            if d.get("closed_at"):
+                status = "closed"
+            else:
+                job_state = jobs.get(d.get("subject_id") or "")
+                status = (
+                    "erasure_ran"
+                    if job_state == "done"
+                    else "erasure_queued"
+                    if job_state in ("queued", "running")
+                    else "open"
+                )
+            received = _as_date(d.get("received_on"))
+            if received is None:
+                continue
+            out.append(
+                ErasureRequestState(
+                    id=d["id"],
+                    reference=str(d.get("reference", "")),
+                    received_on=received,
+                    subject_id=d.get("subject_id"),
+                    status=status,
+                    closed_at=_as_datetime(d.get("closed_at")),
+                    closed_reason=d.get("closed_reason"),
+                )
+            )
+        return out
 
     async def queue(self) -> list[QueueRow]:
         """The rows behind the Attention counts, soonest due first. Ids and
@@ -305,6 +365,11 @@ class MongoOperatorReads:
         for control in await self._controls_in_force():
             if control.name in PAUSES:
                 row("control_paused", control.name, control.until)
+
+        for request in await self.erasure_requests():
+            if request.status == "open":
+                received = datetime.combine(request.received_on, datetime.min.time(), tzinfo=UTC)
+                row("erasure_request_open", request.id, received)
 
         rows.sort(key=lambda r: r.due)
         return rows
