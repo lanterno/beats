@@ -764,13 +764,26 @@ export interface components {
             /** Confirmation */
             confirmation?: string | null;
         };
-        /** ControlArgs */
+        /**
+         * ControlArgs
+         * @description Which control. `network` names one of the sign-up slow-downs that
+         *     each cover one network, by the opaque key the signal showed; without it,
+         *     the control is the one for everyone. Both stand side by side, so each is
+         *     set and cleared on its own. The key travels in this body only: the
+         *     audit's subject is the control's name, and its before and after say
+         *     `one_network`, never which.
+         */
         ControlArgs: {
             /**
              * Name
              * @enum {string}
              */
             name: "coach" | "webhooks" | "imports" | "signups" | "writes_per_minute_beats" | "writes_per_minute_signals" | "imports_per_hour";
+            /**
+             * Network
+             * @default null
+             */
+            network: string | null;
         };
         /**
          * ControlState
@@ -1174,8 +1187,9 @@ export interface components {
          * @description A pause needs `until` (inside MAX_PAUSE) and a `reason` for the
          *     operator's own page; a limit needs a `value` and takes neither. `signups`
          *     may carry a `value` too — a ceiling an hour — and is then slowed rather
-         *     than paused, until `until`. The sentence a user sees is fixed text; the
-         *     reason never reaches them.
+         *     than paused, until `until`. With a `network`, it slows that network
+         *     alone, capped at the next UTC midnight, when the key stops matching. The
+         *     sentence a user sees is fixed text; the reason never reaches them.
          */
         SetControlArgs: {
             /**

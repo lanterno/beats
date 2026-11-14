@@ -664,6 +664,7 @@
         "type": "object"
       },
       "ControlArgs": {
+        "description": "Which control. `network` names one of the sign-up slow-downs that\neach cover one network, by the opaque key the signal showed; without it,\nthe control is the one for everyone. Both stand side by side, so each is\nset and cleared on its own. The key travels in this body only: the\naudit's subject is the control's name, and its before and after say\n`one_network`, never which.",
         "properties": {
           "name": {
             "enum": [
@@ -677,6 +678,20 @@
             ],
             "title": "Name",
             "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Network"
           }
         },
         "required": [
@@ -1802,7 +1817,7 @@
         "type": "object"
       },
       "SetControlArgs": {
-        "description": "A pause needs `until` (inside MAX_PAUSE) and a `reason` for the\noperator's own page; a limit needs a `value` and takes neither. `signups`\nmay carry a `value` too \u2014 a ceiling an hour \u2014 and is then slowed rather\nthan paused, until `until`. The sentence a user sees is fixed text; the\nreason never reaches them.",
+        "description": "A pause needs `until` (inside MAX_PAUSE) and a `reason` for the\noperator's own page; a limit needs a `value` and takes neither. `signups`\nmay carry a `value` too \u2014 a ceiling an hour \u2014 and is then slowed rather\nthan paused, until `until`. With a `network`, it slows that network\nalone, capped at the next UTC midnight, when the key stops matching. The\nsentence a user sees is fixed text; the reason never reaches them.",
         "properties": {
           "name": {
             "enum": [
