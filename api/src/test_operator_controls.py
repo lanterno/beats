@@ -100,7 +100,11 @@ class TestControlCommands:
     def test_a_network_is_slowed_never_blocked_and_only_until_midnight(
         self, operator_client, mongo
     ):
-        soon = (datetime.now(UTC) + timedelta(minutes=10)).isoformat()
+        # Before the key's midnight however near it is: ten minutes on, the
+        # test would be refused between 23:50 and midnight UTC.
+        now = datetime.now(UTC)
+        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        soon = (now + min(timedelta(minutes=10), (midnight - now) / 2)).isoformat()
         key = "0123456789abcdef0123456789abcdef"
         ok = self._run(
             operator_client,
