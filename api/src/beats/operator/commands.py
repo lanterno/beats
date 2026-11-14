@@ -30,6 +30,7 @@ from beats.infrastructure.operator_store import MongoPlatformControlsStore
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
 from beats.operator.erasure_requests import CloseErasureRequest, LogErasureRequest
+from beats.operator.ids import DocumentId
 from beats.operator.settings import OperatorIdentity
 from beats.operator.status_page import (
     MESSAGE_MAX,
@@ -110,7 +111,7 @@ class InvalidCommandArgs(DomainException):
 
 
 class AccountArgs(BaseModel):
-    user_id: str = Field(min_length=1, max_length=64)
+    user_id: DocumentId
 
 
 class SuspendArgs(AccountArgs):
@@ -292,7 +293,7 @@ class RevokeDevice(_AccountCommand):
 
 
 class OrganisationArgs(BaseModel):
-    organisation_id: str = Field(min_length=1, max_length=64)
+    organisation_id: DocumentId
 
 
 async def _organisation_name(ctx: CommandContext, organisation_id: str) -> str:
@@ -336,7 +337,7 @@ class _OrganisationCommand:
 
 
 class GrantOwnerArgs(OrganisationArgs):
-    user_id: str = Field(min_length=1, max_length=64)
+    user_id: DocumentId
 
 
 class GrantOwner(_OrganisationCommand):
@@ -719,7 +720,7 @@ class DeleteOrganisation(_OrganisationCommand):
 class RetentionPurgeArgs(BaseModel):
     # None purges every organisation; the confirmation is then the word
     # "all", typed.
-    organisation_id: str | None = Field(default=None, max_length=64)
+    organisation_id: DocumentId | None = None
 
 
 class RetentionPurge:
@@ -767,7 +768,7 @@ class JobNotFound(DomainException):
 
 
 class CancelJobArgs(BaseModel):
-    job_id: str = Field(min_length=1, max_length=64)
+    job_id: DocumentId
 
 
 class CancelJob:

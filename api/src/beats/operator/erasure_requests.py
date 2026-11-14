@@ -17,6 +17,7 @@ from pydantic import AfterValidator, BaseModel, Field, PrivateAttr, model_valida
 
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.operator_store import MongoErasureRequests
+from beats.operator.ids import DocumentId
 
 if TYPE_CHECKING:
     from beats.operator.commands import CommandContext
@@ -39,19 +40,10 @@ def _a_reference(value: str) -> str:
     return value
 
 
-def _an_account_id(value: str) -> str:
-    # Whole, and lower-case as the account page shows it: the request's
-    # state and its closing find the erasure job by this id, exactly.
-    value = value.strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{24}", value):
-        raise ValueError("an account id is 24 characters of 0-9 and a-f; paste it whole")
-    return value
-
-
 class LogErasureRequestArgs(BaseModel):
     reference: Annotated[str, AfterValidator(_a_reference)] = Field(min_length=1, max_length=40)
     received_on: date
-    user_id: Annotated[str, AfterValidator(_an_account_id)] | None = None
+    user_id: DocumentId | None = None
     # The request's own id, made before it is written, so the audit can name
     # a request with no account by an id too. Never sent by the client.
     _request_id: str = PrivateAttr(default_factory=lambda: str(ObjectId()))
@@ -117,7 +109,7 @@ class ErasureRequestNotFound(DomainException):
 
 
 class CloseErasureRequestArgs(BaseModel):
-    request_id: str = Field(min_length=1, max_length=64)
+    request_id: DocumentId
     # erased: the job ran. no_account: nothing to erase. withdrawn: they
     # asked again, the other way.
     reason: Literal["erased", "no_account", "withdrawn"]
