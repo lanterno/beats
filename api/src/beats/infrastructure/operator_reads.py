@@ -444,13 +444,9 @@ class MongoOperatorReads:
             with_writes = len(
                 await self._db.timeLogs.distinct("user_id", {"user_id": {"$in": this_hour}})
             )
-        groups = (
-            await self._db[SIGNUP_NETWORK_COUNTS]
-            .find({"hour": hour_key(now)}, projection=["key", "completed"])
-            .sort("completed", -1)
-            .to_list()
+        largest = await self._db[SIGNUP_NETWORK_COUNTS].find_one(
+            {"hour": hour_key(now)}, projection=["key", "completed"], sort=[("completed", -1)]
         )
-        largest = groups[0] if groups else None
         size = int(largest.get("completed", 0)) if largest else 0
         shown = largest is not None and size >= SIGNUP_NETWORK_MIN_GROUP
         return SignupWave(
@@ -460,7 +456,6 @@ class MongoOperatorReads:
             accounts_with_writes=with_writes,
             largest_group=size if shown else None,
             largest_key=str(largest["key"]) if shown and largest else None,
-            groups=len(groups),
         )
 
     # ── the operator's own records ──────────────────────────────────

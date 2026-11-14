@@ -274,7 +274,11 @@ SIGNUP_BASELINE_WEEKS = 8
 class SignupWave:
     """This hour's sign-ups against the usual for this hour of the week, and
     the largest network's share — the key is opaque and day-scoped, the page
-    says "Network A", and no account is joined to it anywhere."""
+    says "Network A", and no account is joined to it anywhere.
+
+    Nothing about a network below `SIGNUP_NETWORK_MIN_GROUP` is said, not
+    even how many there are: a count of networks this hour, beside the
+    hour's accounts, would tell small groups apart."""
 
     hour: str
     completed: int
@@ -282,7 +286,6 @@ class SignupWave:
     accounts_with_writes: int
     largest_group: int | None
     largest_key: str | None
-    groups: int
 
 
 @dataclass(frozen=True)
