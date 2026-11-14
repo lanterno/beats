@@ -9,9 +9,9 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. Stages 1, 2, 3, 4 and 8 — the pages reorganised around the work, the
-switches with the global limits, sign-ups from one network, live health and
-the erasure request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
+from. Stages 1, 2, 3, 4, 5 and 8 — the pages reorganised around the work,
+the switches with the global limits, sign-ups from one network, live health,
+release history and the erasure request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
 pages* and § *Controls*; no other stage has started.
 
 **The owner's inputs were decided on 2026-11-14**, so no stage in this file
@@ -20,7 +20,6 @@ done by hand. Stage 7 lives in its own file and keeps its own open question.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 5 | Release history | Build | Nothing | Nothing |
 | 6 | Deploy freeze | Build | Nothing | Nothing |
 | 7 | Customer updates | Build | Its own file, [status-page.md](status-page.md) | The wording of the PRIVACY.md sentence |
 | – | Rolling a release back from the back office | Postponed | [Below](#postponed-rolling-a-release-back) | |
@@ -47,7 +46,7 @@ hand-made step **where it reasonably can** — this is encouraged, not a hard
 rule, and a stage that genuinely needs one adds it, with a working default
 where a default is possible and a sentence in its docs saying why. Stage 3
 shows the preferred shape: its day key is derived from `JWT_SECRET`, which the
-public API already holds, rather than from a new secret. For stages 5 and 6,
+public API already holds, rather than from a new secret. For stage 6,
 prefer what the service can learn for itself (project, region and service
 name from the metadata server), have a value Terraform already knows set by
 Terraform rather than by a person, and make a deployment that is not on Google
@@ -63,7 +62,7 @@ figure, person and organisation in it is invented.
 
 | Mock screen | Replaces | Stage |
 |---|---|---|
-| `Main` (Today) | `pages/Today.tsx` | Built, 1 and 4; 5 adds to it |
+| `Main` (Today) | `pages/Today.tsx` | Built, 1, 4 and 5 |
 | `Queue` | `pages/Queue.tsx` | Built, 1 |
 | `Palette` (⌘K) | `app/Palette.tsx` | Built, 1 |
 | `Runbooks` | `pages/Runbooks.tsx` | Built, 1 |
@@ -74,7 +73,7 @@ figure, person and organisation in it is invented.
 | `Capacity` | `pages/Capacity.tsx` | Built, 1 and 4 |
 | `Jobs`, `Audit`, `Compliance` | `pages/Jobs.tsx`, `Audit.tsx`, `Compliance.tsx` | Built, 1 and 8 |
 | `Access` (access and controls) | `pages/Access.tsx` | Built, 2 |
-| `Releases` | Nothing | 5 and 6 |
+| `Releases` | `pages/Releases.tsx` | Built, 5; 6 adds to it |
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
 | `Phone`, `States`, `Dusk` | Not screens to build: narrow width, empty and error states, and the dusk hour, in every stage | All |
 
@@ -147,39 +146,6 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
 
 ## Work
 
-### Stage 5. Release history
-
-**Goal:** when something breaks, see what shipped just before it.
-
-**Build:** `GET /api/operator/releases`, cached like live health (`HealthCache` in `operator/health.py`), and the `Releases`
-screen without its rollback controls. Each row links to its commit, and a bad
-one links to the runbook for reverting on `main`.
-
-| What | From | Grant on `beats-operator` |
-|---|---|---|
-| API builds, newest first, with their commit | Cloud Build `builds.list` | `roles/cloudbuild.builds.viewer` |
-| The API's commit | The operator's own image tag, set by Terraform as an env (`terraform/operator.tf` gives both services `var.container_image_tag` in one apply), so nobody deploying sets it by hand; unset reads as "unknown" | None |
-| The web app's live commit | A `version.json` written by the build from `VITE_GIT_SHA`, fetched from `lifepete.com` | None |
-| Web releases over time | Firebase Hosting's release list | `roles/firebasehosting.viewer` |
-| Commit subjects | GitHub's public REST API, cached per sha for good | None; the repo is public |
-
-- **Label the API's commit "as deployed".** If a revision failed to become
-  ready, the API is still on the previous one and this figure is wrong. The
-  truthful answer is the deploy-state row below, which does wait on
-  [secret-manager.md](secret-manager.md).
-- **A web app behind the API is normal,** because they ship separately. Show it
-  as a fact and not as a problem.
-- **A build viewer can read every step's arguments.** `api/cloudbuild.yaml` has no
-  secrets in them today. A step that gained one would hand it to the operator.
-
-**Tests:** merging the sources, one source failing while the others answer, a
-web `version.json` that is missing.
-
-**Done when** the screen matches production for the last ten deploys of each half.
-
-**Must not:** add anything that moves traffic; read the API's Cloud Run service
-in this stage.
-
 ### Stage 6. Deploy freeze
 
 **Goal:** during an incident, stop a merge from shipping on top of it.
@@ -233,7 +199,7 @@ Its own file, because it is not an operator feature: [status-page.md](status-pag
   `api/**`, `terraform/**` or `backoffice/**` runs as that account, though,
   and steady-state applies only refresh what exists: once
   [secret-manager.md](secret-manager.md)'s resources and the grants in stages
-  5 and 6 (stage 4's `roles/monitoring.viewer` is already made) are created too, how much of this it keeps is the owner's call.
+  6 (stages 4 and 5's viewer roles are already made) are created too, how much of this it keeps is the owner's call.
 - **The landing page's deploy-state row** waits on
   [secret-manager.md](secret-manager.md): the API's Cloud Run spec carries
   `JWT_SECRET` and the DSN as plain environment values, so reading the
