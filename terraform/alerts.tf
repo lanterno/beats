@@ -181,7 +181,9 @@ resource "google_monitoring_alert_policy" "api_latency" {
 # maxScale in cloudrun.tf) for ten minutes: new requests wait for a free
 # instance, and Cloud Run turns away (429) those that wait too long. At the
 # current maximum of 2 this held for five minutes three times in the week to
-# 2026-10-30, and for ten minutes twice.
+# 2026-10-30, and for ten minutes twice. The back office's live health
+# (api/src/beats/operator/health.py) counts instances the same way, against
+# the same ceiling; a change to this filter is made there too.
 resource "google_monitoring_alert_policy" "api_instances_at_max" {
   display_name          = "${var.api_service_name}: instances at the maximum"
   project               = var.project_id
