@@ -267,7 +267,11 @@ export function Today() {
 						) : (
 							", in the API's log on Google Cloud"
 						)}
-						. It stays empty until a <code>WRITES_PER_MINUTE_*</code> ceiling is set.
+						. It stays empty until a write ceiling is in force: one set on{" "}
+						<Link to="/access" className="link">
+							Access
+						</Link>
+						, an account's own, or a <code>WRITES_PER_MINUTE_*</code> setting.
 					</Prose>
 				</Panel>
 				<Panel title="Shipped">
