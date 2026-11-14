@@ -101,7 +101,7 @@ export const RUNBOOKS: Runbook[] = [
 			"Log it on Privacy and compliance the day it arrives, with a reference — a ticket number or the mail's date — and the account's id. Never a name or the address: the row outlives the account.",
 			"Check the mail came from the address on the account. Find the account by that exact address, and compare.",
 			"Queue the erasure from the account's page. Queueing suspends the account with wording that names the day the window ends, so an impersonated request can still be stopped by them.",
-			"When the job has run, close the request as erased. If there was no account, close it as no_account; if they changed their mind inside the window, cancel the job and close it as withdrawn.",
+			"When the job runs, it closes the request naming the account as erased, which starts the year the request is kept. If there was no account, close it as no_account; if they changed their mind inside the window, cancel the job and close it as withdrawn.",
 		],
 	},
 	{
