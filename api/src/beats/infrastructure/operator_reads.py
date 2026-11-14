@@ -24,6 +24,7 @@ from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
     ACCOUNT_COACH_SPEND_DAYS,
     COACH_CAP_ATTENTION_FRACTION,
+    COACH_COST_DAYS,
     ERASURE_REQUEST_ATTENTION_DAYS,
     SIGNUP_BASELINE_WEEKS,
     SIGNUP_NETWORK_MIN_GROUP,
@@ -836,12 +837,18 @@ class MongoOperatorReads:
                     name=name,
                     documents=int(stats.get("count", 0)),
                     storage_bytes=int(stats.get("storageSize", 0)),
+                    index_bytes=int(stats.get("totalIndexSize", 0)),
                 )
             )
 
         # The platform's coach cost by day and model, with what one account's
         # /api/coach/usage cannot say: the cache-hit ratio across everyone.
+        # The last COACH_COST_DAYS days only, newest first: every day since
+        # launch would grow without bound.
+        today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        since = today - timedelta(days=COACH_COST_DAYS - 1)
         pipeline = [
+            {"$match": {"ts": {"$gte": since}}},
             {
                 "$group": {
                     "_id": {
@@ -854,7 +861,7 @@ class MongoOperatorReads:
                     "calls": {"$sum": 1},
                 }
             },
-            {"$sort": {"_id.day": 1}},
+            {"$sort": {"_id.day": -1, "_id.model": 1}},
         ]
         cursor = await self._db.llm_usage.aggregate(pipeline)
         coach_cost = [

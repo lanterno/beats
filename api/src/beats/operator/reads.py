@@ -37,6 +37,12 @@ ERASURE_REQUEST_ATTENTION_DAYS = 14
 # stays one small list.
 ACCOUNT_COACH_SPEND_DAYS = 30
 
+# How many days of the platform's coach cost Capacity reads, today included:
+# a 30-day chart, and the whole of this month on its 31st, which the month's
+# spend is summed over. Bounded, so the answer stays one small list however
+# long the platform has run.
+COACH_COST_DAYS = 31
+
 
 @dataclass(frozen=True)
 class AttentionCounts:
@@ -305,6 +311,8 @@ class CollectionSize:
     name: str
     documents: int
     storage_bytes: int
+    # What the collection's indexes take up besides.
+    index_bytes: int = 0
 
 
 @dataclass(frozen=True)
@@ -312,6 +320,7 @@ class CoachCostDay:
     day: str
     model: str
     cost_usd: float
+    # Uncached input; what came from the cache is `cache_read_tokens`.
     input_tokens: int
     cache_read_tokens: int
     calls: int
@@ -320,6 +329,8 @@ class CoachCostDay:
 @dataclass(frozen=True)
 class CapacityReport:
     collections: list[CollectionSize]
+    # The last COACH_COST_DAYS days (UTC), newest first, one row per day and
+    # model; a day nothing was spent has no row.
     coach_cost: list[CoachCostDay]
 
 
