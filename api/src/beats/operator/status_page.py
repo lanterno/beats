@@ -5,10 +5,13 @@ own: the current state, a short message, what is affected, and the last
 posts. The page at `lifepete.com/status` and the SPA's banner read that file
 and nothing else, so both still work when the API is down — the only time
 they matter. Written whole each time, by `status.publish` and `status.clear`
-through the runner, with `ifGenerationMatch` so two writes cannot silently
-lose one, and with `Cache-Control: public, max-age=30`, because Cloud
-Storage's default for a public object is an hour of caching and "we're back"
-must not arrive an hour late.
+through the runner, over the version of the file the operator reviewed and
+no other: the review reads the file's generation, the act sends it back, and
+the write is conditional on it (`ifGenerationMatch`), so a post made between
+the review and the send is refused rather than replaced unseen. With
+`Cache-Control: public, max-age=30`, because Cloud Storage's default for a
+public object is an hour of caching and "we're back" must not arrive an hour
+late.
 
 **Nothing about a person in a post** — the file is public and keeps its
 history — and no email, no push, no third-party status page.
@@ -106,12 +109,23 @@ class StatusUnavailable(DomainException):
 
 
 class StatusConflict(DomainException):
-    """Somebody else published between the read and the write. Read again
-    and publish again: nothing was lost, nothing was overwritten."""
+    """Somebody else published since the review read the file, or between
+    the read and the write. Review it again and publish again: nothing was
+    lost, nothing was overwritten."""
 
     status_code = 409
     code = "STATUS_CONFLICT"
-    message = "The status file changed under you; read it again and publish again"
+    message = "The status file changed since you reviewed it; review it again and publish again"
+
+
+class StatusNotReviewed(DomainException):
+    """A post says which version of the file it was reviewed against — the
+    generation the preview answered. Without it there is nothing to hold the
+    write to, and a colleague's newer post could be replaced unseen."""
+
+    status_code = 409
+    code = "STATUS_NOT_REVIEWED"
+    message = "Send the generation the review showed, so a newer post is not replaced unseen"
 
 
 class StatusStore(Protocol):
@@ -202,11 +216,30 @@ class MemoryStatusStore:
 
 
 async def publish(
-    store: StatusStore, *, state: str, message: str, affected: list[str], now: datetime
+    store: StatusStore,
+    *,
+    state: str,
+    message: str,
+    affected: list[str],
+    now: datetime,
+    reviewed: int | None = None,
 ) -> StatusDoc:
+    """The post, on top of the file the operator reviewed and only that one.
+
+    `reviewed` is the generation the review read (`describe()` answers it,
+    the act sends it back; None, a caller that did not say, is refused). A
+    file that has moved since — a colleague's post in between, minutes ago —
+    is 409 `STATUS_CONFLICT`, so the operator sees the newer "Now" and
+    decides again. The write is conditional on the same generation, which
+    covers the last gap, between this read and the write.
+    """
+    if reviewed is None:
+        raise StatusNotReviewed()
     current, generation = await store.read()
+    if generation != reviewed:
+        raise StatusConflict()
     doc = next_doc(current, state=state, message=message, affected=affected, now=now)
-    await store.write(doc, if_generation_match=generation)
+    await store.write(doc, if_generation_match=reviewed)
     return doc
 
 
