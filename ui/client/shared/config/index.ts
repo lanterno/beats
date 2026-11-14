@@ -15,6 +15,12 @@ export interface AppConfig {
 	apiBaseUrl: string;
 	/** Whether we're in development mode */
 	isDev: boolean;
+	/**
+	 * Where the public status file is (docs/status-page.md), or "" for none:
+	 * then there is no /status route and no banner, which is the self-hosted
+	 * default. The split deployment names it with `VITE_STATUS_URL`.
+	 */
+	statusUrl: string;
 }
 
 /**
@@ -79,6 +85,7 @@ export function isLoopbackUrl(url: string): boolean {
 export const config: AppConfig = {
 	apiBaseUrl: resolveApiBaseUrl(),
 	isDev: import.meta.env.DEV,
+	statusUrl: ((import.meta.env.VITE_STATUS_URL as string | undefined) ?? "").trim(),
 };
 
 export { APP_NAME } from "./brand";

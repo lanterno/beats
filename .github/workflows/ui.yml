@@ -93,6 +93,9 @@ jobs:
         env:
           VITE_API_URL: https://api.lifepete.com
           VITE_GIT_SHA: ${{ github.sha }}
+          # The public status file (docs/status-page.md), written from the
+          # back office; the bucket is terraform/status.tf's.
+          VITE_STATUS_URL: https://storage.googleapis.com/beats-476914-status/status.json
           VITE_CF_WEB_ANALYTICS_TOKEN: ${{ vars.CF_WEB_ANALYTICS_TOKEN }}
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:

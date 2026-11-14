@@ -19,6 +19,7 @@ import {
 	useTimerNotification,
 } from "@/shared/lib";
 import { CommandPalette, FocusMode, SkyBackdrop } from "@/shared/ui";
+import { StatusBanner } from "@/shared/ui/status-banner";
 import { MobileHeader, Sidebar } from "@/widgets/sidebar";
 
 export function Layout() {
@@ -119,6 +120,9 @@ export function Layout() {
 
 			{/* Mobile header + drawer */}
 			<MobileHeader {...timerProps} />
+
+			{/* What customers are told is happening, when it is not "operational" */}
+			<StatusBanner />
 
 			{/* Main content area */}
 			{/* on-sky: the headings and captions the pages set straight on the sky */}
