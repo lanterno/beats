@@ -9,9 +9,10 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. Stages 1 and 2 — the pages reorganised around the work, and the
-switches with the global limits — shipped on 2026-11-14 and are in
-docs/backoffice.md § *The pages* and § *Controls*; no other stage has started.
+from. Stages 1, 2, 3 and 8 — the pages reorganised around the work, the
+switches with the global limits, sign-ups from one network and the erasure
+request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
+pages* and § *Controls*; no other stage has started.
 
 **The owner's inputs were decided on 2026-11-14**, so no stage below waits
 on a decision; each says what was decided and why, and what is still done by
@@ -19,12 +20,10 @@ hand.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 3 | Signups from one network | Keep, and improve | Nothing | Setting the secret; approving the PRIVACY.md sentence drafted below |
 | 4 | Live health from Cloud Monitoring | Build | Nothing | Nothing (target decided below) |
 | 5 | Release history | Build | Nothing | Nothing |
 | 6 | Deploy freeze | Build | Nothing | Nothing |
 | 7 | Customer updates | Build | Its own file, [status-page.md](status-page.md) | The wording of the PRIVACY.md sentence |
-| 8 | Erasure request log | Wanted, not urgent | Do it last | Adding `erasure_requests` to the Atlas role |
 | – | Rolling a release back from the back office | Postponed | [Below](#postponed-rolling-a-release-back) | |
 | – | Reasons on commands, incidents, restrictions in force, an audit of lookups | No answer given | [Below](#not-decided-the-new-records) | The decision |
 
@@ -33,12 +32,25 @@ can be picked up alone. Stage 1's screens are built; the rows below marked
 "then 3 and 4 add to it" are what later stages add to a built page. Five
 smaller items from before the redesign are at the end of *Work*.
 
-**By hand, before stage 2 is used in production:** add `platform_controls`
-to the `beatsOperator` Atlas role's writes (terraform/README.md § *Operator
-Deployment*). Until then `control.set` fails on the write and nothing else
-is affected. The limit values are set from the page, not in code: 120 beat
+**By hand, before stages 2 and 8 are used in production:** add
+`platform_controls` and `erasure_requests` to the `beatsOperator` Atlas
+role's writes (terraform/README.md § *Operator Deployment*). Until then
+`control.set` and `erasure_request.log` fail on the write and nothing else is
+affected. The limit values are set from the page, not in code: 120 beat
 writes and 60 signal writes a minute and 10 imports an hour are the
 recommendation, after reading the per-account rate in the request log.
+
+**A rule for every stage left, decided 2026-11-14: no new variable, secret
+or hand-made step for anyone deploying this.** LifePete should start with
+great defaults and nothing to configure beyond what it already asks for.
+Stage 3 was built that way — its day key is derived from `JWT_SECRET`, which
+the public API already holds, rather than from a new secret — and stages 4
+to 6 must be too: a figure read from Google is configured from the metadata
+server the service already runs on (project, region, service name), never
+from a variable, and a deployment that is not on Google Cloud shows
+"unavailable" and a link, never a broken page. The one thing that cannot be
+avoided, an IAM grant in `terraform/`, is gated on `operator_enabled` like
+the rest, so a self-hosted install never sees it.
 
 ## The design
 
@@ -55,9 +67,9 @@ figure, person and organisation in it is invented.
 | `Accounts`, `Account` | `pages/Accounts.tsx` | 1 |
 | `Review` (review before acting) | `shared/ui/CommandForm.tsx`, inline | 1 |
 | `Orgs`, `Org` | `pages/Organisations.tsx` | 1 |
-| `Trust` | `pages/Abuse.tsx` | 1, then 3 and 4 add to it |
+| `Trust` | `pages/Abuse.tsx` | Built, 1 and 3; 4 adds to it |
 | `Capacity` | `pages/Capacity.tsx` | 1, then 4 adds to it |
-| `Jobs`, `Audit`, `Compliance` | `pages/Compliance.tsx`, split in three | 1, then 8 adds to it |
+| `Jobs`, `Audit`, `Compliance` | `pages/Compliance.tsx`, split in three | Built, 1 and 8 |
 | `Access` (access and controls) | Nothing | Built, 2 |
 | `Releases` | Nothing | 5 and 6 |
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
@@ -132,90 +144,6 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
 
 ## Work
 
-### Stage 3. Signups from one network
-
-**Goal:** see a bulk-signup wave while it happens, and slow that one source
-down, while keeping less about addresses than the request log already does. The
-owner kept this and asked for it to be improved. It is the most
-privacy-sensitive addition in this file.
-
-**What exists:** Cloud Run's own request log holds each visitor's `remoteIp`
-for 30 days; `routers/auth.py` limits by address, in memory, per instance
-(#376); the Abuse page counts signups per day. Nothing in Beats stores an
-address, and PRIVACY.md says nothing about Beats using one.
-
-**Why stored, when the last two signals were "logged and counted, never
-stored":** those are facts about one account's request, and that decision
-refuses a history of what a person did. This holds no account at all. Logging
-it instead would show the operator raw addresses, or need a metric label per
-network, which is the unbounded cardinality that decision also refuses.
-
-**Build:**
-
-- **Truncate, then hash.** IPv4 to /24, IPv6 to /48, then HMAC with a key
-  derived for the UTC day from a new secret, `SIGNUP_NETWORK_KEY`, held by the
-  public API only. The operator can never compute a key, so it can never test a
-  guess. Unset means the signal does not run, which is the self-hosted default
-  (behind nginx every visitor would look like one network).
-- **Store only a counter.** `signup_network_counts`: hour, opaque key, `started`,
-  `completed`, and nothing else, with a 48-hour TTL index in `ensure_indexes`.
-  `started` is `POST /register/start`, which **creates the user before the
-  ceremony**, so user rows include abandoned starts. `completed` is a finished
-  verify or an SSO account created.
-- **The address** is the one `ProxyHeadersMiddleware` resolved, so a change to
-  `FORWARDED_ALLOW_IPS` or a new proxy changes this signal too.
-- **The read,** with named constants in `reads.py` like the others. The hour's
-  completed signups against the median of the same hour of the week over the
-  last eight weeks, from `users` holding a credential or an SSO identity, so
-  abandoned starts do not inflate it (a baseline per network cannot exist, by
-  design). Then the largest group's share of this window, shown only at or above
-  a minimum group size (start at 5). Below that, nothing is shown at all.
-- **The page** says "Network A", never the key. The sentence "of these accounts,
-  3 have written anything" covers **every account created in the window**. It
-  says, in words, that offices, universities, carrier networks and an
-  organisation onboarding its staff all look like this.
-- **The action** is a lower ceiling for that one key, through stage 2's control
-  with the key as its subject. It slows and never blocks, and it expires at the
-  next UTC midnight at the latest, because that is when the key stops matching.
-  The page says so. It uses the limiter `routers/auth.py` already has.
-
-**By hand:** the owner sets `SIGNUP_NETWORK_KEY` (a plain environment value
-like the others until [secret-manager.md](secret-manager.md) lands, a fifth
-secret after). Decided 2026-11-14: 32 random bytes, hex (`openssl rand -hex
-32`), rotated by setting a new value — rotation only resets the day's
-counters, which is harmless.
-
-**First, in its own commit:** the sentences in PRIVACY.md and DATA.md saying what
-is kept, for how long and why. Nothing ships before them. The wording,
-decided 2026-11-14 and to be pasted as drafted unless the owner objects:
-
-> To notice a burst of sign-ups from one place, LifePete keeps for 48 hours
-> a count of sign-ups per hour per network, where the network is the first
-> part of the visitor's address (the /24 for IPv4, the /48 for IPv6),
-> hashed with a key that changes every day. The address itself is not
-> stored, the hash cannot be reversed or matched against a guess after the
-> day ends, and no account is ever linked to a network. The operator sees
-> only how large the largest group in an hour is, and may slow sign-ups from
-> it for the rest of the day; nobody is blocked.
-
-The action is stage 2's `signups` control with the key as its subject —
-stage 2 shipped, so this is unblocked.
-
-**Tests:** IPv4 and IPv6 truncation at their boundaries; a key changing at UTC
-midnight; the minimum group size holding at one below it; abandoned starts not
-counted as completed. Extend `TestOperatorWall`: a planted address, whole or
-truncated, appears in no operator response and no stored document.
-
-**Done when** a scripted burst from one address shows as one network locally, a
-burst below the minimum shows nothing, and the slow-down expires by itself.
-
-**Must not:** put a network on a user document, a beat or an audit row; join an
-account to a network anywhere; keep the counters past 48 hours; look
-up a country or a provider; add a network label to a metric; offer a block.
-
-**Overturns:** docs/backoffice.md § *The pages*, under *Abuse*, gains this and
-the reasoning.
-
 ### Stage 4. Live health from Cloud Monitoring
 
 **Goal:** Today and Capacity show whether the product is healthy, without opening
@@ -242,7 +170,8 @@ touch the API's Cloud Run spec.
 - **The figures:** availability (the uptime checks), share of 5xx and p95
   latency (the filters of the `api` dashboard in `terraform/monitoring.tf`, with
   a comment at both ends, since each must change with the other), instances
-  against `var.max_instances` (passed in as a new env), refused writes per route
+  against `var.max_instances` (read off the service's own Cloud Run
+  description through the metadata server, not a new env), refused writes per route
   (`write_limit_refusals`), restore sizes (`import_bytes`), and the job runner's
   last completed run.
 - **Open alerts:** `GET /v3/projects/{id}/alerts`, Google's `alerts.list`.
@@ -346,34 +275,6 @@ bucket; allow a freeze with no end.
 ### Stage 7. Customer updates
 
 Its own file, because it is not an operator feature: [status-page.md](status-page.md).
-
-### Stage 8. Erasure request log (not urgent)
-
-**Goal:** a request that arrives by email has a date and a visible deadline. The
-owner called it nice and not urgent. PRIVACY.md promises deletion seven days
-after queueing, well inside the legal month, so the risk it covers is a mail
-forgotten before anything is queued.
-
-**Build:** a small collection the operator writes through one command when the
-mail arrives, holding the day it arrived, a reference and `subject_id` (never
-`user_id`, or erasure's own sweep deletes it, as `MongoOperatorAudit`'s docstring
-explains) and **never an address**. A request from someone with no account is a
-reference alone. Attention shows any request past a named number of days with
-no erasure queued. Add the collection to the Atlas grant by hand first.
-
-Decided 2026-11-14: the collection is `erasure_requests`; the named number
-of days is 14 (the PRIVACY.md promise is seven days after queueing, so a
-request not queued within two weeks is the risk); a row is kept one year
-after the erasure it names ran, or after it was marked closed with no
-account, and the retention purge deletes it then — the same shape as the
-operator audit's four years, shorter because a request names nothing but a
-reference and an id.
-
-**Must not:** add an in-app request, or keep these rows with no stated retention.
-
-**Overturns:** docs/backoffice.md § *The pages*, *Attention*: "Erasure requests are
-deliberately not counted". Its reason, that counting would take an in-app request,
-does not hold for a log the operator keeps.
 
 ### Smaller items, from before the redesign
 
