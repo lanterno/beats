@@ -9,26 +9,23 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. Stages 1 to 6 and 8 — the pages reorganised around the work, the
-switches with the global limits, sign-ups from one network, live health,
-release history, the deploy freeze and the erasure request log — shipped on
-2026-11-14 and are in docs/backoffice.md § *The
-pages* and § *Controls*; no other stage has started.
+from. **Every stage shipped on 2026-11-14**: the pages reorganised around the
+work, the switches with the global limits, sign-ups from one network, live
+health, release history, the deploy freeze, the status page
+([docs/status-page.md](../docs/status-page.md)) and the erasure request log,
+all in docs/backoffice.md and docs/status-page.md.
 
 **The owner's inputs were decided on 2026-11-14**, so no stage in this file
 waits on a decision; each says what was decided and why, and what is still
-done by hand. Stage 7 lives in its own file and keeps its own open question.
+done by hand.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 7 | Customer updates | Build | Its own file, [status-page.md](status-page.md) | The wording of the PRIVACY.md sentence |
 | – | Rolling a release back from the back office | Postponed | [Below](#postponed-rolling-a-release-back) | |
 | – | Reasons on commands, incidents, restrictions in force, an audit of lookups | No answer given | [Below](#not-decided-the-new-records) | The decision |
 
-The numbers are a suggested order. Apart from what the table says, any stage
-can be picked up alone. Every screen in § *The design* marked "Built" exists;
-what a later stage adds to one is named in its row. Five smaller items from
-before the redesign are at the end of *Work*.
+Every screen in § *The design* marked "Built" exists. What is left is under
+*Work*.
 
 **By hand, before stages 2 and 8 are used in production:** add
 `platform_controls` and `erasure_requests` to the `beatsOperator` Atlas
@@ -75,7 +72,7 @@ figure, person and organisation in it is invented.
 | `Jobs`, `Audit`, `Compliance` | `pages/Jobs.tsx`, `Audit.tsx`, `Compliance.tsx` | Built, 1 and 8 |
 | `Access` (access and controls) | `pages/Access.tsx` | Built, 2 |
 | `Releases` | `pages/Releases.tsx` | Built, 5 and 6 |
-| `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
+| `Incidents`, `IncidentRoom` | Nothing | Not decided; the status page stands without them |
 | `Phone`, `States`, `Dusk` | Not screens to build: narrow width, empty and error states, and the dusk hour, in every stage | All |
 
 **The mock can be built as drawn.** On 2026-11-09 the twelve places where it
@@ -147,25 +144,8 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
 
 ## Work
 
-### Stage 7. Customer updates
+### What is left
 
-Its own file, because it is not an operator feature: [status-page.md](status-page.md).
-
-### Smaller items, from before the redesign
-
-- **Before a second person is added.** PRIVACY.md's "I … am the only operator"
-  sentence names them before any `viewer` goes on the allowlist, and the DPA's
-  confidentiality term ([legal/dpa.md](legal/dpa.md)) says who else sees an
-  organisation's members.
-- **Whether the deployer keeps what it was given by hand.** Cloud Build's
-  account, `cloudbuild-beats-api`, holds `roles/owner`,
-  `resourcemanager.projectIamAdmin` and `serviceUsageAdmin` (read off the
-  project's IAM policy on 2026-11-08), and `cloudbuild.tf` grants none of
-  them, which is how CI created the operator's resources. Every push touching
-  `api/**`, `terraform/**` or `backoffice/**` runs as that account, though,
-  and steady-state applies only refresh what exists: once
-  [secret-manager.md](secret-manager.md)'s resources and the grants in stages
-  4 to 6 (all made now) are created too, how much of this it keeps is the owner's call.
 - **The landing page's deploy-state row** waits on
   [secret-manager.md](secret-manager.md): the API's Cloud Run spec carries
   `JWT_SECRET` and the DSN as plain environment values, so reading the
@@ -175,17 +155,12 @@ Its own file, because it is not an operator feature: [status-page.md](status-pag
   `beats/deploy.lock` alone as an object get under a `resource.name`
   condition (a condition cannot narrow a list, so the operator never lists
   the bucket) — granted to the `beats-operator` service account.
-- **A job running past the one-hour stale-claim window is reclaimed and run
-  a second time, concurrently.** `claim()` cannot tell a dead run from a
-  slow one, and the documented re-run safety of `organisation.delete`
-  (#414) is sequential: two concurrent deletions could both read a
-  project's holders before either deletes the assignments, duplicating
-  hand-backs. No command comes within two orders of magnitude of an hour at
-  this platform's scale, so the bound is accepted; if a purge or deletion
-  ever approaches it, the runner needs a claim heartbeat (refresh
-  `claimed_at` while executing) before the window is widened.
-- **`subscriptions.md`** plans its seat reconciliation on the operator job
-  runner; whatever that needs is its change to argue.
+
+The other smaller items from before the redesign were decisions, not work,
+and moved on 2026-11-14 to where decisions live: the stale-claim bound to
+docs/backoffice.md § *Jobs*, the rule before a second person is added to
+§ *Authentication*, and what Cloud Build's account keeps to
+terraform/README.md. `subscriptions.md` argues its own needs on the job runner.
 
 ## Postponed: rolling a release back
 
@@ -215,7 +190,7 @@ decision would replace.
 | Record | What it would take | What the screens do instead |
 |---|---|---|
 | A required reason and reference on every command | `MongoOperatorAudit.record` has no such field; only `SuspendArgs` has a reason. Add them to the `POST /commands/{name}` body rather than to each command's `args_model`, and let the runner write them | `Review` asks for the typed confirmation alone and says the record is you, the command, the subject and the two sides; `Audit` shows before and after |
-| Incidents and write-ups | A new collection, its commands, and the Atlas grant | `Incidents` and `IncidentRoom` are drawn and unscheduled; stage 7 stands without them, and `Main`'s hero is the first thing on the queue |
+| Incidents and write-ups | A new collection, its commands, and the Atlas grant | `Incidents` and `IncidentRoom` are drawn and unscheduled; the status page stands without them, and `Main`'s hero is the first thing on the queue |
 | Restrictions in force | The list itself is derivable from `users.suspended_at` and `account_limits`, ids only; no page lists it yet, and showing it is the cheap half. "Look again on" and the reference are the new part — check either against docs/backoffice.md's refusal of a browsable account list | Each account's page shows its own suspension and limits; nothing lists them across accounts, or records why, or when to look again |
 | An audit of each lookup | A write on a read path, which the audit does not do today, and which a required reason would make slower to use. Needs a retention figure | `Accounts` says plainly that opening an account is a read and reads are not recorded; the recent list is ids in `localStorage`, visible to nobody else |
 | Snoozing or finishing a queue item | Stored state per row, so a row can no longer simply leave when its condition clears | `Queue` says there is nothing to tick off: a row is the condition, and it leaves when the condition does |
