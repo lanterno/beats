@@ -692,3 +692,34 @@ class TestOperatorHealthRoute:
         self.fake.fail = True
         body = operator_client.get("/api/operator/health").json()
         assert body == {**body, "state": "unavailable", "figures": None}
+
+
+class TestOperatorReleasesRoute:
+    """GET /api/operator/releases over a fake of the port."""
+
+    def test_the_report_names_the_live_build_and_what_did_not_answer(self, operator_client):
+        from beats.operator.releases import Build, ReleasesCache
+
+        sha = "d" * 40
+
+        class _Fake:
+            async def builds(self):
+                return [Build(sha, "SUCCESS", None, None, None)]
+
+            async def web_commit(self):
+                raise RuntimeError("away")
+
+            async def subject(self, s):
+                return "api: the change"
+
+        state = operator_client.app.state
+        was = (state.release_source, state.releases_cache, state.operator_settings.api_commit)
+        state.release_source, state.releases_cache = _Fake(), ReleasesCache(seconds=0)
+        state.operator_settings.api_commit = sha
+        try:
+            body = operator_client.get("/api/operator/releases").json()
+        finally:
+            state.release_source, state.releases_cache, state.operator_settings.api_commit = was
+        assert body["builds"][0]["live"] is True
+        assert body["builds"][0]["subject"] == "api: the change"
+        assert body["unavailable"] == ["web"]
