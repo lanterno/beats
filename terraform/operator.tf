@@ -140,6 +140,19 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         name  = "COACH_MONTHLY_BUDGET_USD"
         value = tostring(var.coach_monthly_budget_usd)
       }
+
+      # Live health (api/src/beats/operator/health.py): which service's
+      # figures to read, and the ceiling its instances are drawn against.
+      # The project and the token come from the metadata server.
+      env {
+        name  = "OPERATOR_API_SERVICE"
+        value = var.api_service_name
+      }
+
+      env {
+        name  = "OPERATOR_API_MAX_INSTANCES"
+        value = tostring(var.max_instances)
+      }
     }
   }
 
@@ -149,6 +162,16 @@ resource "google_cloud_run_v2_service" "beats_operator" {
     google_project_service.iap,
     google_secret_manager_secret_iam_member.operator_dsn_reader,
   ]
+}
+
+# Live health: reading time series and alert policies, nothing else. The
+# viewer role writes nothing and reads no log entry or secret.
+resource "google_project_iam_member" "operator_monitoring_viewer" {
+  count = var.operator_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/monitoring.viewer"
+  member  = "serviceAccount:${google_service_account.beats_operator[0].email}"
 }
 
 # IAP's service agent is the only invoker: no allUsers, and nothing reaches
