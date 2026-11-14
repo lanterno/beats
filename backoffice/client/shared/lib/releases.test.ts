@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isBad, releasesHeadline, statusLabel, unanswered } from "./releases";
+import {
+	buildLabel,
+	isBad,
+	releasesHeadline,
+	rerunAdvice,
+	statusLabel,
+	unanswered,
+} from "./releases";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -53,5 +60,37 @@ describe("unanswered and status", () => {
 			held: false,
 		};
 		expect(isBad(row)).toBe(true);
+	});
+});
+
+describe("a build the freeze held back", () => {
+	const row = {
+		sha: A,
+		status: "FAILURE",
+		subject: null,
+		created_at: null,
+		finished_at: null,
+		log_url: null,
+		live: false,
+		held: true,
+	};
+
+	it("is held, not a bad release to revert", () => {
+		expect(buildLabel(row)).toBe("Held by the freeze");
+		expect(isBad(row)).toBe(false);
+		expect(isBad({ ...row, held: false })).toBe(true);
+	});
+
+	it("is named for re-running during the freeze and after it", () => {
+		const rerun = { sha: B, subject: "Fix the thing", created_at: null, log_url: null };
+		expect(rerunAdvice(rerun, true)).toBe(
+			"Once it lifts, re-run the build of bbbbbbb (Fix the thing): a held build does not deploy by itself.",
+		);
+		expect(rerunAdvice(rerun, false)).toContain("The freeze held back bbbbbbb (Fix the thing)");
+	});
+
+	it("says nothing once the freeze is off and nothing waits", () => {
+		expect(rerunAdvice(null, false)).toBeNull();
+		expect(rerunAdvice(null, true)).toContain("if there is one");
 	});
 });
