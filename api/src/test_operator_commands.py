@@ -849,6 +849,29 @@ class TestCommandPreview:
         assert mine["before"]["revoked"] is False
         assert theirs["before"]["revoked"] is None
 
+    def test_a_purge_counts_what_it_would_change_not_every_organisation(
+        self, operator_client, mongo
+    ):
+        """An organisation with nothing past its period is read and left
+        alone; the review counts the ones that would change, and the rows."""
+        quiet, stale = ObjectId(), ObjectId()
+        mongo.organisations.insert_many(
+            [{"_id": oid, "name": oid.binary.hex(), "created_by": "x"} for oid in (quiet, stale)]
+        )
+        mongo.org_audit.insert_one(
+            {"organisation_id": str(stale), "at": "2000-01-01T00:00:00", "event": "old"}
+        )
+        try:
+            every = self._preview(operator_client, "retention.purge", {}).json()["before"]
+            one = self._preview(
+                operator_client, "retention.purge", {"organisation_id": str(quiet)}
+            ).json()["before"]
+        finally:
+            mongo.organisations.delete_many({"_id": {"$in": [quiet, stale]}})
+            mongo.org_audit.delete_many({"organisation_id": str(stale)})
+        assert (every["would_touch_organisations"], every["rows_deleted"]) == (1, 1)
+        assert (one["would_touch_organisations"], one["rows_deleted"]) == (0, 0)
+
     def test_a_subject_that_does_not_resolve_refuses_before_anything_is_typed(
         self, operator_client, mongo
     ):
