@@ -34,7 +34,11 @@ export function freshness(report: HealthReport): string | null {
 	return `Google did not answer. These figures are ${minutes} min old.`;
 }
 
-/** "1 of 2", "1", or "no data". */
+/**
+ * "1 of 2", "1", or "no data": the busiest revision's active instances
+ * against the ceiling, which is per revision; idle ones a rollover leaves on
+ * the old revision count against neither (operator/health.py).
+ */
 export function instancesOf(report: HealthReport): string {
 	const now = report.figures?.instances;
 	if (now === null || now === undefined) return "no data";

@@ -1,6 +1,6 @@
 /**
  * Live health (docs/backoffice.md § The pages, Today): availability against
- * the target, the share of 5xx, p95 latency, instances against their ceiling,
+ * the target, the share of 5xx, p95 latency, active instances against their ceiling,
  * and on Capacity the refused writes per route. Fails on its own: a Google
  * failure never takes the rest of a page with it.
  */
@@ -67,7 +67,7 @@ export function HealthPanel({ routes = false }: { routes?: boolean }) {
 							? "no data"
 							: `${whole(Math.round(f.p95_latency_ms))} ms`,
 					],
-					["Instances now", instancesOf(report)],
+					["Active instances now", instancesOf(report)],
 				]}
 			/>
 			{routes ? (
