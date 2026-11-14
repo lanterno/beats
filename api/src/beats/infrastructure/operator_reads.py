@@ -14,6 +14,7 @@ stored series is the database's own size a day (`database_sizes.py`), since
 a pace needs a size from before today and nothing else keeps one.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlparse
 
@@ -21,6 +22,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from pydantic import TypeAdapter
 from pymongo.asynchronous.database import AsyncDatabase
+from pymongo.errors import PyMongoError
 
 from beats.infrastructure.database_sizes import MongoDatabaseSizes, collection_stats
 from beats.operator.growth import database_growth, with_growth
@@ -42,6 +44,7 @@ from beats.operator.reads import (
     CoachCostDay,
     CollectionSize,
     ControlState,
+    DatabaseConnections,
     DayFigure,
     DeviceSummary,
     DomainFigure,
@@ -58,6 +61,8 @@ from beats.operator.reads import (
 )
 from beats.platform_controls import COLLECTION as CONTROLS_COLLECTION
 from beats.platform_controls import PAUSES, SIGNUP_NETWORK_COUNTS, control_from_doc, hour_key
+
+logger = logging.getLogger(__name__)
 
 # The collections the storage estimate sums, each keyed on `user_id` and led
 # by an index on it. What the account stores, never what it says.
@@ -890,4 +895,21 @@ class MongoOperatorReads:
             coach_cost=coach_cost,
             sizes=series,
             growth=growth,
+            connections=await self._connections(),
         )
+
+    async def _connections(self) -> DatabaseConnections | None:
+        """The cluster's connections, from `serverStatus` — which Atlas's free
+        tier answers with its connections among the few sections it keeps,
+        for a user whose role carries the action. Refused, the page says it
+        cannot tell rather than failing whole."""
+        try:
+            status = await self._db.command("serverStatus")
+        except PyMongoError as e:
+            logger.warning("serverStatus refused: %s", f"{type(e).__name__}: {e}"[:300])
+            return None
+        connections = status.get("connections") or {}
+        current, available = connections.get("current"), connections.get("available")
+        if not isinstance(current, int) or not isinstance(available, int):
+            return None
+        return DatabaseConnections(current=current, allowed=current + available)

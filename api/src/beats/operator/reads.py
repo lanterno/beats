@@ -367,6 +367,16 @@ class DatabaseGrowth:
 
 
 @dataclass(frozen=True)
+class DatabaseConnections:
+    """`serverStatus`'s connections as the cluster answers them: those open
+    now, and how many it allows — open and still available together, which on
+    Atlas's free tier is its 500."""
+
+    current: int
+    allowed: int
+
+
+@dataclass(frozen=True)
 class CoachCostDay:
     day: str
     model: str
@@ -389,6 +399,9 @@ class CapacityReport:
     # None below two days kept: one size is where the database stands, not
     # a pace.
     growth: DatabaseGrowth | None = None
+    # None when the cluster would not say: a database user without the
+    # serverStatus action, or a server that refuses the command.
+    connections: DatabaseConnections | None = None
 
 
 class OperatorReads(Protocol):

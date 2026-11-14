@@ -328,9 +328,10 @@ async def abuse(operator: CurrentOperator, reads: OperatorReadsDep) -> AbuseRepo
 @router.get("/capacity", response_model=CapacityReport)
 async def capacity(operator: CurrentOperator, reads: OperatorReadsDep) -> CapacityReport:
     """What the platform will cost: documents and storage per collection, the
-    database's size a day as the job runner kept it and its pace, and the
-    coach's cost by day and model with the cache-hit ratio's inputs. Latency
-    and error rates are Cloud Monitoring's — link, don't rebuild."""
+    database's size a day as the job runner kept it and its pace, its
+    connections, and the coach's cost by day and model with the cache-hit
+    ratio's inputs. Latency and error rates are Cloud Monitoring's — link,
+    don't rebuild."""
     return await reads.capacity()
 
 
