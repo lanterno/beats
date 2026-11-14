@@ -159,13 +159,20 @@ class TrayService {
       final image = tray.Image.fromFile(_iconPath!);
       if (image != null) icon.icon = image;
       icon.setTooltip(appName);
-      // The menu opens on either button, as it always has here: the right
-      // click natively, the left through the event. Linux reports no tray
-      // clicks at all — the panel holds them and opens the menu itself.
-      icon.setContextMenuTrigger(tray.ContextMenuTrigger.rightClicked);
-      icon.addListener((event) {
-        if (event is tray.TrayIconClickedEvent) icon.openContextMenu();
-      });
+      // The menu opens on either button. On Windows the right click opens it
+      // natively and the left through the event. On Linux the panel shows the
+      // menu itself, and `clicked` has it do so on the left button too (KDE
+      // reads it as ItemIsMenu; GNOME's extension does so anyway). KDE does
+      // report a left click, but the app opening the menu itself works only
+      // under X11: under Wayland openContextMenu just logs a warning.
+      if (Platform.isLinux) {
+        icon.setContextMenuTrigger(tray.ContextMenuTrigger.clicked);
+      } else {
+        icon.setContextMenuTrigger(tray.ContextMenuTrigger.rightClicked);
+        icon.addListener((event) {
+          if (event is tray.TrayIconClickedEvent) icon.openContextMenu();
+        });
+      }
       icon.setVisible(true);
     }
 

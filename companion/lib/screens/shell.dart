@@ -251,7 +251,9 @@ class MainWindowState extends State<MainWindow> {
           child: Stack(children: [
             Positioned.fill(child: page),
             if (Platform.isMacOS)
-              const Positioned(top: 0, left: 0, right: 0, height: 28, child: DragToMoveArea(child: SizedBox.expand())),
+              // Not const: DragToMoveArea holds a Window, which is ffi.Finalizable,
+              // and the VM's FFI transform gives such a constructor a body.
+              Positioned(top: 0, left: 0, right: 0, height: 28, child: DragToMoveArea(child: const SizedBox.expand())),
           ]),
         ),
       ]);
@@ -381,7 +383,7 @@ class _Sidebar extends StatelessWidget {
           // Room for the traffic lights, and somewhere to drag the window by.
           SizedBox(
             height: Platform.isMacOS ? 48 : 16,
-            child: Platform.isMacOS ? const DragToMoveArea(child: SizedBox.expand()) : null,
+            child: Platform.isMacOS ? DragToMoveArea(child: const SizedBox.expand()) : null,
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),

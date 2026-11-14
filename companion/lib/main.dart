@@ -23,13 +23,43 @@ import 'state/week_controller.dart';
 import 'theme/sky.dart';
 import 'ui/kit.dart';
 
+/// The app's own window on the desktop, found once and then held. The
+/// platform's "current" window is whatever it says now (the main window on
+/// macOS, the active one on Windows), which by the time the tray asks may be
+/// no window of ours. Null on a phone, and until the desktop has one.
+Window? _appWindow;
+Window? _findAppWindow() {
+  if (!Platform.isMacOS && !Platform.isWindows && !Platform.isLinux) return null;
+  return _appWindow ??= WindowManager.instance.getCurrent();
+}
+
+/// Holds the first window of ours that takes focus. Windows answers "the
+/// current window" with the foreground one, so a tray click while the app is
+/// in the background would find none, and nothing at startup asks: the
+/// runner shows the window on the first frame, after main() has run. Focus
+/// events are only ever the app's own windows (nativeapi filters the
+/// system-wide foreground hook by process), and the runner focuses the
+/// window when it shows it.
+void _holdAppWindowWhenFocused() {
+  WindowManager.instance.addListener((event) {
+    if (_appWindow == null && event is WindowFocusedEvent) {
+      _appWindow = WindowManager.instance.get(event.windowId);
+    }
+  });
+}
+
+/// Brings the app's window forward, out of the Dock if it was minimized.
+void _showAppWindow() {
+  final window = _findAppWindow();
+  if (window == null) return;
+  if (window.isMinimized) window.restore();
+  window.show();
+  window.focus();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // window_manager is desktop-only: on a phone the call has no plugin to
-  // answer it and throws before runApp, leaving the app on its splash.
-  if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
-    await windowManager.ensureInitialized();
-  }
+  if (Platform.isWindows) _holdAppWindowWhenFocused();
   if (Platform.isMacOS) {
     // The sky runs under a hidden title bar; the traffic lights stay and sit
     // in the sidebar's top corner. A debug build opened with LIFEPETE_PHONE=1
@@ -37,23 +67,23 @@ void main() async {
     // LIFEPETE_PHONE=store is 9:16 (1080×1920 on a Retina screen), the shape
     // Google Play wants its screenshots in. Neither shows the traffic lights.
     final phone = kDebugMode ? Platform.environment['LIFEPETE_PHONE'] : null;
-    await windowManager.waitUntilReadyToShow(
-      WindowOptions(
-        title: appName,
-        size: switch (phone) {
+    final window = _findAppWindow();
+    if (window != null) {
+      window.titleBarStyle = TitleBarStyle.hidden;
+      window.isWindowControlButtonsVisible = phone == null;
+      window.setSize(
+        switch (phone) {
           '1' => const Size(390, 844),
           'store' => const Size(540, 960),
           _ => const Size(1180, 820),
-        },
-        minimumSize: phone == null ? const Size(880, 620) : const Size(360, 640),
-        titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: phone == null,
-      ),
-      () async {
-        await windowManager.show();
-        await windowManager.focus();
-      },
-    );
+        }.toNative(),
+        false,
+      );
+      window.minimumSize = (phone == null ? const Size(880, 620) : const Size(360, 640))
+          .toNative();
+      window.title = appName;
+      _showAppWindow();
+    }
   }
   final hour = HourController();
   await hour.load();
@@ -180,10 +210,7 @@ class _AppShellState extends State<AppShell> {
     _tray = TrayService(
       client: client,
       timer: _timer!,
-      onShowWindow: () async {
-        await windowManager.show();
-        await windowManager.focus();
-      },
+      onShowWindow: _showAppWindow,
     )..init();
     StatusMenu.listen(
       show: (section, route) => _window.currentState?.showByName(section: section, route: route),

@@ -9,12 +9,12 @@ on:
 permissions:
   contents: read
 
-# Every job sets up the Flutter named in companion/.fvmrc, not whatever stable
-# is that day. A new stable can stop the locked packages compiling with nothing
-# in the repo changed: 3.50 did, because the nativeapi that tray_manager 0.8
-# locks calls VM APIs that Dart 3.14 removed. The version moves in a PR of its
-# own (Renovate's fvm manager opens one), together with pubspec.yaml's
-# `flutter:` range.
+# Every job sets up the Flutter named in companion/.fvmrc, never `channel:
+# stable`. A new stable can stop the locked packages compiling with nothing in
+# the repo changed: 3.50 did, because the nativeapi that tray_manager 0.8
+# locked calls VM APIs that Dart 3.14 removed. The version moves in a PR of its
+# own (Renovate's fvm manager opens one), with pubspec.lock resolved on it and
+# pubspec.yaml's `flutter:` floor raised when a package needs the newer SDK.
 jobs:
   quality:
     name: Analyze & Test
