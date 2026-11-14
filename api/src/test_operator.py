@@ -30,7 +30,12 @@ import jwt.algorithms
 import pytest
 from bson import ObjectId
 
-from beats.operator.reads import ACCOUNT_COACH_SPEND_DAYS
+from beats.operator.reads import (
+    ABSENCE_REQUEST_ATTENTION_DAYS,
+    ACCOUNT_COACH_SPEND_DAYS,
+    SUPERSEDED_ATTENTION_DAYS,
+    queue_due,
+)
 from conftest import OPERATOR_ORIGIN as ORIGIN
 from conftest import OPERATOR_SUB
 
@@ -273,6 +278,7 @@ class TestOperatorWall:
         pages = [
             ("GET", "/api/operator/me", None),
             ("GET", "/api/operator/attention", None),
+            ("GET", "/api/operator/queue", None),
             ("POST", "/api/operator/accounts/lookup", {"email": "wall@example.test"}),
             ("GET", f"/api/operator/accounts/{planted['user_id']}", None),
             ("GET", f"/api/operator/accounts/{planted['user_id']}/coach", None),
@@ -543,3 +549,71 @@ class TestOneAccountsReads:
         itself, and neither should answer 500."""
         assert operator_client.get("/api/operator/accounts/not-an-id/coach").json() == []
         assert operator_client.get("/api/operator/accounts/not-an-id/audit").json() == []
+
+
+class TestQueueDue:
+    """The queue's due dates, at the boundaries Attention counts by."""
+
+    NOW = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
+
+    def test_a_superseded_approval_is_due_when_attention_starts_counting_it(self):
+        since = self.NOW - timedelta(days=SUPERSEDED_ATTENTION_DAYS)
+        assert queue_due("approvals_superseded", since, self.NOW) == self.NOW
+        later = since + timedelta(seconds=1)
+        assert queue_due("approvals_superseded", later, self.NOW) > self.NOW
+
+    def test_an_absence_request_is_due_after_its_own_window(self):
+        since = self.NOW - timedelta(days=ABSENCE_REQUEST_ATTENTION_DAYS)
+        assert queue_due("absence_requests_pending", since, self.NOW) == self.NOW
+
+    def test_a_queued_job_is_due_when_its_window_ends(self):
+        run_after = self.NOW + timedelta(days=7)
+        assert queue_due("job_queued", run_after, self.NOW) == run_after
+
+    def test_a_condition_with_no_date_is_due_now(self):
+        assert queue_due("organisation_without_owner", None, self.NOW) == self.NOW
+        assert queue_due("approvals_superseded", None, self.NOW) == self.NOW
+
+
+class TestQueueRead:
+    """The rows behind the Attention counts, over HTTP."""
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        for name in ("operator_jobs", "org_timesheets", "org_absence_requests", "organisations"):
+            mongo[name].delete_many({})
+
+    def test_rows_are_soonest_due_first_and_grouped_per_organisation(self, operator_client, mongo):
+        now = datetime.now(UTC)
+        org = str(ObjectId())
+        mongo.org_absence_requests.insert_many(
+            [
+                {
+                    "organisation_id": org,
+                    "user_id": SENTINEL,
+                    "status": "pending",
+                    "requested_at": (now - timedelta(days=d)).isoformat(),
+                }
+                for d in (20, 2)
+            ]
+        )
+        mongo.org_absence_requests.insert_one(
+            {"organisation_id": org, "status": "approved", "requested_at": now.isoformat()}
+        )
+        failed = mongo.operator_jobs.insert_one(
+            {"state": "failed", "finished_at": now.isoformat(), "command": "x"}
+        ).inserted_id
+        mongo.operator_jobs.insert_one(
+            {"state": "done", "finished_at": now.isoformat(), "command": "x"}
+        )
+
+        rows = operator_client.get("/api/operator/queue").json()
+        assert [(r["kind"], r["subject_id"], r["count"]) for r in rows] == [
+            ("absence_requests_pending", org, 2),
+            ("job_failed", str(failed), 1),
+        ]
+        assert SENTINEL not in str(rows), "no member is named"
+
+    def test_an_empty_platform_has_an_empty_queue(self, operator_client):
+        assert operator_client.get("/api/operator/queue").json() == []
