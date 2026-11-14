@@ -10,6 +10,7 @@ built, and why.
 | [account-emails.md](account-emails.md) | Several verified addresses on one account — what #341 waits on, and the one place decision 11's no-email rule gets revisited |
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
+| [backoffice-records.md](backoffice-records.md) | Five records the control plane does not keep and nobody has decided whether it should: a reason on every command, incidents, restrictions in force, an audit of each lookup, snoozing a queue row |
 | [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state row waits on |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
@@ -20,7 +21,8 @@ each had to fail to stay: **is it an organisations feature?** A control
 plane, push, an account's addresses, taking money and an identity protocol
 are none of them, and filing them under the epic was shaping each around one
 view of one feature. The control plane has since shipped in full
-([docs/backoffice.md](../docs/backoffice.md), 2026-11-14) and its file went;
+([docs/backoffice.md](../docs/backoffice.md), 2026-11-14) and its file went,
+but for the five records nobody has decided on (backoffice-records.md);
 the four others are above. Three of the epic's own items wait on one of them
 (#341 on the addresses, #345 on the money, #351 on push), and its file
 keeps, for each of those three, the paragraph saying what stays the epic's

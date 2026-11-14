@@ -55,7 +55,9 @@ the operator's control plane ([docs/backoffice.md](docs/backoffice.md), shipped
 2026-11-04 and redesigned in full by 2026-11-14 — operator routes in this API,
 mounted only by a second deployment behind IAP, which also serves a UI of its
 own; operational metadata, never user content; the one thing it still owes
-waits in [roadmaps/secret-manager.md](roadmaps/secret-manager.md)), the
+waits in [roadmaps/secret-manager.md](roadmaps/secret-manager.md), and five
+records nobody has decided to keep are in
+[roadmaps/backoffice-records.md](roadmaps/backoffice-records.md)), the
 public status page ([docs/status-page.md](docs/status-page.md)),
 several verified addresses on an account
 ([roadmaps/account-emails.md](roadmaps/account-emails.md)), server push

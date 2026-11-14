@@ -8,9 +8,9 @@
  * anything, it is in `localStorage` rather than the database, and nobody but
  * this operator on this machine can read it.
  *
- * Reads are not audited (docs/backoffice.md § Decided against), so this must
- * not grow into a log that says who looked at whom. If that decision is ever
- * taken, it belongs in the audit, not here.
+ * Reads are not audited (docs/backoffice.md § What it does not keep), so this
+ * must not grow into a log that says who looked at whom. If keeping one is
+ * ever decided, it belongs in the audit, not here.
  */
 
 const KEY = "backoffice.recent-accounts";

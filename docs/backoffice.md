@@ -329,41 +329,39 @@ a reason) and `deploy.unfreeze` — the runner and the audit like every act.
   Terraform), the commands answer 409 `FREEZE_UNAVAILABLE` and the panel says
   the builds cannot be held back from here.
 
-## Decided against, or postponed
+## Postponed: rolling a release back
 
-The redesign's last open questions were answered on 2026-11-14, when its last
-stage shipped and its roadmap went. None of these is built, each on purpose,
-and a screen that offered one would be the same bug as a control the API
-cannot serve.
+Postponed by the owner on 2026-11-08. A rollback stays what it is: revert on
+`main`. A build never rolls back, because `deploy_lock.sh` skips a commit the
+live one already contains. It would take `run.services.update` on the
+operator's account, which holds nothing like it, and a way to square a moved
+traffic split with Terraform, whose next apply owns the service and would move
+it straight back. Reopen it only if a real incident shows that reverting on
+`main` was too slow, measured from the merge to the live revision.
 
-- **Rolling a release back from the back office** — postponed by the owner on
-  2026-11-08. A rollback stays what it is: revert on `main`. A build never
-  rolls back, because `deploy_lock.sh` skips a commit the live one already
-  contains. It would take `run.services.update` on the operator's account,
-  which holds nothing like it, and a way to square a moved traffic split with
-  Terraform, whose next apply owns the service and would move it straight
-  back. Reopen it only if a real incident shows that reverting on `main` was
-  too slow, measured from the merge to the live revision.
-- **A required reason and reference on every command** — no. The record is
-  you, the command, the subject and the two sides; a reason that had to be
-  typed would be typed badly, and the one command whose reason matters
-  (suspension) already asks for it. The deploy freeze, a pause and a status
-  post carry theirs because somebody else reads them.
-- **Incidents and write-ups** — no, not as a record here. The status page
-  tells customers; a write-up is prose, and belongs in the repository's
-  history with the fix. If one is ever kept, it can prefill a status post.
-- **A list of restrictions in force across accounts** — no. Each account's
-  page shows its own suspension and limits, and a list across accounts is
-  the browsable account list the line refuses; nothing records why, or when
-  to look again, for the same reason.
-- **An audit of each lookup** — no. Opening an account is a read, and reads
-  are not recorded: a write on every read path would slow the one thing the
-  operator does most, and a log of who looked at whom is a record about
-  people the control plane deliberately does not keep. The recent list is
-  ids in `localStorage`, visible to nobody else.
-- **Snoozing or finishing a queue item** — no. A row is the condition, and
-  it leaves when the condition does; stored state per row would let a row be
-  ticked off while the thing itself still stands.
+## What it does not keep
+
+The redesign's mock first drew five records that the control plane does not
+keep. Whether to keep any of them is not decided: the owner left it open on
+2026-11-08, and [roadmaps/backoffice-records.md](../roadmaps/backoffice-records.md)
+holds the question and what each would take. Until then no screen assumes
+one, and each says what it does instead, so a screen that offered one would
+be the same bug as a control the API cannot serve.
+
+- **A reason and reference on every command.** The record is you, the
+  command, the subject and the two sides. The one command whose reason
+  matters to its subject (suspension) asks for it, and the deploy freeze, a
+  pause and a status post carry theirs because somebody else reads them.
+- **Incidents and write-ups.** The status page tells customers and stands
+  without them; Today's first panel is the first thing on the queue.
+- **A list of restrictions in force across accounts.** Each account's page
+  shows its own suspension and limits; nothing lists them across accounts, or
+  records why, or when to look again.
+- **An audit of each lookup.** Opening an account is a read, and reads are
+  not recorded. The recent list is ids in `localStorage`, visible to nobody
+  else.
+- **Snoozing or finishing a queue item.** A row is the condition, and it
+  leaves when the condition does; nothing is stored per row.
 
 ## Authentication
 
