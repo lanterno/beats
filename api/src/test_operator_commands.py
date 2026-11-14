@@ -785,3 +785,113 @@ class TestCommandPreview:
         )
         with pytest.raises(ViewerCannotAct):
             await preview_command(ctx, "account.unsuspend", {"user_id": "u"})
+
+
+class TestControlCommands:
+    """`control.set` and `control.clear` (docs/backoffice.md § Controls):
+    the shape a pause and a limit must have, the audit row each writes, and
+    what the Access page reads back."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        mongo.platform_controls.delete_many({})
+        mongo.operator_audit.delete_many({})
+
+    def _run(self, operator_client, name, args):
+        return operator_client.post(
+            f"/api/operator/commands/{name}", json={"args": args}, headers=self.OWN
+        )
+
+    def test_a_pause_is_written_with_its_end_and_audited(self, operator_client, mongo):
+        until = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
+        done = self._run(
+            operator_client,
+            "control.set",
+            {"name": "coach", "until": until, "reason": "cost spike"},
+        )
+        assert done.status_code == 200, done.text
+        entry = done.json()
+        assert entry["subject_kind"] == "control"
+        assert entry["subject_id"] == "coach"
+        assert entry["before"] == {"set": False}
+        assert entry["after"]["in_force"] is True
+        assert entry["after"]["set_by"] == OPERATOR_SUB
+        stored = mongo.platform_controls.find_one({"name": "coach"})
+        assert stored["reason"] == "cost spike"
+        assert "user_id" not in stored
+
+        controls = operator_client.get("/api/operator/controls").json()
+        assert [(c["name"], c["in_force"], c["reason"]) for c in controls] == [
+            ("coach", True, "cost spike")
+        ]
+
+        cleared = self._run(operator_client, "control.clear", {"name": "coach"})
+        assert cleared.status_code == 200
+        assert cleared.json()["after"] == {"set": False}
+        assert mongo.platform_controls.count_documents({}) == 0
+
+    def test_a_pause_needs_an_end_inside_the_cap_and_a_reason(self, operator_client):
+        from beats.platform_controls import MAX_PAUSE
+
+        soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        for args in (
+            {"name": "imports", "reason": "r"},
+            {"name": "imports", "until": soon},
+            {
+                "name": "imports",
+                "until": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+                "reason": "r",
+            },
+            {
+                "name": "imports",
+                "until": (datetime.now(UTC) + MAX_PAUSE + timedelta(hours=1)).isoformat(),
+                "reason": "r",
+            },
+            {"name": "imports", "until": soon, "reason": "r", "value": 3},
+        ):
+            refused = self._run(operator_client, "control.set", args)
+            assert refused.status_code == 422, (args, refused.text)
+            assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+
+    def test_a_limit_takes_a_value_and_nothing_else(self, operator_client, mongo):
+        ok = self._run(operator_client, "control.set", {"name": "imports_per_hour", "value": 10})
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["after"]["value"] == 10
+        soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        for args in (
+            {"name": "imports_per_hour"},
+            {"name": "imports_per_hour", "value": 10, "until": soon},
+            {"name": "imports_per_hour", "value": 0},
+        ):
+            assert self._run(operator_client, "control.set", args).status_code == 422, args
+
+    def test_slowed_signups_carry_a_ceiling(self, operator_client):
+        soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        done = self._run(
+            operator_client,
+            "control.set",
+            {"name": "signups", "until": soon, "reason": "a wave", "value": 20},
+        )
+        assert done.status_code == 200, done.text
+        assert done.json()["after"]["value"] == 20
+
+    def test_a_pause_in_force_is_a_queue_row_and_an_attention_count(self, operator_client, mongo):
+        until = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
+        self._run(
+            operator_client, "control.set", {"name": "webhooks", "until": until, "reason": "r"}
+        )
+        assert operator_client.get("/api/operator/attention").json()["controls_paused"] == 1
+        rows = operator_client.get("/api/operator/queue").json()
+        assert [(r["kind"], r["subject_id"]) for r in rows] == [("control_paused", "webhooks")]
+        assert rows[0]["due"].startswith(until[:16])
+
+    def test_access_lists_the_allowlist_and_nothing_else(self, operator_client):
+        access = operator_client.get("/api/operator/access").json()
+        assert {(a["email"], a["role"]) for a in access} == {
+            ("op@example.test", "operator"),
+            ("viewer@example.test", "viewer"),
+        }
+        assert all(set(a) == {"email", "role"} for a in access)

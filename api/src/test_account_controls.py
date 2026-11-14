@@ -409,3 +409,162 @@ class TestAccountLimitsAPI:
         asyncio.run(dispatch_webhook_event("timer.start", {}, heard, "u-enabled"))
         assert not silenced.asked
         assert heard.asked
+
+
+class TestPlatformControlsAPI:
+    """The operator's platform-wide controls as the public API enforces them
+    (docs/backoffice.md § Controls): each paused route refuses with 409 and
+    its own code, works again once the pause has expired, existing people
+    still sign in, and the three ceilings are read in order — the account's
+    override, then the control, then the setting."""
+
+    def _control(self, mongo, name: str, *, until=None, value=None):
+        from beats import platform_controls
+
+        mongo.platform_controls.update_one(
+            {"name": name},
+            {"$set": {"name": name, "until": until, "value": value, "reason": "test"}},
+            upsert=True,
+        )
+        platform_controls.clear()
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        from beats import platform_controls
+
+        platform_controls.clear()
+        yield
+        mongo.platform_controls.delete_many({})
+        mongo.account_limits.delete_many({})
+        platform_controls.clear()
+
+    @staticmethod
+    def _soon() -> str:
+        return (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+
+    @staticmethod
+    def _passed() -> str:
+        return (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
+
+    def _import(self, client, headers):
+        return client.post(
+            "/api/export/import",
+            files={"file": ("backup.json", b'{"version": "1.0"}', "application/json")},
+            headers=headers,
+        )
+
+    def test_imports_refuse_while_paused_and_work_after_expiry(self, client, auth_headers, mongo):
+        self._control(mongo, "imports", until=self._soon())
+        refused = self._import(client, auth_headers)
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "IMPORTS_PAUSED"
+        assert "test" not in refused.json()["detail"], "the operator's reason stays theirs"
+
+        self._control(mongo, "imports", until=self._passed())
+        assert self._import(client, auth_headers).status_code != 409
+
+    def test_the_coach_refuses_while_paused(self, client, auth_headers, mongo):
+        self._control(mongo, "coach", until=self._soon())
+        refused = client.post("/api/coach/memory/rewrite", headers=auth_headers)
+        assert refused.status_code == 409, refused.text
+        assert refused.json()["code"] == "COACH_PAUSED"
+
+    def test_signups_refuse_while_paused_and_sign_in_still_works(self, client, mongo):
+        self._control(mongo, "signups", until=self._soon())
+        start = client.post(
+            "/api/auth/register/start", json={"email": "new@example.test", "display_name": "N"}
+        )
+        assert start.status_code == 409, start.text
+        assert start.json()["code"] == "SIGNUPS_PAUSED"
+        assert mongo.users.count_documents({"email": "new@example.test"}) == 0, "no row left"
+        verify = client.post("/api/auth/register/verify", json={"credential": {}})
+        assert verify.status_code == 409
+        # Never a sign-in.
+        assert client.get("/api/auth/login/options").status_code == 200
+
+    def test_slowed_signups_refuse_once_the_hour_holds_the_ceiling(self, client, mongo):
+        from datetime import datetime as dt
+
+        self._control(mongo, "signups", until=self._soon(), value=2)
+        recent = dt.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        mongo.users.insert_many(
+            [{"email": f"wave{i}@example.test", "created_at": recent} for i in range(2)]
+        )
+        start = client.post(
+            "/api/auth/register/start", json={"email": "late@example.test", "display_name": "L"}
+        )
+        assert start.status_code == 409
+        assert start.json()["code"] == "SIGNUPS_PAUSED"
+
+        from beats import platform_controls
+
+        self._control(mongo, "signups", until=self._soon(), value=5)
+        platform_controls._signups_counted_at = 0.0
+        assert (
+            client.post(
+                "/api/auth/register/start", json={"email": "room@example.test", "display_name": "R"}
+            ).status_code
+            == 200
+        )
+
+    def _post_beat(self, client, headers, project_id: str):
+        start = datetime.now(UTC) - timedelta(hours=2)
+        return client.post(
+            "/api/beats/",
+            json={
+                "project_id": project_id,
+                "start": start.isoformat(),
+                "end": (start + timedelta(minutes=5)).isoformat(),
+            },
+            headers=headers,
+        )
+
+    def test_the_control_caps_writes_beneath_the_accounts_own_override(
+        self, client, auth_headers, auth_info, mongo
+    ):
+        from beats.auth import account_access
+
+        project = client.post("/api/projects/", json={"name": "Ctl"}, headers=auth_headers).json()[
+            "id"
+        ]
+        self._control(mongo, "writes_per_minute_beats", value=1)
+        assert self._post_beat(client, auth_headers, project).status_code == 201
+        assert self._post_beat(client, auth_headers, project).status_code == 429
+
+        # The account's own override wins over the control.
+        mongo.account_limits.update_one(
+            {"user_id": auth_info["user_id"]},
+            {"$set": {"writes_per_minute_beats": 10}},
+            upsert=True,
+        )
+        account_access.clear()
+        assert self._post_beat(client, auth_headers, project).status_code == 201
+
+    def test_paused_webhooks_drop_with_a_line_per_event(self, auth_info, caplog):
+        """No outbox holds a delivery, so a pause drops it — and logs it, so
+        the loss can be counted. Pre-warmed like the per-account switch's
+        test, so no event loop reaches the database."""
+        import asyncio
+        import time
+
+        from beats import platform_controls
+        from beats.api.routers.webhooks import dispatch_webhook_event
+        from beats.auth import account_access
+
+        class _Repo:
+            asked = False
+
+            async def list_by_event(self, event):
+                self.asked = True
+                return []
+
+        platform_controls._state = platform_controls.controls_from_docs(
+            [{"name": "webhooks", "until": self._soon()}], datetime.now(UTC)
+        )
+        platform_controls._expires_at = time.monotonic() + 60
+        account_access.remember("u-open", account_access.AccountAccess(exists=True))
+        repo = _Repo()
+        with caplog.at_level(logging.WARNING, logger="beats.api.routers.webhooks"):
+            asyncio.run(dispatch_webhook_event("timer.start", {}, repo, "u-open"))  # ty: ignore[invalid-argument-type]
+        assert not repo.asked
+        assert any("WEBHOOKS_PAUSED_DROPPED event=timer.start" in r.message for r in caplog.records)
