@@ -1,6 +1,6 @@
 /**
  * The work queue: every row behind an Attention count, each with a date and a
- * next step (docs/backoffice.md, stage 1). There is nothing to tick off:
+ * next step (docs/backoffice.md § The pages). There is nothing to tick off:
  * a row is the condition itself, so it leaves when the thing is dealt with and
  * comes back if it returns. Nothing here is stored, by the "not decided" list
  * in that roadmap.

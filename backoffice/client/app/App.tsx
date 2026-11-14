@@ -6,7 +6,7 @@
  * The sidebar is grouped by the question being asked — what is happening now,
  * who it is happening to, what the platform is doing, what we promised —
  * because the pages are reached by the job in hand and not by collection
- * (docs/backoffice.md, stage 1). A place appears here only once its page
+ * (docs/backoffice.md § The pages). A place appears here only once its page
  * is built: a nav entry to a screen that does not exist yet is a promise the
  * API cannot keep.
  */

@@ -1,6 +1,6 @@
 /**
  * The runbooks: what to do when a queue row or an alert lands, as static
- * pages in the bundle (docs/backoffice.md, stage 1). The alert runbooks
+ * pages in the bundle (docs/backoffice.md § The pages). The alert runbooks
  * start from the `documentation` blocks in terraform/alerts.tf; a change to
  * one is made in both places, because the mail that pages the owner carries
  * that text and this page should not disagree with it.

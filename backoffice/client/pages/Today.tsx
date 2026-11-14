@@ -1,6 +1,5 @@
 /**
- * Today: the reason to open the control plane (docs/backoffice.md, stage
- * 1). One sentence saying what matters, the next things due off the queue,
+ * Today: the reason to open the control plane (docs/backoffice.md § The pages). One sentence saying what matters, the next things due off the queue,
  * the jobs waiting out a window, the last few things the back office did, and
  * what the platform costs. Every figure is one of the reads the other pages
  * already make; the mock's incident and release panels wait for their own

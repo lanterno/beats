@@ -52,8 +52,8 @@ client/
 │                      deployment label, the /me badge, the routes
 ├── app/Palette.tsx    ⌘K: pages, a command's review, one exact account
 ├── pages/             Today, Queue, Accounts, Account, Review, Organisations,
-│                      Trust, Capacity, Jobs, Compliance, Audit, Runbooks —
-│                      one file per operator job
+│                      Trust, Capacity, Releases, Jobs, Compliance, Audit,
+│                      Access, Runbooks — one file per operator job
 └── shared/
     ├── api/           same-origin fetch client (no token: IAP's cookie is the
     │                  credential), the command POST, generated types + schema

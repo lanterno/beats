@@ -483,9 +483,9 @@ class TestIAPVerifier:
 
 
 class TestOneAccountsReads:
-    """The two reads behind the account page (docs/backoffice.md, stage
-    1): what the back office has done to this account, and where its coach
-    money went. Both answer about one account and must not widen into a way
+    """The two reads behind the account page (docs/backoffice.md § The
+    pages): what the back office has done to this account, and where its
+    coach money went. Both answer about one account and must not widen into a way
     to read the platform."""
 
     OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
