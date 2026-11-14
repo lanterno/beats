@@ -15,29 +15,21 @@ A command with a `window` is destructive and enqueues instead of executing
 `viewer` runs none.
 """
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Annotated, Any, Literal, Protocol
+from typing import Any, Literal, Protocol
 
-from bson import ObjectId
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    Field,
-    PrivateAttr,
-    ValidationError,
-    model_validator,
-)
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
 from beats.domain.exceptions import DomainException, OrganisationNotFound
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
-from beats.infrastructure.operator_store import MongoErasureRequests, MongoPlatformControlsStore
+from beats.infrastructure.operator_store import MongoPlatformControlsStore
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
+from beats.operator.erasure_requests import CloseErasureRequest, LogErasureRequest
 from beats.operator.settings import OperatorIdentity
 from beats.operator.status_page import (
     MESSAGE_MAX,
@@ -497,138 +489,6 @@ class ClearControl(_ControlCommand):
     async def execute(self, ctx: CommandContext, args: ControlArgs) -> dict[str, Any]:
         await MongoPlatformControlsStore(ctx.db).clear(args.name)
         return await _control_state(ctx, args.name)
-
-
-# ── the erasure request log ──────────────────────────────────────────
-
-
-# A reference is a ticket number or the mail's date — T-1234, #42,
-# 2026-11-14-2: a few letters at most, then digits. Never free text: the row
-# is kept a year after it closes and names the account by id, so neither a
-# name nor an address has anywhere to go.
-_REFERENCE = re.compile(r"[A-Za-z]{0,8}[-#]?[0-9][0-9-]*")
-
-
-def _a_reference(value: str) -> str:
-    value = value.strip()
-    if not _REFERENCE.fullmatch(value):
-        raise ValueError(
-            "a ticket number or the mail's date, like T-1234 or 2026-11-14: a few letters"
-            " at most, then digits — never a name or an address"
-        )
-    return value
-
-
-def _an_account_id(value: str) -> str:
-    # Whole, and lower-case as the account page shows it: the request's
-    # state and its closing find the erasure job by this id, exactly.
-    value = value.strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{24}", value):
-        raise ValueError("an account id is 24 characters of 0-9 and a-f; paste it whole")
-    return value
-
-
-class LogErasureRequestArgs(BaseModel):
-    reference: Annotated[str, AfterValidator(_a_reference)] = Field(min_length=1, max_length=40)
-    received_on: date
-    user_id: Annotated[str, AfterValidator(_an_account_id)] | None = None
-    # The request's own id, made before it is written, so the audit can name
-    # a request with no account by an id too. Never sent by the client.
-    _request_id: str = PrivateAttr(default_factory=lambda: str(ObjectId()))
-
-    @model_validator(mode="after")
-    def _not_in_the_future(self) -> LogErasureRequestArgs:
-        if self.received_on > datetime.now(UTC).date():
-            raise ValueError("received_on is in the future")
-        return self
-
-
-class LogErasureRequest:
-    """A request that arrived by mail gets a date, so the deadline is
-    visible before anything is queued (docs/backoffice.md § The pages,
-    Compliance). The audit's subject is an id — the account's when one is
-    named, else the request's own — and never the reference: the audit is
-    kept four years and names its subject the way it outlives it, by id."""
-
-    name = "erasure_request.log"
-    subject_kind = "erasure_request"
-    window: timedelta | None = None
-    args_model: type[BaseModel] = LogErasureRequestArgs
-
-    def subject_id(self, args: Any) -> str:
-        return args.user_id or args._request_id
-
-    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
-        return None
-
-    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        if args.user_id is None:
-            return {"account": None}
-        user = await ctx.accounts.find(args.user_id)
-        if user is None:
-            # The account is a box on the form, not the subject in the route:
-            # name the box, so the review keeps the form and says what is
-            # wrong with it, rather than failing as a 404 would.
-            raise InvalidCommandArgs(
-                [{"path": "user_id", "message": "No account has this id", "type": "not_found"}]
-            )
-        return {"account": "exists", "suspended": user.suspended}
-
-    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        row = await MongoErasureRequests(ctx.db).log(
-            request_id=args._request_id,
-            reference=args.reference,
-            received_on=args.received_on.isoformat(),
-            subject_id=args.user_id,
-            logged_by=ctx.operator.sub,
-        )
-        return {"request_id": row["id"], "received_on": row["received_on"]}
-
-    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
-        return None
-
-
-class ErasureRequestNotFound(DomainException):
-    status_code = 404
-    message = "No open erasure request with that id"
-    code = "ERASURE_REQUEST_NOT_FOUND"
-
-
-class CloseErasureRequestArgs(BaseModel):
-    request_id: str = Field(min_length=1, max_length=64)
-    # erased: the job ran. no_account: nothing to erase. withdrawn: they
-    # asked again, the other way.
-    reason: Literal["erased", "no_account", "withdrawn"]
-
-
-class CloseErasureRequest:
-    name = "erasure_request.close"
-    subject_kind = "erasure_request"
-    window: timedelta | None = None
-    args_model: type[BaseModel] = CloseErasureRequestArgs
-
-    def subject_id(self, args: Any) -> str:
-        return args.request_id
-
-    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
-        return None
-
-    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        row = await MongoErasureRequests(ctx.db).get(args.request_id)
-        if row is None or row.get("closed_at"):
-            raise ErasureRequestNotFound()
-        return {"received_on": row["received_on"], "closed": False}
-
-    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        row = await MongoErasureRequests(ctx.db).close(
-            args.request_id, reason=args.reason, closed_by=ctx.operator.sub
-        )
-        if row is None:
-            raise ErasureRequestNotFound()
-        return {"received_on": row["received_on"], "closed": True, "reason": args.reason}
-
-    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
-        return None
 
 
 # ── the deploy freeze ────────────────────────────────────────────────
