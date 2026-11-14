@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bucketOf, dueLabel, queueHeadline } from "./queue";
+import type { QueueRow } from "@/shared/api/schema";
+import { bucketOf, dueLabel, KINDS, queueHeadline } from "./queue";
 
 const NOW = new Date("2026-11-14T12:00:00Z");
 const at = (iso: string) => ({ since: "2026-11-01T00:00:00Z", due: iso });
@@ -56,5 +57,34 @@ describe("queueHeadline", () => {
 	it("falls back to figures past the words it has", () => {
 		const many = Array.from({ length: 5 }, () => row("2026-11-20T00:00:00Z"));
 		expect(queueHeadline(many, NOW)).toBe("5 things are waiting.");
+	});
+});
+
+describe("a control's row", () => {
+	const control = (kind: QueueRow["kind"], subject_id: string, count = 1): QueueRow => ({
+		kind,
+		subject_id,
+		since: "2026-11-14T23:00:00Z",
+		due: "2026-11-14T23:00:00Z",
+		count,
+	});
+	const title = (row: QueueRow) => KINDS[row.kind].title(row);
+
+	it("says paused only of a control that pauses", () => {
+		expect(title(control("control_paused", "coach"))).toBe("Coach is paused for everyone");
+		expect(title(control("control_paused", "signups"))).toBe("Sign-ups are paused for everyone");
+	});
+
+	it("says slowed of sign-ups held to a ceiling", () => {
+		expect(title(control("control_slowed", "signups"))).toBe("Sign-ups are slowed for everyone");
+	});
+
+	it("says a network's slow-down covers that network, not everyone", () => {
+		expect(title(control("control_slowed_network", "signups"))).toBe(
+			"Sign-ups from one network are slowed",
+		);
+		expect(title(control("control_slowed_network", "signups", 3))).toBe(
+			"Sign-ups from 3 networks are slowed",
+		);
 	});
 });
