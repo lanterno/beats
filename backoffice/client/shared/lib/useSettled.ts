@@ -21,6 +21,7 @@ export function useSettled<T>(value: T, ms: number = SETTLE_MS): T {
 	// `key` stands in for `value` in the dependencies on purpose: callers
 	// pass a fresh object each render, so depending on it directly would
 	// restart the timer forever and never settle.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: key stands in for value, as above
 	useEffect(() => {
 		const timer = setTimeout(() => setSettled(value), ms);
 		return () => clearTimeout(timer);
