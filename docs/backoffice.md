@@ -133,6 +133,7 @@ either is the signal it was put in the wrong place.
 | `account.set_limits` / `clear_limits` | inline | — | the same: `account_limits`, the whole document at once |
 | `device.revoke` | inline | — | the device repository |
 | `control.set` / `control.clear` | inline | — | `MongoPlatformControlsStore` (§ Controls) |
+| `erasure_request.log` / `close` | inline | — | `MongoErasureRequests` (*Privacy and compliance*) |
 | `account.erase` | job, **7 days** | the email | `erasure.erase_account` |
 | `organisation.grant_owner` | inline | the name | the operator twin of `set_role` |
 | `organisation.begin_closing` / `cancel_closing` | inline | the name / — | the twins (start or move / cancel) |
@@ -390,11 +391,10 @@ cannot keep.
   per organisation, with a count and no member named, and are listed before
   they are due. A row with no stored date is due when it is read and shows as
   today, never overdue. **Nothing is stored**: there is no snooze and no
-  "done"; a row is the condition, and leaves when it clears. Erasure requests
-  are deliberately not counted: PRIVACY.md has a person ask by email, and
-  counting them would take an in-app request — a product change, not a
-  control-plane page (roadmaps/backoffice.md, stage 8, would change that with
-  a log the operator keeps).
+  "done"; a row is the condition, and leaves when it clears. An erasure
+  request the operator logged (see *Privacy and compliance*) is a row too,
+  due 14 days after the mail arrived, until an erasure is queued for its
+  account or it is closed; a paused control is a row due when it ends.
 - **The palette** (⌘K, in the top bar): goes to a page, opens a command's
   review for an account named by its whole id, and finds one account by its
   whole address through the same `POST /accounts/lookup`. Pages are filtered
@@ -437,6 +437,31 @@ cannot keep.
   Abuse that shows in requests rather than accounts is already counted and
   alerted on in Cloud Monitoring.
 
+  **Sign-ups from one network** (shipped 2026-11-14, stage 3 of what was
+  roadmaps/backoffice.md): the hour's finished sign-ups against the median
+  of the same hour of the week over the last eight weeks, and the largest
+  network's share of the hour, shown only at or above `SIGNUP_NETWORK_MIN_GROUP`
+  (5). The network is the visitor's address cut to its /24 (IPv4) or /48
+  (IPv6) and HMAC-hashed under a key derived for the UTC day — from
+  `JWT_SECRET`, which the public API already holds and the operator
+  deployment never does, so the operator can never compute a key and never
+  test a guess, and **no new secret or setting is needed**: a deployment that
+  can sign a session runs the signal (`auth/signup_networks.py`). Only a
+  counter is stored (`signup_network_counts`: hour, key, `started`,
+  `completed`, 48-hour TTL), written best-effort from the two passkey doors
+  and the SSO branch that creates an account. The page says "Network A",
+  never the key, and says in words that offices, universities, carrier
+  networks and an organisation onboarding its staff all look like this. The
+  action is the `signups` control with the key as its `network`: a ceiling an
+  hour for that network alone, read off the signal's own counter, that slows
+  and never blocks and ends at the next UTC midnight at the latest, when the
+  key stops matching. Why stored, when the two signals below are "logged and
+  counted, never stored": those are facts about one account's request; this
+  holds no account at all, and logging it would show the operator raw
+  addresses or need a metric label per network. PRIVACY.md and DATA.md say
+  what is kept, for how long and why. Behind a self-hosted nginx every
+  visitor is one network, which only makes the signal quiet.
+
   Two of its signals are **logged and counted, never stored** (decided
   2026-11-07). A per-account write limit's refusal
   (`WRITE_LIMIT_REFUSED`, emitted from the one 429 handler in
@@ -463,7 +488,20 @@ cannot keep.
   re-run: three attempts is terminal, and the way back is to queue the
   command again.
 - **Privacy and compliance**: the platform-wide retention purge behind the
-  typed word `all`.
+  typed word `all`, and **the erasure request log** (shipped 2026-11-14,
+  stage 8 of what was roadmaps/backoffice.md). A request that arrives by
+  email gets a date the day it arrives (`erasure_request.log`: the day, a
+  reference the operator chose, the account by `subject_id` — never
+  `user_id`, or erasure's sweep would take the record that it was asked for
+  — and never an address, which the command refuses), so the legal month is
+  visible before anything is queued. Its state is read off the job queue,
+  never stored: open, erasure queued, erasure ran, closed. A request open
+  with nothing queued for `ERASURE_REQUEST_ATTENTION_DAYS` (14) counts on
+  Attention and sits on the queue; `erasure_request.close` ends it with a
+  reason (erased, no account, withdrawn), and a closed row goes a year later
+  by TTL (`MongoErasureRequests`, `erasure_requests` on the Atlas grant). The
+  earlier reason for not counting requests — that it would take an in-app
+  request — does not hold for a log the operator keeps.
 - **Audit log**: the operator audit — readable, filterable, editable by
   nobody, kept four years. It holds what ran: the runner writes the row after
   a command succeeds, so a refused or failed command is not in it.
