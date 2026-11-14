@@ -38,6 +38,16 @@
             "title": "Sessions Created 7D Per Account",
             "type": "array"
           },
+          "signup_wave": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignupWave"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "signups_per_day": {
             "items": {
               "$ref": "#/components/schemas/DayFigure"
@@ -1104,6 +1114,64 @@
           "due"
         ],
         "title": "QueueRow",
+        "type": "object"
+      },
+      "SignupWave": {
+        "description": "This hour's sign-ups against the usual for this hour of the week, and\nthe largest network's share \u2014 the key is opaque and day-scoped, the page\nsays \"Network A\", and no account is joined to it anywhere.",
+        "properties": {
+          "accounts_with_writes": {
+            "title": "Accounts With Writes",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "groups": {
+            "title": "Groups",
+            "type": "integer"
+          },
+          "hour": {
+            "title": "Hour",
+            "type": "string"
+          },
+          "largest_group": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Group"
+          },
+          "largest_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Largest Key"
+          },
+          "usual": {
+            "title": "Usual",
+            "type": "number"
+          }
+        },
+        "required": [
+          "hour",
+          "completed",
+          "usual",
+          "accounts_with_writes",
+          "largest_group",
+          "largest_key",
+          "groups"
+        ],
+        "title": "SignupWave",
         "type": "object"
       },
       "ValidationError": {

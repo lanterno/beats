@@ -425,6 +425,7 @@ export interface components {
             report_links_per_account: components["schemas"]["AccountFigure"][];
             /** Sessions Created 7D Per Account */
             sessions_created_7d_per_account: components["schemas"]["AccountFigure"][];
+            signup_wave?: components["schemas"]["SignupWave"] | null;
             /** Signups Per Day */
             signups_per_day: components["schemas"]["DayFigure"][];
             /** Webhook Domains */
@@ -833,6 +834,28 @@ export interface components {
             since: string | null;
             /** Subject Id */
             subject_id: string;
+        };
+        /**
+         * SignupWave
+         * @description This hour's sign-ups against the usual for this hour of the week, and
+         *     the largest network's share — the key is opaque and day-scoped, the page
+         *     says "Network A", and no account is joined to it anywhere.
+         */
+        SignupWave: {
+            /** Accounts With Writes */
+            accounts_with_writes: number;
+            /** Completed */
+            completed: number;
+            /** Groups */
+            groups: number;
+            /** Hour */
+            hour: string;
+            /** Largest Group */
+            largest_group: number | null;
+            /** Largest Key */
+            largest_key: string | null;
+            /** Usual */
+            usual: number;
         };
         /** ValidationError */
         ValidationError: {
