@@ -25,7 +25,9 @@ unreachable metadata server on every request. Nothing is stored: no time
 series, no table, no query box.
 
 The filters below are the ones the `api` dashboard in
-`terraform/monitoring.tf` draws, and change with it.
+`terraform/monitoring.tf` draws, except the instance count, which is read the
+way the instances-at-max alert in `terraform/alerts.tf` reads it; they change
+with those.
 """
 
 import asyncio
@@ -60,7 +62,12 @@ class HealthFigures:
     availability: float | None  # share of uptime probes passing, last 24 h
     error_share: float | None  # 5xx / all requests, last hour
     p95_latency_ms: float | None  # last hour
-    instances: float | None  # most recent 5-minute maximum
+    # Active instances on the busiest revision, most recent 5-minute maximum.
+    # The ceiling, maxScale (terraform/cloudrun.tf), is a revision's, and the
+    # instances-at-max alert (terraform/alerts.tf) reads it the same way: a
+    # sum over every revision and both states counts the last revision's
+    # idle instances during a rollover, and read "3 of 2".
+    instances: float | None
     refused_writes: list[RouteFigure] = field(default_factory=list)  # last 24 h
 
 
@@ -130,6 +137,24 @@ def by_label(body: dict[str, Any], label: str) -> list[RouteFigure]:
             if value is not None:
                 out[name] = out.get(name, 0.0) + value
     return [RouteFigure(k, v) for k, v in sorted(out.items(), key=lambda kv: -kv[1])]
+
+
+def busiest_now(body: dict[str, Any]) -> float | None:
+    """At the newest instant any series has a point for, the largest value
+    among the series — one series per revision, so the busiest revision's
+    count. A revision that has stopped has no point then and cannot win
+    with an older one."""
+    points = [
+        (end, value)
+        for series in body.get("timeSeries") or []
+        for point in series.get("points") or []
+        if (value := _point_value(point)) is not None
+        and (end := (point.get("interval") or {}).get("endTime", ""))
+    ]
+    if not points:
+        return None
+    newest = max(end for end, _ in points)
+    return max(value for end, value in points if end == newest)
 
 
 def share(part: float | None, whole: float | None) -> float | None:
@@ -257,11 +282,13 @@ class GoogleMonitoring:
                 self._series(
                     client,
                     token,
-                    f'{api} AND metric.type="run.googleapis.com/container/instance_count"',
+                    f'{api} AND metric.type="run.googleapis.com/container/instance_count" '
+                    'AND metric.label.state="active"',
                     window=timedelta(minutes=15),
                     period=timedelta(minutes=5),
                     aligner="ALIGN_MAX",
                     reducer="REDUCE_SUM",
+                    group_by="resource.label.revision_name",
                 ),
                 self._series(
                     client,
@@ -279,7 +306,7 @@ class GoogleMonitoring:
             availability=latest_value(uptime),
             error_share=share(total_value(errors), total_value(total)),
             p95_latency_ms=latest_value(latency),
-            instances=latest_value(instances),
+            instances=busiest_now(instances),
             refused_writes=by_label(refused, "route"),
         )
 
