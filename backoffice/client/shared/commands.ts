@@ -655,9 +655,9 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 		title: "Set it",
 		action: "Set this control",
 		about:
-			"Takes effect for everyone within 30 seconds, on every instance. A pause has an end and lifts itself; a limit stays until it is cleared.",
+			"Takes effect within 30 seconds, on every instance, for everyone it covers: everyone, or the one network handed over from Trust and safety. A pause has an end and lifts itself; a limit stays until it is cleared.",
 		notices:
-			"Everyone, at once: a paused request is refused with a fixed sentence (409, its own code). The reason stays here.",
+			"Whoever it covers, at once: a refused request gets a fixed sentence (409, its own code). The reason stays here.",
 		undo: "Yes. Clear it, or set it again. A pause also ends by itself.",
 		fields: (name) =>
 			isLimit(name)
@@ -695,7 +695,7 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 		title: "Clear it",
 		action: "Clear this control",
 		about: "Puts it back to open: running, or no limit.",
-		notices: "Everyone, within 30 seconds: whatever was refused is accepted again.",
+		notices: "Whoever it covered, within 30 seconds: whatever was refused is accepted again.",
 		undo: "Yes. Set it again.",
 		changes: (before, args, name) => [
 			{
