@@ -11,6 +11,7 @@ built, and why.
 | [server-push.md](server-push.md) | APNs and FCM (#298): the channel #351 waits on, and the Cloud Run shape that decides its architecture |
 | [subscriptions.md](subscriptions.md) | Collecting the per-seat price (#345). What to charge is decided in [docs/pricing.md](../docs/pricing.md); this is the machinery |
 | [backoffice-records.md](backoffice-records.md) | Five records the control plane does not keep and nobody has decided whether it should: a reason on every command, incidents, restrictions in force, an audit of each lookup, snoozing a queue row |
+| [database-ceiling.md](database-ceiling.md) | How full the database is against the free tier's 0.5 GB: Capacity draws the pace, and waits on where to learn the limit |
 | [secret-manager.md](secret-manager.md) | The API's four secrets out of its Cloud Run spec, its Terraform state and its tfvars, and onto a service account of its own — what the control plane's deploy-state row waits on |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
