@@ -9,8 +9,8 @@
  *   sign-ups by day; this hour is the sentence beneath it;
  * - each axis is its highest 20 and nothing else, so the table has no
  *   "against the median" column, and no "already restricted" one, which
- *   would be the restrictions across accounts that docs/backoffice.md says
- *   no page lists;
+ *   would be a list of restrictions across accounts, a record the control
+ *   plane does not keep (docs/backoffice.md § What it does not keep);
  * - writes refused per route are a link, as they are on Today: nothing
  *   stores a refusal.
  *
