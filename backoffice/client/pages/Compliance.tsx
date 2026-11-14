@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import type { ErasureRequestState } from "@/shared/api/schema";
+import { daysBetween, deadlineOf } from "@/shared/lib/deadline";
 import { dayOf } from "@/shared/lib/format";
 import {
 	buttonClass,
@@ -35,24 +36,16 @@ import {
 } from "@/shared/ui";
 import { CommandForm } from "@/shared/ui/CommandForm";
 
-/** How many days from the mail the law allows, and the day it runs out. */
-export const LEGAL_MONTH_DAYS = 30;
-
-export function deadlineOf(received: string): string {
-	const day = new Date(`${received}T00:00:00Z`);
-	day.setUTCDate(day.getUTCDate() + LEGAL_MONTH_DAYS);
-	return day.toISOString().slice(0, 10);
-}
-
-/** Where a request stands, in words: the status, and the days it has waited. */
+/** Where a request stands, in words: the status, and the days it has waited
+ * out of the month it has, the mail's day being day 1 and the deadline the
+ * last. */
 export function requestState(row: ErasureRequestState, today: string): string {
 	if (row.status === "closed") return `Closed: ${row.closed_reason ?? "—"}`;
 	if (row.status === "erasure_ran") return "Erasure ran — close it";
 	if (row.status === "erasure_queued") return "Erasure queued";
-	const waited = Math.floor(
-		(Date.parse(`${today}T00:00:00Z`) - Date.parse(`${row.received_on}T00:00:00Z`)) / 86_400_000,
-	);
-	return `Open, day ${waited + 1} of ${LEGAL_MONTH_DAYS}`;
+	const day = daysBetween(row.received_on, today) + 1;
+	const of = daysBetween(row.received_on, deadlineOf(row.received_on)) + 1;
+	return `Open, day ${day} of ${of}`;
 }
 
 function ErasureRequests() {

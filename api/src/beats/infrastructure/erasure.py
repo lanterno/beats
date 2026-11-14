@@ -42,6 +42,11 @@ credentials, the account — is deleted. The tombstone is `erased:<membership
 id>`, one per organisation, so the organisation's record still groups one
 former member's rows together and nothing else in the system can ever be
 scoped to it.
+
+Last, the request that asked for this, when the operator logged one
+(`erasure_requests`, docs/backoffice.md § The pages), is closed as erased:
+here rather than in the job, so the break-glass script answers it too, and
+last, so an erasure that dies midway leaves it open until a re-run finishes.
 """
 
 import logging
@@ -52,6 +57,7 @@ from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.models import ActorKind, MembershipEnd
+from beats.infrastructure.operator_store import MongoErasureRequests
 from beats.infrastructure.organisations import record_org_audit
 
 logger = logging.getLogger(__name__)
@@ -67,6 +73,7 @@ class ErasureReport(NamedTuple):
     deleted: dict[str, int]  # collection -> documents deleted
     retained: dict[str, int]  # collection -> documents kept under a tombstone
     organisations: list[str]  # the organisations whose record kept rows
+    requests_closed: int  # logged erasure requests this answered
 
 
 def tombstone(membership_id: str) -> str:
@@ -231,6 +238,7 @@ async def erase_account(
         user = await db.users.find_one_and_delete({"_id": ObjectId(user_id)})
     if user is not None:
         deleted["users"] = 1
+    requests_closed = await MongoErasureRequests(db).close_erased(user_id)
     logger.info(
         "erased account %s: deleted %s, retained %s for %s",
         user_id,
@@ -238,4 +246,9 @@ async def erase_account(
         retained,
         organisations,
     )
-    return ErasureReport(deleted=deleted, retained=retained, organisations=organisations)
+    return ErasureReport(
+        deleted=deleted,
+        retained=retained,
+        organisations=organisations,
+        requests_closed=requests_closed,
+    )

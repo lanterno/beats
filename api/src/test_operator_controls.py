@@ -185,8 +185,8 @@ class TestErasureRequestLog:
     ):
         from beats.operator.reads import ERASURE_REQUEST_ATTENTION_DAYS
 
-        fresh = self._log(operator_client, 1, reference="fresh")
-        old = self._log(operator_client, ERASURE_REQUEST_ATTENTION_DAYS, reference="old")
+        fresh = self._log(operator_client, 1, reference="T-1")
+        old = self._log(operator_client, ERASURE_REQUEST_ATTENTION_DAYS, reference="T-2")
 
         rows = operator_client.get("/api/operator/erasure-requests").json()
         assert {(r["id"], r["status"]) for r in rows} == {(fresh, "open"), (old, "open")}
@@ -198,14 +198,38 @@ class TestErasureRequestLog:
         assert ("erasure_request_open", fresh) in kinds
         assert ("erasure_request_open", old) in kinds
 
-    def test_a_reference_is_never_an_address(self, operator_client):
-        refused = self._run(
-            operator_client,
-            "erasure_request.log",
-            {"reference": "ana@example.test", "received_on": "2026-11-01"},
-        )
-        assert refused.status_code == 422
-        assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+    def test_the_audit_names_an_id_never_the_reference(self, operator_client, mongo):
+        """operator_audit is kept four years and holds its subject as an id:
+        the account's when the request names one, else the request's own. The
+        reference the operator typed is in no audit row."""
+        user_id = str(ObjectId())
+        mongo.users.insert_one({"_id": ObjectId(user_id), "email": "named@example.test"})
+        self._log(operator_client, 1, user_id=user_id, reference="T-4417")
+        alone = self._log(operator_client, 1, reference="T-4418")
+
+        audit = list(mongo.operator_audit.find({"command": "erasure_request.log"}))
+        assert sorted(row["subject_id"] for row in audit) == sorted([user_id, alone])
+        assert "T-441" not in str(audit)
+        assert mongo.erasure_requests.find_one({"_id": ObjectId(alone)})["reference"] == "T-4418"
+
+    def test_a_reference_is_a_ticket_or_a_date_never_a_name(self, operator_client, mongo):
+        """The reference is kept a year after the request closes, so it is
+        a ticket number or the mail's date and nothing a person is called."""
+        for typed in ("Jane Doe mail", "JaneDoe", "jane.doe.2026", "ana@example.test"):
+            refused = self._run(
+                operator_client,
+                "erasure_request.log",
+                {"reference": typed, "received_on": "2026-11-01"},
+            )
+            assert refused.status_code == 422, typed
+            assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+            [field] = refused.json()["fields"]
+            assert field["path"] == "reference"
+            assert field["message"].startswith("a ticket number or the mail's date")
+        assert mongo.erasure_requests.count_documents({}) == 0
+
+        for typed in ("T-1234", "#42", "2026-11-14-2"):
+            self._log(operator_client, 1, reference=typed)
 
     def test_the_state_is_read_off_the_job_queue(self, operator_client, mongo):
         user_id = str(ObjectId())
@@ -253,10 +277,17 @@ class TestErasureRequestLog:
         assert again.status_code == 404
         assert again.json()["code"] == "ERASURE_REQUEST_NOT_FOUND"
 
-    def test_a_request_naming_an_unknown_account_is_refused(self, operator_client):
-        refused = self._run(
-            operator_client,
-            "erasure_request.log",
-            {"reference": "r", "received_on": "2026-11-01", "user_id": str(ObjectId())},
-        )
-        assert refused.status_code == 404
+    def test_an_account_id_naming_no_account_is_refused_on_its_box(self, operator_client):
+        """The review keeps its form on a 422 and fails whole on anything
+        else, so an unknown id, or a fragment of one, is refused as the
+        argument it is: in the preview, before anything is logged, and in the
+        act. A fragment once reached ObjectId() and answered 500."""
+        for user_id in (str(ObjectId()), "6633f0a1"):
+            args = {"reference": "mail-1", "received_on": "2026-11-01", "user_id": user_id}
+            for path in ("erasure_request.log/preview", "erasure_request.log"):
+                refused = operator_client.post(
+                    f"/api/operator/commands/{path}", json={"args": args}, headers=self.OWN
+                )
+                assert refused.status_code == 422, (user_id, path, refused.text)
+                assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+                assert [f["path"] for f in refused.json()["fields"]] == ["user_id"]

@@ -147,6 +147,40 @@ class TestOperatorCommands:
         bad = self._run(operator_client, "account.suspend", {"user_id": ""})
         assert bad.status_code == 422
         assert bad.json()["code"] == "INVALID_COMMAND_ARGS"
+        # Each argument that failed is named, so the review can say which box.
+        assert {f["path"] for f in bad.json()["fields"]} == {"user_id", "reason"}
+
+    def test_a_malformed_id_is_refused_on_its_box(self, operator_client, mongo):
+        """A fragment of an account id reached ObjectId() in the user
+        repository and answered 500, and a malformed organisation or job id
+        read as "no such thing"; each is refused when the arguments are
+        parsed, naming the box, in the preview as in the act."""
+        for name, args, boxes in (
+            ("account.suspend", {"user_id": "6633f0a1", "reason": "r"}, {"user_id"}),
+            ("account.erase", {"user_id": "6633f0a1"}, {"user_id"}),
+            ("device.revoke", {"user_id": "6633f0a1", "device_id": "d"}, {"user_id"}),
+            (
+                "organisation.grant_owner",
+                {"organisation_id": "acme", "user_id": "6633f0a1"},
+                {"organisation_id", "user_id"},
+            ),
+            ("job.cancel", {"job_id": "last-one"}, {"job_id"}),
+        ):
+            for path in (f"{name}/preview", name):
+                refused = self._run(operator_client, path, args)
+                assert refused.status_code == 422, (path, refused.text)
+                assert {f["path"] for f in refused.json()["fields"]} == boxes, path
+
+    def test_an_id_typed_in_capitals_is_the_same_subject(self, operator_client, mongo):
+        """Erasure sweeps `user_id` by exact match, so an erasure queued under
+        an upper-case id would have deleted the account and nothing keyed on
+        it; the id is the account page's, lower-case, however it was typed."""
+        user_id = self._user(mongo, "capitals@example.test")
+        preview = self._run(
+            operator_client, "account.erase/preview", {"user_id": f" {user_id.upper()} "}
+        )
+        assert preview.status_code == 200, preview.text
+        assert preview.json()["subject_id"] == user_id
 
     async def test_a_viewer_runs_no_command(self):
         """The role gate is the runner's, so it holds for every command at
@@ -344,6 +378,7 @@ class TestOperatorJobs:
         yield
         mongo.operator_jobs.delete_many({})
         mongo.operator_audit.delete_many({})
+        mongo.erasure_requests.delete_many({})
 
     def _user(self, mongo, email: str) -> str:
         user_id = str(ObjectId())
@@ -451,6 +486,50 @@ class TestOperatorJobs:
         assert audit["command"] == "account.erase"
         assert audit["operator_sub"] == OPERATOR_SUB
         assert "gone@example.test" not in str(audit)
+
+    def test_the_erasure_closes_the_request_that_asked_for_it(self, operator_client, mongo):
+        """A request's year starts when it is closed, and nothing asked
+        anyone to close one whose erasure had run, so it was kept forever.
+        The erasure closes it, as erased — only the requests naming that
+        account, and one whose id was typed in capitals still names it."""
+        user_id = self._user(mongo, "asked@example.test")
+        other = self._user(mongo, "other@example.test")
+        received = (datetime.now(UTC) - timedelta(days=3)).date().isoformat()
+
+        def log(**args: str) -> str:
+            done = self._run(
+                operator_client, "erasure_request.log", {"received_on": received, **args}
+            )
+            assert done.status_code == 200, done.text
+            return done.json()["after"]["request_id"]
+
+        asked = log(reference="T-1", user_id=user_id.upper())
+        elsewhere = log(reference="T-2", user_id=other)
+        no_account = log(reference="T-3")
+
+        job = self._run(
+            operator_client,
+            "account.erase",
+            {"user_id": user_id},
+            confirmation="asked@example.test",
+        ).json()["job"]
+        self._due_now(mongo, job["id"])
+        assert _run_jobs() == 1
+
+        states = {
+            r["id"]: (r["status"], r["closed_reason"])
+            for r in operator_client.get("/api/operator/erasure-requests").json()
+        }
+        assert states == {
+            asked: ("closed", "erased"),
+            elsewhere: ("open", None),
+            no_account: ("open", None),
+        }
+        expires = mongo.erasure_requests.find_one({"_id": ObjectId(asked)})["expires_at"]
+        kept = expires.replace(tzinfo=UTC) - datetime.now(UTC)
+        assert timedelta(days=364) < kept <= timedelta(days=365)
+        audit = mongo.operator_audit.find_one({"command": "account.erase", "subject_id": user_id})
+        assert audit["after"]["requests_closed"] == 1
 
     def test_a_deletion_queued_then_outranked_by_a_new_owner_fails_its_job(
         self, operator_client, mongo

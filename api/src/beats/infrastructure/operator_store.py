@@ -108,8 +108,16 @@ class MongoErasureRequests:
         return doc
 
     async def log(
-        self, *, reference: str, received_on: str, subject_id: str | None, logged_by: str
+        self,
+        *,
+        request_id: str,
+        reference: str,
+        received_on: str,
+        subject_id: str | None,
+        logged_by: str,
     ) -> dict[str, Any]:
+        """`request_id` is made by the caller, before the write, so the
+        audit of logging it can name a request with no account by its id."""
         doc = {
             "reference": reference,
             "received_on": received_on,
@@ -121,8 +129,8 @@ class MongoErasureRequests:
             "closed_by": None,
             "expires_at": None,
         }
-        result = await self._col.insert_one(dict(doc))
-        return {**doc, "id": str(result.inserted_id)}
+        await self._col.insert_one({"_id": ObjectId(request_id), **doc})
+        return {**doc, "id": request_id}
 
     async def get(self, request_id: str) -> dict[str, Any] | None:
         try:
@@ -152,6 +160,26 @@ class MongoErasureRequests:
             return_document=ReturnDocument.AFTER,
         )
         return self._out(doc) if doc else None
+
+    async def close_erased(self, subject_id: str) -> int:
+        """Every open request naming this account, closed `erased` by the
+        erasure itself as it finishes, so a request's year starts the day
+        it was answered rather than never. `closed_by` stays empty: nobody
+        closed it by hand, and the audit of `account.erase` names who queued
+        it. Closes nothing on a re-run."""
+        now = datetime.now(UTC)
+        result = await self._col.update_many(
+            {"subject_id": subject_id, "closed_at": None},
+            {
+                "$set": {
+                    "closed_at": now.isoformat(),
+                    "closed_reason": "erased",
+                    "closed_by": None,
+                    "expires_at": now + timedelta(days=ERASURE_REQUEST_RETENTION_DAYS),
+                }
+            },
+        )
+        return result.modified_count
 
     async def all(self) -> list[dict[str, Any]]:
         docs = await self._col.find({}).sort("received_on", -1).to_list()

@@ -402,9 +402,10 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 
 /**
  * The erasure request log (docs/backoffice.md § The pages, Compliance). A
- * request is logged with a reference the operator chooses — never an
- * address, which the API refuses — and closed with a reason once the
- * erasure ran, or there was no account, or they withdrew it.
+ * request is logged with a reference the operator chooses — a ticket number
+ * or the mail's date, which is all the API takes, so never a name or an
+ * address. The account's erasure closes it as erased when it runs; the rest
+ * are closed by hand, when there was no account or they withdrew it.
  */
 export const ERASURE_COMMANDS: CommandSpec[] = [
 	{
@@ -414,7 +415,7 @@ export const ERASURE_COMMANDS: CommandSpec[] = [
 		title: "Log a request",
 		action: "Log this request",
 		about:
-			"A request that arrived by mail gets a date here, so the deadline is visible before anything is queued. The account, if there is one, is named by its id; someone with no account is a reference alone.",
+			"A request that arrived by mail gets a date here, so the deadline is visible before anything is queued. The account, if there is one, is named by its id, and its erasure closes the request when it runs; someone with no account is a reference alone.",
 		notices: "Nobody. This is your own record; queueing the erasure is a separate act.",
 		undo: "Close it with a reason. Nothing is deleted by logging.",
 		fields: [
@@ -422,14 +423,14 @@ export const ERASURE_COMMANDS: CommandSpec[] = [
 				key: "reference",
 				label: "Reference",
 				kind: "text",
-				hint: "Your own: a ticket number, the mail's date. Never an address.",
+				hint: "A ticket number or the mail's date, like T-1234 or 2026-11-14: a few letters at most, then digits. Never a name or an address.",
 			},
 			{ key: "received_on", label: "Received on (UTC day)", kind: "text", hint: "YYYY-MM-DD" },
 			{
 				key: "user_id",
 				label: "Account id",
 				kind: "text",
-				hint: "Leave empty when there is no account.",
+				hint: "The whole id, from the account's page. Leave empty when there is no account.",
 			},
 		],
 		changes: (before, args) => [
@@ -451,7 +452,7 @@ export const ERASURE_COMMANDS: CommandSpec[] = [
 		title: "Close it",
 		action: "Close this request",
 		about:
-			"Closes the request with a reason: erased (the job ran), no_account (nothing to erase), or withdrawn. A closed request is kept a year, then goes.",
+			"Closes the request with a reason: erased, no_account (nothing to erase), or withdrawn. An erasure closes the requests naming its account by itself; erased by hand is for the rest. A closed request is kept a year, then goes.",
 		notices: "Nobody.",
 		undo: "No; log it again if it was closed by mistake.",
 		fields: [

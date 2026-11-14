@@ -22,7 +22,12 @@ from pydantic import BaseModel, ValidationError
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.operator_jobs import MongoOperatorJobs
 from beats.infrastructure.operator_store import MongoOperatorAudit
-from beats.operator.commands import COMMANDS, CommandContext, OperatorCommand
+from beats.operator.commands import (
+    COMMANDS,
+    CommandContext,
+    InvalidCommandArgs,
+    OperatorCommand,
+)
 
 
 class UnknownCommand(DomainException):
@@ -37,11 +42,6 @@ class ViewerCannotAct(DomainException):
     status_code = 403
     message = "A viewer runs no command"
     code = "VIEWER_CANNOT_ACT"
-
-
-class InvalidCommandArgs(DomainException):
-    status_code = 422
-    code = "INVALID_COMMAND_ARGS"
 
 
 class JobAlreadyQueued(DomainException):
@@ -87,7 +87,7 @@ def _resolve(
     try:
         return command, command.args_model.model_validate(args)
     except ValidationError as e:
-        raise InvalidCommandArgs(str(e)) from None
+        raise InvalidCommandArgs.of(e) from None
 
 
 @dataclass(frozen=True)

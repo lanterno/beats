@@ -17,18 +17,20 @@ A command with a `window` is destructive and enqueues instead of executing
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Annotated, Any, Literal, Protocol
+from typing import Any, Literal, Protocol
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
 from beats.domain.exceptions import DomainException, OrganisationNotFound
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
-from beats.infrastructure.operator_store import MongoErasureRequests, MongoPlatformControlsStore
+from beats.infrastructure.operator_store import MongoPlatformControlsStore
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
+from beats.operator.erasure_requests import CloseErasureRequest, LogErasureRequest
+from beats.operator.ids import DocumentId
 from beats.operator.settings import OperatorIdentity
 from beats.operator.status_page import (
     MESSAGE_MAX,
@@ -73,11 +75,43 @@ class OperatorCommand(Protocol):
     async def on_queued(self, ctx: CommandContext, args: Any) -> None: ...
 
 
+class InvalidCommandArgs(DomainException):
+    """The arguments do not hold — a box left empty, a value of the wrong
+    shape, an id that names nothing. 422, with each failing argument in the
+    envelope's `fields` (`{path, message, type}`, as api/errors.py builds them
+    for the public API), so the review can say which box is wrong rather than
+    fail as a whole. Raised by the runner's parse and by a command's
+    `describe()` when an argument names nothing."""
+
+    status_code = 422
+    code = "INVALID_COMMAND_ARGS"
+
+    def __init__(self, fields: list[dict[str, str]]):
+        self.fields = fields
+        super().__init__(
+            "; ".join(f"{f['path']}: {f['message']}" if f["path"] else f["message"] for f in fields)
+        )
+
+    @classmethod
+    def of(cls, error: ValidationError) -> InvalidCommandArgs:
+        # Pydantic prefixes a validator's own sentence with its kind.
+        return cls(
+            [
+                {
+                    "path": ".".join(str(p) for p in e["loc"]),
+                    "message": e["msg"].removeprefix("Value error, "),
+                    "type": e["type"],
+                }
+                for e in error.errors()
+            ]
+        )
+
+
 # ── accounts ─────────────────────────────────────────────────────────
 
 
 class AccountArgs(BaseModel):
-    user_id: str = Field(min_length=1, max_length=64)
+    user_id: DocumentId
 
 
 class SuspendArgs(AccountArgs):
@@ -259,7 +293,7 @@ class RevokeDevice(_AccountCommand):
 
 
 class OrganisationArgs(BaseModel):
-    organisation_id: str = Field(min_length=1, max_length=64)
+    organisation_id: DocumentId
 
 
 async def _organisation_name(ctx: CommandContext, organisation_id: str) -> str:
@@ -303,7 +337,7 @@ class _OrganisationCommand:
 
 
 class GrantOwnerArgs(OrganisationArgs):
-    user_id: str = Field(min_length=1, max_length=64)
+    user_id: DocumentId
 
 
 class GrantOwner(_OrganisationCommand):
@@ -456,110 +490,6 @@ class ClearControl(_ControlCommand):
     async def execute(self, ctx: CommandContext, args: ControlArgs) -> dict[str, Any]:
         await MongoPlatformControlsStore(ctx.db).clear(args.name)
         return await _control_state(ctx, args.name)
-
-
-# ── the erasure request log ──────────────────────────────────────────
-
-
-def _no_address(value: str) -> str:
-    # The log never holds an address: a request outlives the account, and
-    # the account is named by id. A reference with an @ is refused outright.
-    if "@" in value:
-        raise ValueError("a reference must not be an address; name the account by its id")
-    return value
-
-
-class LogErasureRequestArgs(BaseModel):
-    reference: Annotated[str, AfterValidator(_no_address)] = Field(min_length=1, max_length=200)
-    received_on: date
-    user_id: str | None = Field(default=None, min_length=1, max_length=64)
-
-    @model_validator(mode="after")
-    def _not_in_the_future(self) -> LogErasureRequestArgs:
-        if self.received_on > datetime.now(UTC).date():
-            raise ValueError("received_on is in the future")
-        return self
-
-
-class LogErasureRequest:
-    """A request that arrived by mail gets a date, so the deadline is
-    visible before anything is queued (docs/backoffice.md § The pages,
-    Compliance). The subject is the operator's reference; the account, when
-    there is one, is named by id in the row."""
-
-    name = "erasure_request.log"
-    subject_kind = "erasure_request"
-    window: timedelta | None = None
-    args_model: type[BaseModel] = LogErasureRequestArgs
-
-    def subject_id(self, args: Any) -> str:
-        return args.reference
-
-    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
-        return None
-
-    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        if args.user_id is None:
-            return {"account": None}
-        user = await ctx.accounts.find(args.user_id)
-        if user is None:
-            raise AccountNotFound()
-        return {"account": "exists", "suspended": user.suspended}
-
-    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        row = await MongoErasureRequests(ctx.db).log(
-            reference=args.reference,
-            received_on=args.received_on.isoformat(),
-            subject_id=args.user_id,
-            logged_by=ctx.operator.sub,
-        )
-        return {"request_id": row["id"], "received_on": row["received_on"]}
-
-    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
-        return None
-
-
-class ErasureRequestNotFound(DomainException):
-    status_code = 404
-    message = "No open erasure request with that id"
-    code = "ERASURE_REQUEST_NOT_FOUND"
-
-
-class CloseErasureRequestArgs(BaseModel):
-    request_id: str = Field(min_length=1, max_length=64)
-    # erased: the job ran. no_account: nothing to erase. withdrawn: they
-    # asked again, the other way.
-    reason: Literal["erased", "no_account", "withdrawn"]
-
-
-class CloseErasureRequest:
-    name = "erasure_request.close"
-    subject_kind = "erasure_request"
-    window: timedelta | None = None
-    args_model: type[BaseModel] = CloseErasureRequestArgs
-
-    def subject_id(self, args: Any) -> str:
-        return args.request_id
-
-    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
-        return None
-
-    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        row = await MongoErasureRequests(ctx.db).get(args.request_id)
-        if row is None or row.get("closed_at"):
-            raise ErasureRequestNotFound()
-        return {"received_on": row["received_on"], "closed": False}
-
-    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
-        row = await MongoErasureRequests(ctx.db).close(
-            args.request_id, reason=args.reason, closed_by=ctx.operator.sub
-        )
-        if row is None:
-            raise ErasureRequestNotFound()
-        return {"received_on": row["received_on"], "closed": True, "reason": args.reason}
-
-    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
-        return None
 
 
 # ── the deploy freeze ────────────────────────────────────────────────
@@ -770,6 +700,7 @@ class EraseAccount(_AccountCommand):
         return {
             "deleted": sum(report.deleted.values()),
             "retained": sum(report.retained.values()),
+            "requests_closed": report.requests_closed,
         }
 
 
@@ -789,7 +720,7 @@ class DeleteOrganisation(_OrganisationCommand):
 class RetentionPurgeArgs(BaseModel):
     # None purges every organisation; the confirmation is then the word
     # "all", typed.
-    organisation_id: str | None = Field(default=None, max_length=64)
+    organisation_id: DocumentId | None = None
 
 
 class RetentionPurge:
@@ -837,7 +768,7 @@ class JobNotFound(DomainException):
 
 
 class CancelJobArgs(BaseModel):
-    job_id: str = Field(min_length=1, max_length=64)
+    job_id: DocumentId
 
 
 class CancelJob:
