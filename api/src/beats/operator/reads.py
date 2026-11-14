@@ -43,6 +43,16 @@ ACCOUNT_COACH_SPEND_DAYS = 30
 # long the platform has run.
 COACH_COST_DAYS = 31
 
+# The database's sizes, one a UTC day, kept by the job runner
+# (infrastructure/database_sizes.py): this many days, by a TTL index, and the
+# series Capacity draws is every one of them. A year and a bit, so a month
+# can be set beside the same month a year before.
+SIZE_KEEP_DAYS = 400
+# The pace is read over this many days back from the newest size kept: long
+# enough that one day's purge or restore does not swing it, short enough to
+# be the current pace rather than the platform's whole history.
+GROWTH_PACE_DAYS = 30
+
 
 @dataclass(frozen=True)
 class AttentionCounts:
@@ -325,6 +335,35 @@ class CollectionSize:
     storage_bytes: int
     # What the collection's indexes take up besides.
     index_bytes: int = 0
+    # Its pace between the two days the database's is read between
+    # (`DatabaseGrowth`): bytes a month, and that as a share of what it took
+    # up on the first of them. None when there is no pace yet, or the
+    # collection was not kept on both days; the share is None too when it
+    # took up nothing on the first.
+    growth_bytes_a_month: float | None = None
+    growth_share_a_month: float | None = None
+
+
+@dataclass(frozen=True)
+class SizeDay:
+    """The database's size on disk as the job runner kept it that UTC day:
+    every collection's `storage_bytes` added up, as the page's own total is."""
+
+    day: date
+    storage_bytes: int
+
+
+@dataclass(frozen=True)
+class DatabaseGrowth:
+    """The pace: what the database moved between two days kept, carried to a
+    month of 30 days. `until` is the newest size kept and `since` the oldest
+    within `GROWTH_PACE_DAYS` before it — or, when the runner kept none in
+    that span, the one kept just before `until`."""
+
+    since: date
+    until: date
+    change_bytes: int
+    bytes_a_month: float
 
 
 @dataclass(frozen=True)
@@ -344,6 +383,12 @@ class CapacityReport:
     # The last COACH_COST_DAYS days (UTC), newest first, one row per day and
     # model; a day nothing was spent has no row.
     coach_cost: list[CoachCostDay]
+    # Every size the job runner has kept, oldest first; a day it did not run
+    # has no row. Empty until its first run.
+    sizes: list[SizeDay] = field(default_factory=list)
+    # None below two days kept: one size is where the database stands, not
+    # a pace.
+    growth: DatabaseGrowth | None = None
 
 
 class OperatorReads(Protocol):

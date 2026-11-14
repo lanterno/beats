@@ -9,7 +9,9 @@ and greps every response for it.
 
 A pipeline per request is fine at this size (§ *What is deliberately not
 here*): no pre-computed aggregates, and the account page's storage estimate
-is computed for one account on that page only, never for a list.
+is computed for one account on that page only, never for a list. The one
+stored series is the database's own size a day (`database_sizes.py`), since
+a pace needs a size from before today and nothing else keeps one.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -20,6 +22,8 @@ from bson.errors import InvalidId
 from pydantic import TypeAdapter
 from pymongo.asynchronous.database import AsyncDatabase
 
+from beats.infrastructure.database_sizes import MongoDatabaseSizes, collection_stats
+from beats.operator.growth import database_growth, with_growth
 from beats.operator.reads import (
     ABSENCE_REQUEST_ATTENTION_DAYS,
     ACCOUNT_COACH_SPEND_DAYS,
@@ -829,19 +833,23 @@ class MongoOperatorReads:
         )
 
     async def capacity(self) -> CapacityReport:
-        collections = []
-        for name in sorted(await self._db.list_collection_names()):
-            cursor = await self._db[name].aggregate([{"$collStats": {"storageStats": {}}}])
-            rows = await cursor.to_list(1)
-            stats = rows[0].get("storageStats", {}) if rows else {}
-            collections.append(
-                CollectionSize(
-                    name=name,
-                    documents=int(stats.get("count", 0)),
-                    storage_bytes=int(stats.get("storageSize", 0)),
-                    index_bytes=int(stats.get("totalIndexSize", 0)),
-                )
+        # Each collection as it stands, and the database's pace off the
+        # sizes the job runner keeps a day (infrastructure/database_sizes.py).
+        sizes = MongoDatabaseSizes(self._db)
+        series = await sizes.series()
+        growth = database_growth(series)
+        collections = [
+            CollectionSize(
+                name=s.name,
+                documents=s.documents,
+                storage_bytes=s.storage_bytes,
+                index_bytes=s.index_bytes,
             )
+            for s in await collection_stats(self._db)
+        ]
+        if growth is not None:
+            then, now = await sizes.on(growth.since), await sizes.on(growth.until)
+            collections = with_growth(collections, growth, then, now)
 
         # The platform's coach cost by day and model, with what one account's
         # /api/coach/usage cannot say: the cache-hit ratio across everyone.
@@ -877,4 +885,9 @@ class MongoOperatorReads:
             )
             async for d in cursor
         ]
-        return CapacityReport(collections=collections, coach_cost=coach_cost)
+        return CapacityReport(
+            collections=collections,
+            coach_cost=coach_cost,
+            sizes=series,
+            growth=growth,
+        )
