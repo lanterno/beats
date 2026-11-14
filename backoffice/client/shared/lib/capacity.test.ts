@@ -36,7 +36,7 @@ describe("coachMonth", () => {
 		expect(month.spent).toBe(6.5);
 		expect(month.running).toHaveLength(14);
 		expect(month.running[0]).toBe(3);
-		expect(month.running.at(-1)).toBe(6.5);
+		expect(month.running[month.running.length - 1]).toBe(6.5);
 		// 13.5 of November's 30 days have gone.
 		expect(month.heading).toBeCloseTo((6.5 * 30) / 13.5, 6);
 	});
