@@ -50,6 +50,7 @@ describe("unanswered and status", () => {
 			finished_at: null,
 			log_url: null,
 			live: false,
+			held: false,
 		};
 		expect(isBad(row)).toBe(true);
 	});
