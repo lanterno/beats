@@ -42,6 +42,17 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
   deletion or a retention purge (one day) — as the serialised command, who
   queued it, when it runs, and its state. The subject is an id here too, so
   an erasure cannot sweep the record of itself
+- **Erasure requests** (`erasure_requests`): one per request to delete an
+  account that arrived by mail, logged by the operator the day it arrives so
+  the legal month shows before anything is queued — the day it arrived, the
+  operator's reference (a ticket number or the mail's date, never a name or
+  an address), the account it names as an id or none, which operator logged
+  it and when, and once closed, when, which operator (none when the erasure
+  closed it) and why (`erased`, `no_account`, `withdrawn`). The account's
+  erasure closes the requests naming it, as `erased`, when it runs. Kept
+  while open, then a year after it is closed, as the record that the request
+  was answered, and deleted by a TTL index. The account is named as
+  `subject_id`, so the erasure it asked for cannot sweep the record of it
 - WebAuthn credentials: public key, credential id, sign counter, device label
 - **Single sign-on identities** (`identities[]` on the user): per linked
   OpenID Connect provider, its configured id, the `issuer` and `subject`
