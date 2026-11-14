@@ -197,6 +197,8 @@ const CHIP = {
 	quiet: "bg-wash text-ink",
 	good: "bg-leaf/15 text-leaf-ink",
 	owed: "bg-persimmon/15 text-persimmon-ink",
+	/** Watched, or on its way out: not yours to act on, not settled either. */
+	warn: "bg-sun/20 text-sun-ink",
 } as const;
 
 export function Chip({
