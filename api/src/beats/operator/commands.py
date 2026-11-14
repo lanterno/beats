@@ -15,6 +15,7 @@ A command with a `window` is destructive and enqueues instead of executing
 `viewer` runs none.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any, Literal, Protocol
@@ -501,10 +502,19 @@ def _no_address(value: str) -> str:
     return value
 
 
+def _an_account_id(value: str) -> str:
+    # Whole, and lower-case as the account page shows it: the request's
+    # state and its closing find the erasure job by this id, exactly.
+    value = value.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{24}", value):
+        raise ValueError("an account id is 24 characters of 0-9 and a-f; paste it whole")
+    return value
+
+
 class LogErasureRequestArgs(BaseModel):
     reference: Annotated[str, AfterValidator(_no_address)] = Field(min_length=1, max_length=200)
     received_on: date
-    user_id: str | None = Field(default=None, min_length=1, max_length=64)
+    user_id: Annotated[str, AfterValidator(_an_account_id)] | None = None
 
     @model_validator(mode="after")
     def _not_in_the_future(self) -> LogErasureRequestArgs:
@@ -535,7 +545,12 @@ class LogErasureRequest:
             return {"account": None}
         user = await ctx.accounts.find(args.user_id)
         if user is None:
-            raise AccountNotFound()
+            # The account is a box on the form, not the subject in the route:
+            # name the box, so the review keeps the form and says what is
+            # wrong with it, rather than failing as a 404 would.
+            raise InvalidCommandArgs(
+                [{"path": "user_id", "message": "No account has this id", "type": "not_found"}]
+            )
         return {"account": "exists", "suspended": user.suspended}
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
