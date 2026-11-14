@@ -18,7 +18,82 @@ import {
 	statusLabel,
 	unanswered,
 } from "@/shared/lib/releases";
-import { Chip, day, Empty, Facts, Failed, Loading, Page, Panel, Prose, Table } from "@/shared/ui";
+import {
+	buttonClass,
+	Chip,
+	day,
+	Empty,
+	Facts,
+	Failed,
+	Loading,
+	Page,
+	Panel,
+	Prose,
+	Table,
+} from "@/shared/ui";
+
+interface FreezeState {
+	available: boolean;
+	frozen: boolean;
+	until?: string | null;
+	reason?: string | null;
+	set_by?: string | null;
+}
+
+/** The deploy freeze: whether it holds, and the two acts, each through its review. */
+function FreezePanel({ newest }: { newest: string | null }) {
+	const freeze = useQuery({
+		queryKey: ["deploy-freeze"],
+		queryFn: () => get<FreezeState>("/api/operator/deploy-freeze"),
+	});
+	if (freeze.error) {
+		return (
+			<Panel title="Deploy freeze">
+				<Failed bare error={freeze.error} onRetry={() => freeze.refetch()} />
+			</Panel>
+		);
+	}
+	if (!freeze.data) return null;
+	const f = freeze.data;
+	if (!f.available) {
+		return (
+			<Panel title="Deploy freeze">
+				<Prose>
+					This deployment has no freeze bucket, so its builds cannot be held back from here.
+				</Prose>
+			</Panel>
+		);
+	}
+	return (
+		<Panel
+			raised={f.frozen}
+			title="Deploy freeze"
+			note={
+				f.frozen
+					? `API deploys are frozen until ${minuteOf(f.until)} UTC${f.reason ? ` — ${f.reason}` : ""}. The web app can still ship.`
+					: "API deploys are shipping. Freezing holds back every API build until a time you set; the web app is not held."
+			}
+		>
+			<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
+				{f.frozen ? (
+					<>
+						<Link to="/review/deploy.unfreeze/api" className={buttonClass("primary")}>
+							Lift the freeze
+						</Link>
+						<span className="text-[13px] text-ink-muted">
+							Then re-run the newest build{newest ? ` (${short(newest)})` : ""}: one held back does
+							not deploy by itself.
+						</span>
+					</>
+				) : (
+					<Link to="/review/deploy.freeze/api" className={buttonClass("secondary")}>
+						Freeze the API's deploys
+					</Link>
+				)}
+			</div>
+		</Panel>
+	);
+}
 
 export function Releases() {
 	const releases = useQuery({
@@ -76,6 +151,7 @@ export function Releases() {
 					}
 				/>
 			</Panel>
+			<FreezePanel newest={r.builds[0]?.sha ?? null} />
 			<Panel title="The web app">
 				<Facts
 					items={[

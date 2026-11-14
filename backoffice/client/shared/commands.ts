@@ -43,7 +43,15 @@ export interface Family {
 	missing: string;
 }
 
-export const FAMILIES: Record<"account" | "control" | "erasure", Family> = {
+export const FAMILIES: Record<"account" | "control" | "erasure" | "deploy", Family> = {
+	deploy: {
+		// The subject is fixed ("api") and sent as nothing: both deploy
+		// commands are subjectless on the wire.
+		subjectKey: "name",
+		back: () => ({ to: "/releases", label: "Back to releases" }),
+		typedLabel: "Type it to confirm",
+		missing: "There is nothing to act on.",
+	},
 	erasure: {
 		subjectKey: "request_id",
 		back: () => ({ to: "/compliance", label: "Back to privacy and compliance" }),
@@ -458,7 +466,71 @@ export const ERASURE_COMMANDS: CommandSpec[] = [
 	},
 ];
 
-const EVERY_COMMAND = [...ACCOUNT_COMMANDS, ...CONTROL_COMMANDS, ...ERASURE_COMMANDS];
+/**
+ * The deploy freeze (docs/backoffice.md § Deploy freeze): holds back the
+ * API's builds until a time, and lifts it. The web app ships from its own
+ * workflow and is not held — the review says so.
+ */
+export const DEPLOY_COMMANDS: CommandSpec[] = [
+	{
+		family: "deploy",
+		subjectless: true,
+		name: "deploy.freeze",
+		title: "Freeze the API's deploys",
+		action: "Freeze deploys",
+		about:
+			"Every API build that reaches its deploy step while this is in force skips its apply and goes red. It ends by itself at the time you set, within 7 days. The web app can still ship: it deploys from its own workflow, which this does not hold.",
+		notices:
+			"Whoever merges: their build goes red saying it was frozen. Users notice nothing — nothing changes for them.",
+		undo: "Yes. Unfreeze it, then re-run the newest build: a build held back does not deploy by itself.",
+		fields: [
+			{
+				key: "until",
+				label: "Until (UTC)",
+				kind: "text",
+				hint: "An instant like 2026-11-15T09:00:00Z. At most 7 days from now.",
+			},
+			{ key: "reason", label: "Reason", kind: "text", hint: "Shown in the build's log." },
+		],
+		changes: (before, args) => [
+			{
+				what: "API deploys",
+				now: before.frozen
+					? `Frozen until ${String(before.until ?? "—").slice(0, 16)}`
+					: "Shipping",
+				after: `Frozen until ${String(args.until || "—").slice(0, 16)}`,
+			},
+			{ what: "Web app deploys", now: "Shipping", after: "Still shipping" },
+		],
+	},
+	{
+		family: "deploy",
+		subjectless: true,
+		name: "deploy.unfreeze",
+		title: "Lift the freeze",
+		action: "Lift the freeze",
+		about:
+			"API builds deploy again. One held back while frozen does not deploy by itself: re-run the newest build, which Releases names.",
+		notices: "Nobody, until the next build deploys.",
+		undo: "Yes. Freeze again.",
+		changes: (before) => [
+			{
+				what: "API deploys",
+				now: before.frozen
+					? `Frozen until ${String(before.until ?? "—").slice(0, 16)}`
+					: "Shipping",
+				after: "Shipping",
+			},
+		],
+	},
+];
+
+const EVERY_COMMAND = [
+	...ACCOUNT_COMMANDS,
+	...CONTROL_COMMANDS,
+	...ERASURE_COMMANDS,
+	...DEPLOY_COMMANDS,
+];
 
 export const commandSpec = (name: string): CommandSpec | undefined =>
 	EVERY_COMMAND.find((c) => c.name === name);
