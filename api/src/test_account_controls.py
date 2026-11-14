@@ -7,12 +7,11 @@ door's suspension test stays with TestSSOAPI's harness there.
 
 import logging
 import time
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from api_helpers import _billed_march, _mint_link, _read_report
+from api_helpers import _billed_march, _mint_link, _read_report, arriving_from
 
 
 class TestAccountSuspensionAPI:
@@ -593,20 +592,6 @@ class TestSignupNetworks:
         platform_controls.clear()
 
     @staticmethod
-    @contextmanager
-    def _from(client, address: str):
-        """The class's TestClient, seen as arriving from `address`. The same
-        client, not a second one: a fresh TestClient runs on an event loop of
-        its own, which the session's Mongo client refuses."""
-        transport = client._transport
-        was = transport.client
-        transport.client = (address, 443)
-        try:
-            yield client
-        finally:
-            transport.client = was
-
-    @staticmethod
     def _key(address: str) -> str:
         from beats.auth.signup_networks import key_for
 
@@ -618,9 +603,9 @@ class TestSignupNetworks:
         return client.post("/api/auth/register/start", json={"email": email, "display_name": "W"})
 
     def test_a_start_is_one_counter_row_with_a_key_and_no_address(self, client, mongo):
-        with self._from(client, self.VISITOR) as visitor:
+        with arriving_from(client, self.VISITOR) as visitor:
             assert self._start(visitor, "wave-a@example.test").status_code == 200
-        with self._from(client, "203.0.113.9") as neighbour:
+        with arriving_from(client, "203.0.113.9") as neighbour:
             assert self._start(neighbour, "wave-b@example.test").status_code == 200
         rows = list(mongo.signup_network_counts.find({}))
         assert len(rows) == 1, "two addresses in one /24 are one network"
@@ -677,7 +662,7 @@ class TestSignupNetworks:
         )
         platform_controls.clear()
 
-        with self._from(client, self.VISITOR) as same:
+        with arriving_from(client, self.VISITOR) as same:
             assert self._start(same, "wave-g@example.test").status_code == 200
             verify = same.post("/api/auth/register/verify", json={"credential": {}})
             assert verify.json().get("code") != "SIGNUPS_PAUSED", verify.text
@@ -697,17 +682,17 @@ class TestSignupNetworks:
             {"name": "signups", "until": until, "value": 1, "network": key, "reason": "wave"}
         )
         platform_controls.clear()
-        with self._from(client, "198.51.100.4") as other:
+        with arriving_from(client, "198.51.100.4") as other:
             refused = self._start(other, "wave-h@example.test")
             assert refused.status_code == 409, refused.text
             assert refused.json()["code"] == "SIGNUPS_PAUSED"
 
         mongo.platform_controls.delete_one({"network": None})
         platform_controls.clear()
-        with self._from(client, self.VISITOR) as same:
+        with arriving_from(client, self.VISITOR) as same:
             assert self._start(same, "wave-i@example.test").status_code == 200
             assert self._start(same, "wave-j@example.test").status_code == 409
-        with self._from(client, "198.51.100.4") as other:
+        with arriving_from(client, "198.51.100.4") as other:
             assert self._start(other, "wave-k@example.test").status_code == 200
 
     def test_a_slowed_network_is_refused_and_nobody_else(self, client, mongo):
@@ -720,12 +705,12 @@ class TestSignupNetworks:
         )
         platform_controls.clear()
 
-        with self._from(client, self.VISITOR) as same:
+        with arriving_from(client, self.VISITOR) as same:
             assert self._start(same, "wave-d@example.test").status_code == 200
             refused = self._start(same, "wave-e@example.test")
             assert refused.status_code == 409, refused.text
             assert refused.json()["code"] == "SIGNUPS_PAUSED"
             # Never a sign-in.
             assert same.get("/api/auth/login/options").status_code == 200
-        with self._from(client, "198.51.100.4") as other:
+        with arriving_from(client, "198.51.100.4") as other:
             assert self._start(other, "wave-f@example.test").status_code == 200
