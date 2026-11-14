@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { type FieldProblem, OperatorApiError } from "@/shared/api/client";
 import { type CommandField, commandSpec, fieldsOf } from "@/shared/commands";
-import { sent } from "./Review";
+import { refusalOf, sent } from "./Review";
 
 const limits = () => commandSpec("account.set_limits");
 const fields = (name: string, subject = "x"): CommandField[] => {
@@ -247,5 +248,59 @@ describe("the status commands", () => {
 	it("send no subject: the file is the platform's", () => {
 		expect(commandSpec("status.publish")?.subjectless).toBe(true);
 		expect(commandSpec("status.clear")?.subjectless).toBe(true);
+	});
+});
+
+describe("refusalOf", () => {
+	const refused = (...problems: Array<Omit<FieldProblem, "type"> & { type?: string }>) =>
+		new OperatorApiError(
+			422,
+			"Validation failed",
+			"INVALID_COMMAND_ARGS",
+			problems.map((p) => ({ type: "value_error", ...p })),
+		);
+	const log = fields("erasure_request.log", "new");
+
+	// Every box filled, and the old page still said "fill in the fields".
+	it("puts a filled box's refusal beside it, in the API's words", () => {
+		const reason = "a reference must not be an address; name the account by its id";
+		const out = refusalOf(refused({ path: "reference", message: reason }), log, {
+			reference: "ana@example.test",
+			received_on: "2026-11-01",
+		});
+		expect(out).toEqual({ byField: { reference: reason }, general: [], incomplete: false });
+	});
+
+	it("asks for the rest only when a required box is really empty", () => {
+		const out = refusalOf(
+			refused({ path: "received_on", message: "Field required", type: "missing" }),
+			log,
+			{ reference: "T-1", received_on: " " },
+		);
+		expect(out).toEqual({ byField: {}, general: [], incomplete: true });
+	});
+
+	it("says a rule on the arguments as a whole by the button", () => {
+		const out = refusalOf(
+			refused({ path: "", message: "a pause lasts at most 7 days; set it again after" }),
+			fields("control.set", "coach"),
+			{ until: "2026-12-30T00:00:00Z", reason: "r" },
+		);
+		expect(out.general).toEqual(["a pause lasts at most 7 days; set it again after"]);
+		expect(out.byField).toEqual({});
+	});
+
+	it("reads a list item's path as its box", () => {
+		const out = refusalOf(
+			refused({ path: "affected.1", message: "Input should be 'web app', 'api' or …" }),
+			fields("status.publish", "public"),
+			{ state: "outage", message: "Down.", affected: "api, apii" },
+		);
+		expect(Object.keys(out.byField)).toEqual(["affected"]);
+	});
+
+	it("reads anything but a 422 as no refusal of the arguments", () => {
+		const missing = new OperatorApiError(404, "Account not found", "ACCOUNT_NOT_FOUND");
+		expect(refusalOf(missing, log, {})).toEqual({ byField: {}, general: [], incomplete: false });
 	});
 });
