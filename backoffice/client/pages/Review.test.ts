@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type FieldProblem, OperatorApiError } from "@/shared/api/client";
 import { type CommandField, commandSpec, fieldsOf, startingArgs } from "@/shared/commands";
-import { refusalOf, sent } from "./Review";
+import { refusalOf, requestArgs, sent } from "./Review";
 
 const limits = () => commandSpec("account.set_limits");
 const fields = (name: string, subject = "x"): CommandField[] => {
@@ -326,5 +326,44 @@ describe("startingArgs", () => {
 		const args = start("control.set", "signups", "network=k3y-0f-net&reason=forged&value=1");
 		expect(args.network).toBe("k3y-0f-net");
 		expect([args.reason, args.value, args.until]).toEqual(["", "", ""]);
+	});
+});
+
+describe("the subject a review sends", () => {
+	const purge = commandSpec("retention.purge");
+
+	// "all" sent as an organisation id would be refused as no such
+	// organisation, and the platform-wide purge could never be queued.
+	it("sends a purge of every organisation as no organisation at all", () => {
+		expect(purge && requestArgs(purge, "all", {})).toEqual({});
+		expect(purge && requestArgs(purge, "6730aaa2b3c4d5e6f7a8b9c1", {})).toEqual({
+			organisation_id: "6730aaa2b3c4d5e6f7a8b9c1",
+		});
+	});
+
+	it("sends a device with the account it belongs to", () => {
+		const revoke = commandSpec("device.revoke");
+		expect(revoke && requestArgs(revoke, "u1", { device_id: "d1" })).toEqual({
+			user_id: "u1",
+			device_id: "d1",
+		});
+	});
+});
+
+describe("what a subject that is not there reads as", () => {
+	// `describe()` answers None for a device of another account and for a
+	// requester who is not a member. Read as falsy, either would look like
+	// the ordinary state the act expects.
+	it("tells a device not on the account from one that is paired", () => {
+		const now = (revoked: unknown) =>
+			commandSpec("device.revoke")?.changes({ revoked }, {}, "u")[0].now;
+		expect(now(null)).not.toBe(now(false));
+		expect(now(null)).not.toBe(now(true));
+	});
+
+	it("tells a requester who is not a member from one who is", () => {
+		const now = (role: unknown) =>
+			commandSpec("organisation.grant_owner")?.changes({ requester_role: role }, {}, "o")[1].now;
+		expect(now(null)).not.toBe(now("member"));
 	});
 });
