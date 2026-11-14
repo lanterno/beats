@@ -172,6 +172,12 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         name  = "OPERATOR_FREEZE_BUCKET"
         value = google_storage_bucket.deploy_freeze[0].name
       }
+
+      # The public status file's bucket (api/src/beats/operator/status_page.py).
+      env {
+        name  = "OPERATOR_STATUS_BUCKET"
+        value = google_storage_bucket.status[0].name
+      }
     }
   }
 
