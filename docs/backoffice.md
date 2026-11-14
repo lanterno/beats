@@ -271,9 +271,11 @@ controls*, each through its own review and the runner like every mutation.
   `dispatch_webhook_event`, where it **drops** — there is no outbox — with
   one `WEBHOOKS_PAUSED_DROPPED` line per event so the loss can be counted;
   `signups` at `POST /register/start` before the user row exists, at
-  `/register/verify` (start leaves a row a script could finish later) and on
-  the branch of `SSOAccountService.sign_in` that would create an account —
-  never a sign-in or an added passkey. The three limits sit in `_ceiling`
+  `/register/verify` for the pause alone (start leaves a row a script could
+  finish later; the slow-down counted this visitor at start, and checked
+  again would refuse them against their own start) and on the branch of
+  `SSOAccountService.sign_in` that would create an account — never a
+  sign-in or an added passkey. The three limits sit in `_ceiling`
   (`api/rate_limits.py`): the account's override, then the control, then the
   setting, which stays for self-hosted.
 - **Refusals are 409** with `COACH_PAUSED`, `IMPORTS_PAUSED` or

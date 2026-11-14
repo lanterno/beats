@@ -204,11 +204,10 @@ async def verify_registration(
     webauthn: WebAuthnDep,
 ) -> RegistrationVerifyResponse:
     """Verify registration response and store the credential."""
-    # Checked here too: `start` leaves a row a script could finish later.
+    # The pause is checked here too: `start` leaves a row a script could
+    # finish later. The slow-down is not; it counted this visitor at start.
     visitor = request.client.host if request.client else None
-    await platform_controls.refuse_if_signups_closed(
-        Database.get_db(), signup_networks.key_for(visitor)
-    )
+    await platform_controls.refuse_if_signups_paused(Database.get_db())
     # Get the pending registration user_id
     user_id = _session_manager.get_pending_registration_user_id("registration")
     if not user_id:

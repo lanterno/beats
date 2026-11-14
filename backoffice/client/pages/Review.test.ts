@@ -14,23 +14,41 @@ describe("sent", () => {
 		expect(sent([], { stray: 1 })).toEqual({});
 	});
 
-	// An empty box means the platform's default, and the API reads null as
-	// that. Sending 0 would set a ceiling of zero writes a minute.
-	it("turns an empty box into null, never zero", () => {
+	// An empty box means the field's default, and the API reads a field left
+	// out as that. Sending 0 would set a ceiling of zero writes a minute.
+	it("leaves an empty box out, never zero", () => {
 		const out = sent(fields("account.set_limits"), {
 			coach_monthly_budget_usd: "",
-			writes_per_minute_beats: "",
+			writes_per_minute_beats: " ",
 			writes_per_minute_signals: "",
 			imports_per_hour: "",
 			webhooks_disabled: false,
 		});
-		expect(out).toEqual({
-			coach_monthly_budget_usd: null,
-			writes_per_minute_beats: null,
-			writes_per_minute_signals: null,
-			imports_per_hour: null,
+		expect(out).toEqual({ webhooks_disabled: false });
+	});
+
+	// Not null: the status models have defaults that are not None (the fixed
+	// all-clear, no parts), and refuse null, so the review could never open.
+	it("leaves an empty status message and empty parts out", () => {
+		expect(sent(fields("status.clear", "public"), { message: "" })).toEqual({});
+		expect(
+			sent(fields("status.publish", "public"), {
+				state: "degraded",
+				message: "Syncing is slow",
+				affected: "",
+			}),
+		).toEqual({ state: "degraded", message: "Syncing is slow" });
+	});
+
+	// NaN goes over JSON as null, and a slow-down sent as null is a pause.
+	it("sends a number box that is not a number as typed, for the API to refuse", () => {
+		const out = sent(fields("account.set_limits"), {
+			writes_per_minute_beats: "1,000",
+			imports_per_hour: "10/h",
 			webhooks_disabled: false,
 		});
+		expect(out.writes_per_minute_beats).toBe("1,000");
+		expect(out.imports_per_hour).toBe("10/h");
 	});
 
 	it("sends a number as a number, not the typed string", () => {

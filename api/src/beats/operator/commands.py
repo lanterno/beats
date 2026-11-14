@@ -402,7 +402,11 @@ async def _control_state(ctx: CommandContext, name: str) -> dict[str, Any]:
         "until": control.until.isoformat() if control.until else None,
         "value": control.value,
         "set_by": control.set_by,
-        "network": control.network,
+        # That one network is slowed, never which: this is the audit's before
+        # and after, kept four years, and the key is a hash a holder of the
+        # secret could recompute for any /24 (docs/backoffice.md § Trust and
+        # safety). The key stays on the control, which goes by midnight.
+        "one_network": control.network is not None,
     }
 
 
