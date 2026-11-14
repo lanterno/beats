@@ -35,7 +35,8 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 - **The operator's audit** (`operator_audit`): every act through the control
   plane — the command, which operator ran it, the subject as an id (never a
   name or address, so it can outlive the account it names), and the
-  subject's state before and after. Editable by nobody; kept four years, the
+  subject's state before and after; for a sign-up slow-down, whether it
+  covered one network, never which. Editable by nobody; kept four years, the
   platform's default retention, then purged
 - **The operator's job queue** (`operator_jobs`): the irreversible work
   waiting out its window — an erasure (seven days), an organisation's
@@ -53,6 +54,15 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
   while open, then a year after it is closed, as the record that the request
   was answered, and deleted by a TTL index. The account is named as
   `subject_id`, so the erasure it asked for cannot sweep the record of it
+- **The platform's controls** (`platform_controls`): the switches and limits
+  the operator sets through the control plane — per control its name, when a
+  pause ends (`until`), the value of a limit or a slow-down, the operator's
+  reason (shown to no user), and who set it and when. No account, no
+  address. A pause stays, read as open once it has ended, until it is
+  cleared or set again; a limit stays until it is cleared. A slow-down on
+  one network is a document of its own holding that network's hash (the one
+  under *Sign-up network counts* below) and is deleted by a TTL index when
+  it ends, at midnight UTC that day at the latest
 - WebAuthn credentials: public key, credential id, sign counter, device label
 - **Single sign-on identities** (`identities[]` on the user): per linked
   OpenID Connect provider, its configured id, the `issuer` and `subject`
@@ -232,10 +242,14 @@ Kept only as long as it takes to finish one request, then deleted by a TTL index
 - **Pairing codes** (`pairing_codes`): the hash of a code shown once to pair a device, and
   your account id. Taken when used; otherwise five minutes.
 - **Sign-up network counts** (`signup_network_counts`): per hour, per network — the
-  visitor's address cut to its /24 (IPv4) or /48 (IPv6) and HMAC-hashed with a key derived
-  for the UTC day from the server's own secret — how many sign-ups were started and how
-  many finished. No address, no account id, and nothing that joins an account to a
-  network. 48 hours.
+  visitor's address cut to its /24 (IPv4) or /48 (IPv6), and HMAC-SHA256 of the UTC day
+  and that network under the API's signing secret (`JWT_SECRET`) — how many sign-ups
+  were started and how many finished. No address, no account id, and nothing that joins
+  an account to a network. The hash is one-way only to those without the secret: the
+  secret does not rotate, and whoever holds it can match a hash to its network by
+  hashing candidates (every IPv4 /24 in seconds, any IPv6 /48 they can guess), on any
+  day. The operator's deployment never holds it; the API and whoever runs its
+  infrastructure do. 48 hours.
 
 ## Encryption
 
