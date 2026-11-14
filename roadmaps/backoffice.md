@@ -9,9 +9,10 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. Stages 1, 2, 3, 4, 5 and 8 — the pages reorganised around the work,
-the switches with the global limits, sign-ups from one network, live health,
-release history and the erasure request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
+from. Stages 1 to 6 and 8 — the pages reorganised around the work, the
+switches with the global limits, sign-ups from one network, live health,
+release history, the deploy freeze and the erasure request log — shipped on
+2026-11-14 and are in docs/backoffice.md § *The
 pages* and § *Controls*; no other stage has started.
 
 **The owner's inputs were decided on 2026-11-14**, so no stage in this file
@@ -20,7 +21,6 @@ done by hand. Stage 7 lives in its own file and keeps its own open question.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 6 | Deploy freeze | Build | Nothing | Nothing |
 | 7 | Customer updates | Build | Its own file, [status-page.md](status-page.md) | The wording of the PRIVACY.md sentence |
 | – | Rolling a release back from the back office | Postponed | [Below](#postponed-rolling-a-release-back) | |
 | – | Reasons on commands, incidents, restrictions in force, an audit of lookups | No answer given | [Below](#not-decided-the-new-records) | The decision |
@@ -46,8 +46,9 @@ hand-made step **where it reasonably can** — this is encouraged, not a hard
 rule, and a stage that genuinely needs one adds it, with a working default
 where a default is possible and a sentence in its docs saying why. Stage 3
 shows the preferred shape: its day key is derived from `JWT_SECRET`, which the
-public API already holds, rather than from a new secret. For stage 6,
-prefer what the service can learn for itself (project, region and service
+public API already holds, rather than from a new secret; stages 4 to 6 read
+the project and token from the metadata server and take the rest from values
+Terraform already knows. For what is left, prefer what the service can learn for itself (project, region and service
 name from the metadata server), have a value Terraform already knows set by
 Terraform rather than by a person, and make a deployment that is not on Google
 Cloud show "unavailable" and a link, never a broken page. IAM grants in
@@ -73,7 +74,7 @@ figure, person and organisation in it is invented.
 | `Capacity` | `pages/Capacity.tsx` | Built, 1 and 4 |
 | `Jobs`, `Audit`, `Compliance` | `pages/Jobs.tsx`, `Audit.tsx`, `Compliance.tsx` | Built, 1 and 8 |
 | `Access` (access and controls) | `pages/Access.tsx` | Built, 2 |
-| `Releases` | `pages/Releases.tsx` | Built, 5; 6 adds to it |
+| `Releases` | `pages/Releases.tsx` | Built, 5 and 6 |
 | `Incidents`, `IncidentRoom` | Nothing | Not decided, and 7 stands without them |
 | `Phone`, `States`, `Dusk` | Not screens to build: narrow width, empty and error states, and the dusk hour, in every stage | All |
 
@@ -146,41 +147,6 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
 
 ## Work
 
-### Stage 6. Deploy freeze
-
-**Goal:** during an incident, stop a merge from shipping on top of it.
-
-**Build:**
-
-- **The flag is one object in a new, small, private bucket,** in Terraform, with
-  `roles/storage.objectUser` for `beats-operator` on that bucket alone. **Not the
-  Terraform state bucket:** the state holds `JWT_SECRET`, and the operator must
-  never hold a grant there.
-- **Two commands through the runner,** `deploy.freeze` (required `until`) and
-  `deploy.unfreeze`, writing through a narrow port added to `CommandContext`.
-  An expired flag reads as no freeze.
-- **The API's check** goes in `decide` in `api/scripts/deploy_lock.sh`, which
-  already holds the mutex and already skips a build that was superseded. A
-  frozen build must say so in its log and skip the apply, and the lock must still
-  be released. Decide whether it shows green or red, and write down why: green
-  reads as "deployed".
-- **After a lift, the frozen commit does not deploy by itself.** Re-run the newest
-  build. The `Releases` page says which one.
-- **The web app ships separately,** from the `deploy` job in
-  `.github/workflows/ui.yml`, with credentials that cannot see this bucket. Either
-  grant `firebase-deployer` read on it and check there, or ship API-only first
-  and have the page say "the web app can still ship". Do not leave it unsaid.
-
-**Tests:** the runner commands; `decide` with a flag, without one and with an
-expired one (the script is shell, so run it with a stub `gcloud`, as far as that
-is honest, and watch the first real build).
-
-**Done when** a freeze has held back a real build, an unfreeze and re-run has
-shipped it, and the lock was free afterwards.
-
-**Must not:** put the flag anywhere the operator would need a grant on the state
-bucket; allow a freeze with no end.
-
 ### Stage 7. Customer updates
 
 Its own file, because it is not an operator feature: [status-page.md](status-page.md).
@@ -199,7 +165,7 @@ Its own file, because it is not an operator feature: [status-page.md](status-pag
   `api/**`, `terraform/**` or `backoffice/**` runs as that account, though,
   and steady-state applies only refresh what exists: once
   [secret-manager.md](secret-manager.md)'s resources and the grants in stages
-  6 (stages 4 and 5's viewer roles are already made) are created too, how much of this it keeps is the owner's call.
+  4 to 6 (all made now) are created too, how much of this it keeps is the owner's call.
 - **The landing page's deploy-state row** waits on
   [secret-manager.md](secret-manager.md): the API's Cloud Run spec carries
   `JWT_SECRET` and the DSN as plain environment values, so reading the
