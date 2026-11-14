@@ -97,14 +97,19 @@ class TestControlCommands:
         ):
             assert self._run(operator_client, "control.set", args).status_code == 422, args
 
+    @staticmethod
+    def _before_midnight() -> datetime:
+        """An end before the key's midnight however near it is: ten minutes
+        on, a network's slow-down would be refused between 23:50 and
+        midnight UTC. Whole seconds, as a stored date keeps them."""
+        now = datetime.now(UTC)
+        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return (now + min(timedelta(minutes=10), (midnight - now) / 2)).replace(microsecond=0)
+
     def test_a_network_is_slowed_never_blocked_and_only_until_midnight(
         self, operator_client, mongo
     ):
-        # Before the key's midnight however near it is: ten minutes on, the
-        # test would be refused between 23:50 and midnight UTC.
-        now = datetime.now(UTC)
-        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        soon = (now + min(timedelta(minutes=10), (midnight - now) / 2)).isoformat()
+        soon = self._before_midnight().isoformat()
         key = "0123456789abcdef0123456789abcdef"
         ok = self._run(
             operator_client,
@@ -122,6 +127,64 @@ class TestControlCommands:
             {"name": "signups", "until": tomorrow_noon, "reason": "r", "value": 5, "network": key},
         ):
             assert self._run(operator_client, "control.set", args).status_code == 422, args
+
+    def test_the_control_for_everyone_and_each_networks_stand_side_by_side(
+        self, operator_client, mongo
+    ):
+        """Slowing a network neither replaces the control for everyone nor
+        releases another network, and lifting one leaves the rest — with
+        the audit saying which kind was lifted and never which network."""
+        until = self._before_midnight()
+        a, b = "a" * 32, "b" * 32
+        for args in (
+            {"name": "signups", "until": until.isoformat(), "reason": "everyone"},
+            {
+                "name": "signups",
+                "until": until.isoformat(),
+                "reason": "a",
+                "value": 5,
+                "network": a,
+            },
+            {
+                "name": "signups",
+                "until": until.isoformat(),
+                "reason": "b",
+                "value": 3,
+                "network": b,
+            },
+        ):
+            done = self._run(operator_client, "control.set", args)
+            assert done.status_code == 200, (args, done.text)
+        stored = {d.get("network"): d for d in mongo.platform_controls.find({"name": "signups"})}
+        assert set(stored) == {None, a, b}
+        assert stored[None]["value"] is None, "the pause for everyone still stands"
+        assert (stored[a]["value"], stored[b]["value"]) == (5, 3)
+        # A network's key goes with its control: the TTL index reads this.
+        assert stored[a]["expires_at"].replace(tzinfo=UTC) == until
+        assert stored[None].get("expires_at") is None, "the one for everyone stays until cleared"
+
+        lifted = self._run(operator_client, "control.clear", {"name": "signups", "network": a})
+        assert lifted.status_code == 200, lifted.text
+        assert lifted.json()["before"]["one_network"] is True
+        assert lifted.json()["after"] == {"set": False, "one_network": True}
+        assert {d.get("network") for d in mongo.platform_controls.find({})} == {None, b}
+
+        lifted = self._run(operator_client, "control.clear", {"name": "signups"})
+        assert lifted.status_code == 200, lifted.text
+        assert lifted.json()["before"]["one_network"] is False
+        assert lifted.json()["after"] == {"set": False}
+        assert {d.get("network") for d in mongo.platform_controls.find({})} == {b}
+
+        for entry in mongo.operator_audit.find({}):
+            assert a not in str(entry), "a network's key is in no audit row"
+            assert b not in str(entry), "a network's key is in no audit row"
+
+    def test_only_signups_are_slowed_for_one_network(self, operator_client):
+        refused = self._run(
+            operator_client, "control.clear", {"name": "coach", "network": "c" * 32}
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
 
     def test_slowed_signups_carry_a_ceiling(self, operator_client):
         soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()

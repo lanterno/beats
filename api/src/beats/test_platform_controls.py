@@ -46,6 +46,30 @@ class TestReading:
         assert paused.paused("signups", NOW) is True
         assert paused.signups_per_hour(NOW) is None
 
+    def test_a_networks_slow_down_stands_beside_the_control_for_everyone(self):
+        """One document each: a network's slow-down neither lifts the pause
+        for everyone nor another network's, whatever order they are read in."""
+        later = (NOW + timedelta(hours=1)).isoformat()
+        docs = [
+            _doc("signups", until=later, value=5, network="network-a"),
+            _doc("signups", until=later, value=2, network="network-b"),
+            _doc("signups", until=later),
+        ]
+        for order in (docs, docs[::-1]):
+            controls = controls_from_docs(order, NOW)
+            assert controls.paused("signups", NOW) is True
+            assert controls.network_per_hour("network-a", NOW) == 5
+            assert controls.network_per_hour("network-b", NOW) == 2
+            assert controls.network_per_hour("network-c", NOW) is None
+            assert controls.network_per_hour(None, NOW) is None
+
+    def test_a_network_is_slowed_and_never_paused(self):
+        later = (NOW + timedelta(hours=1)).isoformat()
+        controls = controls_from_docs([_doc("signups", until=later, network="network-a")], NOW)
+        assert controls.paused("signups", NOW) is False
+        assert controls.network_per_hour("network-a", NOW) is None
+        assert controls.signups_per_hour(NOW) is None
+
     def test_a_limit_is_a_setting_and_does_not_expire(self):
         controls = controls_from_docs([_doc("writes_per_minute_beats", value=120)], NOW)
         assert controls.limit("writes_per_minute_beats") == 120

@@ -682,6 +682,34 @@ class TestSignupNetworks:
             verify = same.post("/api/auth/register/verify", json={"credential": {}})
             assert verify.json().get("code") != "SIGNUPS_PAUSED", verify.text
 
+    def test_a_networks_slow_down_and_the_pause_for_everyone_both_hold(self, client, mongo):
+        """Two documents, both read: the network's slow-down lifts no pause,
+        and lifting the pause leaves the slow-down."""
+        from beats import platform_controls
+
+        key = self._key(self.VISITOR)
+        until = (datetime.now(UTC) + timedelta(minutes=30)).isoformat()
+        # The network's last, so a cache keyed on the name alone would keep it.
+        mongo.platform_controls.insert_one(
+            {"name": "signups", "until": until, "value": None, "network": None, "reason": "all"}
+        )
+        mongo.platform_controls.insert_one(
+            {"name": "signups", "until": until, "value": 1, "network": key, "reason": "wave"}
+        )
+        platform_controls.clear()
+        with self._from(client, "198.51.100.4") as other:
+            refused = self._start(other, "wave-h@example.test")
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "SIGNUPS_PAUSED"
+
+        mongo.platform_controls.delete_one({"network": None})
+        platform_controls.clear()
+        with self._from(client, self.VISITOR) as same:
+            assert self._start(same, "wave-i@example.test").status_code == 200
+            assert self._start(same, "wave-j@example.test").status_code == 409
+        with self._from(client, "198.51.100.4") as other:
+            assert self._start(other, "wave-k@example.test").status_code == 200
+
     def test_a_slowed_network_is_refused_and_nobody_else(self, client, mongo):
         from beats import platform_controls
 
