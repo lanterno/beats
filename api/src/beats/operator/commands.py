@@ -725,6 +725,17 @@ class DeleteOrganisation(_OrganisationCommand):
     name = "organisation.delete"
     window: timedelta | None = timedelta(days=1)
 
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        """What a deletion hands back and removes: its projects, each copied
+        to the members who hold rows on it, and its active members."""
+        state = await _organisation_state(ctx, args.organisation_id)
+        store = ctx.organisations.store
+        return {
+            **state,
+            "projects": len(await store.list_projects(args.organisation_id)),
+            "members": len(await store.list_members(args.organisation_id)),
+        }
+
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         counts = await ctx.organisations.operator_delete_organisation(args.organisation_id)
         return dict(counts)
