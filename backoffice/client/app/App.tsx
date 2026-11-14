@@ -14,9 +14,9 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { BrowserRouter, NavLink, Route, Routes } from "react-router";
+import { Palette } from "@/app/Palette";
 import { Account } from "@/pages/Account";
 import { Accounts } from "@/pages/Accounts";
-
 import { Audit } from "@/pages/Audit";
 import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
@@ -151,14 +151,15 @@ function Where() {
 }
 
 /**
- * Above every page. The mock's search field lands here with the palette and
- * its chip with incidents; neither is built, and on this surface a control
- * that does nothing is worse than no control at all.
+ * Above every page: where you are, and the palette. The mock's incidents
+ * chip is not built, and on this surface a control that does nothing is
+ * worse than no control at all.
  */
 function Topbar() {
 	return (
 		<div className="mb-6 flex flex-wrap items-center gap-2.5">
 			<Where />
+			<Palette />
 		</div>
 	);
 }
