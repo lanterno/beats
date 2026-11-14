@@ -21,6 +21,7 @@ commands answer 409 `STATUS_UNAVAILABLE` and the back office says so.
 """
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal, Protocol, get_args
@@ -29,6 +30,8 @@ import httpx
 
 from beats.domain.exceptions import DomainException
 from beats.operator.health import METADATA, TIMEOUT_SECONDS
+
+logger = logging.getLogger(__name__)
 
 STORAGE = "https://storage.googleapis.com"
 OBJECT = "status.json"
@@ -112,6 +115,17 @@ class StatusUnavailable(DomainException):
     message = "No status bucket is configured for this deployment"
 
 
+class StatusUnreachable(DomainException):
+    """Cloud Storage, or the metadata server that hands out its token, did
+    not answer. Nothing was changed; the read-back says "unreachable" rather
+    than a state, and an act answers this in the envelope instead of a bare
+    500."""
+
+    status_code = 503
+    code = "STATUS_UNREACHABLE"
+    message = "Cloud Storage did not answer for the status file; nothing was changed"
+
+
 class StatusUnreadable(DomainException):
     """The file is there but cannot be read. Nothing writes over it: a post
     would replace the history the public page shows with one line. Only a
@@ -174,24 +188,36 @@ class GcsStatusStore:
         return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
     async def read(self) -> tuple[StatusDoc | None, int]:
-        async with self._client() as client:
-            headers = await self._token(client)
-            meta = await client.get(
-                f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}", headers=headers
-            )
-            if meta.status_code == 404:
-                return None, 0
-            meta.raise_for_status()
-            generation = int(meta.json()["generation"])
-            body = await client.get(
-                f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
-                params={"alt": "media", "generation": str(generation)},
-                headers=headers,
-            )
-            body.raise_for_status()
-            return parse(body.text), generation
+        try:
+            async with self._client() as client:
+                headers = await self._token(client)
+                meta = await client.get(
+                    f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}", headers=headers
+                )
+                if meta.status_code == 404:
+                    return None, 0
+                meta.raise_for_status()
+                generation = int(meta.json()["generation"])
+                body = await client.get(
+                    f"{STORAGE}/storage/v1/b/{self._bucket}/o/{OBJECT}",
+                    params={"alt": "media", "generation": str(generation)},
+                    headers=headers,
+                )
+                body.raise_for_status()
+                text = body.text
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("status file unreachable on read: %r", e)
+            raise StatusUnreachable() from e
+        return parse(text), generation
 
     async def write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
+        try:
+            await self._write(doc, if_generation_match=if_generation_match)
+        except (httpx.HTTPError, KeyError, ValueError) as e:
+            logger.warning("status file unreachable on write: %r", e)
+            raise StatusUnreachable() from e
+
+    async def _write(self, doc: StatusDoc, *, if_generation_match: int) -> None:
         boundary = "beats-status-boundary"
         metadata = json.dumps({"name": OBJECT, "cacheControl": CACHE_CONTROL})
         body = (

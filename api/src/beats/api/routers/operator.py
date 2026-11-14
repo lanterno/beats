@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from beats.operator.dependencies import CommandContextDep, CurrentOperator, OperatorReadsDep
+from beats.operator.deploy_freeze import FreezeUnreachable
 from beats.operator.health import HealthReport
 from beats.operator.reads import (
     AbuseReport,
@@ -37,7 +38,7 @@ from beats.operator.reads import (
 )
 from beats.operator.releases import ReleasesReport
 from beats.operator.runner import CommandPreview, preview_command, run_command
-from beats.operator.status_page import StatusUnreadable, state_of
+from beats.operator.status_page import StatusUnreachable, StatusUnreadable, state_of
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
 
@@ -223,20 +224,28 @@ async def releases(request: Request, operator: CurrentOperator) -> ReleasesRepor
 
 class FreezeState(BaseModel):
     available: bool
-    frozen: bool
+    # Null when the flag could not be read (`problem`): unknown, which is
+    # not the same as "not frozen".
+    frozen: bool | None
     until: datetime | None = None
     reason: str | None = None
     set_by: str | None = None
+    # "unreachable": Cloud Storage, or the metadata server, did not answer.
+    problem: Literal["unreachable"] | None = None
 
 
 @router.get("/deploy-freeze", response_model=FreezeState)
 async def deploy_freeze(request: Request, operator: CurrentOperator) -> FreezeState:
     """Whether the API's deploys are frozen, until when and why. Not
-    available where no freeze bucket is configured."""
+    available where no freeze bucket is configured; a flag that cannot be
+    read is said, never shown as "not frozen"."""
     store = getattr(request.app.state, "deploy_freeze", None)
     if store is None:
         return FreezeState(available=False, frozen=False)
-    flag = await store.get()
+    try:
+        flag = await store.get()
+    except FreezeUnreachable:
+        return FreezeState(available=True, frozen=None, problem="unreachable")
     if flag is None or not flag.in_force(datetime.now(UTC)):
         return FreezeState(available=True, frozen=False)
     return FreezeState(
@@ -254,8 +263,9 @@ class PublicStatus(BaseModel):
     updated_at: str | None = None
     published: bool = False
     # "unreadable": the file is there but is not one the commands wrote, and
-    # they refuse to write over it.
-    problem: Literal["unreadable"] | None = None
+    # they refuse to write over it. "unreachable": Cloud Storage, or the
+    # metadata server, did not answer.
+    problem: Literal["unreadable", "unreachable"] | None = None
 
 
 @router.get("/status", response_model=PublicStatus)
@@ -271,6 +281,10 @@ async def public_status(request: Request, operator: CurrentOperator) -> PublicSt
     except StatusUnreadable:
         return PublicStatus(
             available=True, state=None, message="", affected=[], problem="unreadable"
+        )
+    except StatusUnreachable:
+        return PublicStatus(
+            available=True, state=None, message="", affected=[], problem="unreachable"
         )
     return PublicStatus(available=True, **state_of(doc))
 
