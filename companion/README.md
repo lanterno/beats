@@ -72,6 +72,10 @@ workflow, and the console's answers.
 
 ## Running
 
+The Flutter it builds with is the one in `.fvmrc`, which every CI job installs;
+`pubspec.yaml`'s `flutter:` range refuses 3.50 and later, and says why, until the
+tray packages move to that line. A local SDK on another 3.47 patch works.
+
 A build names the server it pairs with, from `config/`: `local.json` (the API on
 :7999, the web app on :8080) or `lifepete.json` (lifepete.com). A build
 given neither has no server of its own, and pairing asks for one.
