@@ -132,11 +132,17 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 	},
 };
 
+/** How many things are waiting: one a row, as the queue lists them. The
+ * sidebar's badge counts this, so it says what the page will show. */
+export function waiting(rows: readonly QueueRow[]): number {
+	return rows.length;
+}
+
 const WORDS = ["Nothing is", "One thing is", "Two things are", "Three things are"];
 
 /** The page's sentence: how many are waiting, and how many are overdue. */
 export function queueHeadline(rows: QueueRow[], now: Date): string {
-	const n = rows.length;
+	const n = waiting(rows);
 	const over = rows.filter((row) => bucketOf(row, now) === "overdue").length;
 	const head = `${WORDS[n] ?? `${n} things are`} waiting.`;
 	if (over === 0) return head;
