@@ -596,37 +596,37 @@ cannot keep.
   sign-ups are read by day.
 
   **Sign-ups from one network** (shipped 2026-11-14, stage 3 of what was
-  roadmaps/backoffice.md): the hour's finished sign-ups against the median
-  of the same hour of the week over the last eight weeks, and the largest
-  network's share of the hour, shown only at or above `SIGNUP_NETWORK_MIN_GROUP`
-  (5). The network is the visitor's address cut to its /24 (IPv4) or /48
-  (IPv6) and HMAC-hashed under a key derived for the UTC day — from
-  `JWT_SECRET`, which the public API already holds and the operator
+  roadmaps/backoffice.md): the hour's finished sign-ups against the median of
+  the same hour of the week over the last eight weeks, and the largest
+  network's share of the hour, shown only at or above
+  `SIGNUP_NETWORK_MIN_GROUP` (5). The network is the visitor's address cut to
+  its /24 (IPv4) or /48 (IPv6) and HMAC-hashed under a key derived for the UTC
+  day — from `JWT_SECRET`, which the public API already holds and the operator
   deployment never does, so the operator can never compute a key and never
   test a guess, and **no new secret or setting is needed**: a deployment that
   can sign a session runs the signal (`auth/signup_networks.py`). Only a
   counter is stored (`signup_network_counts`: hour, key, `started`,
   `completed`, 48-hour TTL), written best-effort from the two passkey doors
-  and the SSO branch that creates an account (as both a start and a
-  finish). Below the minimum nothing is said, not even how many networks
-  there were: beside the hour's count, a count of networks would tell small
-  groups apart. The page says "Network A",
-  never the key, and says in words that offices, universities, carrier
-  networks and an organisation onboarding its staff all look like this. The
-  action is the `signups` control with the key as its `network`, a record
-  beside the control for everyone (§ Controls): a ceiling an hour for that
-  network alone, read off the signal's own counter, that slows and never
-  blocks and ends at the next UTC midnight at the latest, when the key stops
-  matching. The key goes to the review in navigation state, never in a URL. Why stored, when the two signals below are "logged and
+  and the SSO branch that creates an account (as both a start and a finish).
+  Below the minimum nothing is said, not even how many networks there were:
+  beside the hour's count, a count of networks would tell small groups apart.
+  The page says "Network A", never the key, and says in words that offices,
+  universities, carrier networks and an organisation onboarding its staff all
+  look like this. The action is the `signups` control with the key as its
+  `network`, a record beside the control for everyone (§ Controls): a ceiling
+  an hour for that network alone, read off the signal's own counter, that
+  slows and never blocks and ends at the next UTC midnight at the latest, when
+  the key stops matching. The key goes to the review in navigation state,
+  never in a URL. Why stored, when the two signals below are "logged and
   counted, never stored": those are facts about one account's request; this
   holds no account at all, and logging it would show the operator raw
   addresses or need a metric label per network. PRIVACY.md and DATA.md say
   what is kept, for how long and why. A self-hosted install sees each
   visitor's own network: its nginx forwards the address (`ui/nginx.conf`) and
   the API believes nginx alone (`FORWARDED_ALLOW_IPS` in
-  `compose.selfhost.yml`). Only a proxy in front of that nginx, unnamed,
-  would make every visitor one network, which would hold everyone to one
-  network's slow-down.
+  `compose.selfhost.yml`). Only a proxy in front of that nginx, unnamed, would
+  make every visitor one network, which would hold everyone to one network's
+  slow-down.
 
   Two of its signals are **logged and counted, never stored** (decided
   2026-11-07). A per-account write limit's refusal
