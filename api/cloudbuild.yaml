@@ -92,6 +92,9 @@ steps:
       - 'GCP_PROJECT=${_PROJECT_ID}'
       # The repository the trigger builds (github_owner/github_repo in terraform/).
       - 'DEPLOY_REPO_URL=https://github.com/lanterno/beats'
+      # The operator's deploy freeze (terraform/operator.tf). A missing bucket
+      # or object is no freeze, so a deployment without the operator is unchanged.
+      - 'DEPLOY_FREEZE_OBJECT=gs://${_PROJECT_ID}-deploy-freeze/freeze'
     args:
       - '-c'
       - |
@@ -115,6 +118,9 @@ steps:
         if [ "$$decision" = skip ]; then
           echo "A newer commit is live; not deploying $COMMIT_SHA."
           echo 0 > /workspace/.deploy/apply-status
+        elif [ "$$decision" = frozen ]; then
+          echo "Deploys are frozen; not deploying $COMMIT_SHA."
+          echo frozen > /workspace/.deploy/apply-status
         elif [ "$$decision" = apply ]; then
           terraform init -input=false && \
           terraform apply -auto-approve -input=false -lock-timeout=5m \
@@ -140,6 +146,12 @@ steps:
         bash api/scripts/deploy_lock.sh release
         released=$$?
         status=$$(cat /workspace/.deploy/apply-status 2>/dev/null || echo 1)
+        if [ "$$status" = frozen ]; then
+          # Red on purpose: green reads as "deployed". Re-run the newest build
+          # once the freeze lifts (docs/backoffice.md § Deploy freeze).
+          echo "Frozen: $COMMIT_SHA was not deployed. Re-run the newest build after the freeze lifts." >&2
+          exit 1
+        fi
         if [ "$$status" != 0 ]; then
           echo "terraform-apply recorded a failure (exit $$status)." >&2
           exit 1

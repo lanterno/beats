@@ -23,7 +23,10 @@
 #            deploys: "skip" when this build's commit is a strict ancestor of
 #            the live one (a newer build got there first), "apply" otherwise.
 #            Deciding inside the mutex is the point: no newer build can apply
-#            between the check and this build's apply.
+#            between the check and this build's apply. Before any of that, a
+#            deploy freeze the operator set (DEPLOY_FREEZE_OBJECT, in force
+#            until its until_epoch) decides "frozen": no apply, and the build
+#            goes red, because green reads as "deployed".
 #   release  delete the mutex, conditional on the generation this build
 #            created, so a build whose mutex was broken as stale never deletes
 #            the one another build now holds.
@@ -47,6 +50,9 @@
 #   CLOUD_RUN_SERVICE, CLOUD_RUN_REGION, GCP_PROJECT
 #                              the service whose live image is compared (decide)
 #   DEPLOY_REPO_URL            git URL holding main's history (decide)
+#   DEPLOY_FREEZE_OBJECT       gs:// URL of the deploy freeze flag; optional,
+#                              and a missing object or bucket is no freeze
+#                              (decide; docs/backoffice.md § Deploy freeze)
 #
 # A stuck mutex can be cleared by hand: gcloud storage rm "$DEPLOY_LOCK_OBJECT"
 set -euo pipefail
@@ -88,7 +94,7 @@ retry() {
 	shift 2
 	for attempt in 1 2 3; do
 		"$@" 2>"$err_file" && return 0
-		if [[ -n $final ]] && grep -q -- "$final" "$err_file"; then
+		if [[ -n $final ]] && grep -qE -- "$final" "$err_file"; then
 			return 1
 		fi
 		((attempt < 3)) || return 1
@@ -206,6 +212,26 @@ decide() {
 	work=$(mktemp -d)
 	# shellcheck disable=SC2064 # expand $work now; it is local to this function
 	trap "rm -rf '$work'" EXIT
+
+	# The deploy freeze comes first: while it is in force nothing else matters.
+	# A flag that cannot be read for any reason but its absence fails the build
+	# rather than deploying into what may be an incident.
+	if [[ -n ${DEPLOY_FREEZE_OBJECT:-} ]]; then
+		local flag until_epoch
+		if flag=$(retry "$work/freeze.err" 'matched no objects|not found|404|does not exist' \
+			gcloud storage cat "$DEPLOY_FREEZE_OBJECT"); then
+			until_epoch=$(sed -n 's/^until_epoch=\([0-9][0-9]*\)$/\1/p' <<<"$flag" | head -n 1)
+			if [[ -n $until_epoch ]] && ((until_epoch > $(date +%s))); then
+				printf 'frozen\n' >"$DEPLOY_STATE_DIR/decision"
+				log "frozen: deploys are held until $(sed -n 's/^until=//p' <<<"$flag" | head -n 1) ($(sed -n 's/^reason=//p' <<<"$flag" | head -n 1)). Not deploying $COMMIT_SHA; once the freeze lifts, re-run the newest build."
+				return 0
+			fi
+			log "the deploy freeze has expired; deciding as usual"
+		elif ! grep -qE 'matched no objects|not found|404|does not exist' "$work/freeze.err"; then
+			cat "$work/freeze.err" >&2
+			die "could not read the deploy freeze flag $DEPLOY_FREEZE_OBJECT"
+		fi
+	fi
 
 	# Every read below holds the mutex and runs after the image build, so a blip
 	# is retried before it fails the build and strands this commit undeployed.
