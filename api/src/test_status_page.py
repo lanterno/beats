@@ -222,6 +222,32 @@ class TestStatusCommands:
         ):
             assert self._run(operator_client, "status.publish", args).status_code == 422, args
 
+    def test_a_bucket_that_does_not_answer_is_said_and_an_act_answers_the_envelope(
+        self, operator_client
+    ):
+        """The bug this pins: a metadata or Cloud Storage failure escaped the
+        read and the review as a bare 500."""
+
+        def refuse(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("no metadata server here")
+
+        operator_client.app.state.status_store = GcsStatusStore(
+            "b", transport=httpx.MockTransport(refuse)
+        )
+        read = operator_client.get("/api/operator/status")
+        assert read.status_code == 200
+        assert read.json()["problem"] == "unreachable"
+        assert read.json()["state"] is None
+
+        args = {"state": "outage", "message": "m", "generation": 0}
+        for path in (
+            "/api/operator/commands/status.publish/preview",
+            "/api/operator/commands/status.publish",
+        ):
+            answer = operator_client.post(path, json={"args": args}, headers=self.OWN)
+            assert answer.status_code == 503, path
+            assert answer.json()["code"] == "STATUS_UNREACHABLE", path
+
     def test_with_no_bucket_the_commands_say_so(self, operator_client):
         operator_client.app.state.status_store = None
         refused = self._run(operator_client, "status.publish", {"state": "outage", "message": "m"})

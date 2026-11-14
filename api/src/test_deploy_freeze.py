@@ -11,9 +11,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import ClassVar
 
+import httpx
 import pytest
 
-from beats.operator.deploy_freeze import Freeze, parse, render
+from beats.operator.deploy_freeze import Freeze, GcsDeployFreeze, parse, render
 from conftest import OPERATOR_ORIGIN as ORIGIN
 from conftest import OPERATOR_SUB
 
@@ -128,7 +129,37 @@ class TestFreezeCommands:
             "until": None,
             "reason": None,
             "set_by": None,
+            "problem": None,
         }
+
+    def test_a_bucket_that_does_not_answer_is_unknown_and_an_act_answers_the_envelope(
+        self, operator_client
+    ):
+        """The bug this pins: a metadata or Cloud Storage failure escaped the
+        read and the review as a bare 500, where every other read says
+        "unavailable"."""
+
+        def refuse(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("no metadata server here")
+
+        operator_client.app.state.deploy_freeze = GcsDeployFreeze(
+            "b", transport=httpx.MockTransport(refuse)
+        )
+        read = operator_client.get("/api/operator/deploy-freeze")
+        assert read.status_code == 200
+        assert read.json()["problem"] == "unreachable"
+        assert read.json()["frozen"] is None, "unknown, never 'not frozen'"
+
+        until = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        for path in (
+            "/api/operator/commands/deploy.freeze/preview",
+            "/api/operator/commands/deploy.freeze",
+        ):
+            answer = operator_client.post(
+                path, json={"args": {"until": until, "reason": "r"}}, headers=self.OWN
+            )
+            assert answer.status_code == 503, path
+            assert answer.json()["code"] == "FREEZE_UNREACHABLE", path
 
 
 STUB = """#!/usr/bin/env bash
