@@ -830,6 +830,25 @@ class TestCommandPreview:
             }
         ]
 
+    def test_a_device_is_previewed_only_on_the_account_it_belongs_to(self, operator_client, mongo):
+        """revoke is scoped to the account; a preview that found another
+        account's device would promise an act that touches nothing."""
+        owner, other = self._user(mongo, "owner@example.test"), self._user(mongo, "o@example.test")
+        mongo.device_registrations.insert_one(
+            {"user_id": owner, "device_id": "dev-preview", "revoked": False}
+        )
+        try:
+            mine = self._preview(
+                operator_client, "device.revoke", {"user_id": owner, "device_id": "dev-preview"}
+            ).json()
+            theirs = self._preview(
+                operator_client, "device.revoke", {"user_id": other, "device_id": "dev-preview"}
+            ).json()
+        finally:
+            mongo.device_registrations.delete_many({"device_id": "dev-preview"})
+        assert mine["before"]["revoked"] is False
+        assert theirs["before"]["revoked"] is None
+
     def test_a_subject_that_does_not_resolve_refuses_before_anything_is_typed(
         self, operator_client, mongo
     ):
