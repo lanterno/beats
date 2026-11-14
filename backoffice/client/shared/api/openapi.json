@@ -96,8 +96,6 @@
       "AccountArgs": {
         "properties": {
           "user_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "User Id",
             "type": "string"
           }
@@ -434,8 +432,6 @@
             "title": "Closes On"
           },
           "organisation_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "Organisation Id",
             "type": "string"
           }
@@ -449,8 +445,6 @@
       "CancelJobArgs": {
         "properties": {
           "job_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "Job Id",
             "type": "string"
           }
@@ -510,8 +504,6 @@
             "type": "string"
           },
           "request_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "Request Id",
             "type": "string"
           }
@@ -1005,14 +997,10 @@
       "GrantOwnerArgs": {
         "properties": {
           "organisation_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "Organisation Id",
             "type": "string"
           },
           "user_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "User Id",
             "type": "string"
           }
@@ -1333,8 +1321,6 @@
       "OrganisationArgs": {
         "properties": {
           "organisation_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "Organisation Id",
             "type": "string"
           }
@@ -1751,7 +1737,6 @@
           "organisation_id": {
             "anyOf": [
               {
-                "maxLength": 64,
                 "type": "string"
               },
               {
@@ -1774,8 +1759,6 @@
             "type": "string"
           },
           "user_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "User Id",
             "type": "string"
           }
@@ -1910,8 +1893,6 @@
             "title": "Imports Per Hour"
           },
           "user_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "User Id",
             "type": "string"
           },
@@ -2029,8 +2010,6 @@
             "type": "string"
           },
           "user_id": {
-            "maxLength": 64,
-            "minLength": 1,
             "title": "User Id",
             "type": "string"
           }
