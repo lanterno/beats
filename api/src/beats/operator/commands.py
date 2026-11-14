@@ -281,8 +281,12 @@ class RevokeDevice(_AccountCommand):
     args_model = RevokeDeviceArgs
 
     async def describe(self, ctx: CommandContext, args: RevokeDeviceArgs) -> dict[str, Any]:
+        # `revoke` acts only on a device of this account, so another's is
+        # nothing to revoke here (None), however it stands.
         reg = await ctx.devices.get_by_device_id(args.device_id)
-        return {"device_id": args.device_id, "revoked": reg.revoked if reg else None}
+        if reg is None or reg.user_id != args.user_id:
+            return {"device_id": args.device_id, "revoked": None}
+        return {"device_id": args.device_id, "revoked": reg.revoked}
 
     async def execute(self, ctx: CommandContext, args: RevokeDeviceArgs) -> dict[str, Any]:
         revoked = await ctx.devices.revoke(args.device_id, args.user_id)
