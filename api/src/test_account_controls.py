@@ -499,6 +499,22 @@ class TestPlatformControlsAPI:
         self._control(mongo, "imports", until=self._passed())
         assert self._import(client, auth_headers).status_code != 409
 
+    def test_a_paused_import_spends_none_of_the_hours_imports(self, client, auth_headers, mongo):
+        """The pause refuses before the limiter counts: an account that tried
+        while imports were paused still has its imports for the hour once
+        the pause ends. With one import an hour, the second paused attempt
+        was a 429, and so was the first import after the pause."""
+        self._control(mongo, "imports_per_hour", value=1)
+        self._control(mongo, "imports", until=self._soon())
+        for _ in range(2):
+            refused = self._import(client, auth_headers)
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "IMPORTS_PAUSED"
+
+        self._control(mongo, "imports", until=self._passed())
+        assert self._import(client, auth_headers).status_code == 200
+        assert self._import(client, auth_headers).status_code == 429, "the hour's one import"
+
     def test_the_coach_refuses_while_paused(self, client, auth_headers, mongo):
         self._control(mongo, "coach", until=self._soon())
         refused = client.post("/api/coach/memory/rewrite", headers=auth_headers)
