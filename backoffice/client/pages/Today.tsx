@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
 import type { CapacityReport, QueueRow, ReleasesReport } from "@/shared/api/schema";
-import { API_LOG, logsQuery } from "@/shared/lib/console";
+import { useConsole } from "@/shared/lib/console";
 import { dollars, formatBytes, minuteOf } from "@/shared/lib/format";
 import { bucketOf, dueLabel, KINDS } from "@/shared/lib/queue";
 import { releasesHeadline } from "@/shared/lib/releases";
@@ -30,14 +30,6 @@ import {
 	Table,
 } from "@/shared/ui";
 import { HealthPanel } from "@/shared/ui/HealthPanel";
-
-const CLOUD_RUN = "https://console.cloud.google.com/run?project=beats-476914";
-
-// Accounts a per-account write limit refused. Not a count on this page:
-// nothing stores a refusal, by the decision in docs/backoffice.md § *Abuse*
-// — the account is in the log line and in no document, so the question
-// "which accounts, this week" is a log query and not a number.
-const REFUSALS = logsQuery(`${API_LOG}\ntextPayload:"WRITE_LIMIT_REFUSED"`, 7);
 
 /** How many of the queue's rows Today shows before "Open the queue". */
 const NEXT = 4;
@@ -143,6 +135,7 @@ export function Today() {
 		queryKey: ["capacity"],
 		queryFn: () => get<CapacityReport>("/api/operator/capacity"),
 	});
+	const links = useConsole();
 	// The queue is the page's sentence; without it there is no page. The other
 	// panels fail on their own, so one broken read does not hide the rest.
 	if (queue.error) return <Failed error={queue.error} onRetry={() => queue.refetch()} />;
@@ -246,11 +239,21 @@ export function Today() {
 			</Panel>
 			<Pair>
 				<Panel title="Writes refused by a per-account limit">
+					{/* Not a count: nothing stores a refusal, by the decision in
+					docs/backoffice.md § *Abuse* — the account is in the log line and
+					in no document, so "which accounts, this week" is a log query. */}
 					<Prose>
-						These live in the log, never in a document, so it's a query rather than a count:{" "}
-						<a href={REFUSALS} className="link">
-							the accounts refused in the last 7 days
-						</a>
+						These live in the log, never in a document, so it's a query rather than a count
+						{links ? (
+							<>
+								:{" "}
+								<a href={links.apiLog("WRITE_LIMIT_REFUSED", 7)} className="link">
+									the accounts refused in the last 7 days
+								</a>
+							</>
+						) : (
+							", in the API's log on Google Cloud"
+						)}
 						. It stays empty until a <code>WRITES_PER_MINUTE_*</code> ceiling is set.
 					</Prose>
 				</Panel>
@@ -262,9 +265,13 @@ export function Today() {
 						</Link>
 						. Whether a revision became ready waits on the API's secrets leaving its Cloud Run spec;
 						until then,{" "}
-						<a href={CLOUD_RUN} className="link">
-							the Cloud Run console
-						</a>{" "}
+						{links ? (
+							<a href={links.cloudRun} className="link">
+								the Cloud Run console
+							</a>
+						) : (
+							"the Cloud Run console"
+						)}{" "}
 						says.
 					</Prose>
 				</Panel>

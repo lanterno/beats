@@ -8,14 +8,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { get } from "@/shared/api/client";
 import type { HealthReport } from "@/shared/api/schema";
+import { useConsole } from "@/shared/lib/console";
 import { whole } from "@/shared/lib/format";
-import {
-	freshness,
-	healthHeadline,
-	instancesOf,
-	MONITORING_CONSOLE,
-	percent,
-} from "@/shared/lib/health";
+import { freshness, healthHeadline, instancesOf, percent } from "@/shared/lib/health";
 import { Empty, Facts, Failed, figure, Loading, Panel, Prose, Table } from "@/shared/ui";
 
 export function HealthPanel({ routes = false }: { routes?: boolean }) {
@@ -24,6 +19,7 @@ export function HealthPanel({ routes = false }: { routes?: boolean }) {
 		queryFn: () => get<HealthReport>("/api/operator/health"),
 		refetchInterval: 60_000,
 	});
+	const links = useConsole();
 	if (health.error) {
 		return (
 			<Panel title="Health">
@@ -44,11 +40,16 @@ export function HealthPanel({ routes = false }: { routes?: boolean }) {
 		return (
 			<Panel title="Health" note={healthHeadline(report)}>
 				<Prose>
-					Monitoring answers only on Google Cloud, with the operator allowed to read it.{" "}
-					<a href={MONITORING_CONSOLE} className="link">
-						Open the Monitoring console
-					</a>
-					.
+					Monitoring answers only on Google Cloud, with the operator allowed to read it.
+					{links ? (
+						<>
+							{" "}
+							<a href={links.monitoring} className="link">
+								Open the Monitoring console
+							</a>
+							.
+						</>
+					) : null}
 				</Prose>
 			</Panel>
 		);
@@ -76,11 +77,13 @@ export function HealthPanel({ routes = false }: { routes?: boolean }) {
 					empty={<Empty title="No write was refused by a limit in the last day." />}
 				/>
 			) : null}
-			<Prose>
-				<a href={MONITORING_CONSOLE} className="link">
-					The full dashboard
-				</a>
-			</Prose>
+			{links ? (
+				<Prose>
+					<a href={links.monitoring} className="link">
+						The full dashboard
+					</a>
+				</Prose>
+			) : null}
 		</Panel>
 	);
 }

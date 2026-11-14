@@ -7,13 +7,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { get } from "@/shared/api/client";
 import type { CapacityReport } from "@/shared/api/schema";
+import { useConsole } from "@/shared/lib/console";
 import { counted, dollars, formatBytes, whole } from "@/shared/lib/format";
 import { day, Empty, Failed, figure, Loading, Page, Panel, Prose, Table } from "@/shared/ui";
 import { HealthPanel } from "@/shared/ui/HealthPanel";
 
-const MONITORING = "https://console.cloud.google.com/monitoring/dashboards?project=beats-476914";
-
 export function Capacity() {
+	const links = useConsole();
 	const { data, error, refetch } = useQuery({
 		queryKey: ["capacity"],
 		queryFn: () => get<CapacityReport>("/api/operator/capacity"),
@@ -73,11 +73,16 @@ export function Capacity() {
 			</Panel>
 			<Panel title="Latency, error rates and instances">
 				<Prose>
-					These aren't rebuilt here.{" "}
-					<a href={MONITORING} className="link">
-						Open Cloud Monitoring
-					</a>
-					.
+					These aren't rebuilt here.
+					{links ? (
+						<>
+							{" "}
+							<a href={links.monitoring} className="link">
+								Open Cloud Monitoring
+							</a>
+							.
+						</>
+					) : null}
 				</Prose>
 			</Panel>
 		</Page>

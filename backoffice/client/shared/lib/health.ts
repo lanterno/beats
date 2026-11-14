@@ -7,9 +7,6 @@
 
 import type { HealthReport } from "@/shared/api/schema";
 
-export const MONITORING_CONSOLE =
-	"https://console.cloud.google.com/monitoring/dashboards?project=beats-476914";
-
 /** 0.9983 → "99.83%"; null → "no data". */
 export function percent(value: number | null | undefined, digits = 2): string {
 	if (value === null || value === undefined) return "no data";
