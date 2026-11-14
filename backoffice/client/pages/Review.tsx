@@ -305,10 +305,18 @@ function CommandReview() {
 
 	return (
 		<Page
-			title={done ? "Done. Here is what changed." : "Check what will change, then do it."}
+			title={
+				queued
+					? "Queued. It runs when its window ends."
+					: done
+						? "Done. Here is what changed."
+						: "Check what will change, then do it."
+			}
 			back={back}
 			lead={
-				done ? (
+				queued ? (
+					"Until then it waits on Jobs and windows, where you can still cancel it. The audit records it when it runs."
+				) : done ? (
 					"It is on the record, and its page already shows it."
 				) : spec.subjectless ? (
 					"Nothing has happened yet."
@@ -355,8 +363,8 @@ function CommandReview() {
 									<Link to={back.to} className={buttonClass("primary")}>
 										{back.label}
 									</Link>
-									<Link to="/audit" className={buttonClass("secondary")}>
-										See it in the audit
+									<Link to={queued ? "/jobs" : "/audit"} className={buttonClass("secondary")}>
+										{queued ? "See it in jobs and windows" : "See it in the audit"}
 									</Link>
 								</div>
 							</>
