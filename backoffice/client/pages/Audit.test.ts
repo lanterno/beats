@@ -17,6 +17,12 @@ describe("matching", () => {
 		expect(matching(rows, "6730f1a2b3c4d5e6f7a8b9c0")).toEqual([rows[0]]);
 	});
 
+	// Both ids start 6730: a fragment would list every subject that shares it.
+	it("finds no subject by a fragment of its id", () => {
+		expect(matching(rows, "6730")).toEqual([]);
+		expect(matching(rows, "6730f1a2b3c4d5e6f7a8b9c")).toEqual([]);
+	});
+
 	it("finds every row of one command", () => {
 		expect(matching(rows, "organisation.")).toEqual([rows[1]]);
 	});
