@@ -591,9 +591,10 @@ cannot keep.
   sign-up signal, then the signal with its one act, then the six axes in a
   single table with a tab each, each its highest 20. The mock's "against the
   median" and "already restricted" columns are not there: nothing about the
-  rest of the accounts is read, and the second would be the list of
-  restrictions across accounts no page keeps. Its chart is by day, because
-  sign-ups are read by day.
+  rest of the accounts is read, and the second would be a list of
+  restrictions across accounts, a record the control plane does not keep
+  (§ What it does not keep). Its chart is by day, because sign-ups are read
+  by day.
 
   **Sign-ups from one network** (shipped 2026-11-14, stage 3 of what was
   roadmaps/backoffice.md): the hour's finished sign-ups against the median of
