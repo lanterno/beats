@@ -65,6 +65,24 @@
         "title": "AbuseReport",
         "type": "object"
       },
+      "AccessEntry": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "role"
+        ],
+        "title": "AccessEntry",
+        "type": "object"
+      },
       "AccountDetail": {
         "properties": {
           "biometric_rows": {
@@ -336,6 +354,10 @@
             "title": "Approvals Superseded Over 30D",
             "type": "integer"
           },
+          "controls_paused": {
+            "title": "Controls Paused",
+            "type": "integer"
+          },
           "jobs_failed": {
             "title": "Jobs Failed",
             "type": "integer"
@@ -355,6 +377,7 @@
         },
         "required": [
           "organisations_without_owner",
+          "controls_paused",
           "organisations_all_owners_suspended",
           "jobs_queued",
           "jobs_failed",
@@ -535,6 +558,87 @@
           }
         },
         "title": "CommandRequest",
+        "type": "object"
+      },
+      "ControlState": {
+        "description": "One control as the Access page shows it. The operator's own text\n(`reason`) is theirs to read back; a user never sees it.",
+        "properties": {
+          "in_force": {
+            "title": "In Force",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "set_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set At"
+          },
+          "set_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "in_force",
+          "until",
+          "value",
+          "reason",
+          "set_by",
+          "set_at"
+        ],
+        "title": "ControlState",
         "type": "object"
       },
       "DayFigure": {
@@ -891,7 +995,8 @@
               "job_queued",
               "approvals_superseded",
               "absence_requests_pending",
-              "account_near_coach_cap"
+              "account_near_coach_cap",
+              "control_paused"
             ],
             "title": "Kind",
             "type": "string"
@@ -988,6 +1093,32 @@
           }
         },
         "summary": "Abuse",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/access": {
+      "get": {
+        "description": "Who can reach this back office, read off the allowlist the deployment\nwas started with. Read-only: the list is an environment value, and\nchanging it is a deploy (terraform/README.md \u00a7 Operator Deployment).",
+        "operationId": "access_api_operator_access_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccessEntry"
+                  },
+                  "title": "Response Access Api Operator Access Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Access",
         "tags": [
           "operator"
         ]
@@ -1387,6 +1518,32 @@
           }
         },
         "summary": "Preview",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/controls": {
+      "get": {
+        "description": "The platform's switches and global limits as they stand\n(docs/backoffice.md \u00a7 Controls). Written only through `control.set` and\n`control.clear`.",
+        "operationId": "controls_api_operator_controls_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ControlState"
+                  },
+                  "title": "Response Controls Api Operator Controls Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Controls",
         "tags": [
           "operator"
         ]

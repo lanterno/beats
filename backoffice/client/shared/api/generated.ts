@@ -25,6 +25,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Access
+         * @description Who can reach this back office, read off the allowlist the deployment
+         *     was started with. Read-only: the list is an environment value, and
+         *     changing it is a deploy (terraform/README.md § Operator Deployment).
+         */
+        get: operations["access_api_operator_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/accounts/lookup": {
         parameters: {
             query?: never;
@@ -227,6 +249,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Controls
+         * @description The platform's switches and global limits as they stand
+         *     (docs/backoffice.md § Controls). Written only through `control.set` and
+         *     `control.clear`.
+         */
+        get: operations["controls_api_operator_controls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/jobs": {
         parameters: {
             query?: never;
@@ -365,6 +409,13 @@ export interface components {
             /** Webhook Domains */
             webhook_domains: components["schemas"]["DomainFigure"][];
         };
+        /** AccessEntry */
+        AccessEntry: {
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
+        };
         /** AccountDetail */
         AccountDetail: {
             /**
@@ -482,6 +533,8 @@ export interface components {
             accounts_near_coach_cap: number;
             /** Approvals Superseded Over 30D */
             approvals_superseded_over_30d: number;
+            /** Controls Paused */
+            controls_paused: number;
             /** Jobs Failed */
             jobs_failed: number;
             /** Jobs Queued */
@@ -559,6 +612,27 @@ export interface components {
             };
             /** Confirmation */
             confirmation?: string | null;
+        };
+        /**
+         * ControlState
+         * @description One control as the Access page shows it. The operator's own text
+         *     (`reason`) is theirs to read back; a user never sees it.
+         */
+        ControlState: {
+            /** In Force */
+            in_force: boolean;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /** Set At */
+            set_at: string | null;
+            /** Set By */
+            set_by: string | null;
+            /** Until */
+            until: string | null;
+            /** Value */
+            value: number | null;
         };
         /** DayFigure */
         DayFigure: {
@@ -703,7 +777,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "organisation_without_owner" | "organisation_all_owners_suspended" | "job_failed" | "job_queued" | "approvals_superseded" | "absence_requests_pending" | "account_near_coach_cap";
+            kind: "organisation_without_owner" | "organisation_all_owners_suspended" | "job_failed" | "job_queued" | "approvals_superseded" | "absence_requests_pending" | "account_near_coach_cap" | "control_paused";
             /** Since */
             since: string | null;
             /** Subject Id */
@@ -747,6 +821,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AbuseReport"];
+                };
+            };
+        };
+    };
+    access_api_operator_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessEntry"][];
                 };
             };
         };
@@ -1022,6 +1116,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    controls_api_operator_controls_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlState"][];
                 };
             };
         };
