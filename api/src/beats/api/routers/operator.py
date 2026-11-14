@@ -13,7 +13,7 @@ in the **body** — an address in a URL is in Cloud Run's request log for 30
 days, the reason `/api/reports` takes its token in a header.
 """
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from beats.operator.dependencies import CommandContextDep, CurrentOperator, OperatorReadsDep
@@ -23,6 +23,7 @@ from beats.operator.reads import (
     AccountMatch,
     AttentionCounts,
     CapacityReport,
+    ControlState,
     DayFigure,
     OrganisationDetail,
     OrganisationSummary,
@@ -161,6 +162,28 @@ async def organisation_audit(
     """The organisation's log without each event's `details`, which carry
     what the organisation wrote."""
     return await reads.organisation_audit(organisation_id, limit)
+
+
+@router.get("/controls", response_model=list[ControlState])
+async def controls(operator: CurrentOperator, reads: OperatorReadsDep) -> list[ControlState]:
+    """The platform's switches and global limits as they stand
+    (docs/backoffice.md § Controls). Written only through `control.set` and
+    `control.clear`."""
+    return await reads.controls()
+
+
+class AccessEntry(BaseModel):
+    email: str
+    role: str
+
+
+@router.get("/access", response_model=list[AccessEntry])
+async def access(request: Request, operator: CurrentOperator) -> list[AccessEntry]:
+    """Who can reach this back office, read off the allowlist the deployment
+    was started with. Read-only: the list is an environment value, and
+    changing it is a deploy (terraform/README.md § Operator Deployment)."""
+    allowlist = request.app.state.operator_settings.allowlist
+    return [AccessEntry(email=i.email, role=i.role) for i in allowlist]
 
 
 @router.get("/abuse", response_model=AbuseReport)

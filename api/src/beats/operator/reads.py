@@ -36,6 +36,7 @@ class AttentionCounts:
     """The landing page: each count links to the thing."""
 
     organisations_without_owner: int
+    controls_paused: int
     organisations_all_owners_suspended: int
     jobs_queued: int
     jobs_failed: int
@@ -52,6 +53,7 @@ QueueKind = Literal[
     "approvals_superseded",
     "absence_requests_pending",
     "account_near_coach_cap",
+    "control_paused",
 ]
 
 
@@ -80,7 +82,9 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
     due when its window ends, the last moment it can still be cancelled
     (`since` is its `run_after`). Everything else needs somebody now: a
     failed job, an organisation nobody can manage, a coach cap in reach.
-    A condition with no stored date is due `now`."""
+    A pause is due when it ends (`since` is its `until`): until then it
+    stands on purpose, and the row says so. A condition with no stored date
+    is due `now`."""
     if since is None:
         return now
     if kind == "approvals_superseded":
@@ -88,6 +92,20 @@ def queue_due(kind: QueueKind, since: datetime | None, now: datetime) -> datetim
     if kind == "absence_requests_pending":
         return since + timedelta(days=ABSENCE_REQUEST_ATTENTION_DAYS)
     return since
+
+
+@dataclass(frozen=True)
+class ControlState:
+    """One control as the Access page shows it. The operator's own text
+    (`reason`) is theirs to read back; a user never sees it."""
+
+    name: str
+    in_force: bool
+    until: datetime | None
+    value: int | None
+    reason: str | None
+    set_by: str | None
+    set_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -240,6 +258,7 @@ class OperatorReads(Protocol):
 
     async def attention(self) -> AttentionCounts: ...
     async def queue(self) -> list[QueueRow]: ...
+    async def controls(self) -> list[ControlState]: ...
     async def audit_log(self, limit: int = 200, subject_id: str | None = None) -> list[dict]: ...
     async def account_coach_spend(self, user_id: str, days: int = 30) -> list[DayFigure]: ...
     async def jobs(self, limit: int = 200) -> list[dict]: ...

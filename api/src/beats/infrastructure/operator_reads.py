@@ -32,6 +32,7 @@ from beats.operator.reads import (
     CapacityReport,
     CoachCostDay,
     CollectionSize,
+    ControlState,
     DayFigure,
     DeviceSummary,
     DomainFigure,
@@ -43,6 +44,8 @@ from beats.operator.reads import (
     QueueRow,
     queue_due,
 )
+from beats.platform_controls import COLLECTION as CONTROLS_COLLECTION
+from beats.platform_controls import PAUSES, control_from_doc
 
 # The collections the storage estimate sums, each keyed on `user_id` and led
 # by an index on it. What the account stores, never what it says.
@@ -192,8 +195,11 @@ class MongoOperatorReads:
             if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
                 near_cap += 1
 
+        paused = sum(1 for c in await self._controls_in_force() if c.name in PAUSES)
+
         return AttentionCounts(
             organisations_without_owner=without_owner,
+            controls_paused=paused,
             organisations_all_owners_suspended=all_suspended,
             jobs_queued=jobs_queued,
             jobs_failed=jobs_failed,
@@ -201,6 +207,30 @@ class MongoOperatorReads:
             absence_requests_pending_over_14d=pending,
             accounts_near_coach_cap=near_cap,
         )
+
+    async def _controls_in_force(self):
+        now = datetime.now(UTC)
+        docs = await self._db[CONTROLS_COLLECTION].find({}, projection={"_id": False}).to_list()
+        return [c for c in map(control_from_doc, docs) if c.in_force(now)]
+
+    async def controls(self) -> list[ControlState]:
+        """Every control document, in force or expired: an expired pause is
+        open to the public API and still shown here as what it was, until
+        it is cleared or set again."""
+        now = datetime.now(UTC)
+        docs = await self._db[CONTROLS_COLLECTION].find({}, projection={"_id": False}).to_list()
+        return [
+            ControlState(
+                name=c.name,
+                in_force=c.in_force(now),
+                until=c.until,
+                value=c.value,
+                reason=c.reason,
+                set_by=c.set_by,
+                set_at=c.set_at,
+            )
+            for c in sorted(map(control_from_doc, docs), key=lambda c: c.name)
+        ]
 
     async def queue(self) -> list[QueueRow]:
         """The rows behind the Attention counts, soonest due first. Ids and
@@ -271,6 +301,10 @@ class MongoOperatorReads:
             budget = budgets.get(uid, self._coach_default_budget)
             if budget > 0 and spent >= COACH_CAP_ATTENTION_FRACTION * budget:
                 row("account_near_coach_cap", uid, None)
+
+        for control in await self._controls_in_force():
+            if control.name in PAUSES:
+                row("control_paused", control.name, control.until)
 
         rows.sort(key=lambda r: r.due)
         return rows

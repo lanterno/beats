@@ -16,18 +16,20 @@ A command with a `window` is destructive and enqueues instead of executing
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
 from beats.domain.exceptions import DomainException, OrganisationNotFound
 from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
+from beats.infrastructure.operator_store import MongoPlatformControlsStore
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
 from beats.operator.settings import OperatorIdentity
+from beats.platform_controls import LIMITS, MAX_PAUSE, ControlName, control_from_doc
 
 
 @dataclass
@@ -323,6 +325,109 @@ class CancelClosing(_OrganisationCommand):
         return await _organisation_state(ctx, args.organisation_id)
 
 
+# ── the platform's switches and limits ───────────────────────────────
+
+
+class ControlArgs(BaseModel):
+    name: ControlName
+
+
+class SetControlArgs(ControlArgs):
+    """A pause needs `until` (inside MAX_PAUSE) and a `reason` for the
+    operator's own page; a limit needs a `value` and takes neither. `signups`
+    may carry a `value` too — a ceiling an hour — and is then slowed rather
+    than paused, until `until`. The sentence a user sees is fixed text; the
+    reason never reaches them."""
+
+    until: datetime | None = None
+    value: int | None = Field(default=None, ge=1)
+    reason: str | None = Field(default=None, min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def _shape(self) -> SetControlArgs:
+        if self.name in LIMITS:
+            if self.value is None:
+                raise ValueError("a limit needs a value")
+            if self.until is not None or self.reason is not None:
+                raise ValueError("a limit is a setting: it takes no until and no reason")
+            return self
+        if self.until is None:
+            raise ValueError("a pause needs an until: every pause expires")
+        if self.reason is None:
+            raise ValueError("a pause needs a reason, for your own record")
+        now = datetime.now(UTC)
+        until = self.until if self.until.tzinfo else self.until.replace(tzinfo=UTC)
+        if until <= now:
+            raise ValueError("until is already past")
+        if until > now + MAX_PAUSE:
+            raise ValueError(f"a pause lasts at most {MAX_PAUSE.days} days; set it again after")
+        if self.value is not None and self.name != "signups":
+            raise ValueError("only signups can be slowed to a value; the rest pause")
+        self.until = until
+        return self
+
+
+async def _control_state(ctx: CommandContext, name: str) -> dict[str, Any]:
+    doc = await MongoPlatformControlsStore(ctx.db).get(name)
+    if doc is None:
+        return {"set": False}
+    control = control_from_doc(doc)
+    return {
+        "set": True,
+        "in_force": control.in_force(datetime.now(UTC)),
+        "until": control.until.isoformat() if control.until else None,
+        "value": control.value,
+        "set_by": control.set_by,
+    }
+
+
+class _ControlCommand:
+    """Inline, no window, no typed confirmation: a switch is thrown in an
+    incident and is reversible by the twin command."""
+
+    subject_kind = "control"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = ControlArgs
+
+    def subject_id(self, args: Any) -> str:
+        return args.name
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        return await _control_state(ctx, args.name)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class SetControl(_ControlCommand):
+    name = "control.set"
+    args_model = SetControlArgs
+
+    async def execute(self, ctx: CommandContext, args: SetControlArgs) -> dict[str, Any]:
+        await MongoPlatformControlsStore(ctx.db).set(
+            args.name,
+            until=args.until,
+            value=args.value,
+            reason=args.reason,
+            set_by=ctx.operator.sub,
+        )
+        return await _control_state(ctx, args.name)
+
+
+class ClearControl(_ControlCommand):
+    name = "control.clear"
+
+    async def execute(self, ctx: CommandContext, args: ControlArgs) -> dict[str, Any]:
+        await MongoPlatformControlsStore(ctx.db).clear(args.name)
+        return await _control_state(ctx, args.name)
+
+
 # ── the irreversible work: jobs with a window ────────────────────────
 
 
@@ -488,6 +593,8 @@ COMMANDS: dict[str, OperatorCommand] = {
         SetLimits(),
         ClearLimits(),
         RevokeDevice(),
+        SetControl(),
+        ClearControl(),
         GrantOwner(),
         BeginClosing(),
         CancelClosing(),
