@@ -13,7 +13,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router";
 import { OperatorApiError } from "@/shared/api/client";
 import { previewCommand, runCommand } from "@/shared/api/commands";
@@ -146,16 +146,17 @@ export function Review() {
 	// not a failure. Settled, or every keystroke would be a request.
 	const sentArgs = sent(fields, args);
 	const settledArgs = useSettled(sentArgs);
+	// A subjectless command makes its subject; the route's is a placeholder.
+	const named = spec?.subjectless ? {} : { [family.subjectKey]: subject };
 	const preview = useQuery({
 		queryKey: ["preview", command, subject, settledArgs],
-		queryFn: () => previewCommand(command, { [family.subjectKey]: subject, ...settledArgs }),
+		queryFn: () => previewCommand(command, { ...named, ...settledArgs }),
 		enabled: Boolean(spec && subject),
 		retry: false,
 	});
 
 	const act = useMutation({
-		mutationFn: () =>
-			runCommand(command, { [family.subjectKey]: subject, ...sentArgs }, typed || undefined),
+		mutationFn: () => runCommand(command, { ...named, ...sentArgs }, typed || undefined),
 		onSuccess: () => {
 			// Not the preview: once the act has run, "Now" is the state it
 			// found, and re-reading it would make the change table claim the
@@ -167,6 +168,7 @@ export function Review() {
 				"attention",
 				"controls",
 				"operator-queue",
+				"erasure-requests",
 			]) {
 				queryClient.invalidateQueries({ queryKey: [key] });
 			}
@@ -218,6 +220,8 @@ export function Review() {
 			lead={
 				done ? (
 					"It is on the record, and its page already shows it."
+				) : spec.subjectless ? (
+					"Nothing has happened yet."
 				) : (
 					<>
 						Acting on <Id>{subject}</Id>. Nothing has happened yet.
@@ -245,7 +249,9 @@ export function Review() {
 								<Facts
 									items={[
 										["Command", spec.title],
-										["Subject", <Id key="s">{subject}</Id>],
+										...(spec.subjectless
+											? []
+											: ([["Subject", <Id key="s">{subject}</Id>]] as Array<[string, ReactNode]>)),
 										[
 											"Where it is",
 											queued

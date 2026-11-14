@@ -8,14 +8,106 @@
  * feature: an operator reading it should be able to tell, before opening
  * any other page, which questions this surface will refuse to answer.
  *
- * What the mock shows and this does not: an erasure request log (its own
- * stage, roadmaps/backoffice.md § 8), backup and restore-drill dates, and a
- * documents checklist. No route answers any of them, and a date with no
- * source is worse here than on any other page.
+ * The erasure request log lives here too: a mail gets a date the day it
+ * arrives, so the legal month is visible before anything is queued. What the
+ * mock shows and this does not: backup and restore-drill dates, and a
+ * documents checklist. No route answers them, and a date with no source is
+ * worse here than on any other page.
  */
 
-import { Page, Pair, Panel, Prose } from "@/shared/ui";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
+import { get } from "@/shared/api/client";
+import type { ErasureRequestState } from "@/shared/api/schema";
+import { dayOf } from "@/shared/lib/format";
+import {
+	buttonClass,
+	Chip,
+	Empty,
+	Failed,
+	Id,
+	Loading,
+	Page,
+	Pair,
+	Panel,
+	Prose,
+	Table,
+} from "@/shared/ui";
 import { CommandForm } from "@/shared/ui/CommandForm";
+
+/** How many days from the mail the law allows, and the day it runs out. */
+export const LEGAL_MONTH_DAYS = 30;
+
+export function deadlineOf(received: string): string {
+	const day = new Date(`${received}T00:00:00Z`);
+	day.setUTCDate(day.getUTCDate() + LEGAL_MONTH_DAYS);
+	return day.toISOString().slice(0, 10);
+}
+
+/** Where a request stands, in words: the status, and the days it has waited. */
+export function requestState(row: ErasureRequestState, today: string): string {
+	if (row.status === "closed") return `Closed: ${row.closed_reason ?? "—"}`;
+	if (row.status === "erasure_ran") return "Erasure ran — close it";
+	if (row.status === "erasure_queued") return "Erasure queued";
+	const waited = Math.floor(
+		(Date.parse(`${today}T00:00:00Z`) - Date.parse(`${row.received_on}T00:00:00Z`)) / 86_400_000,
+	);
+	return `Open, day ${waited + 1} of ${LEGAL_MONTH_DAYS}`;
+}
+
+function ErasureRequests() {
+	const requests = useQuery({
+		queryKey: ["erasure-requests"],
+		queryFn: () => get<ErasureRequestState[]>("/api/operator/erasure-requests"),
+	});
+	if (requests.error)
+		return <Failed bare error={requests.error} onRetry={() => requests.refetch()} />;
+	if (!requests.data) return <Loading />;
+	const today = new Date().toISOString().slice(0, 10);
+	const open = requests.data.filter((r) => r.status !== "closed");
+	return (
+		<>
+			<Table
+				head={["Reference", "Received", "Deadline", "Account", "State", ""]}
+				rows={open.map((r) => [
+					r.reference,
+					dayOf(r.received_on),
+					deadlineOf(r.received_on),
+					r.subject_id ? (
+						<Link key="a" to={`/accounts/${r.subject_id}`} className="link">
+							<Id>{r.subject_id}</Id>
+						</Link>
+					) : (
+						"None"
+					),
+					<Chip key="s" tone={r.status === "open" ? "owed" : "quiet"}>
+						{requestState(r, today)}
+					</Chip>,
+					<Link
+						key="c"
+						to={`/review/erasure_request.close/${r.id}`}
+						className={buttonClass("secondary")}
+					>
+						Close
+					</Link>,
+				])}
+				empty={
+					<Empty title="No open request.">
+						Log one the day its mail arrives, so the deadline is visible before anything is queued.
+					</Empty>
+				}
+			/>
+			<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
+				<Link to="/review/erasure_request.log/new" className={buttonClass("primary")}>
+					Log a request
+				</Link>
+				<span className="text-[13px] text-ink-muted">
+					{requests.data.length - open.length} closed, kept a year each.
+				</span>
+			</div>
+		</>
+	);
+}
 
 /** docs/backoffice.md § The line, as the operator reads it. */
 const LINE: Array<[sees: string, never: string]> = [
@@ -78,18 +170,23 @@ export function Compliance() {
 					</table>
 				</div>
 			</Panel>
+			<Panel
+				title="Erasure requests"
+				note="They arrive by email at the address in PRIVACY.md. The clock runs from the mail: a request with nothing queued after 14 days is on the queue. A reference and an id, never an address."
+			>
+				<ErasureRequests />
+			</Panel>
 			<Pair>
-				<Panel title="Erasure requests">
-					<Prose>
-						They arrive by email at the address in PRIVACY.md, and there is no log of them here yet.
-						An erasure you have queued is on Jobs and windows, where its seven-day window is
-						running.
-					</Prose>
-				</Panel>
 				<Panel title="Reading a document in the database">
 					<Prose>
 						Nothing above stops it, and PRIVACY.md says so rather than pretending otherwise. The
 						point of these pages is that the question is answered here instead.
+					</Prose>
+				</Panel>
+				<Panel title="Queued erasures">
+					<Prose>
+						An erasure you have queued is on Jobs and windows, where its seven-day window is
+						running; the state column above reads it from there.
 					</Prose>
 				</Panel>
 			</Pair>

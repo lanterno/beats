@@ -34,7 +34,7 @@ export interface Change {
 /** Which page a command belongs to, and how its subject is named. */
 export interface Family {
 	/** The argument the subject travels as. */
-	subjectKey: "user_id" | "name";
+	subjectKey: "user_id" | "name" | "request_id";
 	/** Where "back" goes, for a subject. */
 	back: (subject: string) => { to: string; label: string };
 	/** The confirmation field's label, when a command asks for one. */
@@ -43,7 +43,13 @@ export interface Family {
 	missing: string;
 }
 
-export const FAMILIES: Record<"account" | "control", Family> = {
+export const FAMILIES: Record<"account" | "control" | "erasure", Family> = {
+	erasure: {
+		subjectKey: "request_id",
+		back: () => ({ to: "/compliance", label: "Back to privacy and compliance" }),
+		typedLabel: "Type the reference to confirm",
+		missing: "There is no open request with that id.",
+	},
 	account: {
 		subjectKey: "user_id",
 		back: (subject) => ({ to: `/accounts/${subject}`, label: "Back to the account" }),
@@ -61,6 +67,9 @@ export const FAMILIES: Record<"account" | "control", Family> = {
 export interface CommandSpec {
 	name: string;
 	family: keyof typeof FAMILIES;
+	/** The command makes its subject rather than acting on one: the route's
+	 * subject is a placeholder and is not sent. */
+	subjectless?: boolean;
 	/** What the operator calls it. */
 	title: string;
 	/** The button: a verb and its object. */
@@ -371,12 +380,89 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 	},
 ];
 
-export const commandSpec = (name: string): CommandSpec | undefined =>
-	[...ACCOUNT_COMMANDS, ...CONTROL_COMMANDS].find((c) => c.name === name);
+/**
+ * The erasure request log (docs/backoffice.md § The pages, Compliance). A
+ * request is logged with a reference the operator chooses — never an
+ * address, which the API refuses — and closed with a reason once the
+ * erasure ran, or there was no account, or they withdrew it.
+ */
+export const ERASURE_COMMANDS: CommandSpec[] = [
+	{
+		family: "erasure",
+		subjectless: true,
+		name: "erasure_request.log",
+		title: "Log a request",
+		action: "Log this request",
+		about:
+			"A request that arrived by mail gets a date here, so the deadline is visible before anything is queued. The account, if there is one, is named by its id; someone with no account is a reference alone.",
+		notices: "Nobody. This is your own record; queueing the erasure is a separate act.",
+		undo: "Close it with a reason. Nothing is deleted by logging.",
+		fields: [
+			{
+				key: "reference",
+				label: "Reference",
+				kind: "text",
+				hint: "Your own: a ticket number, the mail's date. Never an address.",
+			},
+			{ key: "received_on", label: "Received on (UTC day)", kind: "text", hint: "YYYY-MM-DD" },
+			{
+				key: "user_id",
+				label: "Account id",
+				kind: "text",
+				hint: "Leave empty when there is no account.",
+			},
+		],
+		changes: (before, args) => [
+			{
+				what: "The request",
+				now: "Not logged",
+				after: `Logged, received ${String(args.received_on || "—")}`,
+			},
+			{
+				what: "Account",
+				now: before.account === "exists" ? "Exists" : "None named",
+				after: args.user_id ? "Named by id" : "None",
+			},
+		],
+	},
+	{
+		family: "erasure",
+		name: "erasure_request.close",
+		title: "Close it",
+		action: "Close this request",
+		about:
+			"Closes the request with a reason: erased (the job ran), no_account (nothing to erase), or withdrawn. A closed request is kept a year, then goes.",
+		notices: "Nobody.",
+		undo: "No; log it again if it was closed by mistake.",
+		fields: [
+			{
+				key: "reason",
+				label: "Reason",
+				kind: "text",
+				hint: "One of: erased, no_account, withdrawn",
+			},
+		],
+		changes: (before, args) => [
+			{
+				what: "The request",
+				now: `Open since ${String(before.received_on ?? "—")}`,
+				after: args.reason ? `Closed: ${String(args.reason)}` : "Closed",
+			},
+		],
+	},
+];
 
-/** The commands that share a subject with `spec`, for swapping one for another. */
+const EVERY_COMMAND = [...ACCOUNT_COMMANDS, ...CONTROL_COMMANDS, ...ERASURE_COMMANDS];
+
+export const commandSpec = (name: string): CommandSpec | undefined =>
+	EVERY_COMMAND.find((c) => c.name === name);
+
+/** The commands that share a subject with `spec`, for swapping one for
+ * another. A subjectless command stands alone: nothing shares its subject. */
 export const familyOf = (spec: CommandSpec): CommandSpec[] =>
-	spec.family === "account" ? ACCOUNT_COMMANDS : CONTROL_COMMANDS;
+	spec.subjectless
+		? [spec]
+		: EVERY_COMMAND.filter((c) => c.family === spec.family && !c.subjectless);
 
 /** What every command puts on the record, said once. */
 export const ON_THE_RECORD = "You, the command, the subject, and what it changed on either side.";

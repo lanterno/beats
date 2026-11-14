@@ -92,6 +92,19 @@ export const RUNBOOKS: Runbook[] = [
 		],
 	},
 	{
+		id: "erasure-request",
+		title: "Someone asks for erasure",
+		reviewed_on: "2026-11-14",
+		about:
+			"A request arrives by mail at the address in PRIVACY.md. The law gives one month from that day; the promise is deletion seven days after queueing.",
+		steps: [
+			"Log it on Privacy and compliance the day it arrives, with your own reference and the account's id. Never the address: the row outlives the account.",
+			"Check the mail came from the address on the account. Find the account by that exact address, and compare.",
+			"Queue the erasure from the account's page. Queueing suspends the account with wording that names the day the window ends, so an impersonated request can still be stopped by them.",
+			"When the job has run, close the request as erased. If there was no account, close it as no_account; if they changed their mind inside the window, cancel the job and close it as withdrawn.",
+		],
+	},
+	{
 		id: "bad-release",
 		title: "A release is bad",
 		reviewed_on: "2026-11-14",

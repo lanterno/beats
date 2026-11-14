@@ -23,5 +23,7 @@ export type CommandPreview = components["schemas"]["CommandPreview"];
 export type ControlState = components["schemas"]["ControlState"];
 /** One person on the operator allowlist, as the deployment was started. */
 export type AccessEntry = components["schemas"]["AccessEntry"];
+/** One logged erasure request: a reference and an id, never an address. */
+export type ErasureRequestState = components["schemas"]["ErasureRequestState"];
 /** One row behind an Attention count: ids and dates, never a name. */
 export type QueueRow = components["schemas"]["QueueRow"];

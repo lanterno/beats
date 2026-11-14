@@ -114,6 +114,14 @@ export const KINDS: Record<QueueRow["kind"], Kind> = {
 		to: () => "/access",
 		runbook: "control-paused",
 	},
+	erasure_request_open: {
+		title: (row) => `Erasure request ${short(row.subject_id)} has nothing queued`,
+		label: "Privacy",
+		why: "The law gives one month from the day the request arrived, and the clock runs from the mail, not from when a job is queued. Queue the erasure, or close the request if there is no account.",
+		next: "Open privacy and compliance",
+		to: () => "/compliance",
+		runbook: "erasure-request",
+	},
 	account_near_coach_cap: {
 		title: (row) => `Account ${short(row.subject_id)} is at 80% of its coach cap`,
 		label: "Cost",
