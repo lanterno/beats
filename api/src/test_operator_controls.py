@@ -253,10 +253,17 @@ class TestErasureRequestLog:
         assert again.status_code == 404
         assert again.json()["code"] == "ERASURE_REQUEST_NOT_FOUND"
 
-    def test_a_request_naming_an_unknown_account_is_refused(self, operator_client):
-        refused = self._run(
-            operator_client,
-            "erasure_request.log",
-            {"reference": "r", "received_on": "2026-11-01", "user_id": str(ObjectId())},
-        )
-        assert refused.status_code == 404
+    def test_an_account_id_naming_no_account_is_refused_on_its_box(self, operator_client):
+        """The review keeps its form on a 422 and fails whole on anything
+        else, so an unknown id, or a fragment of one, is refused as the
+        argument it is: in the preview, before anything is logged, and in the
+        act. A fragment once reached ObjectId() and answered 500."""
+        for user_id in (str(ObjectId()), "6633f0a1"):
+            args = {"reference": "mail-1", "received_on": "2026-11-01", "user_id": user_id}
+            for path in ("erasure_request.log/preview", "erasure_request.log"):
+                refused = operator_client.post(
+                    f"/api/operator/commands/{path}", json={"args": args}, headers=self.OWN
+                )
+                assert refused.status_code == 422, (user_id, path, refused.text)
+                assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+                assert [f["path"] for f in refused.json()["fields"]] == ["user_id"]
