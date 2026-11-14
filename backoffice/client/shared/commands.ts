@@ -796,7 +796,7 @@ export const DEPLOY_COMMANDS: CommandSpec[] = [
 			"Every API build that reaches its deploy step while this is in force skips its apply and goes red. It ends by itself at the time you set, within 7 days. The web app can still ship: it deploys from its own workflow, which this does not hold.",
 		notices:
 			"Whoever merges: their build goes red saying it was frozen. Users notice nothing — nothing changes for them.",
-		undo: "Yes. Unfreeze it, then re-run the newest build: a build held back does not deploy by itself.",
+		undo: "Yes. Unfreeze it, then re-run the build Releases names: a build held back does not deploy by itself.",
 		fields: [
 			{
 				key: "until",
@@ -824,7 +824,7 @@ export const DEPLOY_COMMANDS: CommandSpec[] = [
 		title: "Lift the freeze",
 		action: "Lift the freeze",
 		about:
-			"API builds deploy again. One held back while frozen does not deploy by itself: re-run the newest build, which Releases names.",
+			"API builds deploy again. One held back while frozen does not deploy by itself: re-run the build Releases names, the newest commit the freeze held back.",
 		notices: "Nobody, until the next build deploys.",
 		undo: "Yes. Freeze again.",
 		changes: (before) => [

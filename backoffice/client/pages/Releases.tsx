@@ -8,14 +8,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import type { ReleasesReport } from "@/shared/api/schema";
+import type { FreezeState, HeldBuild, ReleasesReport } from "@/shared/api/schema";
 import { minuteOf } from "@/shared/lib/format";
 import {
+	buildLabel,
 	commitUrl,
 	isBad,
 	releasesHeadline,
+	rerunAdvice,
 	short,
-	statusLabel,
 	unanswered,
 } from "@/shared/lib/releases";
 import {
@@ -32,16 +33,27 @@ import {
 	Table,
 } from "@/shared/ui";
 
-interface FreezeState {
-	available: boolean;
-	frozen: boolean;
-	until?: string | null;
-	reason?: string | null;
-	set_by?: string | null;
+/** The build to re-run, and where: Cloud Build's page for it has the re-run. */
+function Rerun({ rerun, frozen }: { rerun: HeldBuild | null | undefined; frozen: boolean }) {
+	const advice = rerunAdvice(rerun, frozen);
+	if (!advice) return null;
+	return (
+		<span className="text-[13px] text-ink-muted">
+			{advice}
+			{rerun?.log_url ? (
+				<>
+					{" "}
+					<a href={rerun.log_url} className="link">
+						Open the build
+					</a>
+				</>
+			) : null}
+		</span>
+	);
 }
 
 /** The deploy freeze: whether it holds, and the two acts, each through its review. */
-function FreezePanel({ newest }: { newest: string | null }) {
+function FreezePanel({ rerun }: { rerun: HeldBuild | null | undefined }) {
 	const freeze = useQuery({
 		queryKey: ["deploy-freeze"],
 		queryFn: () => get<FreezeState>("/api/operator/deploy-freeze"),
@@ -64,6 +76,25 @@ function FreezePanel({ newest }: { newest: string | null }) {
 			</Panel>
 		);
 	}
+	if (f.frozen === null) {
+		return (
+			<Panel title="Deploy freeze">
+				<div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-5">
+					<p className="min-w-0 flex-1 text-[15px] leading-relaxed">
+						Whether API deploys are frozen is unknown: the freeze's bucket did not answer. A build
+						that cannot read it stops rather than deploy.
+					</p>
+					<button
+						type="button"
+						onClick={() => freeze.refetch()}
+						className={buttonClass("secondary")}
+					>
+						Try again
+					</button>
+				</div>
+			</Panel>
+		);
+	}
 	return (
 		<Panel
 			raised={f.frozen}
@@ -76,20 +107,15 @@ function FreezePanel({ newest }: { newest: string | null }) {
 		>
 			<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
 				{f.frozen ? (
-					<>
-						<Link to="/review/deploy.unfreeze/api" className={buttonClass("primary")}>
-							Lift the freeze
-						</Link>
-						<span className="text-[13px] text-ink-muted">
-							Then re-run the newest build{newest ? ` (${short(newest)})` : ""}: one held back does
-							not deploy by itself.
-						</span>
-					</>
+					<Link to="/review/deploy.unfreeze/api" className={buttonClass("primary")}>
+						Lift the freeze
+					</Link>
 				) : (
 					<Link to="/review/deploy.freeze/api" className={buttonClass("secondary")}>
 						Freeze the API's deploys
 					</Link>
 				)}
+				<Rerun rerun={rerun} frozen={f.frozen} />
 			</div>
 		</Panel>
 	);
@@ -123,7 +149,7 @@ export function Releases() {
 			<Panel
 				raised
 				title="API builds"
-				note="Newest first. The live one is what the API was deployed with: a revision that failed to start would leave the previous one serving."
+				note="Newest first. The live one is what the API was deployed with: a revision that failed to start would leave the previous one serving. One the deploy freeze held back is red in Cloud Build and was never deployed."
 			>
 				<Table
 					head={[day("Started"), "Commit", "What", "Build", ""]}
@@ -132,7 +158,7 @@ export function Releases() {
 						sha(b.sha),
 						b.subject ?? "—",
 						<Chip key="s" tone={isBad(b) ? "owed" : b.status === "SUCCESS" ? "good" : "quiet"}>
-							{statusLabel(b.status)}
+							{buildLabel(b)}
 						</Chip>,
 						b.live ? (
 							<Chip key="l">Live, as deployed</Chip>
@@ -151,7 +177,7 @@ export function Releases() {
 					}
 				/>
 			</Panel>
-			<FreezePanel newest={r.builds[0]?.sha ?? null} />
+			<FreezePanel rerun={r.rerun} />
 			<Panel title="The web app">
 				<Facts
 					items={[

@@ -34,3 +34,11 @@ export type HealthReport = components["schemas"]["HealthReport"];
 /** What shipped: the API's builds, the commit deployed, the web app's live commit. */
 export type ReleasesReport = components["schemas"]["ReleasesReport"];
 export type ReleaseRow = components["schemas"]["ReleaseRow"];
+/** The newest commit the deploy freeze held back that nothing has shipped since. */
+export type HeldBuild = components["schemas"]["HeldBuild"];
+/** The deploy freeze as it stands, or unknown when its bucket did not answer. */
+export type FreezeState = components["schemas"]["FreezeState"];
+/** The public status file read back, or why it could not be. */
+export type PublicStatus = components["schemas"]["PublicStatus"];
+/** The Google Cloud project and the API's service, for the console links. */
+export type Deployment = components["schemas"]["Deployment"];

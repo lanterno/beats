@@ -4,7 +4,7 @@
  * said as a fact, not a problem.
  */
 
-import type { ReleaseRow, ReleasesReport } from "@/shared/api/schema";
+import type { HeldBuild, ReleaseRow, ReleasesReport } from "@/shared/api/schema";
 
 export const short = (sha: string | null | undefined): string =>
 	sha ? sha.slice(0, 7) : "unknown";
@@ -28,8 +28,30 @@ export function statusLabel(status: string): string {
 	return STATUS[status] ?? "Unknown";
 }
 
+/** A build the deploy freeze held back is red in Cloud Build, and is not a bad release. */
+export function buildLabel(row: ReleaseRow): string {
+	return row.held ? "Held by the freeze" : statusLabel(row.status);
+}
+
 export function isBad(row: ReleaseRow): boolean {
-	return ["FAILURE", "INTERNAL_ERROR", "TIMEOUT"].includes(row.status);
+	return !row.held && ["FAILURE", "INTERNAL_ERROR", "TIMEOUT"].includes(row.status);
+}
+
+/**
+ * What to re-run once the freeze lifts. A held build does not deploy by
+ * itself, and the one to re-run is the newest commit the freeze held back,
+ * which the API names only while nothing has shipped it since.
+ */
+export function rerunAdvice(rerun: HeldBuild | null | undefined, frozen: boolean): string | null {
+	if (!rerun) {
+		return frozen
+			? "Once it lifts, re-run the newest build it held back, if there is one: a held build does not deploy by itself."
+			: null;
+	}
+	const what = `${short(rerun.sha)}${rerun.subject ? ` (${rerun.subject})` : ""}`;
+	return frozen
+		? `Once it lifts, re-run the build of ${what}: a held build does not deploy by itself.`
+		: `The freeze held back ${what}, and nothing has shipped it since. Re-run its build to deploy it.`;
 }
 
 /** The page's first sentence: what each half is running. */
