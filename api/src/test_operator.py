@@ -281,6 +281,7 @@ class TestOperatorWall:
             ("GET", "/api/operator/queue", None),
             ("GET", "/api/operator/controls", None),
             ("GET", "/api/operator/access", None),
+            ("GET", "/api/operator/erasure-requests", None),
             ("POST", "/api/operator/accounts/lookup", {"email": "wall@example.test"}),
             ("GET", f"/api/operator/accounts/{planted['user_id']}", None),
             ("GET", f"/api/operator/accounts/{planted['user_id']}/coach", None),

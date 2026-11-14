@@ -895,3 +895,113 @@ class TestControlCommands:
             ("viewer@example.test", "viewer"),
         }
         assert all(set(a) == {"email", "role"} for a in access)
+
+
+class TestErasureRequestLog:
+    """The erasure request log (docs/backoffice.md § The pages, Compliance):
+    a mail gets a date, the deadline is visible, the state is read off the
+    job queue, and no address is ever in a row."""
+
+    OWN: ClassVar[dict[str, str]] = {"Origin": ORIGIN}
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        yield
+        for name in ("erasure_requests", "operator_audit", "operator_jobs", "users"):
+            mongo[name].delete_many({})
+
+    def _run(self, operator_client, name, args):
+        return operator_client.post(
+            f"/api/operator/commands/{name}", json={"args": args}, headers=self.OWN
+        )
+
+    def _log(self, operator_client, days_ago: int, user_id=None, reference="mail-1"):
+        received = (datetime.now(UTC) - timedelta(days=days_ago)).date().isoformat()
+        done = self._run(
+            operator_client,
+            "erasure_request.log",
+            {"reference": reference, "received_on": received, "user_id": user_id},
+        )
+        assert done.status_code == 200, done.text
+        return done.json()["after"]["request_id"]
+
+    def test_a_request_is_logged_dated_and_overdue_after_the_named_days(
+        self, operator_client, mongo
+    ):
+        from beats.operator.reads import ERASURE_REQUEST_ATTENTION_DAYS
+
+        fresh = self._log(operator_client, 1, reference="fresh")
+        old = self._log(operator_client, ERASURE_REQUEST_ATTENTION_DAYS, reference="old")
+
+        rows = operator_client.get("/api/operator/erasure-requests").json()
+        assert {(r["id"], r["status"]) for r in rows} == {(fresh, "open"), (old, "open")}
+        assert (
+            operator_client.get("/api/operator/attention").json()["erasure_requests_overdue"] == 1
+        )
+        queue = operator_client.get("/api/operator/queue").json()
+        kinds = [(r["kind"], r["subject_id"]) for r in queue]
+        assert ("erasure_request_open", fresh) in kinds
+        assert ("erasure_request_open", old) in kinds
+
+    def test_a_reference_is_never_an_address(self, operator_client):
+        refused = self._run(
+            operator_client,
+            "erasure_request.log",
+            {"reference": "ana@example.test", "received_on": "2026-11-01"},
+        )
+        assert refused.status_code == 422
+        assert refused.json()["code"] == "INVALID_COMMAND_ARGS"
+
+    def test_the_state_is_read_off_the_job_queue(self, operator_client, mongo):
+        user_id = str(ObjectId())
+        mongo.users.insert_one({"_id": ObjectId(user_id), "email": "er@example.test"})
+        request = self._log(operator_client, 3, user_id=user_id)
+
+        queued = self._run(operator_client, "account.erase", {"user_id": user_id})
+        assert queued.status_code == 409, "the email must be typed"
+        queued = operator_client.post(
+            "/api/operator/commands/account.erase",
+            json={"args": {"user_id": user_id}, "confirmation": "er@example.test"},
+            headers=self.OWN,
+        )
+        assert queued.status_code == 200, queued.text
+        rows = operator_client.get("/api/operator/erasure-requests").json()
+        assert rows[0]["status"] == "erasure_queued"
+        assert (
+            operator_client.get("/api/operator/attention").json()["erasure_requests_overdue"] == 0
+        )
+        assert "erasure_request_open" not in {
+            r["kind"] for r in operator_client.get("/api/operator/queue").json()
+        }
+
+        mongo.operator_jobs.update_many({"subject_id": user_id}, {"$set": {"state": "done"}})
+        assert (
+            operator_client.get("/api/operator/erasure-requests").json()[0]["status"]
+            == "erasure_ran"
+        )
+
+        closed = self._run(
+            operator_client, "erasure_request.close", {"request_id": request, "reason": "erased"}
+        )
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["after"]["closed"] is True
+        row = operator_client.get("/api/operator/erasure-requests").json()[0]
+        assert row["status"] == "closed"
+        stored = mongo.erasure_requests.find_one({"_id": ObjectId(request)})
+        assert stored["expires_at"] is not None, "a closed request has a retention date"
+        assert "user_id" not in stored
+        assert "er@example.test" not in str(stored)
+
+        again = self._run(
+            operator_client, "erasure_request.close", {"request_id": request, "reason": "erased"}
+        )
+        assert again.status_code == 404
+        assert again.json()["code"] == "ERASURE_REQUEST_NOT_FOUND"
+
+    def test_a_request_naming_an_unknown_account_is_refused(self, operator_client):
+        refused = self._run(
+            operator_client,
+            "erasure_request.log",
+            {"reference": "r", "received_on": "2026-11-01", "user_id": str(ObjectId())},
+        )
+        assert refused.status_code == 404
