@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any, Literal, Protocol
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, ValidationError, model_validator
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.accounts import ERASURE_WINDOW_DAYS, AccountNotFound, AccountService
@@ -71,6 +71,38 @@ class OperatorCommand(Protocol):
     # the account the moment it is queued, so the window is visible to the
     # person whose address may have been impersonated.
     async def on_queued(self, ctx: CommandContext, args: Any) -> None: ...
+
+
+class InvalidCommandArgs(DomainException):
+    """The arguments do not hold — a box left empty, a value of the wrong
+    shape, an id that names nothing. 422, with each failing argument in the
+    envelope's `fields` (`{path, message, type}`, as api/errors.py builds them
+    for the public API), so the review can say which box is wrong rather than
+    fail as a whole. Raised by the runner's parse and by a command's
+    `describe()` when an argument names nothing."""
+
+    status_code = 422
+    code = "INVALID_COMMAND_ARGS"
+
+    def __init__(self, fields: list[dict[str, str]]):
+        self.fields = fields
+        super().__init__(
+            "; ".join(f"{f['path']}: {f['message']}" if f["path"] else f["message"] for f in fields)
+        )
+
+    @classmethod
+    def of(cls, error: ValidationError) -> InvalidCommandArgs:
+        # Pydantic prefixes a validator's own sentence with its kind.
+        return cls(
+            [
+                {
+                    "path": ".".join(str(p) for p in e["loc"]),
+                    "message": e["msg"].removeprefix("Value error, "),
+                    "type": e["type"],
+                }
+                for e in error.errors()
+            ]
+        )
 
 
 # ── accounts ─────────────────────────────────────────────────────────
