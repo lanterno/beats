@@ -3,6 +3,8 @@ answers at their awkward shapes, and the cache's three states. The route is
 test_operator.py's, over a fake of the port — never a stubbed Google in a
 live page."""
 
+import asyncio
+
 import httpx
 import pytest
 
@@ -130,6 +132,25 @@ class TestGoogle:
         with pytest.raises(httpx.ConnectError):
             await source.read()
         assert (await HealthCache().report(source, None)).state == "unavailable"
+
+    async def test_the_metadata_and_the_six_queries_are_asked_side_by_side(self):
+        """Each call waits for its phase's others to have started: asked one
+        after another, as they once were — eight calls of a 3 s timeout
+        each — the first would wait forever."""
+        metadata, series = asyncio.Barrier(2), asyncio.Barrier(6)
+
+        async def answer(request: httpx.Request) -> httpx.Response:
+            if "metadata" in str(request.url):
+                await metadata.wait()
+                if "project-id" in str(request.url):
+                    return httpx.Response(200, text="proj-1")
+                return httpx.Response(200, json={"access_token": "t"})
+            await series.wait()
+            return httpx.Response(200, json={})
+
+        source = GoogleMonitoring("beats-api", transport=httpx.MockTransport(answer))
+        figures = await asyncio.wait_for(source.read(), timeout=2)
+        assert figures.availability is None
 
     async def test_figures_are_read_off_the_answers(self):
         def answer(request: httpx.Request) -> httpx.Response:
