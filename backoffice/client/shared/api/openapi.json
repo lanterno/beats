@@ -1251,6 +1251,143 @@
         "title": "QueueRow",
         "type": "object"
       },
+      "ReleaseRow": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "log_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Url"
+          },
+          "sha": {
+            "title": "Sha",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "sha",
+          "subject",
+          "status",
+          "created_at",
+          "finished_at",
+          "log_url",
+          "live"
+        ],
+        "title": "ReleaseRow",
+        "type": "object"
+      },
+      "ReleasesReport": {
+        "properties": {
+          "api_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Commit"
+          },
+          "builds": {
+            "items": {
+              "$ref": "#/components/schemas/ReleaseRow"
+            },
+            "title": "Builds",
+            "type": "array"
+          },
+          "repository": {
+            "title": "Repository",
+            "type": "string"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unavailable",
+            "type": "array"
+          },
+          "web_commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Commit"
+          },
+          "web_subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Web Subject"
+          }
+        },
+        "required": [
+          "builds",
+          "api_commit",
+          "web_commit",
+          "web_subject",
+          "repository"
+        ],
+        "title": "ReleasesReport",
+        "type": "object"
+      },
       "RouteFigure": {
         "properties": {
           "route": {
@@ -2117,6 +2254,28 @@
           }
         },
         "summary": "Queue",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/releases": {
+      "get": {
+        "description": "What shipped: the API's builds newest first with their commits, the\ncommit the API was deployed with, and the web app's live commit. Each\nsource answers on its own, and one that fails is named rather than\nbreaking the rest. Nothing here moves traffic.",
+        "operationId": "releases_api_operator_releases_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleasesReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Releases",
         "tags": [
           "operator"
         ]
