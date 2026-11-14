@@ -481,6 +481,19 @@
       },
       "ClearStatusArgs": {
         "properties": {
+          "generation": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Generation"
+          },
           "message": {
             "default": "Everything is working again.",
             "maxLength": 280,
@@ -557,6 +570,11 @@
         "properties": {
           "documents": {
             "title": "Documents",
+            "type": "integer"
+          },
+          "index_bytes": {
+            "default": 0,
+            "title": "Index Bytes",
             "type": "integer"
           },
           "name": {
@@ -810,6 +828,31 @@
         "title": "DayFigure",
         "type": "object"
       },
+      "Deployment": {
+        "properties": {
+          "api_service": {
+            "title": "Api Service",
+            "type": "string"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project"
+          }
+        },
+        "required": [
+          "project",
+          "api_service"
+        ],
+        "title": "Deployment",
+        "type": "object"
+      },
       "DeviceSummary": {
         "properties": {
           "created_at": {
@@ -975,8 +1018,27 @@
             "type": "boolean"
           },
           "frozen": {
-            "title": "Frozen",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frozen"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "const": "unreachable",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
           },
           "reason": {
             "anyOf": [
@@ -1184,6 +1246,57 @@
           "max_instances"
         ],
         "title": "HealthReport",
+        "type": "object"
+      },
+      "HeldBuild": {
+        "description": "The build to re-run once the freeze lifts (`to_rerun`).",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "log_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Url"
+          },
+          "sha": {
+            "title": "Sha",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          }
+        },
+        "required": [
+          "sha",
+          "subject",
+          "created_at",
+          "log_url"
+        ],
+        "title": "HeldBuild",
         "type": "object"
       },
       "LogErasureRequestArgs": {
@@ -1494,14 +1607,36 @@
             "title": "Message",
             "type": "string"
           },
+          "problem": {
+            "anyOf": [
+              {
+                "enum": [
+                  "unreadable",
+                  "unreachable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          },
           "published": {
             "default": false,
             "title": "Published",
             "type": "boolean"
           },
           "state": {
-            "title": "State",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
           },
           "updated_at": {
             "anyOf": [
@@ -1542,6 +1677,19 @@
             "maxItems": 6,
             "title": "Affected",
             "type": "array"
+          },
+          "generation": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Generation"
           },
           "message": {
             "maxLength": 280,
@@ -1649,6 +1797,11 @@
             ],
             "title": "Finished At"
           },
+          "held": {
+            "default": false,
+            "title": "Held",
+            "type": "boolean"
+          },
           "live": {
             "title": "Live",
             "type": "boolean"
@@ -1719,6 +1872,16 @@
           "repository": {
             "title": "Repository",
             "type": "string"
+          },
+          "rerun": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeldBuild"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "unavailable": {
             "items": {
@@ -2568,7 +2731,7 @@
     },
     "/api/operator/deploy-freeze": {
       "get": {
-        "description": "Whether the API's deploys are frozen, until when and why. Not\navailable where no freeze bucket is configured.",
+        "description": "Whether the API's deploys are frozen, until when and why. Not\navailable where no freeze bucket is configured; a flag that cannot be\nread is said, never shown as \"not frozen\".",
         "operationId": "deploy_freeze_api_operator_deploy_freeze_get",
         "responses": {
           "200": {
@@ -2583,6 +2746,28 @@
           }
         },
         "summary": "Deploy Freeze",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/deployment": {
+      "get": {
+        "description": "Where this back office runs, so a link into Google's console names\nthe deployment's own project rather than one written into the bundle.\nThe project comes from the metadata server, the service from Terraform.",
+        "operationId": "deployment_api_operator_deployment_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deployment"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Deployment",
         "tags": [
           "operator"
         ]
@@ -2885,7 +3070,7 @@
     },
     "/api/operator/status": {
       "get": {
-        "description": "What customers see on the status page right now, read back from the\nsame public file. Not available where no status bucket is configured.",
+        "description": "What customers see on the status page right now, read back from the\nsame public file. Not available where no status bucket is configured;\na file that cannot be read is said, never shown as all good.",
         "operationId": "public_status_api_operator_status_get",
         "responses": {
           "200": {
