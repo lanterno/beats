@@ -49,7 +49,7 @@ from beats.api.routers.operator import router as operator_router
 from beats.domain.exceptions import DomainException
 from beats.operator.commands import COMMANDS
 from beats.operator.deploy_freeze import GcsDeployFreeze
-from beats.operator.health import GoogleMonitoring, HealthCache
+from beats.operator.health import GoogleMonitoring, HealthCache, ProjectId
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
 from beats.operator.releases import LiveReleases, ReleasesCache
 from beats.operator.settings import OperatorSettings
@@ -88,6 +88,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.operator_settings = settings
     app.state.health_source = GoogleMonitoring(settings.api_service_name)
     app.state.health_cache = HealthCache()
+    app.state.project_id = ProjectId()
     releases = LiveReleases(web_origin=settings.web_origin, repository=settings.github_repository)
     app.state.release_source = releases
     app.state.releases_cache = ReleasesCache()

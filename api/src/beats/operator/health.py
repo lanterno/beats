@@ -311,6 +311,38 @@ class GoogleMonitoring:
         )
 
 
+class ProjectId:
+    """The Google Cloud project this deployment runs in, read off the
+    metadata server, for the pages' links into Google's console — which
+    would otherwise have to name a project in the bundle. Kept for good once
+    read; None off Google Cloud, where a failure is kept a minute, as
+    health's is, so a page never waits on an absent metadata server."""
+
+    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
+        self._transport = transport
+        self._project: str | None = None
+        self._failed_at: float | None = None
+
+    async def get(self) -> str | None:
+        if self._project is not None:
+            return self._project
+        if self._failed_at is not None and time.monotonic() - self._failed_at < CACHE_SECONDS:
+            return None
+        try:
+            async with httpx.AsyncClient(
+                timeout=TIMEOUT_SECONDS, transport=self._transport
+            ) as client:
+                resp = await client.get(
+                    f"{METADATA}/project/project-id", headers={"Metadata-Flavor": "Google"}
+                )
+                resp.raise_for_status()
+        except httpx.HTTPError:
+            self._failed_at = time.monotonic()
+            return None
+        self._project = resp.text.strip() or None
+        return self._project
+
+
 # ── the cache ────────────────────────────────────────────────────────
 
 

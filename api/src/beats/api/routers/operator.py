@@ -194,6 +194,26 @@ async def access(request: Request, operator: CurrentOperator) -> list[AccessEntr
     return [AccessEntry(email=i.email, role=i.role) for i in allowlist]
 
 
+class Deployment(BaseModel):
+    # The Google Cloud project, for the pages' console links; None off
+    # Google Cloud, where the pages link nowhere rather than to a guess.
+    project: str | None
+    # The API's Cloud Run service, which its log lines are filtered on.
+    api_service: str
+
+
+@router.get("/deployment", response_model=Deployment)
+async def deployment(request: Request, operator: CurrentOperator) -> Deployment:
+    """Where this back office runs, so a link into Google's console names
+    the deployment's own project rather than one written into the bundle.
+    The project comes from the metadata server, the service from Terraform."""
+    state = request.app.state
+    return Deployment(
+        project=await state.project_id.get(),
+        api_service=state.operator_settings.api_service_name,
+    )
+
+
 @router.get("/health", response_model=HealthReport)
 async def health(request: Request, operator: CurrentOperator) -> HealthReport:
     """Whether the product is healthy, from Cloud Monitoring: availability,
