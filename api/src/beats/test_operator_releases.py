@@ -4,6 +4,7 @@ missing. The route is test_operator.py's, over a fake of the port."""
 
 import asyncio
 import time
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -16,6 +17,7 @@ from beats.operator.releases import (
     assemble,
     parse_builds,
     parse_version,
+    to_rerun,
 )
 
 A = "a" * 40
@@ -45,6 +47,25 @@ class TestParsing:
             ]
         }
         assert [(b.sha, b.status) for b in parse_builds(body)] == [(B, "FAILURE"), (A, "SUCCESS")]
+
+    def test_a_build_the_freeze_held_back_is_told_from_one_that_failed(self):
+        """Both are FAILURE to Cloud Build; only the held one failed in the
+        freeze's own step (api/cloudbuild.yaml), and only it is held."""
+
+        def build(sha: str, failed_step: str) -> dict:
+            steps = ["deploy-lock", "terraform-apply", "deploy-unlock", "deploy-frozen"]
+            return {
+                "substitutions": {"COMMIT_SHA": sha},
+                "status": "FAILURE",
+                "createTime": "2026-11-14T10:00:00Z",
+                "steps": [
+                    {"id": s, "status": "FAILURE" if s == failed_step else "SUCCESS"}
+                    for s in steps[: steps.index(failed_step) + 1]
+                ],
+            }
+
+        builds = parse_builds({"builds": [build(A, "deploy-frozen"), build(B, "deploy-unlock")]})
+        assert {b.sha: b.held for b in builds} == {A: True, B: False}
 
     def test_an_empty_answer_is_no_builds(self):
         assert parse_builds({}) == []
@@ -97,6 +118,89 @@ class TestAssemble:
             unavailable=[],
         )
         assert report.builds[0].live is False
+
+
+T0 = datetime(2026, 11, 14, 9, 0, tzinfo=UTC)
+D = "d" * 40
+
+
+def _at(minutes: int) -> datetime:
+    return T0 + timedelta(minutes=minutes)
+
+
+class TestRerun:
+    """Which held build to re-run once the freeze lifts: the newest commit
+    held back, by its first build, and only while nothing has shipped it."""
+
+    def _rerun(self, builds: list[Build], api_commit: str | None = None) -> str | None:
+        newest_first = sorted(builds, key=lambda b: b.created_at or T0, reverse=True)
+        held = to_rerun(newest_first, api_commit)
+        return held.log_url if held else None
+
+    def test_of_two_held_commits_the_newer_carries_the_older(self):
+        builds = [
+            Build(A, "SUCCESS", _at(0), None, "a"),
+            Build(B, "FAILURE", _at(10), None, "b", held=True),
+            Build(C, "FAILURE", _at(20), None, "c", held=True),
+        ]
+        assert self._rerun(builds, api_commit=A) == "c"
+
+    def test_an_older_commit_re_run_during_the_freeze_is_not_the_newest(self):
+        """A re-run is a new build of an old commit: its own build time
+        would wrongly make it the newest."""
+        builds = [
+            Build(B, "FAILURE", _at(10), None, "b", held=True),
+            Build(C, "FAILURE", _at(20), None, "c", held=True),
+            Build(B, "FAILURE", _at(30), None, "b again", held=True),
+        ]
+        assert self._rerun(builds) == "c"
+
+    def test_the_newest_build_of_the_commit_is_named(self):
+        builds = [
+            Build(C, "FAILURE", _at(20), None, "c", held=True),
+            Build(C, "FAILURE", _at(30), None, "c again", held=True),
+        ]
+        assert self._rerun(builds) == "c again"
+
+    def test_nothing_to_re_run_once_it_or_a_later_commit_has_shipped(self):
+        held = Build(C, "FAILURE", _at(20), None, "c", held=True)
+        assert self._rerun([held, Build(D, "SUCCESS", _at(40), None, "d")]) is None, "merged after"
+        assert self._rerun([held, Build(C, "SUCCESS", _at(40), None, "c rerun")]) is None
+        assert self._rerun([held], api_commit=C) is None
+
+    def test_an_older_commit_shipping_does_not_ship_the_held_one(self):
+        builds = [
+            Build(C, "FAILURE", _at(20), None, "c", held=True),
+            Build(B, "SUCCESS", _at(10), None, "b"),
+            Build(B, "SUCCESS", _at(40), None, "b re-run, already live"),
+        ]
+        assert self._rerun(builds, api_commit=B) == "c"
+
+    def test_a_failed_build_is_not_held_and_nothing_is_named(self):
+        assert self._rerun([Build(C, "FAILURE", _at(20), None, "c")]) is None
+
+    def test_the_report_carries_the_held_rows_and_the_one_to_re_run(self):
+        report = assemble(
+            [
+                Build(C, "FAILURE", _at(20), None, "c", held=True),
+                Build(A, "SUCCESS", _at(0), None, "a"),
+            ],
+            api_commit=A,
+            web_commit=None,
+            subjects={C: "api: the held one"},
+            repository="o/r",
+            unavailable=[],
+        )
+        assert [(r.sha, r.held, r.live) for r in report.builds] == [
+            (C, True, False),
+            (A, False, True),
+        ]
+        assert report.rerun is not None
+        assert (report.rerun.sha, report.rerun.subject, report.rerun.log_url) == (
+            C,
+            "api: the held one",
+            "c",
+        )
 
 
 class _Source:
