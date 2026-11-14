@@ -153,6 +153,19 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         name  = "OPERATOR_API_MAX_INSTANCES"
         value = tostring(var.max_instances)
       }
+
+      # Release history (api/src/beats/operator/releases.py): the commit both
+      # services were deployed with in this apply, and where the web app's
+      # version.json is served.
+      env {
+        name  = "OPERATOR_API_COMMIT"
+        value = var.container_image_tag
+      }
+
+      env {
+        name  = "OPERATOR_WEB_ORIGIN"
+        value = var.webauthn_origin
+      }
     }
   }
 
@@ -171,6 +184,17 @@ resource "google_project_iam_member" "operator_monitoring_viewer" {
 
   project = var.project_id
   role    = "roles/monitoring.viewer"
+  member  = "serviceAccount:${google_service_account.beats_operator[0].email}"
+}
+
+# Release history: Cloud Build's build list, read-only. A build viewer can
+# read every step's arguments, so api/cloudbuild.yaml must never put a secret
+# in one.
+resource "google_project_iam_member" "operator_build_viewer" {
+  count = var.operator_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/cloudbuild.builds.viewer"
   member  = "serviceAccount:${google_service_account.beats_operator[0].email}"
 }
 
