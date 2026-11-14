@@ -17,6 +17,7 @@ from beats.infrastructure.repositories import (
     MongoUserRepository,
 )
 from beats.operator.commands import CommandContext
+from beats.operator.deploy_freeze import DeployFreeze
 from beats.operator.settings import OperatorIdentity
 
 
@@ -29,7 +30,9 @@ class RefusingBillingPresence:
         raise RuntimeError("the operator's organisation service never reads billing")
 
 
-def build_command_context(db: AsyncDatabase, operator: OperatorIdentity) -> CommandContext:
+def build_command_context(
+    db: AsyncDatabase, operator: OperatorIdentity, *, freeze: DeployFreeze | None = None
+) -> CommandContext:
     """The services a command delegates to — each owning the rule the command
     invokes, so the rule never lives in two places."""
     users = MongoUserRepository(db.users)
@@ -44,4 +47,5 @@ def build_command_context(db: AsyncDatabase, operator: OperatorIdentity) -> Comm
             billing=RefusingBillingPresence(),
         ),
         devices=MongoDeviceRegistrationRepository(db.device_registrations),
+        freeze=freeze,
     )

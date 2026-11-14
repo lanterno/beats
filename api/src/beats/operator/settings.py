@@ -100,6 +100,8 @@ class OperatorSettings(BaseSettings):
     # Unset, each reads as "unknown" and the rest of the page still answers.
     api_commit: str = Field(default="", validation_alias="OPERATOR_API_COMMIT")
     web_origin: str = Field(default="", validation_alias="OPERATOR_WEB_ORIGIN")
+    # The deploy freeze's bucket (operator/deploy_freeze.py), set by Terraform.
+    freeze_bucket: str = Field(default="", validation_alias="OPERATOR_FREEZE_BUCKET")
     github_repository: str = Field(
         default="lanterno/beats", validation_alias="OPERATOR_GITHUB_REPOSITORY"
     )

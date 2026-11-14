@@ -13,6 +13,8 @@ in the **body** — an address in a URL is in Cloud Run's request log for 30
 days, the reason `/api/reports` takes its token in a header.
 """
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
@@ -214,6 +216,29 @@ async def releases(request: Request, operator: CurrentOperator) -> ReleasesRepor
         state.release_source,
         api_commit=settings.api_commit or None,
         repository=settings.github_repository,
+    )
+
+
+class FreezeState(BaseModel):
+    available: bool
+    frozen: bool
+    until: datetime | None = None
+    reason: str | None = None
+    set_by: str | None = None
+
+
+@router.get("/deploy-freeze", response_model=FreezeState)
+async def deploy_freeze(request: Request, operator: CurrentOperator) -> FreezeState:
+    """Whether the API's deploys are frozen, until when and why. Not
+    available where no freeze bucket is configured."""
+    store = getattr(request.app.state, "deploy_freeze", None)
+    if store is None:
+        return FreezeState(available=False, frozen=False)
+    flag = await store.get()
+    if flag is None or not flag.in_force(datetime.now(UTC)):
+        return FreezeState(available=True, frozen=False)
+    return FreezeState(
+        available=True, frozen=True, until=flag.until, reason=flag.reason, set_by=flag.set_by
     )
 
 

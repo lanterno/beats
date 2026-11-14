@@ -55,8 +55,12 @@ def get_operator_reads(request: Request, db: OperatorDbDep) -> OperatorReads:
 OperatorReadsDep = Annotated[OperatorReads, Depends(get_operator_reads)]
 
 
-def get_command_context(db: OperatorDbDep, operator: CurrentOperator) -> CommandContext:
-    return build_command_context(db, operator)
+def get_command_context(
+    request: Request, db: OperatorDbDep, operator: CurrentOperator
+) -> CommandContext:
+    return build_command_context(
+        db, operator, freeze=getattr(request.app.state, "deploy_freeze", None)
+    )
 
 
 CommandContextDep = Annotated[CommandContext, Depends(get_command_context)]

@@ -28,6 +28,7 @@ from beats.domain.models import AccountLimits, SuspensionKind
 from beats.domain.organisations import OrganisationService
 from beats.infrastructure.operator_store import MongoErasureRequests, MongoPlatformControlsStore
 from beats.infrastructure.repositories import MongoDeviceRegistrationRepository
+from beats.operator.deploy_freeze import DeployFreeze, Freeze, FreezeUnavailable
 from beats.operator.settings import OperatorIdentity
 from beats.platform_controls import LIMITS, MAX_PAUSE, ControlName, control_from_doc
 
@@ -39,6 +40,9 @@ class CommandContext:
     accounts: AccountService
     organisations: OrganisationService
     devices: MongoDeviceRegistrationRepository
+    # The deploy freeze's flag (operator/deploy_freeze.py); None where no
+    # bucket is configured — the job runner, a local run.
+    freeze: DeployFreeze | None = None
 
 
 class OperatorCommand(Protocol):
@@ -543,6 +547,96 @@ class CloseErasureRequest:
         return None
 
 
+# ── the deploy freeze ────────────────────────────────────────────────
+
+
+class FreezeArgs(BaseModel):
+    """Every freeze ends: `until` is required and capped like a pause."""
+
+    until: datetime
+    reason: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def _ends(self) -> FreezeArgs:
+        now = datetime.now(UTC)
+        until = self.until if self.until.tzinfo else self.until.replace(tzinfo=UTC)
+        if until <= now:
+            raise ValueError("until is already past")
+        if until > now + MAX_PAUSE:
+            raise ValueError(f"a freeze lasts at most {MAX_PAUSE.days} days; set it again after")
+        self.until = until
+        return self
+
+
+def _freeze_store(ctx: CommandContext) -> DeployFreeze:
+    if ctx.freeze is None:
+        raise FreezeUnavailable()
+    return ctx.freeze
+
+
+async def _freeze_state(ctx: CommandContext) -> dict[str, Any]:
+    flag = await _freeze_store(ctx).get()
+    if flag is None or not flag.in_force(datetime.now(UTC)):
+        return {"frozen": False}
+    return {"frozen": True, "until": flag.until.isoformat(), "set_by": flag.set_by}
+
+
+class NoArgs(BaseModel):
+    """A command whose subject is fixed and that takes nothing else."""
+
+
+class _DeployCommand:
+    subject_kind = "deploy"
+    window: timedelta | None = None
+    args_model: type[BaseModel] = NoArgs
+
+    def subject_id(self, args: Any) -> str:
+        return "api"
+
+    async def confirmation(self, ctx: CommandContext, args: Any) -> str | None:
+        return None
+
+    async def describe(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        return await _freeze_state(ctx)
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        raise NotImplementedError
+
+    async def on_queued(self, ctx: CommandContext, args: Any) -> None:
+        return None
+
+
+class FreezeDeploys(_DeployCommand):
+    """Holds back the API's builds until `until`: a frozen build skips its
+    apply and goes red. The web app ships from its own workflow and is not
+    held."""
+
+    name = "deploy.freeze"
+    args_model = FreezeArgs
+
+    async def execute(self, ctx: CommandContext, args: FreezeArgs) -> dict[str, Any]:
+        await _freeze_store(ctx).set(
+            Freeze(
+                until=args.until,
+                reason=args.reason,
+                set_by=ctx.operator.sub,
+                set_at=datetime.now(UTC),
+            )
+        )
+        return await _freeze_state(ctx)
+
+
+class UnfreezeDeploys(_DeployCommand):
+    """Lifts the freeze. A build held back does not deploy by itself: re-run
+    the newest one."""
+
+    name = "deploy.unfreeze"
+
+    async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
+        await _freeze_store(ctx).clear()
+        return await _freeze_state(ctx)
+
+
 # ── the irreversible work: jobs with a window ────────────────────────
 
 
@@ -712,6 +806,8 @@ COMMANDS: dict[str, OperatorCommand] = {
         ClearControl(),
         LogErasureRequest(),
         CloseErasureRequest(),
+        FreezeDeploys(),
+        UnfreezeDeploys(),
         GrantOwner(),
         BeginClosing(),
         CancelClosing(),
