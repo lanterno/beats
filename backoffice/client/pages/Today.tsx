@@ -106,7 +106,7 @@ function StatusPanel() {
 			note={
 				s.published
 					? `${s.state}${s.message ? ` — ${s.message}` : ""}${s.updated_at ? `, since ${minuteOf(s.updated_at)} UTC` : ""}.`
-					: "Nothing has been published yet; the page reads as operational."
+					: "Nothing has been published yet, so the public page says it could not load the status. Publish once to give it one."
 			}
 		>
 			<div className="flex flex-wrap items-center gap-3 px-6 pb-5">
