@@ -1,9 +1,9 @@
 """The database's size over time (docs/backoffice.md § The pages, Capacity):
 kept once a UTC day by the job runner, safe when two runs overlap, never in
 the way of the queue the runner exists for, and read back by the capacity
-route as a series and a pace. The pace's arithmetic is
-beats/test_operator_growth.py's; the coach's cost on the same route is
-test_operator.py's `TestCapacityRead`.
+route as a series and a pace; and the cluster's connections beside it. The
+pace's arithmetic is beats/test_operator_growth.py's; the coach's cost on the
+same route is test_operator.py's `TestCapacityRead`.
 
 The runner is driven the way `_run_jobs` in test_operator_commands.py drives
 it: a fresh client on a fresh loop, because in production it is its own
@@ -183,3 +183,28 @@ class TestCapacityGrowth:
         audit = next(c for c in body["collections"] if c["name"] == "operator_audit")
         assert audit["growth_bytes_a_month"] == pytest.approx(2 * MB * DAYS_A_MONTH / 10)
         assert audit["growth_share_a_month"] == pytest.approx(0.5 * DAYS_A_MONTH / 10)
+
+
+class TestConnections:
+    def test_the_clusters_connections_are_read(self, operator_client):
+        connections = operator_client.get("/api/operator/capacity").json()["connections"]
+        assert connections["current"] >= 1
+        assert connections["allowed"] > connections["current"]
+
+    def test_a_refused_server_status_leaves_the_rest_of_the_page(
+        self, operator_client, monkeypatch
+    ):
+        """A database user without the action — the grant not yet made — is
+        a tile that says it cannot tell, not a page that fails."""
+        original = AsyncDatabase.command
+
+        async def refuse(self, command, *args, **kwargs):
+            if command == "serverStatus":
+                raise OperationFailure("not authorized on admin to execute command", code=13)
+            return await original(self, command, *args, **kwargs)
+
+        monkeypatch.setattr(AsyncDatabase, "command", refuse)
+        resp = operator_client.get("/api/operator/capacity")
+        assert resp.status_code == 200
+        assert resp.json()["connections"] is None
+        assert resp.json()["collections"]
