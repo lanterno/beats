@@ -109,8 +109,15 @@ void main() {
     final before = DateTime.now();
     await tester.enterText(find.byType(TextField), 'kite 25m ago');
     await tester.pump();
-    expect(find.text('Switch to Studio Kite from ${_hm(before.subtract(const Duration(minutes: 25)))}'),
-        findsOneWidget);
+    // The sheet reads the wall clock itself, somewhere between these two
+    // readings, and the minute can turn in between: its title names one of
+    // the two.
+    final after = DateTime.now();
+    final titles = {
+      for (final t in [before, after])
+        'Switch to Studio Kite from ${_hm(t.subtract(const Duration(minutes: 25)))}',
+    };
+    expect(find.byWidgetPredicate((w) => w is Text && titles.contains(w.data)), findsOneWidget);
 
     await tester.tap(find.text('Switch'));
     await tester.pumpAndSettle();
