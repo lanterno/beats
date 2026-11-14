@@ -823,6 +823,141 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HealthFigures": {
+        "description": "What Monitoring answered. A figure Google had no points for is None,\nnever zero: an empty series is \"no data\", not \"no errors\".",
+        "properties": {
+          "availability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Availability"
+          },
+          "error_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Share"
+          },
+          "instances": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instances"
+          },
+          "p95_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P95 Latency Ms"
+          },
+          "refused_writes": {
+            "items": {
+              "$ref": "#/components/schemas/RouteFigure"
+            },
+            "title": "Refused Writes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "availability",
+          "error_share",
+          "p95_latency_ms",
+          "instances"
+        ],
+        "title": "HealthFigures",
+        "type": "object"
+      },
+      "HealthReport": {
+        "properties": {
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Seconds"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "availability_target": {
+            "default": 0.995,
+            "title": "Availability Target",
+            "type": "number"
+          },
+          "figures": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthFigures"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_instances": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Instances"
+          },
+          "state": {
+            "enum": [
+              "live",
+              "stale",
+              "unavailable"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "as_of",
+          "age_seconds",
+          "figures",
+          "max_instances"
+        ],
+        "title": "HealthReport",
+        "type": "object"
+      },
       "MembershipSummary": {
         "properties": {
           "active": {
@@ -1114,6 +1249,24 @@
           "due"
         ],
         "title": "QueueRow",
+        "type": "object"
+      },
+      "RouteFigure": {
+        "properties": {
+          "route": {
+            "title": "Route",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "route",
+          "value"
+        ],
+        "title": "RouteFigure",
         "type": "object"
       },
       "SignupWave": {
@@ -1717,6 +1870,28 @@
           }
         },
         "summary": "Erasure Requests",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/health": {
+      "get": {
+        "description": "Whether the product is healthy, from Cloud Monitoring: availability,\nthe share of 5xx, p95 latency, instances against their ceiling and\nrefused writes per route. Cached a minute; a Google failure answers the\nlast figures and their age, and off Google Cloud it answers\n\"unavailable\" \u2014 never an invented number.",
+        "operationId": "health_api_operator_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
         "tags": [
           "operator"
         ]

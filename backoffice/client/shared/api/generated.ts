@@ -292,6 +292,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health
+         * @description Whether the product is healthy, from Cloud Monitoring: availability,
+         *     the share of 5xx, p95 latency, instances against their ceiling and
+         *     refused writes per route. Cached a minute; a Google failure answers the
+         *     last figures and their age, and off Google Cloud it answers
+         *     "unavailable" — never an invented number.
+         */
+        get: operations["health_api_operator_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/jobs": {
         parameters: {
             query?: never;
@@ -720,6 +744,43 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HealthFigures
+         * @description What Monitoring answered. A figure Google had no points for is None,
+         *     never zero: an empty series is "no data", not "no errors".
+         */
+        HealthFigures: {
+            /** Availability */
+            availability: number | null;
+            /** Error Share */
+            error_share: number | null;
+            /** Instances */
+            instances: number | null;
+            /** P95 Latency Ms */
+            p95_latency_ms: number | null;
+            /** Refused Writes */
+            refused_writes?: components["schemas"]["RouteFigure"][];
+        };
+        /** HealthReport */
+        HealthReport: {
+            /** Age Seconds */
+            age_seconds: number | null;
+            /** As Of */
+            as_of: string | null;
+            /**
+             * Availability Target
+             * @default 0.995
+             */
+            availability_target: number;
+            figures: components["schemas"]["HealthFigures"] | null;
+            /** Max Instances */
+            max_instances: number | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "live" | "stale" | "unavailable";
+        };
         /** MembershipSummary */
         MembershipSummary: {
             /** Active */
@@ -834,6 +895,13 @@ export interface components {
             since: string | null;
             /** Subject Id */
             subject_id: string;
+        };
+        /** RouteFigure */
+        RouteFigure: {
+            /** Route */
+            route: string;
+            /** Value */
+            value: number;
         };
         /**
          * SignupWave
@@ -1230,6 +1298,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErasureRequestState"][];
+                };
+            };
+        };
+    };
+    health_api_operator_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthReport"];
                 };
             };
         };
