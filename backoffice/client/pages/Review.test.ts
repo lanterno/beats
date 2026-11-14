@@ -152,6 +152,7 @@ describe("the control commands", () => {
 			"until",
 			"reason",
 			"value",
+			"network",
 		]);
 	});
 
