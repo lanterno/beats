@@ -215,7 +215,7 @@ class TestDecide:
         code, decision, err = self._decide(tmp_path, self._flag(timedelta(hours=1)))
         assert code == 0, err
         assert decision == "frozen"
-        assert "re-run the newest build" in err
+        assert "re-run the build the back office's Releases names" in err
 
     def test_no_flag_decides_as_usual(self, tmp_path):
         code, decision, err = self._decide(tmp_path, "missing")
