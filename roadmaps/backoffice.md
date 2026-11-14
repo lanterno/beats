@@ -9,11 +9,11 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. No stage has started.
+from. Stage 1, the pages reorganised around the work, shipped on 2026-11-14
+and is in docs/backoffice.md § *The pages*; no other stage has started.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 1 | The pages, reorganised around the work, on today's data | The redesign itself | Nothing | Nothing |
 | 2 | Switches: pause the coach, webhooks, imports or signups; the global write limits | Build | Nothing | One collection on an Atlas role; the limit values |
 | 3 | Signups from one network | Keep, and improve | Its action needs stage 2; the signal does not | The PRIVACY.md sentence; one new secret |
 | 4 | Live health from Cloud Monitoring | Build | Nothing | The availability target |
@@ -25,7 +25,8 @@ from. No stage has started.
 | – | Reasons on commands, incidents, restrictions in force, an audit of lookups | No answer given | [Below](#not-decided-the-new-records) | The decision |
 
 The numbers are a suggested order. Apart from what the table says, any stage
-can be picked up alone. Five smaller items from before the redesign are at the
+can be picked up alone. Stage 1's screens are built; the rows below marked
+"then 3 and 4 add to it" are what later stages add to a built page. Five smaller items from before the redesign are at the
 end of *Work*.
 
 ## The design
@@ -119,60 +120,6 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
   Each stage names the sentence in `docs/` it overturns.
 
 ## Work
-
-### Stage 1. Reorganise the pages around the work
-
-**Goal:** the operator lands on what needs them, reaches any account or command
-in two keystrokes, and sees what a command will do before doing it. No new data
-source, no new collection, no Terraform.
-
-One PR per item, in this order. Frontend only unless it says otherwise.
-
-1. **The frame.** The mock's `Sidebar` and `Topbar` in
-   `backoffice/client/app/App.tsx`, and `pages/Compliance.tsx` split into Jobs,
-   Audit and Compliance. `Abuse` becomes Trust and safety.
-2. **One account.** `Accounts` and `Account`, over `POST /accounts/lookup` and
-   `GET /accounts/{user_id}` (`AccountDetail`, `api/src/beats/operator/reads.py`).
-   Two small reads are new (backend, its own commit): coach spend per day for
-   one account, and `audit_log` filtered by `subject_id` (it takes only a
-   `limit` today) for "What has been done to this account". "You opened
-   recently" is ids only, in `localStorage`, cleared after a week.
-3. **Review before acting.** Replaces the inline `CommandForm`. "What will
-   change" needs a backend route, `POST /commands/{name}/preview`, which
-   validates the args and answers what `describe()` returns and whether a
-   typed confirmation will be asked for. It calls neither `execute()` nor
-   `on_queued()`, and writes nothing. "Who notices" and "Can you undo it" are
-   fixed text per command. Windowed commands say when they run.
-4. **The queue.** A new read returns the rows behind the Attention counts, ids
-   and dates only, each with a due date from the constants already in
-   `reads.py`. A row leaves when its condition clears, because nothing stores
-   that it was handled. Superseded approvals and absence requests stay per
-   organisation, with no member named.
-5. **Today.** `Main` without the incident and release panels: one sentence
-   saying what matters, what is due next, jobs waiting out a window, the last
-   few audit rows, and storage and coach spend.
-6. **The palette.** Goes to pages, opens a command's review, and finds one
-   account by exact address or id through the same POST. A command never runs
-   from it.
-7. **Runbooks.** Static pages in the bundle, each with a `reviewed_on`, marked
-   stale after six months, and linked from the queue rows they fit. Start from
-   the `documentation` blocks in `terraform/alerts.tf`. A bad release's
-   runbook says to revert on `main`.
-
-**Tests:** the preview route's contract, including that it changes nothing and
-that a `viewer` is refused, as for a command; the new reads against
-`TestOperatorWall`'s sentinels; the due-date logic at its boundaries; the
-palette refusing a fragment.
-
-**Done when** every page marked stage 1 above works on real data locally, and
-no control offers something the API cannot do.
-
-**Must not:** add prefix, fuzzy or "did you mean" matching to the palette; put
-an address in a URL, in browser history or in the recent list; show a later
-stage's panel with placeholder figures. The queue must not grow its own stored
-state in this stage.
-
-**Overturns:** the list of pages in docs/backoffice.md § *The pages*.
 
 ### Stage 2. Switches and the global limits
 
