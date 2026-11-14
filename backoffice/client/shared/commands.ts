@@ -20,6 +20,11 @@ export interface CommandField {
 	kind: "text" | "number" | "checkbox";
 	/** Said under the field, where the label is not enough. */
 	hint?: string;
+	/** A page may hand this box its value in the link it opens the review
+	 * with (`startingArgs`). Only for what names the thing acted on — a
+	 * device, a network — never for what is said or decided: a link anyone
+	 * can craft must not open a status post already written. */
+	linked?: true;
 }
 
 /** One row of "what will change". */
@@ -365,6 +370,7 @@ export const CONTROL_COMMANDS: CommandSpec[] = [
 								label: "Network key",
 								kind: "text",
 								hint: "From the Trust page's signal, to slow that one network. Empty slows everyone. Ends at UTC midnight at the latest.",
+								linked: true,
 							},
 						]
 					: PAUSE_FIELDS,
@@ -645,3 +651,21 @@ export const emptyArgs = (spec: CommandSpec, subject: string): Record<string, un
 	Object.fromEntries(
 		fieldsOf(spec, subject).map((f) => [f.key, f.kind === "checkbox" ? false : ""]),
 	);
+
+/**
+ * The form a review opens with: every box empty but the ones a page may
+ * hand over (`linked`), each read through `given` — the link's query today;
+ * whatever carries it, nothing else is read.
+ */
+export function startingArgs(
+	spec: CommandSpec,
+	subject: string,
+	given: (key: string) => string | null,
+): Record<string, unknown> {
+	const args = emptyArgs(spec, subject);
+	for (const field of fieldsOf(spec, subject)) {
+		const value = field.linked && field.kind !== "checkbox" ? given(field.key) : null;
+		if (value !== null) args[field.key] = value;
+	}
+	return args;
+}

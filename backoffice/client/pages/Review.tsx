@@ -21,11 +21,11 @@ import {
 	type CommandField,
 	type CommandSpec,
 	commandSpec,
-	emptyArgs,
 	FAMILIES,
 	familyOf,
 	fieldsOf,
 	ON_THE_RECORD,
+	startingArgs,
 } from "@/shared/commands";
 import { plainMessage } from "@/shared/lib/errors";
 import { useSettled } from "@/shared/lib/useSettled";
@@ -200,18 +200,13 @@ function CommandReview() {
 	const { command = "", subject = "" } = useParams();
 	const spec = commandSpec(command);
 	const queryClient = useQueryClient();
-	// A page may hand a field's value in the URL (the Trust page hands the
-	// network key to slow); only declared fields are read, nothing else.
+	// A page may hand a box its value in the URL (the Trust page hands the
+	// network key to slow) — only a box marked `linked`, which names what is
+	// acted on; a crafted link fills nothing that is said or decided.
 	const [search] = useSearchParams();
-	const [args, setArgs] = useState<Record<string, unknown>>(() => {
-		if (!spec) return {};
-		const empty = emptyArgs(spec, subject);
-		for (const field of fieldsOf(spec, subject)) {
-			const given = search.get(field.key);
-			if (given !== null && field.kind !== "checkbox") empty[field.key] = given;
-		}
-		return empty;
-	});
+	const [args, setArgs] = useState<Record<string, unknown>>(() =>
+		spec ? startingArgs(spec, subject, (key) => search.get(key)) : {},
+	);
 	const family = FAMILIES[spec?.family ?? "account"];
 	const fields = spec ? fieldsOf(spec, subject) : [];
 	const [typed, setTyped] = useState("");
