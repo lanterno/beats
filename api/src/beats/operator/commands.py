@@ -831,7 +831,12 @@ class CancelJob:
         job = await MongoOperatorJobs(ctx.db).get(args.job_id)
         if job is None:
             raise JobNotFound()
-        return {"command": job["command"], "state": job["state"]}
+        return {
+            "command": job["command"],
+            "state": job["state"],
+            "subject_id": job.get("subject_id"),
+            "run_after": job.get("run_after"),
+        }
 
     async def execute(self, ctx: CommandContext, args: Any) -> dict[str, Any]:
         from beats.infrastructure.operator_jobs import MongoOperatorJobs
