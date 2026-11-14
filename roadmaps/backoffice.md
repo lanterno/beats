@@ -9,9 +9,9 @@ prerequisites in terraform/README.md § *Operator Deployment*.
 On 2026-11-08 the owner reviewed a redesign of the whole back office and
 answered what it assumes but nothing provides yet. This file turns those
 answers into stages that someone with no memory of the conversation can start
-from. Stages 1, 2, 3 and 8 — the pages reorganised around the work, the
-switches with the global limits, sign-ups from one network and the erasure
-request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
+from. Stages 1, 2, 3, 4 and 8 — the pages reorganised around the work, the
+switches with the global limits, sign-ups from one network, live health and
+the erasure request log — shipped on 2026-11-14 and are in docs/backoffice.md § *The
 pages* and § *Controls*; no other stage has started.
 
 **The owner's inputs were decided on 2026-11-14**, so no stage in this file
@@ -20,7 +20,6 @@ done by hand. Stage 7 lives in its own file and keeps its own open question.
 
 | | Work | The owner's answer | Blocked by | Needs the owner for |
 |---|---|---|---|---|
-| 4 | Live health from Cloud Monitoring | Build | Nothing | Nothing (target decided below) |
 | 5 | Release history | Build | Nothing | Nothing |
 | 6 | Deploy freeze | Build | Nothing | Nothing |
 | 7 | Customer updates | Build | Its own file, [status-page.md](status-page.md) | The wording of the PRIVACY.md sentence |
@@ -48,7 +47,7 @@ hand-made step **where it reasonably can** — this is encouraged, not a hard
 rule, and a stage that genuinely needs one adds it, with a working default
 where a default is possible and a sentence in its docs saying why. Stage 3
 shows the preferred shape: its day key is derived from `JWT_SECRET`, which the
-public API already holds, rather than from a new secret. For stages 4 to 6,
+public API already holds, rather than from a new secret. For stages 5 and 6,
 prefer what the service can learn for itself (project, region and service
 name from the metadata server), have a value Terraform already knows set by
 Terraform rather than by a person, and make a deployment that is not on Google
@@ -64,15 +63,15 @@ figure, person and organisation in it is invented.
 
 | Mock screen | Replaces | Stage |
 |---|---|---|
-| `Main` (Today) | `pages/Today.tsx` | Built, 1; 4 and 5 add to it |
+| `Main` (Today) | `pages/Today.tsx` | Built, 1 and 4; 5 adds to it |
 | `Queue` | `pages/Queue.tsx` | Built, 1 |
 | `Palette` (⌘K) | `app/Palette.tsx` | Built, 1 |
 | `Runbooks` | `pages/Runbooks.tsx` | Built, 1 |
 | `Accounts`, `Account` | `pages/Accounts.tsx`, `pages/Account.tsx` | Built, 1 |
 | `Review` (review before acting) | `pages/Review.tsx` | Built, 1; serves account, control and erasure-request commands |
 | `Orgs`, `Org` | `pages/Organisations.tsx` | Built, 1 |
-| `Trust` | `pages/Trust.tsx` | Built, 1 and 3; 4 adds to it |
-| `Capacity` | `pages/Capacity.tsx` | Built, 1; 4 adds to it |
+| `Trust` | `pages/Trust.tsx` | Built, 1 and 3 |
+| `Capacity` | `pages/Capacity.tsx` | Built, 1 and 4 |
 | `Jobs`, `Audit`, `Compliance` | `pages/Jobs.tsx`, `Audit.tsx`, `Compliance.tsx` | Built, 1 and 8 |
 | `Access` (access and controls) | `pages/Access.tsx` | Built, 2 |
 | `Releases` | Nothing | 5 and 6 |
@@ -148,71 +147,11 @@ cd backoffice && pnpm gen:types                  # after any change to the opera
 
 ## Work
 
-### Stage 4. Live health from Cloud Monitoring
-
-**Goal:** Today and Capacity show whether the product is healthy, without opening
-the Google console.
-
-**Not blocked by [secret-manager.md](secret-manager.md).** These reads never
-touch the API's Cloud Run spec.
-
-**Build:**
-
-- **The grant:** `roles/monitoring.viewer` on the `beats-operator` service
-  account in `terraform/operator.tf`, gated on `operator_enabled` like the rest.
-  It includes `monitoring.timeSeries.list` and `monitoring.alerts.list`.
-- **A narrow port** in the shape of `OperatorReads`, implemented with
-  `httpx.AsyncClient` and a metadata-server token, as `operator/iap.py` and
-  `auth/oidc.py` make outbound calls. No Google client library: the image is
-  shared with the public API.
-- **`GET /api/operator/health`,** cached in the process for 30 to 60 seconds. The
-  operator runs one instance, so a local cache is the whole cache. It answers
-  the figures with an `as_of`. If Google fails, it answers the last figures and
-  says how old they are. Locally, with no project configured, it answers
-  "unavailable" and the page shows today's console link. It never shows
-  invented numbers.
-- **The figures:** availability (the uptime checks), share of 5xx and p95
-  latency (the filters of the `api` dashboard in `terraform/monitoring.tf`, with
-  a comment at both ends, since each must change with the other), instances
-  against `var.max_instances` (read off the service's own Cloud Run
-  description through the metadata server, not a new env), refused writes per route
-  (`write_limit_refusals`), restore sizes (`import_bytes`), and the job runner's
-  last completed run.
-- **Open alerts:** `GET /v3/projects/{id}/alerts`, Google's `alerts.list`.
-  Google's docs marked it as public preview on 2026-11-08, so read the current
-  reference first. If it has gone, link to the console as today. An alert channel
-  pointing at the operator cannot work, because IAP refuses it, and a broker is
-  deliberately absent.
-
-**The availability target, decided 2026-11-14: 99.5% a month** (about 3 h
-40 min of downtime), on the uptime checks of `api.lifepete.com/health` and
-`lifepete.com/`. Why not 99.9%: the API is one Cloud Run service in one
-region with cold starts of about 30 s, every API deploy is a revision
-switch, and one person operates it; 43 minutes a month would be an error
-budget spent by the first bad deploy and ignored thereafter. Why not lower:
-the product holds a day job's timesheet, and a half day's outage a month is
-the most the people who rely on it would call reliable. Show the budget left
-in the month against it; raise it when the figures have beaten it for three
-months running.
-
-**Tests:** the parsing of Monitoring's responses (empty series, a gap, a single
-point), the stale answer, and the route's auth. A fake of the port, never a
-stubbed Google in a live page.
-
-**Done when** Today and Capacity show live figures in production, and revoking
-the grant turns them into a clear "old figures" state with the page still up.
-
-**Must not:** store a time series; offer a query box; add a per-account label to
-any metric; let a Google failure break a page that has other things on it.
-
-**Overturns:** docs/backoffice.md § *The pages*, *Capacity*: "Latency, error rates
-and instance counts are Cloud Monitoring's — linked, not rebuilt."
-
 ### Stage 5. Release history
 
 **Goal:** when something breaks, see what shipped just before it.
 
-**Build:** `GET /api/operator/releases`, cached like stage 4, and the `Releases`
+**Build:** `GET /api/operator/releases`, cached like live health (`HealthCache` in `operator/health.py`), and the `Releases`
 screen without its rollback controls. Each row links to its commit, and a bad
 one links to the runbook for reverting on `main`.
 
@@ -294,7 +233,7 @@ Its own file, because it is not an operator feature: [status-page.md](status-pag
   `api/**`, `terraform/**` or `backoffice/**` runs as that account, though,
   and steady-state applies only refresh what exists: once
   [secret-manager.md](secret-manager.md)'s resources and the grants in stages
-  4 to 6 are created too, how much of this it keeps is the owner's call.
+  5 and 6 (stage 4's `roles/monitoring.viewer` is already made) are created too, how much of this it keeps is the owner's call.
 - **The landing page's deploy-state row** waits on
   [secret-manager.md](secret-manager.md): the API's Cloud Run spec carries
   `JWT_SECRET` and the DSN as plain environment values, so reading the
