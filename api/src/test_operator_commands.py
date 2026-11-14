@@ -307,6 +307,20 @@ class TestOperatorOrganisationActs:
         assert refused.status_code == 409
         assert refused.json()["code"] == "REQUESTER_NOT_HIGHEST"
 
+    def test_the_preview_says_where_the_requester_stands(self, operator_client, mongo):
+        planted = self._org(mongo)  # its one active member is an admin
+
+        def before(user_id: str) -> dict:
+            return operator_client.post(
+                "/api/operator/commands/organisation.grant_owner/preview",
+                json={"args": {"organisation_id": planted["org_id"], "user_id": user_id}},
+                headers=self.OWN,
+            ).json()["before"]
+
+        requester = before(planted["member_id"])
+        assert (requester["requester_role"], requester["highest_role"]) == ("admin", "admin")
+        assert before(str(ObjectId()))["requester_role"] is None
+
     def test_a_closing_notice_may_always_move_later(self, operator_client, mongo):
         """Amends decision 29: a notice with five days left can be extended
         by a week, while a fresh short notice is still refused."""
