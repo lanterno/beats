@@ -736,7 +736,7 @@ export const ERASURE_COMMANDS: CommandSpec[] = [
 				key: "reference",
 				label: "Reference",
 				kind: "text",
-				hint: "A ticket number or the mail's date, like T-1234 or 2026-11-14: a few letters at most, then digits. Never a name or an address.",
+				hint: "A ticket number or the mail's date, like T-1234 or 2026-11-14: a few capital letters at most, then digits. Never a name or an address.",
 			},
 			{ key: "received_on", label: "Received on (UTC day)", kind: "text", hint: "YYYY-MM-DD" },
 			{
