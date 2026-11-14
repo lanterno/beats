@@ -868,6 +868,24 @@ class TestControlCommands:
         ):
             assert self._run(operator_client, "control.set", args).status_code == 422, args
 
+    def test_a_network_is_slowed_never_blocked_and_only_until_midnight(self, operator_client):
+        soon = (datetime.now(UTC) + timedelta(minutes=10)).isoformat()
+        key = "0123456789abcdef0123456789abcdef"
+        ok = self._run(
+            operator_client,
+            "control.set",
+            {"name": "signups", "until": soon, "reason": "a wave", "value": 5, "network": key},
+        )
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["after"]["network"] == key
+        tomorrow_noon = (datetime.now(UTC) + timedelta(days=1)).replace(hour=12).isoformat()
+        for args in (
+            {"name": "signups", "until": soon, "reason": "r", "network": key},
+            {"name": "coach", "until": soon, "reason": "r", "network": key, "value": 5},
+            {"name": "signups", "until": tomorrow_noon, "reason": "r", "value": 5, "network": key},
+        ):
+            assert self._run(operator_client, "control.set", args).status_code == 422, args
+
     def test_slowed_signups_carry_a_ceiling(self, operator_client):
         soon = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
         done = self._run(

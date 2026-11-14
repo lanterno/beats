@@ -336,6 +336,34 @@ class TestOperatorWall:
         assert audit[0]["event"] == "timesheet.reopened"
         assert "details" not in audit[0]
 
+    def test_a_visitors_address_is_in_no_response_and_no_document(
+        self, operator_client, planted, mongo, test_client
+    ):
+        """The sign-up network signal keeps a counter per hashed network and
+        nothing else: the address, whole or cut to its /24, reaches no
+        operator page and no stored row."""
+        # The public API's client, seen as arriving from an address: the
+        # same client, since a fresh TestClient runs on a loop of its own.
+        transport = test_client._transport
+        was = transport.client
+        transport.client = ("203.0.113.77", 443)
+        try:
+            started = test_client.post(
+                "/api/auth/register/start",
+                json={"email": "wall-visitor@example.test", "display_name": "V"},
+            )
+        finally:
+            transport.client = was
+        assert started.status_code == 200, started.text
+        try:
+            for path, body in self._every_page(operator_client, planted):
+                assert "203.0.113" not in body, f"an address leaked on {path}"
+            for row in mongo.signup_network_counts.find({}):
+                assert "203.0.113" not in str(row)
+        finally:
+            mongo.signup_network_counts.delete_many({})
+            mongo.users.delete_many({"email": "wall-visitor@example.test"})
+
     def test_the_lookup_is_case_insensitive_and_exact(self, operator_client, planted):
         own = {"Origin": ORIGIN}
         upper = operator_client.post(

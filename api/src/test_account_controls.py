@@ -7,6 +7,7 @@ door's suspension test stays with TestSSOAPI's harness there.
 
 import logging
 import time
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -568,3 +569,117 @@ class TestPlatformControlsAPI:
             asyncio.run(dispatch_webhook_event("timer.start", {}, repo, "u-open"))  # ty: ignore[invalid-argument-type]
         assert not repo.asked
         assert any("WEBHOOKS_PAUSED_DROPPED event=timer.start" in r.message for r in caplog.records)
+
+
+class TestSignupNetworks:
+    """The sign-up network signal over HTTP (docs/backoffice.md § The pages,
+    Trust and safety): a start from an address is one counter row holding a
+    key and never the address; abandoned starts are not completions; the
+    largest group shows only at the minimum size; a network-scoped
+    slow-down refuses that network and nobody else, and expires with the
+    day's key."""
+
+    VISITOR = "203.0.113.7"
+
+    @pytest.fixture(autouse=True)
+    def _clean(self, mongo):
+        from beats import platform_controls
+
+        platform_controls.clear()
+        yield
+        mongo.signup_network_counts.delete_many({})
+        mongo.platform_controls.delete_many({})
+        mongo.users.delete_many({"email": {"$regex": "^wave"}})
+        platform_controls.clear()
+
+    @staticmethod
+    @contextmanager
+    def _from(client, address: str):
+        """The class's TestClient, seen as arriving from `address`. The same
+        client, not a second one: a fresh TestClient runs on an event loop of
+        its own, which the session's Mongo client refuses."""
+        transport = client._transport
+        was = transport.client
+        transport.client = (address, 443)
+        try:
+            yield client
+        finally:
+            transport.client = was
+
+    @staticmethod
+    def _key(address: str) -> str:
+        from beats.auth.signup_networks import key_for
+
+        key = key_for(address)
+        assert key is not None
+        return key
+
+    def _start(self, client, email: str):
+        return client.post("/api/auth/register/start", json={"email": email, "display_name": "W"})
+
+    def test_a_start_is_one_counter_row_with_a_key_and_no_address(self, client, mongo):
+        with self._from(client, self.VISITOR) as visitor:
+            assert self._start(visitor, "wave-a@example.test").status_code == 200
+        with self._from(client, "203.0.113.9") as neighbour:
+            assert self._start(neighbour, "wave-b@example.test").status_code == 200
+        rows = list(mongo.signup_network_counts.find({}))
+        assert len(rows) == 1, "two addresses in one /24 are one network"
+        row = rows[0]
+        assert row["key"] == self._key(self.VISITOR)
+        assert row["started"] == 2
+        assert row.get("completed", 0) == 0, "an abandoned start is not a completion"
+        assert "203.0.113" not in str(row)
+        assert row["expires_at"] is not None
+
+    def test_a_visitor_with_no_address_is_not_counted(self, client, mongo):
+        # The default test client has a name for a host, not an address.
+        assert self._start(client, "wave-c@example.test").status_code == 200
+        assert mongo.signup_network_counts.count_documents({}) == 0
+
+    def test_the_largest_group_shows_at_the_minimum_and_not_below(self, operator_client, mongo):
+        from datetime import datetime as dt
+
+        from beats.operator.reads import SIGNUP_NETWORK_MIN_GROUP
+        from beats.platform_controls import hour_key
+
+        key = self._key(self.VISITOR)
+        mongo.signup_network_counts.insert_one(
+            {
+                "hour": hour_key(dt.now(UTC)),
+                "key": key,
+                "started": 9,
+                "completed": SIGNUP_NETWORK_MIN_GROUP - 1,
+                "expires_at": dt.now(UTC) + timedelta(hours=1),
+            }
+        )
+        wave = operator_client.get("/api/operator/abuse").json()["signup_wave"]
+        assert wave["largest_group"] is None
+        assert wave["largest_key"] is None
+        assert wave["groups"] == 1
+
+        mongo.signup_network_counts.update_one({"key": key}, {"$inc": {"completed": 1}})
+        wave = operator_client.get("/api/operator/abuse").json()["signup_wave"]
+        assert wave["largest_group"] == SIGNUP_NETWORK_MIN_GROUP
+        assert wave["largest_key"] == key
+        assert self.VISITOR not in str(wave)
+        assert "203.0.113" not in str(wave)
+
+    def test_a_slowed_network_is_refused_and_nobody_else(self, client, mongo):
+        from beats import platform_controls
+
+        key = self._key(self.VISITOR)
+        until = (datetime.now(UTC) + timedelta(minutes=30)).isoformat()
+        mongo.platform_controls.insert_one(
+            {"name": "signups", "until": until, "value": 1, "network": key, "reason": "wave"}
+        )
+        platform_controls.clear()
+
+        with self._from(client, self.VISITOR) as same:
+            assert self._start(same, "wave-d@example.test").status_code == 200
+            refused = self._start(same, "wave-e@example.test")
+            assert refused.status_code == 409, refused.text
+            assert refused.json()["code"] == "SIGNUPS_PAUSED"
+            # Never a sign-in.
+            assert same.get("/api/auth/login/options").status_code == 200
+        with self._from(client, "198.51.100.4") as other:
+            assert self._start(other, "wave-f@example.test").status_code == 200
