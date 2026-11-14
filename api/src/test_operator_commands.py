@@ -346,6 +346,7 @@ class TestOperatorJobs:
         yield
         mongo.operator_jobs.delete_many({})
         mongo.operator_audit.delete_many({})
+        mongo.erasure_requests.delete_many({})
 
     def _user(self, mongo, email: str) -> str:
         user_id = str(ObjectId())
@@ -453,6 +454,50 @@ class TestOperatorJobs:
         assert audit["command"] == "account.erase"
         assert audit["operator_sub"] == OPERATOR_SUB
         assert "gone@example.test" not in str(audit)
+
+    def test_the_erasure_closes_the_request_that_asked_for_it(self, operator_client, mongo):
+        """A request's year starts when it is closed, and nothing asked
+        anyone to close one whose erasure had run, so it was kept forever.
+        The erasure closes it, as erased — only the requests naming that
+        account, and one whose id was typed in capitals still names it."""
+        user_id = self._user(mongo, "asked@example.test")
+        other = self._user(mongo, "other@example.test")
+        received = (datetime.now(UTC) - timedelta(days=3)).date().isoformat()
+
+        def log(**args: str) -> str:
+            done = self._run(
+                operator_client, "erasure_request.log", {"received_on": received, **args}
+            )
+            assert done.status_code == 200, done.text
+            return done.json()["after"]["request_id"]
+
+        asked = log(reference="T-1", user_id=user_id.upper())
+        elsewhere = log(reference="T-2", user_id=other)
+        no_account = log(reference="T-3")
+
+        job = self._run(
+            operator_client,
+            "account.erase",
+            {"user_id": user_id},
+            confirmation="asked@example.test",
+        ).json()["job"]
+        self._due_now(mongo, job["id"])
+        assert _run_jobs() == 1
+
+        states = {
+            r["id"]: (r["status"], r["closed_reason"])
+            for r in operator_client.get("/api/operator/erasure-requests").json()
+        }
+        assert states == {
+            asked: ("closed", "erased"),
+            elsewhere: ("open", None),
+            no_account: ("open", None),
+        }
+        expires = mongo.erasure_requests.find_one({"_id": ObjectId(asked)})["expires_at"]
+        kept = expires.replace(tzinfo=UTC) - datetime.now(UTC)
+        assert timedelta(days=364) < kept <= timedelta(days=365)
+        audit = mongo.operator_audit.find_one({"command": "account.erase", "subject_id": user_id})
+        assert audit["after"]["requests_closed"] == 1
 
     def test_a_deletion_queued_then_outranked_by_a_new_owner_fails_its_job(
         self, operator_client, mongo
