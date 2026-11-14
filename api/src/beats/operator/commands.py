@@ -348,6 +348,15 @@ class GrantOwner(_OrganisationCommand):
     name = "organisation.grant_owner"
     args_model = GrantOwnerArgs
 
+    async def describe(self, ctx: CommandContext, args: GrantOwnerArgs) -> dict[str, Any]:
+        """Where the requester stands: their role, or None when they are not
+        an active member, beside the highest role any active member holds."""
+        state = await _organisation_state(ctx, args.organisation_id)
+        members = await ctx.organisations.store.list_members(args.organisation_id)
+        mine = next((m.role.value for m in members if m.user_id == args.user_id), None)
+        top = max((m.role for m in members), key=lambda role: role.rank, default=None)
+        return {**state, "requester_role": mine, "highest_role": top.value if top else None}
+
     async def execute(self, ctx: CommandContext, args: GrantOwnerArgs) -> dict[str, Any]:
         updated = await ctx.organisations.operator_grant_owner(args.organisation_id, args.user_id)
         state = await _organisation_state(ctx, args.organisation_id)
