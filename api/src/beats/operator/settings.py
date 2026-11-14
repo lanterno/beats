@@ -87,6 +87,14 @@ class OperatorSettings(BaseSettings):
         default=10.0, validation_alias="COACH_MONTHLY_BUDGET_USD"
     )
 
+    # Live health (operator/health.py). Both are set by Terraform beside the
+    # values above, and both default to what a fresh deployment has, so
+    # nobody deploying sets either by hand. Off Google Cloud they are unused.
+    api_service_name: str = Field(default="beats-api", validation_alias="OPERATOR_API_SERVICE")
+    api_max_instances: int | None = Field(
+        default=None, validation_alias="OPERATOR_API_MAX_INSTANCES"
+    )
+
     @model_validator(mode="after")
     def _exactly_one_door(self) -> OperatorSettings:
         if bool(self.iap_audience) == bool(self.dev_operator):

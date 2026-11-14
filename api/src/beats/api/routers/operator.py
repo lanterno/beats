@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from beats.operator.dependencies import CommandContextDep, CurrentOperator, OperatorReadsDep
+from beats.operator.health import HealthReport
 from beats.operator.reads import (
     AbuseReport,
     AccountDetail,
@@ -185,6 +186,19 @@ async def access(request: Request, operator: CurrentOperator) -> list[AccessEntr
     changing it is a deploy (terraform/README.md § Operator Deployment)."""
     allowlist = request.app.state.operator_settings.allowlist
     return [AccessEntry(email=i.email, role=i.role) for i in allowlist]
+
+
+@router.get("/health", response_model=HealthReport)
+async def health(request: Request, operator: CurrentOperator) -> HealthReport:
+    """Whether the product is healthy, from Cloud Monitoring: availability,
+    the share of 5xx, p95 latency, instances against their ceiling and
+    refused writes per route. Cached a minute; a Google failure answers the
+    last figures and their age, and off Google Cloud it answers
+    "unavailable" — never an invented number."""
+    state = request.app.state
+    return await state.health_cache.report(
+        state.health_source, state.operator_settings.api_max_instances
+    )
 
 
 @router.get("/erasure-requests", response_model=list[ErasureRequestState])

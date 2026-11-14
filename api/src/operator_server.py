@@ -45,6 +45,7 @@ from beats.api.errors import envelope as error_envelope
 from beats.api.errors import http_exception_handler, validation_exception_handler
 from beats.api.routers.operator import router as operator_router
 from beats.domain.exceptions import DomainException
+from beats.operator.health import GoogleMonitoring, HealthCache
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
 from beats.operator.settings import OperatorSettings
 
@@ -79,6 +80,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     client: AsyncMongoClient = AsyncMongoClient(settings.db_dsn)
     app.state.operator_db = client[settings.db_name]
     app.state.operator_settings = settings
+    app.state.health_source = GoogleMonitoring(settings.api_service_name)
+    app.state.health_cache = HealthCache()
     logger.info("Database connected.")
     yield
     logger.info("Disconnecting from database...")
