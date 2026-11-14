@@ -7,9 +7,9 @@
  *
  * What the mock shows and this does not: a "why" and a reference per row,
  * and lookups among the rows. Neither is kept: a reason on a command and an
- * audit of each read are records decided against (docs/backoffice.md
- * § Decided against), and a column of blanks would read as "nobody said why" rather
- * than "nobody is asked".
+ * audit of each read are records the control plane does not keep
+ * (docs/backoffice.md § What it does not keep), and a column of blanks would
+ * read as "nobody said why" rather than "nobody is asked".
  */
 
 import { useQuery } from "@tanstack/react-query";

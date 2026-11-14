@@ -5,8 +5,8 @@
  * runner, and recorded in the audit like every other act.
  *
  * The access review the mock drew as a checklist is here as a list to read
- * down: nothing records that you did it, by the "not decided" list in
- * docs/backoffice.md, and a box that stored nothing would only pretend.
+ * down: nothing records that you did it (docs/backoffice.md § What it does
+ * not keep), and a box that stored nothing would only pretend.
  */
 
 import { useQuery } from "@tanstack/react-query";
