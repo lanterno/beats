@@ -664,6 +664,24 @@ class TestSignupNetworks:
         assert self.VISITOR not in str(wave)
         assert "203.0.113" not in str(wave)
 
+    def test_a_start_a_slow_down_let_through_is_not_refused_at_verify(self, client, mongo):
+        # Verify ran the start's ceiling again and counted the visitor's own
+        # start: with a ceiling of one, the one start let through could never
+        # finish. Verify fails here for want of a ceremony, never on the control.
+        from beats import platform_controls
+
+        key = self._key(self.VISITOR)
+        until = (datetime.now(UTC) + timedelta(minutes=30)).isoformat()
+        mongo.platform_controls.insert_one(
+            {"name": "signups", "until": until, "value": 1, "network": key, "reason": "wave"}
+        )
+        platform_controls.clear()
+
+        with self._from(client, self.VISITOR) as same:
+            assert self._start(same, "wave-g@example.test").status_code == 200
+            verify = same.post("/api/auth/register/verify", json={"credential": {}})
+            assert verify.json().get("code") != "SIGNUPS_PAUSED", verify.text
+
     def test_a_slowed_network_is_refused_and_nobody_else(self, client, mongo):
         from beats import platform_controls
 
