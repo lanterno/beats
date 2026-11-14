@@ -403,6 +403,20 @@ The zone id is the `cloudflare_zone_id` output and the record id is
 
 ## Operator Deployment (One-Time Setup)
 
+**What Cloud Build's account holds.** `cloudbuild-beats-api` was given
+`roles/owner`, `resourcemanager.projectIamAdmin` and `serviceUsageAdmin` by
+hand (read off the project's IAM policy on 2026-11-08), and `cloudbuild.tf`
+grants none of them; that is how CI created the operator's resources, the
+monitoring and build viewer roles, and the freeze and status buckets. Decided
+2026-11-14: **keep them until every resource in `terraform/` exists in
+production, then narrow to what `cloudbuild.tf` grants plus
+`roles/iam.securityAdmin` scoped to the project**, which is what a steady
+apply still needs to manage the bindings it owns. Narrow by hand, watch the
+next apply, and widen back if it fails — a failed apply blocks every API
+deploy. The deploy-state row on Today waits on
+[roadmaps/secret-manager.md](../roadmaps/secret-manager.md) for the same
+account's reads, and is the next thing CI would need to create.
+
 The control plane (`beats-operator`, [docs/backoffice.md](../docs/backoffice.md))
 is gated behind `operator_enabled = false` until the things below exist, each
 made once by hand because no API creates them. Until the flag flips, an apply

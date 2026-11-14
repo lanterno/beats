@@ -189,6 +189,14 @@ has neither). The audit is written under the operator the command carries.
   runs cannot take the same entry, and re-runs are safe command by command:
   erasure tombstones before it deletes, the purge is idempotent by decision
   30, and a deletion's hand-back takes the assignment with it (#414).
+  **A job running past the hour is reclaimed and run a second time,
+  concurrently** — `claim()` cannot tell a dead run from a slow one, and the
+  re-run safety above is sequential: two concurrent deletions could both read
+  a project's holders before either deletes the assignments. Accepted
+  (2026-11-14): no command comes within two orders of magnitude of an hour
+  at this platform's scale. If a purge or deletion ever approaches it, the
+  runner needs a claim heartbeat (refresh `claimed_at` while executing)
+  before the window is widened.
 - **Rules run at run time, not queue time**: a deletion whose organisation
   gained an owner while it waited is refused then.
 - **Failure**: after three attempts an entry is `failed`, shown on the
@@ -338,6 +346,12 @@ so an IAM grant made by mistake reaches a 403. Locally
 `BEATS_TEST_ENV` stands in for testcontainers: exactly one of it and the
 audience may be set, or the settings refuse to load — a stand-in left in a
 deployment stops the deploy instead of replacing the wall.
+
+**Before a second person goes on the allowlist**, even as a `viewer`,
+PRIVACY.md's "I … am the only operator" sentence names them, and the DPA's
+confidentiality term (roadmaps/legal/dpa.md) says who else sees an
+organisation's members. The allowlist is read-only on the Access page for the
+same reason: adding someone is a deploy, and the privacy text goes first.
 
 The browser's credential is IAP's cookie, which a request another site's page
 starts would carry too. So every command is a POST with a JSON body, no GET
