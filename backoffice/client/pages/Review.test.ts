@@ -192,3 +192,23 @@ describe("the control commands", () => {
 		).toEqual([{ what: "Imports", now: "Running", after: "Running" }]);
 	});
 });
+
+describe("the deploy commands", () => {
+	it("say the web app is not held, before and after", () => {
+		const rows = commandSpec("deploy.freeze")?.changes(
+			{ frozen: false },
+			{ until: "2026-11-15T09:00:00Z", reason: "r" },
+			"api",
+		);
+		expect(rows).toEqual([
+			{ what: "API deploys", now: "Shipping", after: "Frozen until 2026-11-15T09:00" },
+			{ what: "Web app deploys", now: "Shipping", after: "Still shipping" },
+		]);
+		expect(commandSpec("deploy.freeze")?.about).toContain("The web app can still ship");
+	});
+
+	it("send no subject: the freeze is the platform's", () => {
+		expect(commandSpec("deploy.freeze")?.subjectless).toBe(true);
+		expect(commandSpec("deploy.unfreeze")?.subjectless).toBe(true);
+	});
+});
