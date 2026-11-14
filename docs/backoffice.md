@@ -357,18 +357,29 @@ a reason) and `deploy.unfreeze` — the runner and the audit like every act.
   `DEPLOY_FREEZE_OBJECT` is set (`api/cloudbuild.yaml` sets it). In force: the
   decision is `frozen`, the apply is skipped, the lock is released as always,
   and **the build goes red** — green reads as "deployed", and this commit was
-  not. A missing bucket or object is no freeze, so a deployment without the
-  operator builds as before; a flag that cannot be read for any other reason
-  fails the build rather than deploy blind into what may be an incident.
+  not — in a step of its own, `deploy-frozen`, the build's last. That step is
+  how *Releases* tells a held build from a failed deploy (`parse_builds` in
+  `operator/releases.py`), and it shows it as held, with no runbook to revert
+  it; a build held before the step existed (2026-11-14) still reads as
+  failed. A missing bucket or object is no freeze, so a deployment without
+  the operator builds as before; a flag that cannot be read for any other
+  reason fails the build rather than deploy blind into what may be an
+  incident.
 - **After a lift, the frozen commit does not deploy by itself**: re-run the
-  newest build, which *Releases* names.
+  build *Releases* names, during the freeze and after it. It is the newest
+  commit the freeze held back (by when its first build started), and only
+  while nothing has shipped it or anything after it (`to_rerun`): re-running
+  a held build once a newer commit is live would take the API backwards.
 - **The web app is not held.** It ships from the `deploy` job in
   `.github/workflows/ui.yml`, with credentials that cannot see the bucket; the
   page and the review both say "the web app can still ship". Holding it too
   would need `firebase-deployer` read on the bucket and a check in that job.
 - Off Google Cloud, or with no bucket (`OPERATOR_FREEZE_BUCKET`, set by
   Terraform), the commands answer 409 `FREEZE_UNAVAILABLE` and the panel says
-  the builds cannot be held back from here.
+  the builds cannot be held back from here. A bucket that does not answer is
+  different: the read says whether deploys are frozen is unknown (`frozen:
+  null`, `problem: "unreachable"`), and an act answers 503
+  `FREEZE_UNREACHABLE` in the error envelope.
 
 ## Decided against, or postponed
 
@@ -505,7 +516,9 @@ cannot keep.
   coach spend; and one link — the accounts a per-account write limit refused,
   which is a log query because nothing stores a refusal (see *Trust and
   safety* below). The deploy-state card links to the Cloud Run console until
-  roadmaps/secret-manager.md lands.
+  roadmaps/secret-manager.md lands. Every panel but the queue fails on its
+  own, the *Shipped* one included, and *What customers see* says when the
+  status file cannot be read or reached rather than offer a publish.
 - **Work queue** (`GET /api/operator/queue`): the rows behind the Attention
   counts (`GET /api/operator/attention`), ids and dates only, each with a due date from the constants in
   `operator/reads.py` (`queue_due`). The conditions are organisations with no
@@ -645,27 +658,53 @@ cannot keep.
   cardinality, and "which accounts, this week" is the log query the
   Today page links to. The address-keyed doors in `routers/auth.py` are
   deliberately out of both: scanners exhaust them all day, and
-  `api_rejections` already counts them. Until a `WRITES_PER_MINUTE_*`
-  ceiling is set, the refusal signal counts nothing, which the page says.
-- **Capacity**: documents and storage per collection (`$collStats`), the
-  coach's platform cost by day and model with the cache-read inputs, and
-  live health with refused writes per route.
+  `api_rejections` already counts them. Until a write ceiling is in force —
+  a control set on *Access*, an account's own limit, or a
+  `WRITES_PER_MINUTE_*` setting — the refusal signal counts nothing, which
+  the page says.
+- **Capacity and cost** (rebuilt to the mock 2026-11-14, from what the API
+  serves): what the database takes up, as the page's sentence; three tiles —
+  the database's storage and what its indexes take besides, the coach's
+  spend this UTC month with its running total and where the month is heading
+  at the pace so far, and the busiest revision's active instances against
+  the ceiling, from live health; the coach's platform cost a day over the
+  last 7 or 30 days, with the cache's share of the input and the model most
+  of the bill went to; each collection's size, documents and indexes
+  (`$collStats`), largest first; refused writes per route, from live health;
+  and links to the restores in the log, the Monitoring dashboard, Cloud Run,
+  billing and the Atlas cluster. The API sends the coach's cost a day and
+  model for the last 31 UTC days, newest first (`COACH_COST_DAYS`, enough for
+  any month to date): every day since launch grew without bound. Not drawn,
+  though the mock has them: the database's growth and its pace, and each
+  collection's growth, since nothing keeps a size over time and Capacity
+  stores no series; and the database's connections, which Monitoring does
+  not read from Atlas.
 - **Live health** (shipped 2026-11-14, stage 4 of what was
-  roadmaps/backoffice.md), on Today and Capacity through `GET
-  /api/operator/health`: availability over the last day (the uptime checks)
+  roadmaps/backoffice.md), on Today, and in Capacity's instances and refused
+  writes, through `GET /api/operator/health`: availability over the last day
+  (the uptime checks)
   against the **99.5% a month target** (decided 2026-11-14: one region,
   30-second cold starts and one operator make 99.9% a budget the first bad
   deploy would spend), the share of 5xx and p95 latency over the last hour,
-  instances against their ceiling, and refused writes per route. Read by
+  active instances against their ceiling, and refused writes per route. The
+  ceiling is per revision, so the instances are the busiest revision's
+  active ones, read the way the instances-at-max alert reads them
+  (`terraform/alerts.tf`): summed across revisions and states, a rollover's
+  idle instances on the old revision read "3 of 2". Read by
   `GoogleMonitoring` (`operator/health.py`) over plain `httpx`, behind the
   `MonitoringSource` port, with `roles/monitoring.viewer` on the operator's
-  account (gated on `operator_enabled`). **Nothing to configure**: the
-  project and the token come from the metadata server, and the service name
-  and ceiling (`OPERATOR_API_SERVICE`, `OPERATOR_API_MAX_INSTANCES`) are set
-  by Terraform, with defaults. Cached a minute in the process; a Google
-  failure answers the last figures and their age, a failure is cached too,
-  and off Google Cloud the panel says "unavailable" with the console link —
-  never an invented number, never a broken page. Nothing is stored. Not
+  account (gated on `operator_enabled`); the six queries are made side by
+  side over one client, so a read waits for the slowest rather than the sum.
+  **Nothing to configure**: the project and the token come from the metadata
+  server, and the service name and ceiling (`OPERATOR_API_SERVICE`,
+  `OPERATOR_API_MAX_INSTANCES`) are set by Terraform, with defaults. `GET
+  /api/operator/deployment` serves the same project and the API's service
+  name, and the pages build every console link from them
+  (`backoffice/client/shared/lib/console.ts`); off Google Cloud there is no
+  project, and no link. Cached a minute in the process; a Google failure
+  answers the last figures and their age, a failure is cached too, and off
+  Google Cloud the panel says "unavailable" — never an invented number,
+  never a broken page. Nothing is stored. Not
   shown, on purpose: Google's open-alert list (`alerts.list`, in preview on
   2026-11-08; the console link stands in) and the job runner's last run (a
   run that finds nothing writes nothing, so no source holds it).
@@ -679,11 +718,17 @@ cannot keep.
   failed to become ready leaves the previous one serving; and the web app's
   live commit, from the `version.json` its build writes (`ui/vite.config.ts`,
   only when `VITE_GIT_SHA` is set), fetched from `OPERATOR_WEB_ORIGIN`. A
-  web app on another commit than the API is normal and said so. Each source
-  answers on its own, cached a minute (`ReleasesCache`): one that fails keeps
-  its last answer and is named, and subjects are cached for good. Nothing
-  moves traffic, and nothing reads the API's Cloud Run service; a bad build
-  links to the runbook for reverting on `main`. A build viewer can read every
+  web app on another commit than the API is normal and said so. One build is
+  live, the newest green build of the deployed commit, and a deployed tag
+  that is not a commit (`latest`) reads as unknown. Each source answers on
+  its own, cached a minute (`ReleasesCache`), and they are read side by side
+  over one client: one that fails keeps its last answer and is named, and
+  subjects are cached for good. GitHub's 404 and 422 both mean a commit it
+  does not have; a rate limit quiets GitHub until it resets; and one subject
+  that fails holds up none of the others. Nothing moves traffic, and nothing
+  reads the API's Cloud Run service; a bad build links to the runbook for
+  reverting on `main`, and a build the freeze held reads as held, beside the
+  build to re-run (*Deploy freeze* above). A build viewer can read every
   step's arguments, so `api/cloudbuild.yaml` must never put a secret in one.
   Firebase's own release list is deliberately not read: `version.json`
   already says what is live, without another grant or a site id. Today says
