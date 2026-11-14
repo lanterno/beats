@@ -9,7 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import type { CapacityReport, QueueRow, ReleasesReport } from "@/shared/api/schema";
+import type { CapacityReport, PublicStatus, QueueRow, ReleasesReport } from "@/shared/api/schema";
 import { useConsole } from "@/shared/lib/console";
 import { dollars, formatBytes, minuteOf } from "@/shared/lib/format";
 import { bucketOf, dueLabel, KINDS } from "@/shared/lib/queue";
@@ -57,15 +57,6 @@ export function monthSpend(capacity: CapacityReport, now: Date): number {
 		.reduce((sum, c) => sum + c.cost_usd, 0);
 }
 
-interface PublicStatus {
-	available: boolean;
-	state: string;
-	message: string;
-	affected: string[];
-	updated_at?: string | null;
-	published: boolean;
-}
-
 /** What customers are being told (docs/status-page.md), and the way to say more. */
 function StatusPanel() {
 	const status = useQuery({
@@ -87,6 +78,28 @@ function StatusPanel() {
 				<Prose>
 					This deployment has no status bucket, so there is no public status page to write to.
 				</Prose>
+			</Panel>
+		);
+	}
+	if (s.state === null) {
+		// No publish is offered: the API refuses one over a file it cannot
+		// read, and cannot write one where it cannot reach.
+		return (
+			<Panel raised title="What customers see">
+				<div className="flex flex-wrap items-center justify-between gap-4 px-6 pb-5">
+					<p className="min-w-0 flex-1 text-[15px] leading-relaxed">
+						{s.problem === "unreadable"
+							? "The status file is there but cannot be read, so what customers see is unknown and nothing can be published over it. Put the file right by hand first (docs/status-page.md)."
+							: "The status bucket did not answer, so what customers see is unknown."}
+					</p>
+					<button
+						type="button"
+						onClick={() => status.refetch()}
+						className={buttonClass("secondary")}
+					>
+						Try again
+					</button>
+				</div>
 			</Panel>
 		);
 	}
@@ -258,22 +271,26 @@ export function Today() {
 					</Prose>
 				</Panel>
 				<Panel title="Shipped">
-					<Prose>
-						{releases.data ? releasesHeadline(releases.data) : "Reading the releases…"}{" "}
-						<Link to="/releases" className="link">
-							Every release
-						</Link>
-						. Whether a revision became ready waits on the API's secrets leaving its Cloud Run spec;
-						until then,{" "}
-						{links ? (
-							<a href={links.cloudRun} className="link">
-								the Cloud Run console
-							</a>
-						) : (
-							"the Cloud Run console"
-						)}{" "}
-						says.
-					</Prose>
+					{releases.error ? (
+						<Failed error={releases.error} onRetry={() => releases.refetch()} bare />
+					) : (
+						<Prose>
+							{releases.data ? releasesHeadline(releases.data) : "Reading the releases…"}{" "}
+							<Link to="/releases" className="link">
+								Every release
+							</Link>
+							. Whether a revision became ready waits on the API's secrets leaving its Cloud Run
+							spec; until then,{" "}
+							{links ? (
+								<a href={links.cloudRun} className="link">
+									the Cloud Run console
+								</a>
+							) : (
+								"the Cloud Run console"
+							)}{" "}
+							says.
+						</Prose>
+					)}
 				</Panel>
 			</Pair>
 		</Page>
