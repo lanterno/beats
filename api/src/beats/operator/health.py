@@ -13,6 +13,11 @@ instance ceiling are set by Terraform beside the operator's other values
 read fails, and the page says "unavailable" with the console link — never an
 invented number.
 
+**Read at once.** The metadata calls, then the six Monitoring queries, are
+made side by side over one client, so a read waits for its slowest answer
+rather than the sum of them — the worst case is two round trips' timeouts,
+not eight.
+
 **Cached in the process** (`HealthCache`): the operator runs one instance, so
 a local cache is the whole cache. A failed read answers the last figures and
 how old they are; a failure is cached too, so a local run does not wait on an
@@ -23,7 +28,9 @@ The filters below are the ones the `api` dashboard in
 `terraform/monitoring.tf` draws, and change with it.
 """
 
+import asyncio
 import time
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, Protocol
@@ -135,6 +142,22 @@ def share(part: float | None, whole: float | None) -> float | None:
 # ── Google ───────────────────────────────────────────────────────────
 
 
+async def all_of[T](*calls: Awaitable[T]) -> list[T]:
+    """Every call's answer, run side by side. The first to fail cancels the
+    rest before its own error is raised, unwrapped, so no request is left
+    running on a client about to close."""
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(_wrap(call)) for call in calls]
+    except ExceptionGroup as failed:
+        raise failed.exceptions[0] from None
+    return [task.result() for task in tasks]
+
+
+async def _wrap[T](call: Awaitable[T]) -> T:
+    return await call
+
+
 class GoogleMonitoring:
     def __init__(
         self,
@@ -184,11 +207,16 @@ class GoogleMonitoring:
 
     async def read(self) -> HealthFigures:
         async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, transport=self._transport) as client:
+            token_path = "instance/service-accounts/default/token"
             if self._project is None:
-                self._project = (await self._metadata(client, "project/project-id")).text
-            token = (
-                await self._metadata(client, "instance/service-accounts/default/token")
-            ).json()["access_token"]
+                project, token_resp = await all_of(
+                    self._metadata(client, "project/project-id"),
+                    self._metadata(client, token_path),
+                )
+                self._project = project.text
+            else:
+                token_resp = await self._metadata(client, token_path)
+            token = token_resp.json()["access_token"]
 
             api = (
                 f'resource.type="cloud_run_revision" '
@@ -197,52 +225,54 @@ class GoogleMonitoring:
             requests = f'{api} AND metric.type="run.googleapis.com/request_count"'
             hour, day = timedelta(hours=1), timedelta(days=1)
 
-            uptime = await self._series(
-                client,
-                token,
-                'resource.type="uptime_url" '
-                'AND metric.type="monitoring.googleapis.com/uptime_check/check_passed"',
-                window=day,
-                aligner="ALIGN_FRACTION_TRUE",
-                reducer="REDUCE_MEAN",
-            )
-            errors = await self._series(
-                client,
-                token,
-                f'{requests} AND metric.label.response_code_class="5xx"',
-                window=hour,
-                aligner="ALIGN_SUM",
-                reducer="REDUCE_SUM",
-            )
-            total = await self._series(
-                client, token, requests, window=hour, aligner="ALIGN_SUM", reducer="REDUCE_SUM"
-            )
-            latency = await self._series(
-                client,
-                token,
-                f'{api} AND metric.type="run.googleapis.com/request_latencies"',
-                window=hour,
-                aligner="ALIGN_DELTA",
-                reducer="REDUCE_PERCENTILE_95",
-            )
-            instances = await self._series(
-                client,
-                token,
-                f'{api} AND metric.type="run.googleapis.com/container/instance_count"',
-                window=timedelta(minutes=15),
-                period=timedelta(minutes=5),
-                aligner="ALIGN_MAX",
-                reducer="REDUCE_SUM",
-            )
-            refused = await self._series(
-                client,
-                token,
-                'resource.type="cloud_run_revision" AND metric.type='
-                f'"logging.googleapis.com/user/{self._service}/write_limit_refusals"',
-                window=day,
-                aligner="ALIGN_SUM",
-                reducer="REDUCE_SUM",
-                group_by="metric.label.route",
+            uptime, errors, total, latency, instances, refused = await all_of(
+                self._series(
+                    client,
+                    token,
+                    'resource.type="uptime_url" '
+                    'AND metric.type="monitoring.googleapis.com/uptime_check/check_passed"',
+                    window=day,
+                    aligner="ALIGN_FRACTION_TRUE",
+                    reducer="REDUCE_MEAN",
+                ),
+                self._series(
+                    client,
+                    token,
+                    f'{requests} AND metric.label.response_code_class="5xx"',
+                    window=hour,
+                    aligner="ALIGN_SUM",
+                    reducer="REDUCE_SUM",
+                ),
+                self._series(
+                    client, token, requests, window=hour, aligner="ALIGN_SUM", reducer="REDUCE_SUM"
+                ),
+                self._series(
+                    client,
+                    token,
+                    f'{api} AND metric.type="run.googleapis.com/request_latencies"',
+                    window=hour,
+                    aligner="ALIGN_DELTA",
+                    reducer="REDUCE_PERCENTILE_95",
+                ),
+                self._series(
+                    client,
+                    token,
+                    f'{api} AND metric.type="run.googleapis.com/container/instance_count"',
+                    window=timedelta(minutes=15),
+                    period=timedelta(minutes=5),
+                    aligner="ALIGN_MAX",
+                    reducer="REDUCE_SUM",
+                ),
+                self._series(
+                    client,
+                    token,
+                    'resource.type="cloud_run_revision" AND metric.type='
+                    f'"logging.googleapis.com/user/{self._service}/write_limit_refusals"',
+                    window=day,
+                    aligner="ALIGN_SUM",
+                    reducer="REDUCE_SUM",
+                    group_by="metric.label.route",
+                ),
             )
 
         return HealthFigures(
