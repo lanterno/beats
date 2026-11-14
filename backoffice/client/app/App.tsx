@@ -24,6 +24,7 @@ import { Compliance } from "@/pages/Compliance";
 import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
 import { Queue } from "@/pages/Queue";
+import { Releases } from "@/pages/Releases";
 import { Review } from "@/pages/Review";
 import { RunbookPage, Runbooks } from "@/pages/Runbooks";
 import { Today } from "@/pages/Today";
@@ -89,6 +90,7 @@ const GROUPS = [
 				badge: ((counts) => counts.jobs_queued + counts.jobs_failed) satisfies Badge,
 			},
 			{ to: "/capacity", label: "Capacity and cost", Icon: DatabaseIcon },
+			{ to: "/releases", label: "Releases", Icon: LinesIcon },
 		],
 	},
 	{
@@ -247,6 +249,7 @@ function Shell() {
 						<Route path="/organisations/:id" element={<Organisation />} />
 						<Route path="/trust" element={<Trust />} />
 						<Route path="/capacity" element={<Capacity />} />
+						<Route path="/releases" element={<Releases />} />
 						<Route path="/jobs" element={<Jobs />} />
 						<Route path="/compliance" element={<Compliance />} />
 						<Route path="/audit" element={<Audit />} />

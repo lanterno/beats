@@ -10,10 +10,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import type { CapacityReport, QueueRow } from "@/shared/api/schema";
+import type { CapacityReport, QueueRow, ReleasesReport } from "@/shared/api/schema";
 import { API_LOG, logsQuery } from "@/shared/lib/console";
 import { dollars, formatBytes, minuteOf } from "@/shared/lib/format";
 import { bucketOf, dueLabel, KINDS } from "@/shared/lib/queue";
+import { releasesHeadline } from "@/shared/lib/releases";
 import {
 	buttonClass,
 	Chip,
@@ -73,6 +74,10 @@ export function Today() {
 	const audit = useQuery({
 		queryKey: ["operator-audit-recent"],
 		queryFn: () => get<Row[]>(`/api/operator/audit?limit=${RECENT}`),
+	});
+	const releases = useQuery({
+		queryKey: ["releases"],
+		queryFn: () => get<ReleasesReport>("/api/operator/releases"),
 	});
 	const capacity = useQuery({
 		queryKey: ["capacity"],
@@ -188,14 +193,18 @@ export function Today() {
 						. It stays empty until a <code>WRITES_PER_MINUTE_*</code> ceiling is set.
 					</Prose>
 				</Panel>
-				<Panel title="Deploy state">
+				<Panel title="Shipped">
 					<Prose>
-						Not shown here yet: it waits on the API's secrets leaving its Cloud Run spec. Until
-						then,{" "}
+						{releases.data ? releasesHeadline(releases.data) : "Reading the releases…"}{" "}
+						<Link to="/releases" className="link">
+							Every release
+						</Link>
+						. Whether a revision became ready waits on the API's secrets leaving its Cloud Run spec;
+						until then,{" "}
 						<a href={CLOUD_RUN} className="link">
-							open the Cloud Run console
-						</a>
-						.
+							the Cloud Run console
+						</a>{" "}
+						says.
 					</Prose>
 				</Panel>
 			</Pair>
