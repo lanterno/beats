@@ -95,6 +95,15 @@ class OperatorSettings(BaseSettings):
         default=None, validation_alias="OPERATOR_API_MAX_INSTANCES"
     )
 
+    # Release history (operator/releases.py). The commit and the web origin
+    # are set by Terraform; the repository has the project's own as default.
+    # Unset, each reads as "unknown" and the rest of the page still answers.
+    api_commit: str = Field(default="", validation_alias="OPERATOR_API_COMMIT")
+    web_origin: str = Field(default="", validation_alias="OPERATOR_WEB_ORIGIN")
+    github_repository: str = Field(
+        default="lanterno/beats", validation_alias="OPERATOR_GITHUB_REPOSITORY"
+    )
+
     @model_validator(mode="after")
     def _exactly_one_door(self) -> OperatorSettings:
         if bool(self.iap_audience) == bool(self.dev_operator):

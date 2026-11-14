@@ -47,6 +47,7 @@ from beats.api.routers.operator import router as operator_router
 from beats.domain.exceptions import DomainException
 from beats.operator.health import GoogleMonitoring, HealthCache
 from beats.operator.iap import IAPRejected, IAPUnavailable, IAPVerifier
+from beats.operator.releases import LiveReleases, ReleasesCache
 from beats.operator.settings import OperatorSettings
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.operator_settings = settings
     app.state.health_source = GoogleMonitoring(settings.api_service_name)
     app.state.health_cache = HealthCache()
+    app.state.release_source = LiveReleases(
+        web_origin=settings.web_origin, repository=settings.github_repository
+    )
+    app.state.releases_cache = ReleasesCache()
     logger.info("Database connected.")
     yield
     logger.info("Disconnecting from database...")

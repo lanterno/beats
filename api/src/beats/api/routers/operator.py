@@ -32,6 +32,7 @@ from beats.operator.reads import (
     OrgAuditRow,
     QueueRow,
 )
+from beats.operator.releases import ReleasesReport
 from beats.operator.runner import CommandPreview, preview_command, run_command
 
 router = APIRouter(prefix="/api/operator", tags=["operator"])
@@ -198,6 +199,21 @@ async def health(request: Request, operator: CurrentOperator) -> HealthReport:
     state = request.app.state
     return await state.health_cache.report(
         state.health_source, state.operator_settings.api_max_instances
+    )
+
+
+@router.get("/releases", response_model=ReleasesReport)
+async def releases(request: Request, operator: CurrentOperator) -> ReleasesReport:
+    """What shipped: the API's builds newest first with their commits, the
+    commit the API was deployed with, and the web app's live commit. Each
+    source answers on its own, and one that fails is named rather than
+    breaking the rest. Nothing here moves traffic."""
+    state = request.app.state
+    settings = state.operator_settings
+    return await state.releases_cache.report(
+        state.release_source,
+        api_commit=settings.api_commit or None,
+        repository=settings.github_repository,
     )
 
 
