@@ -1249,6 +1249,53 @@
         "title": "PreviewRequest",
         "type": "object"
       },
+      "PublicStatus": {
+        "properties": {
+          "affected": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected",
+            "type": "array"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "published": {
+            "default": false,
+            "title": "Published",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "available",
+          "state",
+          "message",
+          "affected"
+        ],
+        "title": "PublicStatus",
+        "type": "object"
+      },
       "QueueRow": {
         "description": "One row behind an Attention count: what it is, which id, since when,\nand when it is due. Ids and dates only. Nothing stores that a row was\nhandled; it leaves when its condition clears.\n\nSuperseded approvals and absence requests are one row per organisation\n(`count` of them, `since` the oldest), with no member named.",
         "properties": {
@@ -2350,6 +2397,28 @@
           }
         },
         "summary": "Releases",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/status": {
+      "get": {
+        "description": "What customers see on the status page right now, read back from the\nsame public file. Not available where no status bucket is configured.",
+        "operationId": "public_status_api_operator_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Public Status",
         "tags": [
           "operator"
         ]
