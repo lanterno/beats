@@ -120,6 +120,11 @@ execute — and the runner (`beats/operator/runner.py`) is the only path:
 4. run — inline, or enqueue when the command has a window;
 5. write `operator_audit` with before and after.
 
+An argument that does not hold — a box left empty, a value of the wrong
+shape, an id that names nothing — is 422 `INVALID_COMMAND_ARGS` with each
+one in the envelope's `fields` (`path`, `message`, `type`, the public API's
+shape), in the preview as in the act, so the review can say which box.
+
 **No rule lives in a command or the runner**: each delegates to whatever
 already owns the rule — the account service, the device repository, the
 organisation service. There is deliberately no `OperatorService`: a service
@@ -613,16 +618,29 @@ cannot keep.
 - **Privacy and compliance**: the platform-wide retention purge behind the
   typed word `all`, and **the erasure request log** (shipped 2026-11-14,
   stage 8 of what was roadmaps/backoffice.md). A request that arrives by
-  email gets a date the day it arrives (`erasure_request.log`: the day, a
-  reference the operator chose, the account by `subject_id` — never
-  `user_id`, or erasure's sweep would take the record that it was asked for
-  — and never an address, which the command refuses), so the legal month is
-  visible before anything is queued. Its state is read off the job queue,
-  never stored: open, erasure queued, erasure ran, closed. A request open
-  with nothing queued for `ERASURE_REQUEST_ATTENTION_DAYS` (14) counts on
-  Attention and sits on the queue; `erasure_request.close` ends it with a
-  reason (erased, no account, withdrawn), and a closed row goes a year later
-  by TTL (`MongoErasureRequests`, `erasure_requests` on the Atlas grant). The
+  email gets a date the day it arrives (`erasure_request.log`: the day; a
+  reference the operator chose, which is a ticket number or the mail's date
+  — a few letters at most, then digits — so neither a name nor an address
+  fits; and the account's whole id as `subject_id`, never `user_id`, or
+  erasure's sweep would take the record that it was asked for), so the legal
+  month is visible before anything is queued. That month is a calendar
+  month (GDPR Art. 12(3)): due on the same day of the next month, or on its
+  last day when it has none, so mail received on 31 January is due on 28
+  February (`deadlineOf`, `client/shared/lib/deadline.ts`). The log's audit
+  row names the account by id, or the request by its own id when there is
+  no account — never the reference. An account id that names no account is
+  a 422 on that box, in the preview as in the act. Its state is read off the
+  job queue, never stored: open, erasure queued, erasure ran, closed. **The
+  erasure closes the request**: `erase_account` ends by closing every open
+  request naming the account as erased, so the job and the break-glass
+  script both answer it and its year starts the day it ran; `erasure ran` is
+  a request its erasure did not close, from before it closed them, and is
+  closed by hand. A request open with nothing queued for
+  `ERASURE_REQUEST_ATTENTION_DAYS` (14) counts on Attention and sits on the
+  queue — those 14 days and the window's 7 are 21, inside the shortest
+  month; `erasure_request.close` ends the rest with a reason (erased, no
+  account, withdrawn), and a closed row goes a year later by TTL
+  (`MongoErasureRequests`, `erasure_requests` on the Atlas grant). The
   earlier reason for not counting requests — that it would take an in-app
   request — does not hold for a log the operator keeps.
 - **Audit log**: the operator audit — readable, filterable, editable by
