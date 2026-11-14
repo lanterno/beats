@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type FieldProblem, OperatorApiError } from "@/shared/api/client";
-import { type CommandField, commandSpec, fieldsOf } from "@/shared/commands";
+import { type CommandField, commandSpec, fieldsOf, startingArgs } from "@/shared/commands";
 import { refusalOf, sent } from "./Review";
 
 const limits = () => commandSpec("account.set_limits");
@@ -302,5 +302,29 @@ describe("refusalOf", () => {
 	it("reads anything but a 422 as no refusal of the arguments", () => {
 		const missing = new OperatorApiError(404, "Account not found", "ACCOUNT_NOT_FOUND");
 		expect(refusalOf(missing, log, {})).toEqual({ byField: {}, general: [], incomplete: false });
+	});
+});
+
+describe("startingArgs", () => {
+	const link = (query: string) => (key: string) => new URLSearchParams(query).get(key);
+	const start = (name: string, subject: string, query: string) => {
+		const spec = commandSpec(name);
+		return spec ? startingArgs(spec, subject, link(query)) : {};
+	};
+
+	// A crafted link must not open a post already written, one click from
+	// going public.
+	it("fills nothing that is said or decided from a link", () => {
+		expect(start("status.publish", "public", "state=outage&message=Hacked&affected=api")).toEqual({
+			state: "",
+			message: "",
+			affected: "",
+		});
+	});
+
+	it("fills the box that names what is acted on, and only that", () => {
+		const args = start("control.set", "signups", "network=k3y-0f-net&reason=forged&value=1");
+		expect(args.network).toBe("k3y-0f-net");
+		expect([args.reason, args.value, args.until]).toEqual(["", "", ""]);
 	});
 });
