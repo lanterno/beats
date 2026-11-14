@@ -812,6 +812,24 @@ class TestCommandPreview:
         assert bad.status_code == 422
         assert bad.json()["code"] == "INVALID_COMMAND_ARGS"
 
+    def test_a_rule_on_the_arguments_as_a_whole_has_no_path(self, operator_client):
+        """The review puts each reason beside the box it names, and says one
+        that names none by the button: a model-level rule has an empty path,
+        and its message is the validator's own sentence, without pydantic's
+        "Value error, " in front of it."""
+        too_far = (datetime.now(UTC) + timedelta(days=8)).isoformat()
+        whole = self._preview(
+            operator_client, "control.set", {"name": "coach", "until": too_far, "reason": "r"}
+        ).json()
+        assert whole["code"] == "INVALID_COMMAND_ARGS"
+        assert whole["fields"] == [
+            {
+                "path": "",
+                "message": "a pause lasts at most 7 days; set it again after",
+                "type": "value_error",
+            }
+        ]
+
     def test_a_subject_that_does_not_resolve_refuses_before_anything_is_typed(
         self, operator_client, mongo
     ):
