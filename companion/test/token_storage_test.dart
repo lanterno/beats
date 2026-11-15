@@ -135,6 +135,14 @@ void main() {
       expect(await s.loadWebUrl(), 'https://app.example.com');
     });
 
+    test('a saved empty web URL means none, not the build\'s', () async {
+      // What pairing from a QR for a server with no web app saves (#325).
+      final s = TokenStorage(secure: MemorySecureStore());
+      await s.saveWebUrl('https://app.example.com');
+      await s.saveWebUrl('');
+      expect(await s.loadWebUrl(), isNull);
+    });
+
     test('web URL is independent from API URL — distinct prefs keys', () async {
       // Self-hosted users typically have api.example.com and
       // app.example.com on different hosts. Saving one must not affect the
