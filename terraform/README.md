@@ -442,9 +442,9 @@ production, then narrow to what `cloudbuild.tf` grants plus
 `roles/iam.securityAdmin` scoped to the project**, which is what a steady
 apply still needs to manage the bindings it owns. Narrow by hand, watch the
 next apply, and widen back if it fails — a failed apply blocks every API
-deploy. The deploy-state row on Today waits on
-[roadmaps/secret-manager.md](../roadmaps/secret-manager.md) for the same
-account's reads, and is the next thing CI would need to create.
+deploy. The newest resource CI created with them is `operator_api_viewer`
+(2026-11-15), the operator's `roles/run.viewer` on the API's service, which
+Today's deploy state reads.
 
 The control plane (`beats-operator`, [docs/backoffice.md](../docs/backoffice.md))
 is gated behind `operator_enabled = false` until the things below exist, each

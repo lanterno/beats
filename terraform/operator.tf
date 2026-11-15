@@ -23,8 +23,8 @@ resource "google_service_account" "beats_operator" {
 
 # The container: its value — the narrow Atlas user's DSN — is added by hand
 # with `gcloud secrets versions add` and never passes through Terraform, which
-# manages the container and the binding only (roadmaps/secret-manager.md
-# § The shape, for the same reason).
+# manages the container and the binding only (terraform/README.md § The API's
+# Secrets, for the same reason).
 resource "google_secret_manager_secret" "beats_operator_dsn" {
   project   = var.project_id
   secret_id = "beats-operator-dsn"
