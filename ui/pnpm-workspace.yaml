@@ -24,6 +24,12 @@ overrides:
   "esbuild@>=0.27.3 <0.28.1": ">=0.28.1 <0.29"
   "browserslist@<4.28.7": ">=4.28.7 <5"
   "baseline-browser-mapping@>=2.0.0 <2.11.0": ">=2.11.0 <3"
+  # minimatch's pattern-amplification DoS (GHSA-g3hv-75wg-m249) is fixed only in
+  # 11, and glob 11 reads minimatch 10's RegExp parts, so lifting minimatch alone
+  # would leave the PWA precaching nothing. workbox-build calls globSync alone,
+  # which glob 14 (on minimatch 11) keeps; its ignores start with no "/", the one
+  # case 14 reads differently. Checked by the same precache list in dist/spa/sw.js.
+  "workbox-build>glob": ">=14.0.6 <15"
 
 # Postinstall build scripts. These ship prebuilt platform binaries via optional
 # deps, so their build scripts are not needed (matches prior pnpm 10 behavior
