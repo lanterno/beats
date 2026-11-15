@@ -53,6 +53,7 @@ from beats.api.routers.sso import router as sso_router
 from beats.api.routers.timer import router as timer_router
 from beats.api.routers.webhooks import router as webhooks_router
 from beats.auth import account_access, device_access
+from beats.auth.session import session_id_of
 from beats.domain.accounts import suspension_detail
 from beats.domain.exceptions import DomainException
 from beats.infrastructure.database import Database, ensure_indexes
@@ -282,9 +283,13 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 # the account's cut is refused. Compared against auth_time,
                 # which every refresh copies — iat would read newer on each
                 # refresh and never be caught.
-                if access.sessions_valid_after is not None and payload["auth_time"] < int(
-                    access.sessions_valid_after.timestamp()
-                ):
+                signed_out_everywhere = access.sessions_valid_after is not None and payload[
+                    "auth_time"
+                ] < int(access.sessions_valid_after.timestamp())
+                # A logout ends its sign-in on every instance, not only on the
+                # one that took it and holds the token in memory.
+                logged_out = session_id_of(payload) in access.ended_sessions
+                if signed_out_everywhere or logged_out:
                     return error_envelope(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="Invalid or expired session token",
