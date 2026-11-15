@@ -116,8 +116,10 @@ String? briefExcerpt(String? body, {int max = 220}) {
   final window = plain.substring(0, max);
   final sentenceEnd = RegExp(r'[.!?](?=\s)').allMatches(window).lastOrNull;
   if (sentenceEnd != null) return window.substring(0, sentenceEnd.end);
-  final space = window.lastIndexOf(' ');
-  return '${window.substring(0, space > 0 ? space : max).trimRight()}…';
+  // Room for the three periods, so the excerpt stays within [max].
+  final room = plain.substring(0, max - 3);
+  final space = room.lastIndexOf(' ');
+  return '${room.substring(0, space > 0 ? space : room.length).trimRight()}...';
 }
 
 /// What a session on the strip is called, in its tooltip: the project, and

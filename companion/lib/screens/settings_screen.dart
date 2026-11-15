@@ -578,7 +578,7 @@ class _ConnectionsTabState extends State<_ConnectionsTab> {
   }) {
     final p = context.sky;
     if (status.loading) {
-      return _Row(title: name, subtitle: 'Checking…', leading: _dot(p.inkMuted, hollow: true));
+      return _Row(title: name, subtitle: 'Checking...', leading: _dot(p.inkMuted, hollow: true));
     }
     if (status.error != null) {
       return _Row(
@@ -616,7 +616,7 @@ class _ConnectionsTabState extends State<_ConnectionsTab> {
       _SectionLabel(Platform.isMacOS ? 'On this Mac' : 'Your computer'),
       _Group([
         if (recent == null)
-          _Row(title: 'Activity daemon (beatsd)', subtitle: 'Checking…', leading: _dot(p.inkMuted, hollow: true))
+          _Row(title: 'Activity daemon (beatsd)', subtitle: 'Checking...', leading: _dot(p.inkMuted, hollow: true))
         else if (newest != null)
           _Row(
             title: 'Activity daemon (beatsd)',
@@ -633,7 +633,7 @@ class _ConnectionsTabState extends State<_ConnectionsTab> {
         _Row(
           title: 'VS Code extension',
           subtitle: workspaces == null
-              ? 'Checking…'
+              ? 'Checking...'
               : workspaces > 0
                   ? 'Sending from $workspaces workspace${workspaces == 1 ? '' : 's'}'
                   : 'Not seen today',
@@ -864,7 +864,7 @@ class _AccountTabState extends State<_AccountTab> {
         _Row(
           title: host == null || host.isEmpty ? widget.client.baseUrl : host,
           subtitle: _checking
-              ? 'Checking…'
+              ? 'Checking...'
               : _error == null
                   ? 'Connected · checked just now'
                   : 'Can\'t reach it: $_error',
@@ -905,7 +905,7 @@ class _AccountTabState extends State<_AccountTab> {
                 ),
               ]),
             ),
-            SkyButton(label: 'Unpair…', kind: SkyButtonKind.danger, onPressed: _unpair),
+            SkyButton(label: 'Unpair...', kind: SkyButtonKind.danger, onPressed: _unpair),
           ],
         ),
       ),

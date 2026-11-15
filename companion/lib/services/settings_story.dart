@@ -46,5 +46,5 @@ String shortError(Object e, {int max = 80}) {
   if (e is ApiException && colon >= 0) text = text.substring(colon + 2);
   text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
   if (text.length <= max) return text;
-  return '${text.substring(0, max - 1).trimRight()}…';
+  return '${text.substring(0, max - 3).trimRight()}...';
 }

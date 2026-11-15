@@ -74,7 +74,7 @@ void main() {
       expect(shortError(ApiException(502, 'Heartbeat failed: Bad gateway')), 'Bad gateway');
       final long = shortError(ApiException(500, 'Heartbeat failed: ${'x' * 200}'), max: 20);
       expect(long.length, 20);
-      expect(long.endsWith('…'), isTrue);
+      expect(long.endsWith('...'), isTrue);
     });
   });
 }

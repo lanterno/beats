@@ -400,7 +400,7 @@ class _TodayScreenState extends State<TodayScreen> {
       below = Row(mainAxisAlignment: MainAxisAlignment.center, children: [
         const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5)),
         const SizedBox(width: 12),
-        Text('Reading your timer…', style: SkyType.body(15).copyWith(color: p.inkMuted)),
+        Text('Reading your timer...', style: SkyType.body(15).copyWith(color: p.inkMuted)),
       ]);
     } else if (timer.running) {
       final flow = _recentFlow;
@@ -594,7 +594,7 @@ class _TodayScreenState extends State<TodayScreen> {
       child: Row(children: [
         const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
         const SizedBox(width: 14),
-        Text('Reading your timer…', style: SkyType.body(16).copyWith(color: p.inkMuted)),
+        Text('Reading your timer...', style: SkyType.body(16).copyWith(color: p.inkMuted)),
       ]),
     );
   }
@@ -898,7 +898,7 @@ class _TodayScreenState extends State<TodayScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const PanelHeading('This week', size: 17),
           const SizedBox(height: 14),
-          Text('Adding up the week…', style: SkyType.body(14).copyWith(color: p.inkMuted)),
+          Text('Adding up the week...', style: SkyType.body(14).copyWith(color: p.inkMuted)),
         ]),
       );
     }

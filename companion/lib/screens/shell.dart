@@ -147,7 +147,7 @@ class MainWindowState extends State<MainWindow> {
     showQuickStart(context, timer: widget.timer, actions: [
       for (final (i, s) in Section.values.indexed)
         PaletteAction('Open ${s.label}', s.icon, () => show(s), shortcut: '$prefix${i + 1}'),
-      PaletteAction('Log time you forgot…', Icons.history_rounded, logSession, shortcut: '${prefix}L'),
+      PaletteAction('Log time you forgot...', Icons.history_rounded, logSession, shortcut: '${prefix}L'),
       PaletteAction('Focus mode', Icons.fullscreen_rounded, openFocus, shortcut: '⇧${prefix}F'),
       PaletteAction('Settings', Icons.settings_outlined, openSettings, shortcut: '$prefix,'),
     ]);
