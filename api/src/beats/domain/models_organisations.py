@@ -242,6 +242,10 @@ class OrgAssignment(TzNormalizedModel):
     contract: Contract | None = None
     # Stage 3: the contract on this assignment is the employer's to write.
     contract_managed: bool = False
+    # Set by erasure where the balance was withheld for history kept back
+    # (rule 4): the rows that withheld it are deleted with the account, so
+    # this is what keeps it withheld (infrastructure/erasure.py).
+    balance_withheld: bool = False
 
     @property
     def active(self) -> bool:

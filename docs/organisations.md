@@ -80,6 +80,14 @@ first, then the model was built on them.
    This is why "this row is an organisation's record" is a **property of the
    row** (`organisation_id` on the beat and the absence) and not a join
    through a project that is itself being deleted.
+   "Behind a balance it read" is meant exactly. On a project connected with
+   history kept back (decision 7) the record withholds the balance, so no
+   adjustment there is kept. Erasure asks the record's own question before
+   it deletes anything and marks such an assignment `balance_withheld`:
+   the kept-back rows that withheld the balance go with the account, and
+   until 2026-11-15 their going made a balance appear that the organisation
+   had never been shown, its expected hours counted from the contract's
+   start and its worked hours only from the share day.
 
 Then the model's own:
 
@@ -279,8 +287,9 @@ New collections, none scoped by `user_id`:
   kept back, written by a connect alone and never moved after, decision 7),
   `assigned_at`, `assigned_by`, `ended_at`, and the personal
   half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
-  `autostart_repos`, `contract`, and `contract_managed` (decision 21).
-  Unique on `(project_id, user_id)`.
+  `autostart_repos`, `contract`, and `contract_managed` (decision 21);
+  after an erasure, `balance_withheld` where the record withheld the
+  balance (decision 3). Unique on `(project_id, user_id)`.
 - **`org_audit`**: `organisation_id`, `at`, `actor_user_id`, `event`,
   `subject_user_id`, `project_id`, `details`.
 - **`org_teams`** (stage 4): `organisation_id`, `name`, `member_ids`,

@@ -191,7 +191,8 @@ None of these is scoped by `user_id` (docs/organisations.md):
   project are the organisation's), `assigned_at`, `assigned_by`, `ended_at`, and the
   member's personal half of the project: `weekly_goal`, `goal_type`, `goal_overrides`,
   `autostart_repos`, `contract`, and `contract_managed` while the organisation holds the
-  contract's pen.
+  contract's pen; after an erasure, `balance_withheld` where the organisation's record
+  never showed the balance.
 - **Teams** (`org_teams`): a name and `member_ids` — the scope a manager decides and
   reads for (docs/organisations.md, decision 25).
 - **Absence requests** (`org_absence_requests`): a day off asked for on a managed
