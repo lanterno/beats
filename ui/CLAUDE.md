@@ -74,7 +74,8 @@ pnpm e2e           # Playwright E2E (needs API on :7999 + UI on :8080)
 - **Styling**: TailwindCSS 4 (`@theme`, `@layer base` syntax), Radix UI primitives (see
   Theme below)
 - **PWA**: vite-plugin-pwa — the built app precached, Google Fonts cached, the API
-  never (the note in `vite.config.ts`)
+  never (the note in `vite.config.ts`); the app registers the worker itself and moves
+  an open page onto a new release at its next change of page (`client/app/release.ts`)
 - **Node**: >=25.0.0
 
 ## Theme
