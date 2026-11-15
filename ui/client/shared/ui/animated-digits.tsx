@@ -3,7 +3,7 @@
  * Odometer-style rolling animation for timer digits.
  * Each digit position contains a column of 0-9 that translates vertically.
  */
-import { cn } from "@/shared/lib";
+import { cn } from "@/shared/lib/cn";
 
 const DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 

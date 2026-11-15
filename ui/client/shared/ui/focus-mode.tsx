@@ -6,7 +6,8 @@
 
 import { Maximize2, Minimize2, Square } from "lucide-react";
 import { useCallback, useEffect } from "react";
-import { cn, formatSecondsToTime } from "@/shared/lib";
+import { cn } from "@/shared/lib/cn";
+import { formatSecondsToTime } from "@/shared/lib/format";
 import { AnimatedDigits } from "./animated-digits";
 
 interface FocusModeProps {

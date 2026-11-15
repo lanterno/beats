@@ -2,7 +2,7 @@
  * GoalRing Component
  * SVG radial arc showing weekly goal progress.
  */
-import { cn } from "@/shared/lib";
+import { cn } from "@/shared/lib/cn";
 
 interface GoalRingProps {
 	/** Progress percentage 0-100+ */

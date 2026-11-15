@@ -9,7 +9,7 @@
  */
 
 import { createRef, type ReactNode, useMemo } from "react";
-import { cn } from "@/shared/lib";
+import { cn } from "@/shared/lib/cn";
 
 export interface TabItem<T extends string> {
 	value: T;
