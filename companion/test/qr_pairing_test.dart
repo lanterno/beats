@@ -129,4 +129,64 @@ void main() {
       expect(parseQrPairingPayload('{"code": "no"}'), isNull);
     });
   });
+
+  group('the web address a QR carries', () {
+    test('the web QR carries both addresses', () {
+      final p = parseQrPairingPayload(
+          '{"code": "ABC123", "api": "https://api.lifepete.com", "web": "https://lifepete.com"}');
+      expect(p!.apiUrl, 'https://api.lifepete.com');
+      expect(p.webUrl, 'https://lifepete.com');
+    });
+
+    test('a blank web address is none', () {
+      final p = parseQrPairingPayload('{"code": "ABC123", "api": "https://api.example.com", "web": " "}');
+      expect(p!.webUrl, isNull);
+    });
+
+    test('a QR for a server with no web app clears the stored address', () {
+      final p = parseQrPairingPayload('{"code": "ABC123", "api": "https://api.example.com"}')!;
+      expect(webUrlAfterScan(p), '');
+    });
+
+    test('a QR with its web app keeps that address', () {
+      final p = parseQrPairingPayload(
+          '{"code": "ABC123", "api": "https://api.example.com", "web": "https://app.example.com"}')!;
+      expect(webUrlAfterScan(p), 'https://app.example.com');
+    });
+
+    test('a QR that names no server leaves the stored address alone', () {
+      expect(webUrlAfterScan(parseQrPairingPayload('ABC123')!), isNull);
+      expect(webUrlAfterScan(parseQrPairingPayload('beats://pair/ABC123')!), isNull);
+    });
+  });
+
+  group('qrChangesServer — when a scanned QR has to ask first', () {
+    test('the server this device would use anyway stays one tap', () {
+      expect(qrChangesServer('https://api.lifepete.com', 'https://api.lifepete.com'), isFalse);
+      // Same origin, written differently.
+      expect(qrChangesServer('https://API.lifepete.com/', 'https://api.lifepete.com'), isFalse);
+    });
+
+    test('a QR that names no server changes nothing', () {
+      expect(qrChangesServer(null, 'https://api.lifepete.com'), isFalse);
+      expect(qrChangesServer(null, null), isFalse);
+    });
+
+    test('another host asks', () {
+      expect(qrChangesServer('https://api.attacker.example', 'https://api.lifepete.com'), isTrue);
+    });
+
+    test('another scheme or port on the same host asks too', () {
+      expect(qrChangesServer('http://api.lifepete.com', 'https://api.lifepete.com'), isTrue);
+      expect(qrChangesServer('https://api.lifepete.com:8443', 'https://api.lifepete.com'), isTrue);
+    });
+
+    test('with no server to compare against, any server asks', () {
+      expect(qrChangesServer('https://api.example.com', null), isTrue);
+    });
+
+    test('an address with no host asks rather than passes', () {
+      expect(qrChangesServer('not a url', 'https://api.lifepete.com'), isTrue);
+    });
+  });
 }

@@ -13,7 +13,44 @@ class QrPairingPayload {
   /// the user already typed / has saved).
   final String? apiUrl;
 
-  const QrPairingPayload({required this.code, this.apiUrl});
+  /// Optional web app base URL, which the web's QR carries beside `api`
+  /// (`ui/client/pages/settings/pairingQr.ts`) unless it is a loopback
+  /// address. Null when the QR named none.
+  final String? webUrl;
+
+  const QrPairingPayload({required this.code, this.apiUrl, this.webUrl});
+}
+
+/// Whether pairing with [scannedApi] would point this device at a server
+/// other than [currentApi], the one it would use otherwise (the saved one,
+/// else the build's). Compared by origin, so a change of scheme or port
+/// counts too. A QR that names no server changes nothing; one scanned with
+/// no current server is a change, since there is nothing it agrees with.
+///
+/// This is what asks before a QR from some other host takes over a fresh
+/// install, and with it everything the device later uploads (#325).
+bool qrChangesServer(String? scannedApi, String? currentApi) {
+  if (scannedApi == null) return false;
+  final scanned = _origin(scannedApi);
+  final current = currentApi == null ? null : _origin(currentApi);
+  return scanned == null || current == null || scanned != current;
+}
+
+String? _origin(String url) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null || uri.host.isEmpty) return null;
+  final port = uri.hasPort ? ':${uri.port}' : '';
+  return '${uri.scheme.toLowerCase()}://${uri.host.toLowerCase()}$port';
+}
+
+/// The web address to keep after pairing from [payload]: null to leave
+/// the stored one alone (the QR named no server), else the QR's own, else
+/// an empty string, which clears it. A QR for another server with no web
+/// address must not leave this device linking into lifepete.com: no web
+/// links is better than wrong ones (#325).
+String? webUrlAfterScan(QrPairingPayload payload) {
+  if (payload.apiUrl == null) return null;
+  return payload.webUrl ?? '';
 }
 
 /// Parse a QR-decoded string into a [QrPairingPayload]. Returns null when
@@ -46,12 +83,14 @@ QrPairingPayload? parseQrPairingPayload(String? raw) {
       if (decoded is Map<String, dynamic>) {
         final code = decoded['code'];
         final api = decoded['api'] ?? decoded['api_url'] ?? decoded['apiUrl'];
+        final web = decoded['web'] ?? decoded['web_url'] ?? decoded['webUrl'];
         if (code is String) {
           final normalized = _normalizeCode(code);
           if (normalized != null) {
             return QrPairingPayload(
               code: normalized,
               apiUrl: api is String && api.trim().isNotEmpty ? api.trim() : null,
+              webUrl: web is String && web.trim().isNotEmpty ? web.trim() : null,
             );
           }
         }
