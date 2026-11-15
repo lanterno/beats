@@ -55,15 +55,28 @@ type Tracker struct {
 	notifiedThisSession bool          // notification already fired for this session — don't re-spam
 	threshold           time.Duration // how long before it counts as drift
 	onDrift             func(DriftEvent)
+	notify              func(title, body string) // notify.Send, but in tests
 }
 
 // NewTracker creates a distraction shield tracker.
 // onDrift is called when a distraction period exceeds the threshold.
 func NewTracker(onDrift func(DriftEvent)) *Tracker {
+	return NewTrackerWithNotifier(onDrift, notify.Send)
+}
+
+// NewTrackerWithNotifier is the testable form: the "Drift detected" alert
+// goes to n instead of the desktop. notify.Send runs osascript, so a test
+// that crossed the threshold through NewTracker put a real alert on the
+// screen of whoever ran it, under Script Editor's name.
+func NewTrackerWithNotifier(onDrift func(DriftEvent), n func(title, body string)) *Tracker {
+	if n == nil {
+		n = notify.Send
+	}
 	return &Tracker{
 		distractions: DefaultDistractionBundles,
 		threshold:    30 * time.Second,
 		onDrift:      onDrift,
+		notify:       n,
 	}
 }
 
@@ -103,7 +116,7 @@ func (t *Tracker) OnSample(sample collector.Sample, timerRunning bool) {
 	if t.inDistraction && !t.notifiedThisSession {
 		duration := sample.CollectedAt.Sub(t.distractionStart)
 		if duration >= t.threshold {
-			sendDriftNotification(t.distractionApp, duration)
+			t.notify("Drift detected", formatDriftMessage(t.distractionApp, duration))
 			t.notifiedThisSession = true
 		}
 	}
@@ -124,14 +137,6 @@ func (t *Tracker) reset() {
 	t.notifiedThisSession = false
 	t.distractionStart = time.Time{}
 	t.distractionApp = ""
-}
-
-// sendDriftNotification fires the OS-level "drift detected" alert
-// when distraction duration crosses the threshold. The message is
-// rendered by formatDriftMessage so the body can be unit-tested
-// without shelling out to osascript / notify-send.
-func sendDriftNotification(bundleID string, duration time.Duration) {
-	notify.Send("Drift detected", formatDriftMessage(bundleID, duration))
 }
 
 // formatDriftMessage builds the body of the drift notification.
