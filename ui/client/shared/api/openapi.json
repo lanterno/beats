@@ -8194,7 +8194,7 @@
     },
     "/api/account/logout": {
       "post": {
-        "description": "Revoke the current session token.",
+        "description": "End the current sign-in: this token, and every token refreshed from\nthe same sign-in, on every instance (docs/account-controls.md \u00a7 Logout).\nThe account's other sign-ins are untouched.",
         "operationId": "logout_api_account_logout_post",
         "responses": {
           "204": {
