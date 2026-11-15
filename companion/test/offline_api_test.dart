@@ -132,6 +132,7 @@ class Server extends ApiClient {
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) =>
       _write(clientId, () {
@@ -395,6 +396,31 @@ void main() {
       throwsA(isA<NotWhileOffline>()),
     );
     expect(await store.queued(), isEmpty);
+  });
+
+  test('an edit that writes a note is never queued, though the same edit without one is', () async {
+    // The note was built on the one last read: replayed later, it would
+    // undo an edit made elsewhere meanwhile.
+    final b = server.elsewhere('p1', at('09:00'), at('10:00'));
+    await offline();
+    final expected = ExpectedBeat(projectId: 'p1', start: time('09:00'), end: time('10:00'));
+
+    await expectLater(
+      api.updateBeat(
+        id: b['id'] as String,
+        projectId: 'p1',
+        start: time('09:00'),
+        end: time('10:00'),
+        expected: expected,
+        note: 'called Ana',
+      ),
+      throwsA(isA<NotWhileOffline>()),
+    );
+    expect(await store.queued(), isEmpty);
+
+    await api.updateBeat(
+        id: b['id'] as String, projectId: 'p1', start: time('08:30'), end: time('10:00'), expected: expected);
+    expect(await store.queued(), hasLength(1));
   });
 
   test('offline, the day reads as last seen with the sessions made since', () async {

@@ -58,6 +58,31 @@ class Project {
   }
 }
 
+/// The most a note holds (`UpdateBeatRequest.note` in the API).
+const noteLimit = 2000;
+
+/// [existing] with [text] after it, on the one line a note is (the web
+/// edits it in a single-line field): joined by "; ", or by a space after a
+/// sentence that ended. [text] is trimmed and its line breaks become
+/// spaces; an empty [text] leaves the note as it was.
+String appendToNote(String? existing, String text) {
+  final add = text.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim();
+  final have = (existing ?? '').trimRight();
+  if (add.isEmpty) return have;
+  if (have.isEmpty) return add;
+  final ended = RegExp(r'[.;:!?…]$').hasMatch(have);
+  return '$have${ended ? ' ' : '; '}$add';
+}
+
+/// Why a line could not be added to the running session's note, in words
+/// to show as they are.
+class NoteRefused implements Exception {
+  final String message;
+  const NoteRefused(this.message);
+  @override
+  String toString() => message;
+}
+
 /// The session a stop just closed, kept for a minute so it can be undone.
 class StoppedSession {
   final Map<String, dynamic> beat;
@@ -122,6 +147,17 @@ class TimerController extends ChangeNotifier {
   DateTime? since;
   StoppedSession? lastStopped;
 
+  /// The project of the session running, or else of the last one, as the
+  /// API last said: whichever device or surface tracked it.
+  String? lastProjectId;
+
+  /// What "start the last project" starts: [lastProjectId]'s project while
+  /// it is live; null for an archived one or none.
+  Project? get lastProject => switch (projectById(lastProjectId)) {
+        final p? when !p.archived => p,
+        _ => null,
+      };
+
   /// Ticks every second while a timer runs; listen to it for the clock
   /// rather than to the controller, which only notifies when state changes.
   final ValueNotifier<DateTime> now = ValueNotifier(DateTime.now());
@@ -167,9 +203,11 @@ class TimerController extends ChangeNotifier {
         final p = status['project'] as Map<String, dynamic>?;
         current = projectById(p?['id'] as String?) ?? (p != null ? Project.fromJson(p) : null);
         since = DateTime.tryParse(status['since'] as String)?.toUtc();
+        lastProjectId = current?.id;
       } else {
         current = null;
         since = null;
+        lastProjectId = (status['last_beat'] as Map<String, dynamic>?)?['project_id'] as String?;
       }
       error = null;
     } catch (e) {
@@ -297,6 +335,35 @@ class TimerController extends ChangeNotifier {
       );
     }
     await refresh();
+  }
+
+  /// Adds [text] to the running session's note ([appendToNote]). Throws
+  /// [NoteRefused] when nothing runs, when the start has not reached the
+  /// server yet, or when the note would pass [noteLimit]; offline, the
+  /// client refuses it ([OfflineApi.updateBeat]).
+  Future<void> addToNote(String text) async {
+    final project = current;
+    final started = since;
+    if (project == null || started == null) throw const NoteRefused('Nothing is running.');
+    // The API files a session under the UTC day it started on.
+    final beats = await client.getBeatsOn(started.toUtc());
+    final active = beats.where((b) => b['end'] == null && b['project_id'] == project.id).firstOrNull;
+    if (active == null) throw const NoteRefused('The running session was not found.');
+    if (active['queued'] is int) {
+      throw const NoteRefused('That start is still on its way to the server; add to its note once it has synced.');
+    }
+    final note = appendToNote(active['note'] as String?, text);
+    if (note.length > noteLimit) {
+      throw const NoteRefused('That would take the note past $noteLimit characters.');
+    }
+    final start = DateTime.parse(active['start'] as String);
+    await client.updateBeat(
+      id: active['id'] as String,
+      projectId: project.id,
+      start: start,
+      expected: ExpectedBeat(projectId: project.id, start: start),
+      note: note,
+    );
   }
 
   /// Dismisses the writes the API refused, once they have been read.

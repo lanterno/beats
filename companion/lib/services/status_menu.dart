@@ -4,9 +4,10 @@ import 'package:flutter/services.dart';
 
 /// The main window's side of the macOS menu bar item
 /// (`macos/Runner/StatusItemController.swift`): sets what the item shows,
-/// tells an open popover the timer changed, and hears the popover ask for
-/// the window. Every method is a no-op off macOS, where TrayService uses the
-/// tray_manager plugin instead.
+/// tells an open popover the timer changed, hears the popover ask for the
+/// window, and registers, records and answers the global shortcuts
+/// (services/shortcuts.dart). Every method is a no-op off macOS, where
+/// TrayService uses the tray_manager plugin instead.
 class StatusMenu {
   static const _channel = MethodChannel('companion/menubar');
 
@@ -46,15 +47,69 @@ class StatusMenu {
     required void Function(String? section, String? route) show,
     required void Function() refresh,
   }) {
+    _show = show;
+    _refresh = refresh;
+    _listen();
+  }
+
+  /// [handle] gets the global shortcuts the window acts on (`startLast`,
+  /// `stop`) and answers whether there was anything to do; the Mac beeps
+  /// when there was not. Set at startup, paired or not.
+  static void onShortcut(Future<bool> Function(String action) handle) {
+    _shortcut = handle;
+    _listen();
+  }
+
+  /// Registers [bindings] (ShortcutBindings.toNative) and returns the names of the
+  /// actions macOS refused, another app holding their combination.
+  static Future<List<String>> setShortcuts(Map<String, Object?> bindings) async {
+    if (!Platform.isMacOS) return const [];
+    try {
+      final refused = await _channel.invokeMethod<List<Object?>>('shortcuts.set', {'bindings': bindings});
+      return refused?.whereType<String>().toList() ?? const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// The next key pressed in the app, every shortcut off meanwhile, as
+  /// `{keyCode, modifiers, key}`; null when Esc or [cancelRecording] ends it.
+  static Future<Map<Object?, Object?>?> recordShortcut() async {
+    if (!Platform.isMacOS) return null;
+    try {
+      return await _channel.invokeMethod<Map<Object?, Object?>>('shortcuts.record');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> cancelRecording() async {
     if (!Platform.isMacOS) return;
+    try {
+      await _channel.invokeMethod('shortcuts.cancelRecord');
+    } catch (_) {}
+  }
+
+  static void Function(String? section, String? route)? _show;
+  static void Function()? _refresh;
+  static Future<bool> Function(String action)? _shortcut;
+  static bool _listening = false;
+
+  static void _listen() {
+    if (!Platform.isMacOS || _listening) return;
+    _listening = true;
     _channel.setMethodCallHandler((call) async {
       final args = (call.arguments as Map?)?.cast<String, Object?>() ?? const {};
       switch (call.method) {
         case 'window.show':
-          show(args['section'] as String?, args['route'] as String?);
+          _show?.call(args['section'] as String?, args['route'] as String?);
         case 'timer.refresh':
-          refresh();
+          _refresh?.call();
+        case 'shortcut.pressed':
+          final handle = _shortcut;
+          return handle == null ? false : await handle(args['action'] as String? ?? '');
       }
+      return null;
     });
   }
 }

@@ -25,6 +25,8 @@ app's sky (afternoon or dusk):
   sleep beside the next day's flow (Oura, Fitbit, HealthKit, Health Connect)
 - **Quick start** (⌘K in the window, ⌃⌥T from any app) — type a project, and a
   time: "kite from 11:00", "spanish 25m ago", "stop at 17:30"
+- **Shortcuts from any app** — quick start, start the last project, stop, and add a line
+  to the running session's note, each on keys you choose (see [Shortcuts](#shortcuts))
 - **Menu bar** — the running time and project, and a popover with Stop, today and
   the week, and one-click starts; closing the window leaves it running there
 - **Focus mode** (⇧⌘F) — the running clock, full window, at dusk
@@ -54,6 +56,39 @@ floating tab bar instead of the sidebar:
 - **Sample data** — "Look around with sample data" on the pairing screen opens every place on
   a made-up account held in memory (`services/sample_api.dart`), for Play's reviewers and the
   curious; nothing is stored and a banner says so
+
+## Shortcuts
+
+On a Mac, four actions answer a key combination pressed in any app:
+
+| Action | Default | What it does |
+|--------|---------|--------------|
+| Quick start | ⌃⌥T | Opens the palette under the menu bar item |
+| Start the last project | ⌃⌥⌘P | Starts what you tracked last, when nothing is running |
+| Stop | ⌃⌥⌘. | Stops the running timer |
+| Add to the note | ⌃⌥⌘N | A one-line field under the menu bar item; Return adds the line to the running session's note |
+
+Settings → General → *Shortcuts, from any app* changes each one (press the new keys;
+Esc cancels), turns it off, or puts its default back. They are kept in
+`shared_preferences` on this Mac (`services/shortcuts.dart`).
+
+- **No permission to grant.** They are Carbon hot keys (`GlobalShortcuts.swift`), which
+  macOS delivers without Accessibility access, unlike watching every key pressed.
+- **A combination holds ⌃, ⌥ or ⌘.** A key alone, or with ⇧ alone, is typing: taken from
+  every app, it could be typed in none. Settings refuses such a combination, and keys
+  another action already has.
+- **Another app's keys are refused, not shared.** Each is registered exclusively, so when
+  another app has registered the combination macOS says no and Settings shows it, rather
+  than both apps firing on one press.
+- **The last project** is the one running, else the last session's as the API's timer status
+  names it, unless that project has since been archived. Start and Stop take the same
+  path as the window's buttons, so offline they wait in the queue like any other start or
+  stop; with nothing to start or stop, or when the change fails, the Mac beeps.
+- **The note** is read and written whole: the line goes after what the note already says,
+  joined with "; ", or with a space when the note ends in punctuation, on one line and
+  within the API's 2,000 characters. It needs a connection, since appending to a note this
+  device has not seen could overwrite one written elsewhere; offline, the field says so. On
+  an organisation's project it says who can read the note, as the session editor does.
 
 ## Platforms
 
@@ -127,12 +162,14 @@ lib/
 │   ├── offline_queue.dart, offline_view.dart, local_store.dart, sqlite_store.dart
 │   ├── *_story.dart, day_ribbon.dart, quick_parse.dart, time_format.dart
 │   ├── tray_service.dart, status_menu.dart, mac_ambient.dart   Menu bar, Dock, login item
+│   ├── shortcuts.dart             The global shortcuts' keys: defaults, what Settings stores and refuses
 │   └── ...
 ├── theme/sky.dart          The web's tokens and faces (ui/client/global.css), in two hours
 ├── ui/kit.dart             Panels, pill buttons, rings, the sky backdrop
 └── ui/sync_note.dart       The sync line and the note of changes the server refused
 macos/Runner/
-├── StatusItemController.swift     Menu bar item, popover engine, ⌃⌥T hot key
+├── StatusItemController.swift     Menu bar item, popover engine, what each shortcut does
+├── GlobalShortcuts.swift          The shortcuts' registration with macOS, and recording new keys
 └── MacAmbientBridge.swift         Dock badge and icon, open at login
 ```
 
@@ -200,6 +237,9 @@ Tests cover the logic, not the widgets:
   the Coach's week standings and chat stream fold, the Body's recovery and
   sleep-beside-flow lines, Settings' readings
 - What the palette reads from what you type, and the SSE decoder across chunk cuts
+- The global shortcuts' keys as Settings stores, reads back and refuses them; which
+  project is the last one; and a line added to the running session's note, which is
+  never queued offline
 - API error envelope parsing, notification preferences and dedupe, the Insights URL
 - Bundle labels, repo paths and status-bar formatting, with parity tests against
   the daemon (Go) and the VS Code extension (TypeScript)

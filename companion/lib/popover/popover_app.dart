@@ -9,6 +9,7 @@ import '../screens/palette.dart';
 import '../screens/timer_actions.dart';
 import '../services/api_client.dart';
 import '../services/offline_api.dart';
+import '../services/shortcuts.dart';
 import '../services/sync_story.dart';
 import '../services/time_format.dart';
 import '../services/token_storage.dart';
@@ -54,6 +55,9 @@ class _PopoverAppState extends State<PopoverApp> {
   // that had been revoked (#376).
   String? _token;
   String? _apiUrl;
+  // The shortcuts as the window last stored them, read on every show, so a
+  // hint names the keys in force.
+  ShortcutBindings _keys = ShortcutBindings.decode(null);
 
   @override
   void initState() {
@@ -121,9 +125,12 @@ class _PopoverAppState extends State<PopoverApp> {
     switch (call.method) {
       case 'popover.show':
         final mode = (call.arguments as Map?)?['mode'] as String? ?? 'panel';
-        // Settings live in the window's engine; pick up a changed hour.
-        await (await SharedPreferences.getInstance()).reload();
+        // Settings live in the window's engine; pick up a changed hour and
+        // changed shortcuts.
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.reload();
         await widget.hour.load();
+        _keys = ShortcutBindings.decode(prefs.getString(ShortcutBindings.prefsKey));
         // The token is in the keychain, which both engines read live, and
         // SharedPreferences was just reloaded above for the API URL — so
         // this reads the window's pairing, not this engine's cached view.
@@ -162,6 +169,8 @@ class _PopoverAppState extends State<PopoverApp> {
             body = const Center(child: CircularProgressIndicator());
           } else if (timer == null) {
             body = _NotPaired();
+          } else if (_mode == 'note') {
+            body = _QuickNote(timer: timer, keys: _keys, onDone: () => _channel.invokeMethod('popover.close'));
           } else if (_mode == 'palette') {
             body = Padding(
               padding: const EdgeInsets.all(10),
@@ -176,7 +185,7 @@ class _PopoverAppState extends State<PopoverApp> {
               ),
             );
           } else {
-            body = _Panel(timer: timer, week: _week!, onOpen: _open);
+            body = _Panel(timer: timer, week: _week!, keys: _keys, onOpen: _open);
           }
           return Scaffold(backgroundColor: p.panel.withValues(alpha: 1), body: body);
         }),
@@ -208,8 +217,9 @@ class _NotPaired extends StatelessWidget {
 class _Panel extends StatelessWidget {
   final TimerController timer;
   final WeekController week;
+  final ShortcutBindings keys;
   final void Function({String? section, String? route}) onOpen;
-  const _Panel({required this.timer, required this.week, required this.onOpen});
+  const _Panel({required this.timer, required this.week, required this.keys, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -312,7 +322,11 @@ class _Panel extends StatelessWidget {
       ],
       Text('Nothing running', style: SkyType.display(22)),
       const SizedBox(height: 4),
-      Text('Pick a project below, or press ⌃⌥T anywhere to type one.',
+      Text(
+          switch (keys[ShortcutAction.palette]) {
+            final k? => 'Pick a project below, or press ${k.label} anywhere to type one.',
+            null => 'Pick a project below.',
+          },
           style: SkyType.body(13).copyWith(color: p.inkMuted)),
       Align(
         alignment: Alignment.centerLeft,
@@ -384,5 +398,122 @@ class _Panel extends StatelessWidget {
           ),
         ),
     ]);
+  }
+}
+
+/// A line for the running session's note, from the note shortcut: Return
+/// adds it after what the note holds ([TimerController.addToNote]), Esc
+/// closes. On an organisation's project it says the organisation can read
+/// the note, as every input that writes one does (docs/organisations.md).
+class _QuickNote extends StatefulWidget {
+  final TimerController timer;
+  final ShortcutBindings keys;
+  final VoidCallback onDone;
+  const _QuickNote({required this.timer, required this.keys, required this.onDone});
+
+  @override
+  State<_QuickNote> createState() => _QuickNoteState();
+}
+
+class _QuickNoteState extends State<_QuickNote> {
+  final _text = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _add() async {
+    if (_saving || _text.text.trim().isEmpty) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.timer.addToNote(_text.text);
+      _text.clear();
+      widget.onDone();
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): widget.onDone},
+      child: ListenableBuilder(
+        listenable: widget.timer,
+        builder: (context, _) {
+          final current = widget.timer.current;
+          if (current == null) {
+            final start = widget.keys[ShortcutAction.startLast]?.label;
+            return Center(
+              child: EmptyNote(
+                icon: Icons.notes_rounded,
+                title: 'Nothing is running',
+                body: start == null
+                    ? 'Start a timer, then add to its note.'
+                    : 'Start a timer, then add to its note. $start starts the last project.',
+              ),
+            );
+          }
+          final reader = current.organisationName;
+          final quiet = SkyType.body(12).copyWith(color: p.inkMuted);
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                ProjectDot(color: current.color),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(current.name,
+                      overflow: TextOverflow.ellipsis, style: SkyType.body(15, weight: FontWeight.w700)),
+                ),
+                ValueListenableBuilder(
+                  valueListenable: widget.timer.now,
+                  builder: (context, _, _) => Text(formatClock(widget.timer.elapsed), style: SkyType.figure(15)),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _text,
+                autofocus: true,
+                enabled: !_saving,
+                textInputAction: TextInputAction.done,
+                style: SkyType.display(20, weight: FontWeight.w500),
+                decoration: InputDecoration(
+                  hintText: 'Add to the note',
+                  hintStyle: SkyType.display(20, weight: FontWeight.w400).copyWith(color: p.inkMuted),
+                  filled: false,
+                  border: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                onSubmitted: (_) => _add(),
+              ),
+              Divider(height: 1, color: p.hairline),
+              const SizedBox(height: 10),
+              if (reader != null) ...[
+                Text('$reader can read this note', style: quiet),
+                const SizedBox(height: 4),
+              ],
+              if (_error != null) ...[
+                Text(_error!, style: SkyType.body(13).copyWith(color: p.persimmonInk)),
+                const SizedBox(height: 4),
+              ],
+              const Spacer(),
+              Text('Return adds it after the note · Esc closes', style: quiet),
+            ]),
+          );
+        },
+      ),
+    );
   }
 }

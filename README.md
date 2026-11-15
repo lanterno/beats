@@ -63,7 +63,7 @@ when you do your best work.
 | Surface | What it does |
 |---------|--------------|
 | **Web app** ([`ui/`](ui/)) | The full experience: projects, contracts, insights, coach, settings. Installable as a PWA, with an offline timer. |
-| **Desktop app** ([`companion/`](companion/)) | A native Mac window and menu bar item: the timer, flow, coach and body. Quick start from any app (⌃⌥T), a focus mode, and logging time you forgot. Also builds for iOS and Android, where it bridges HealthKit and Health Connect. |
+| **Desktop app** ([`companion/`](companion/)) | A native Mac window and menu bar item: the timer, flow, coach and body. Quick start, start the last project, stop and add to the note from any app, on keys you choose; a focus mode; and logging time you forgot. Also builds for iOS and Android, where it bridges HealthKit and Health Connect. |
 | **Daemon** ([`daemon/`](daemon/)) | `beatsd`, which runs in the background on macOS and Linux to compute the Flow Score, plus a CLI to query it from the terminal. |
 | **VS Code** ([`integrations/vscode-beats/`](integrations/vscode-beats/)) | Tags flow windows with your repo, branch and language, and shows the live flow score in the status bar. |
 | **Wall clock** ([`wall-clock/`](wall-clock/)) | An ESP32 with LEDs and an e-ink display that shows the day's progress on the wall. |

@@ -520,13 +520,15 @@ class ApiClient {
   /// Rewrites one session's times. `end: null` reopens it as the running
   /// timer, which is how a stop is undone and how a running timer's start
   /// is moved earlier. With [expected], only while the stored session is
-  /// still that one (409 BEAT_CHANGED otherwise).
+  /// still that one (409 BEAT_CHANGED otherwise). [note] replaces the note
+  /// when sent; left out, the stored one stays.
   Future<Map<String, dynamic>> updateBeat({
     required String id,
     required String projectId,
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) async {
     final resp = await http.put(
@@ -538,6 +540,7 @@ class ApiClient {
         'start': start.toUtc().toIso8601String(),
         'end': end?.toUtc().toIso8601String(),
         'expected': ?expected?.toJson(),
+        'note': ?note,
       }),
     );
     if (resp.statusCode != 200) {

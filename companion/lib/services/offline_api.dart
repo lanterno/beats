@@ -172,7 +172,9 @@ class OfflineApi extends ApiClient {
 
   /// An edit waits in the queue only with [expected], and never when it
   /// sets a finished session running again: replayed later, that could
-  /// start it beside a timer started elsewhere meanwhile.
+  /// start it beside a timer started elsewhere meanwhile. Nor when it
+  /// writes a [note], which was built on the note as last read: replayed
+  /// later, it would undo an edit made elsewhere meanwhile.
   @override
   Future<Map<String, dynamic>> updateBeat({
     required String id,
@@ -180,6 +182,7 @@ class OfflineApi extends ApiClient {
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) {
     final reopens = end == null && expected?.end != null;
@@ -189,14 +192,17 @@ class OfflineApi extends ApiClient {
       'start': start.toUtc().toIso8601String(),
       'end': end?.toUtc().toIso8601String(),
       'expected': ?expected?.toJson(),
+      'note': ?note,
     };
     return _write(
       _new(WriteKind.edit, body, clientId),
       unqueueable: reopens
           ? 'Undoing a stop needs a connection, and this device is offline.'
-          : expected == null
-              ? 'That change needs a connection, and this device is offline.'
-              : null,
+          : note != null
+              ? 'Adding to a note needs a connection, and this device is offline.'
+              : expected == null
+                  ? 'That change needs a connection, and this device is offline.'
+                  : null,
     );
   }
 
@@ -217,6 +223,7 @@ class OfflineApi extends ApiClient {
           start: at('start'),
           end: b['end'] == null ? null : at('end'),
           expected: expected(),
+          note: b['note'] as String?,
           clientId: w.clientId,
         ),
     };

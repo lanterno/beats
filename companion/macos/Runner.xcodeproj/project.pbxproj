@@ -30,6 +30,7 @@
 		78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */ = {isa = PBXBuildFile; productRef = 78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */; };
 		7A3C00000000000000000A01 /* MacAmbientBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3C00000000000000000A02 /* MacAmbientBridge.swift */; };
 		7A3C00000000000000000A03 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3C00000000000000000A04 /* StatusItemController.swift */; };
+		7A3C00000000000000000A05 /* GlobalShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3C00000000000000000A06 /* GlobalShortcuts.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -82,6 +83,7 @@
 		78E0A7A72DC9AD7400C4905E /* FlutterGeneratedPluginSwiftPackage */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = FlutterGeneratedPluginSwiftPackage; path = ephemeral/Packages/FlutterGeneratedPluginSwiftPackage; sourceTree = "<group>"; };
 		7A3C00000000000000000A02 /* MacAmbientBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAmbientBridge.swift; sourceTree = "<group>"; };
 		7A3C00000000000000000A04 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
+		7A3C00000000000000000A06 /* GlobalShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcuts.swift; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -173,6 +175,7 @@
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				7A3C00000000000000000A02 /* MacAmbientBridge.swift */,
 				7A3C00000000000000000A04 /* StatusItemController.swift */,
+				7A3C00000000000000000A06 /* GlobalShortcuts.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -356,6 +359,7 @@
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				7A3C00000000000000000A01 /* MacAmbientBridge.swift in Sources */,
 				7A3C00000000000000000A03 /* StatusItemController.swift in Sources */,
+				7A3C00000000000000000A05 /* GlobalShortcuts.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

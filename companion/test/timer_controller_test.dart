@@ -16,7 +16,25 @@ class FakeApi extends ApiClient {
   final projects = [
     {'id': 'p1', 'name': 'Northwind', 'color': '#4F8FD6', 'kind': 'day_job'},
     {'id': 'p2', 'name': 'Studio Kite', 'color': '#E07A5F', 'kind': 'freelance'},
+    {'id': 'p3', 'name': 'Old Harbour', 'color': '#888888', 'kind': 'side_project', 'archived': true},
   ];
+
+  /// The running session's note as the server holds it, and each edit
+  /// that wrote one.
+  String? runningNote;
+  final noteWrites = <String>[];
+
+  @override
+  Future<List<Map<String, dynamic>>> getBeatsOn(DateTime utcDay) async => [
+        if (status['isBeating'] == true)
+          {
+            'id': 'running',
+            'project_id': (status['project'] as Map)['id'],
+            'start': status['since'],
+            'end': null,
+            'note': runningNote,
+          },
+      ];
 
   @override
   Future<Map<String, dynamic>> getTimerStatus() async => status;
@@ -51,9 +69,14 @@ class FakeApi extends ApiClient {
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) async {
     calls.add('update $id $projectId ${start.toIso8601String()} end=$end');
+    if (note != null) {
+      runningNote = note;
+      noteWrites.add('$id expected=${expected?.projectId}@${expected?.start.toIso8601String()} note=$note');
+    }
     status = {
       'isBeating': end == null,
       'project': projects.firstWhere((p) => p['id'] == projectId),
@@ -127,5 +150,98 @@ void main() {
 
     expect(timer.recentFirst.map((p) => p.id), ['p2', 'p1']);
     timer.dispose();
+  });
+
+  group('the last project', () {
+    test("is the project of the API's last session when nothing runs, whichever device tracked it", () async {
+      final api = FakeApi()
+        ..status = {
+          'isBeating': false,
+          'last_beat': {'id': 'b9', 'project_id': 'p2', 'end': '2026-10-14T10:00:00Z'},
+        };
+      final timer = TimerController(api);
+      await timer.refresh();
+
+      expect(timer.lastProject?.name, 'Studio Kite');
+      timer.dispose();
+    });
+
+    test('is none for an archived project, or an account with no session yet', () async {
+      final api = FakeApi()
+        ..status = {
+          'isBeating': false,
+          'last_beat': {'id': 'b9', 'project_id': 'p3', 'end': '2026-10-14T10:00:00Z'},
+        };
+      final timer = TimerController(api);
+      await timer.refresh();
+      expect(timer.lastProject, isNull);
+
+      api.status = {'isBeating': false};
+      await timer.refresh();
+      expect(timer.lastProject, isNull);
+      timer.dispose();
+    });
+
+    test('is the running one while a timer runs', () async {
+      final api = FakeApi();
+      final timer = TimerController(api);
+      await timer.refresh();
+      await timer.startProject(timer.projectById('p1')!, at: DateTime.utc(2026, 10, 14, 9, 41));
+
+      expect(timer.lastProject?.id, 'p1');
+      timer.dispose();
+    });
+  });
+
+  group('adding to the note', () {
+    final start = DateTime.utc(2026, 10, 14, 9, 41);
+
+    Future<(FakeApi, TimerController)> running({String? note}) async {
+      final api = FakeApi()..runningNote = note;
+      final timer = TimerController(api);
+      await timer.refresh();
+      await timer.startProject(timer.projectById('p1')!, at: start);
+      return (api, timer);
+    }
+
+    test('writes the line after what the note holds, naming the running session', () async {
+      final (api, timer) = await running(note: 'Sprint review');
+
+      await timer.addToNote('called Ana');
+
+      expect(api.noteWrites, ['running expected=p1@${start.toIso8601String()} note=Sprint review; called Ana']);
+      expect(api.calls.last, 'update running p1 ${start.toIso8601String()} end=null');
+      timer.dispose();
+    });
+
+    test('is refused when nothing runs, or when the note would pass its limit', () async {
+      final api = FakeApi();
+      final idle = TimerController(api);
+      await idle.refresh();
+      await expectLater(idle.addToNote('x'), throwsA(isA<NoteRefused>()));
+      idle.dispose();
+
+      final (full, timer) = await running(note: 'a' * noteLimit);
+      await expectLater(timer.addToNote('one more'), throwsA(isA<NoteRefused>()));
+      expect(full.noteWrites, isEmpty);
+      timer.dispose();
+    });
+  });
+
+  group('appendToNote', () {
+    test('a first line is the note', () {
+      expect(appendToNote(null, 'called Ana'), 'called Ana');
+      expect(appendToNote('  ', ' called Ana '), 'called Ana');
+    });
+
+    test('stays on the one line a note is', () {
+      expect(appendToNote('Sprint review', 'called Ana'), 'Sprint review; called Ana');
+      expect(appendToNote('Sprint review.', 'Called Ana'), 'Sprint review. Called Ana');
+      expect(appendToNote('Sprint review', 'called\nAna'), 'Sprint review; called Ana');
+    });
+
+    test('an empty line leaves the note as it was', () {
+      expect(appendToNote('Sprint review', '   '), 'Sprint review');
+    });
   });
 }
