@@ -279,8 +279,11 @@ purge (`api/scripts/retention_purge.py` — dry by default, audited per
 organisation, scheduled by nothing), rows older than the period stop being
 the organisation's record: **your own entries and absences lose the
 organisation's stamp and stay yours**; only a deleted account's tombstoned
-rows, expired timesheets and old audit entries are actually removed. Your
-timeline never shrinks because an employer's retention ended.
+rows — and, once the last of them has expired, the membership's name and
+email and the assignment's contract that erasure kept beside them —
+expired timesheets, decided absence requests and old audit entries are
+actually removed. Your timeline never shrinks because an employer's
+retention ended.
 
 ## Export
 
@@ -347,9 +350,9 @@ Email <ahmed.elghareeb@proton.me> from the address on your account. I will:
 3. When it runs, the erasure drops every document keyed to your user id across every
    collection above, your credentials, sessions and paired devices among them — except
    the rows that are an organisation's working-time record (docs/organisations.md,
-   decision 3): entries and absences stamped with an organisation, the balance
-   adjustments and contract behind a balance it read, and your membership's name and
-   email, all kept under a tombstone id no account has. It closes the logged request as
+   decision 3): entries and absences stamped with an organisation, your timesheets on
+   its projects, the balance adjustments and contract behind a balance it read, and your
+   membership's name and email, all kept under a tombstone id no account has. It closes the logged request as
    erased
 4. Reply to confirm
 
