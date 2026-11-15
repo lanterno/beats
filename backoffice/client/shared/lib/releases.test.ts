@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { DeployStateReport } from "@/shared/api/schema";
 import {
 	buildLabel,
+	deploySentence,
 	isBad,
 	releasesHeadline,
 	rerunAdvice,
@@ -23,7 +25,7 @@ const report = (fields: Record<string, unknown>) => ({
 describe("releasesHeadline", () => {
 	it("says when both halves are on one commit", () => {
 		expect(releasesHeadline(report({}))).toBe(
-			"The API was deployed at aaaaaaa, and the web app is on the same commit.",
+			"The API serves aaaaaaa, and the web app is on the same commit.",
 		);
 	});
 
@@ -92,5 +94,70 @@ describe("a build the freeze held back", () => {
 	it("says nothing once the freeze is off and nothing waits", () => {
 		expect(rerunAdvice(null, false)).toBeNull();
 		expect(rerunAdvice(null, true)).toContain("if there is one");
+	});
+});
+
+type DeployState = NonNullable<DeployStateReport["deploy"]>;
+
+describe("deploySentence", () => {
+	const deploy = (fields: Partial<DeployState>): DeployStateReport => ({
+		state: "live",
+		as_of: "2026-11-15T07:00:00Z",
+		deploy: {
+			serving_revision: "beats-api-00182-rb5",
+			serving_commit: A,
+			serving_since: "2026-11-15T06:02:56Z",
+			newest_revision: "beats-api-00182-rb5",
+			newest_commit: A,
+			newest: "serving",
+			problem: null,
+			...fields,
+		},
+	});
+
+	it("says the newest revision serves, and since when", () => {
+		expect(deploySentence(deploy({}))).toBe(
+			"The newest revision, beats-api-00182-rb5, became ready and serves aaaaaaa, since 2026-11-15 06:02.",
+		);
+	});
+
+	it("names what still serves while the newest starts", () => {
+		expect(
+			deploySentence(
+				deploy({ newest_revision: "beats-api-00183-xy", newest_commit: B, newest: "starting" }),
+			),
+		).toBe(
+			"beats-api-00183-xy with bbbbbbb is starting; beats-api-00182-rb5 serves aaaaaaa meanwhile.",
+		);
+	});
+
+	it("quotes Cloud Run on a failed revision, and names the one left serving", () => {
+		const sentence = deploySentence(
+			deploy({
+				newest_revision: "beats-api-00183-xy",
+				newest_commit: B,
+				newest: "failed",
+				problem: "Revision 'beats-api-00183-xy' is not ready and cannot serve traffic.\n",
+			}),
+		);
+		expect(sentence).toBe(
+			"The newest revision, beats-api-00183-xy with bbbbbbb, did not become ready, so beats-api-00182-rb5 serves aaaaaaa still. Cloud Run says: “Revision 'beats-api-00183-xy' is not ready and cannot serve traffic.”",
+		);
+	});
+
+	it("says when no revision serves at all", () => {
+		expect(
+			deploySentence(deploy({ serving_revision: null, serving_commit: null, newest: "failed" })),
+		).toContain("did not become ready, and no revision serves.");
+	});
+
+	it("dates a stale answer", () => {
+		expect(deploySentence({ ...deploy({}), state: "stale" })).toContain(
+			"That is as of 2026-11-15 07:00; Cloud Run has not answered since.",
+		);
+	});
+
+	it("leaves an unreadable state to the console", () => {
+		expect(deploySentence({ state: "unavailable", as_of: null, deploy: null })).toBeNull();
 	});
 });
