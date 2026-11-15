@@ -433,6 +433,26 @@ class TestSSOAPI:
         assert resp.status_code == 401
         assert resp.json()["code"] == "SSO_REJECTED"
 
+    def test_a_sign_in_logs_nothing_that_names_the_account(self, client, auth_info, caplog):
+        """PRIVACY.md promises that nothing downstream records which door was
+        used. A line naming the account during this request — the door's own,
+        or the session manager's beside it — is such a record, kept 30 days in
+        Cloud Logging. The passkey door has the same pin in `test_webauthn.py`."""
+        import logging
+
+        linked = self._round_trip(client, self.closed_idp, headers=auth_info["headers"])
+        assert linked.status_code == 200, linked.text
+
+        caplog.clear()  # linking names the account, by design: that is not a sign-in
+        with caplog.at_level(logging.INFO, logger="beats"):
+            signed_in = self._round_trip(client, self.closed_idp)
+
+        assert signed_in.status_code == 200, signed_in.text
+        assert caplog.records, "the sign-in still says that it happened"
+        for record in caplog.records:
+            assert auth_info["user_id"] not in record.getMessage()
+            assert "test@example.com" not in record.getMessage()
+
     # -------- linking --------
 
     def test_link_then_sign_in_with_the_identity(self, client, auth_info):

@@ -186,7 +186,11 @@ class SessionManager:
             payload["email"] = email
 
         token = jwt.encode(payload, self._jwt_secret, algorithm="HS256")
-        logger.info("Created session token for user: %s", user_id)
+        # No log line naming the account. On a sign-in it lands beside the
+        # door's own line, passkey or single sign-on, and the pair is a record
+        # of which door this person used — which PRIVACY.md promises nothing
+        # downstream keeps (the comment above the sign-in line in
+        # `routers/sso.py`).
         return token
 
     def create_device_token(self, user_id: str, device_id: str) -> str:
