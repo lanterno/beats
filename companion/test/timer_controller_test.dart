@@ -226,8 +226,20 @@ void main() {
       expect(full.noteWrites, isEmpty);
       timer.dispose();
     });
+
+    test('counts its limit in characters, as the API does, so an emoji is one', () async {
+      // 1988 emoji and "; called Ana" are 2000 characters, the most a note
+      // holds, though String.length counts 3988. beatsd's test of the same
+      // limit uses euro signs, which are one UTF-16 unit but three bytes.
+      final (api, timer) = await running(note: '🙂' * 1988);
+      await timer.addToNote('called Ana');
+      expect(api.noteWrites, hasLength(1));
+      timer.dispose();
+    });
   });
 
+  // The same cases as appendNote's in daemon/cmd/beatsd/timer_test.go: one
+  // rule, two implementations.
   group('appendToNote', () {
     test('a first line is the note', () {
       expect(appendToNote(null, 'called Ana'), 'called Ana');
