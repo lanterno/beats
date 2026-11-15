@@ -293,7 +293,10 @@ class WebAuthnManager:
                 email=user.email if user else "",
             )
 
-            logger.info("Successfully authenticated user %s with passkey", user_id)
+            # Names nobody, as the single sign-on door's line does
+            # (`routers/sso.py`): PRIVACY.md promises that nothing downstream
+            # records which door a person used.
+            logger.info("Passkey sign-in completed")
             return {
                 "verified": True,
                 "token": token,
