@@ -36,6 +36,7 @@ import { StatusBanner } from "@/shared/ui/status-banner";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Layout } from "./Layout";
 import { QueryProvider } from "./providers";
+import { newReleaseWaiting } from "./release";
 
 /**
  * The account is suspended: the API's own sentence, full-page, instead of the
@@ -122,6 +123,20 @@ function Public({ children }: { children: React.ReactNode }) {
 	);
 }
 
+/**
+ * Loads the new release, when one has taken control while this page was open,
+ * as the visitor moves to another page: never at once, which would throw away
+ * whatever is half-typed (app/release.ts).
+ */
+function LoadNewReleaseOnNavigation() {
+	const { pathname } = useLocation();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: runs on each change of page
+	useEffect(() => {
+		if (newReleaseWaiting()) window.location.reload();
+	}, [pathname]);
+	return null;
+}
+
 function AuthInitializer({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		initializeAuth();
@@ -146,6 +161,7 @@ export function App() {
 					<Toaster />
 					<AuthInitializer>
 						<BrowserRouter>
+							<LoadNewReleaseOnNavigation />
 							<Routes>
 								{/* Public routes */}
 								<Route
