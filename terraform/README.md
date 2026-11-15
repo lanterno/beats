@@ -25,6 +25,7 @@ The Terraform configuration is organized into logical modules for better maintai
 - **`apis.tf`** - GCP API enablement (Cloud Build, Artifact Registry, Storage, Secret Manager, Monitoring, Logging)
 - **`cloudbuild.tf`** - Cloud Build resources (service account, IAM, artifact registry, build triggers)
 - **`cloudrun.tf`** - Cloud Run service, domain mapping, and IAM policies
+- **`secrets.tf`** - The API's four Secret Manager secrets, its service account and the bindings between them
 - **`cloudflare.tf`** - Cloudflare DNS record management (optional)
 - **`monitoring.tf`** - Uptime checks, log-based metrics and the dashboard
 - **`alerts.tf`** - Alert policies and the email channel they are sent to
@@ -400,6 +401,34 @@ The zone id is the `cloudflare_zone_id` output and the record id is
   was documented here and read by no `.tf` file (#376); turning proxying on is
   a change to `cloudflare.tf` and to what the API trusts, not a flag.
 
+
+## The API's Secrets
+
+The API reads four values from Secret Manager, by reference, as its own
+service account (`beats-api`):
+
+| Secret | Env | What it opens |
+|---|---|---|
+| `beats-db-dsn` | `DB_DSN` | The whole database, read and write |
+| `beats-jwt-secret` | `JWT_SECRET` | Every user's session |
+| `beats-anthropic-api-key` | `ANTHROPIC_API_KEY` | The coach's spend |
+| `beats-github-client-secret` | `GITHUB_CLIENT_SECRET` | The GitHub OAuth app |
+
+Terraform (`secrets.tf`) manages the containers, the account and one
+`secretAccessor` binding per secret, to that account alone. It never manages
+a version, so a value is in no plan, no state and no tfvars, and none is in
+the service's spec. A value goes in by hand:
+
+```bash
+printf '%s' "$VALUE" | \
+  gcloud secrets versions add beats-jwt-secret --data-file=- --project=beats-476914
+```
+
+The service reads `latest`, so a rotation is a new version followed by a
+redeploy (rerun the last build, § *Rerunning Builds*): the running revision
+keeps the value it started with. Rotating `beats-jwt-secret` signs everyone
+out. Disable the old version once the new revision is serving
+(`gcloud secrets versions disable`).
 
 ## Operator Deployment (One-Time Setup)
 
