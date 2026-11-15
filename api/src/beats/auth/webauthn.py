@@ -218,7 +218,9 @@ class WebAuthnManager:
                     email=user.email,
                 )
 
-            logger.info("Successfully registered new passkey for user %s", user.email)
+            # Names nobody: an address in a log line is kept for 30 days in
+            # Cloud Logging, and DATA.md promises the logs hold no person.
+            logger.info("Registered a new passkey")
             return result
 
         except Exception as e:
