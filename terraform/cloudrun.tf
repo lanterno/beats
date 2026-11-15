@@ -5,6 +5,12 @@ resource "google_cloud_run_service" "beats_api" {
 
   template {
     spec {
+      # Its own account, which alone reads the four secrets below
+      # (terraform/secrets.tf). Each is read by reference at `latest`, so a
+      # rotation is a new version and a redeploy, never a Terraform change,
+      # and no secret is in this spec, its revisions or the state.
+      service_account_name = google_service_account.beats_api.email
+
       containers {
         image = "${local.built_image}:${var.container_image_tag}"
 
@@ -13,8 +19,13 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
-          name  = "DB_DSN"
-          value = var.mongodb_connection_string
+          name = "DB_DSN"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.api["db_dsn"].secret_id
+              key  = "latest"
+            }
+          }
         }
 
         env {
@@ -23,8 +34,13 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
-          name  = "JWT_SECRET"
-          value = var.jwt_secret
+          name = "JWT_SECRET"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.api["jwt_secret"].secret_id
+              key  = "latest"
+            }
+          }
         }
 
         # The proxy whose X-Forwarded-For the API believes (settings.py). Cloud
@@ -50,8 +66,13 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
-          name  = "ANTHROPIC_API_KEY"
-          value = var.anthropic_api_key
+          name = "ANTHROPIC_API_KEY"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.api["anthropic_api_key"].secret_id
+              key  = "latest"
+            }
+          }
         }
 
         env {
@@ -70,8 +91,13 @@ resource "google_cloud_run_service" "beats_api" {
         }
 
         env {
-          name  = "GITHUB_CLIENT_SECRET"
-          value = var.github_client_secret
+          name = "GITHUB_CLIENT_SECRET"
+          value_from {
+            secret_key_ref {
+              name = google_secret_manager_secret.api["github_client_secret"].secret_id
+              key  = "latest"
+            }
+          }
         }
 
         env {
@@ -110,20 +136,27 @@ resource "google_cloud_run_service" "beats_api" {
       template[0].metadata[0].annotations["run.googleapis.com/client-version"]
     ]
   }
+
+  # The grants first: a revision whose account cannot read a secret it
+  # references, or pull its image, fails to deploy, and nothing else orders
+  # them.
+  depends_on = [
+    google_secret_manager_secret_iam_member.api_reader,
+    google_artifact_registry_repository_iam_member.cloudrun_reader,
+  ]
 }
 
-# Grant Cloud Run default service account access to Artifact Registry
-# Cloud Run uses the Compute Engine default service account
 data "google_project" "project" {
   project_id = var.project_id
 }
 
+# The API's account reads its image from the repository.
 resource "google_artifact_registry_repository_iam_member" "cloudrun_reader" {
   project    = var.project_id
   location   = local.artifact_registry_location
   repository = google_artifact_registry_repository.docker.name
   role       = "roles/artifactregistry.reader"
-  member     = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+  member     = "serviceAccount:${google_service_account.beats_api.email}"
 }
 
 # IAM policy to allow unauthenticated access (public)

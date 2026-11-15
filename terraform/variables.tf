@@ -79,24 +79,13 @@ variable "container_image_tag" {
   default     = "latest"
 }
 
-# Database Configuration
-variable "mongodb_connection_string" {
-  description = "MongoDB connection string (e.g., mongodb+srv://user:pass@cluster.mongodb.net)"
-  type        = string
-  sensitive   = true
-}
-
+# Database Configuration. The connection string, the JWT secret, the Anthropic
+# key and the GitHub OAuth secret are no variables: each is a Secret Manager
+# secret the service reads by reference (secrets.tf).
 variable "mongodb_database_name" {
   description = "MongoDB database name"
   type        = string
   default     = "beats"
-}
-
-# JWT Configuration
-variable "jwt_secret" {
-  description = "Secret key for signing JWT session tokens (WebAuthn)"
-  type        = string
-  sensitive   = true
 }
 
 # WebAuthn Configuration
@@ -119,13 +108,6 @@ variable "github_client_id" {
   default     = ""
 }
 
-variable "github_client_secret" {
-  description = "GitHub OAuth App client secret"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
 variable "github_redirect_uri" {
   description = "GitHub OAuth redirect URI"
   type        = string
@@ -133,13 +115,6 @@ variable "github_redirect_uri" {
 }
 
 # AI Coach (Anthropic API)
-variable "anthropic_api_key" {
-  description = "Anthropic API key for the AI Coach (Claude)"
-  type        = string
-  sensitive   = true
-  default     = ""
-}
-
 variable "coach_model" {
   description = "Claude model ID for the AI coach"
   type        = string
