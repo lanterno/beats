@@ -78,8 +78,15 @@ void main() {
       expect(briefExcerpt(body, max: 40), 'First sentence here.');
     });
 
-    test('cuts at a word with an ellipsis when one sentence is too long', () {
-      expect(briefExcerpt('one two three four five six', max: 12), 'one two…');
+    test('cuts at a word with three periods when one sentence is too long', () {
+      expect(briefExcerpt('one two three four five six', max: 12), 'one two...');
+    });
+
+    test('the periods fit inside the budget', () {
+      // "one two three" fits in 15 but "one two three..." does not.
+      final excerpt = briefExcerpt('one two three four', max: 15)!;
+      expect(excerpt, 'one two...');
+      expect(excerpt.length, lessThanOrEqualTo(15));
     });
 
     test('nothing to say is null', () {
