@@ -301,7 +301,7 @@ class _CoachScreenState extends State<CoachScreen> {
           body: 'Your coach writes it from your recent days, in a few seconds, '
               'using a little of this month\'s coach budget.',
           action: SkyButton(
-            label: _writing ? 'Writing…' : 'Write today\'s brief',
+            label: _writing ? 'Writing...' : 'Write today\'s brief',
             icon: Icons.edit_note_rounded,
             kind: SkyButtonKind.primary,
             onPressed: _writing ? null : _writeBrief,
@@ -580,7 +580,7 @@ class _CoachScreenState extends State<CoachScreen> {
                   keyboardType: TextInputType.multiline,
                   style: SkyType.body(15).copyWith(color: p.ink),
                   decoration: const InputDecoration(
-                    hintText: 'Ask about your time…',
+                    hintText: 'Ask about your time...',
                     filled: false,
                     border: InputBorder.none,
                     focusedBorder: InputBorder.none,
@@ -650,10 +650,10 @@ class _CoachScreenState extends State<CoachScreen> {
         if (reply.lookingUp)
           Padding(
             padding: EdgeInsets.only(top: reply.text.isEmpty ? 0 : 6),
-            child: Text('Looking at your data…', style: muted),
+            child: Text('Looking at your data...', style: muted),
           )
         else if (reply.text.isEmpty && reply.error == null)
-          Text('…', style: muted),
+          Text('...', style: muted),
         if (reply.error != null)
           Padding(
             padding: EdgeInsets.only(top: reply.text.isEmpty ? 0 : 6),

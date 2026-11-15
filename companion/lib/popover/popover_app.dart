@@ -316,7 +316,7 @@ class _Panel extends StatelessWidget {
           style: SkyType.body(13).copyWith(color: p.inkMuted)),
       Align(
         alignment: Alignment.centerLeft,
-        child: LinkButton(label: 'Log time you forgot…', onPressed: () => onOpen(route: 'log')),
+        child: LinkButton(label: 'Log time you forgot...', onPressed: () => onOpen(route: 'log')),
       ),
     ];
   }

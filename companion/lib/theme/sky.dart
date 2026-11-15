@@ -162,6 +162,11 @@ extension SkyContext on BuildContext {
 /// other character stays Zen Maru's. The web's "Latin Dash" face does the same
 /// in `ui/client/global.css`. M PLUS Rounded 1c's own dashes are Latin, so the
 /// display and figure styles need nothing.
+///
+/// The ellipsis has no such face: both rounded faces draw U+2026 as the
+/// full-width Japanese one (scripts/gen_latin_dash.py), so the app's own
+/// strings write three periods instead ("Logging..."). The macOS menus and
+/// notifications keep the character; macOS draws those in its own face.
 const _latinDash = 'LatinDash';
 
 TextStyle _withLatinDash(TextStyle style) => style.copyWith(

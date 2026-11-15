@@ -232,7 +232,7 @@ class _LogSessionDialogState extends State<_LogSessionDialog> {
               SkyButton(label: 'Cancel', onPressed: () => Navigator.of(context).pop()),
               const SizedBox(width: 10),
               SkyButton(
-                label: _sending ? 'Logging…' : 'Log it',
+                label: _sending ? 'Logging...' : 'Log it',
                 kind: SkyButtonKind.primary,
                 onPressed: problem == null && project != null && !_sending ? _send : null,
               ),
