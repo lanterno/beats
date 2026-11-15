@@ -5,11 +5,10 @@ on the revisions from before the move, which carried the four values in the
 clear; they were deleted on 2026-11-15, and the row shipped the same day
 (#487; [docs/backoffice.md](../docs/backoffice.md) § *The pages*, Today).
 
-**What blocks it:** the owner, for steps 1 and 2. Step 1 writes a new
-version of the tfvars secret and step 2 deletes for good, and both are the
-owner's to run: an agent's attempt to copy these values was refused by its
-permission check, which is the right place for that line to be, and step 2
-cannot be undone.
+**What blocks it:** the owner, and one API build. Deleting the old copies
+cannot be undone, so the owner confirms each list; and it waits until a build
+has applied with the stripped tfvars, so that until then version 8 is still
+there to go back to.
 
 Written 2026-11-04, from the control plane's review. The move itself shipped
 on 2026-11-15 (#479, #485): the API reads its four secrets from Secret
@@ -20,34 +19,29 @@ Manager by reference, as a service account of its own
 
 Since `beats-api-00182-rb5` (2026-11-15), the service's spec carries no
 secret, and the 181 revisions before it, whose specs did, were deleted the
-same day. The values are still in the other copies made before it:
+same day, and the four lines left the tfvars that evening: version 9 of
+`beats-terraform-tfvars` (2026-11-15, 22:46 UTC) is the old one less those
+lines, every other byte the same, and the owner's local
+`terraform/terraform.tfvars` lost the same four. The values are still in the
+copies made before:
 
-- **Every version of `beats-terraform-tfvars`** (8, all enabled), the latest
-  among them. Cloud Build still copies it into `terraform.tfvars` on every
-  build; nothing declares the four variables any more, so they only warn.
+- **Versions 1 to 8 of `beats-terraform-tfvars`**, all enabled. Builds read
+  `latest`, so none of them is read any more.
 - **The noncurrent generations of `beats/default.tfstate`** in
   `beats-476914-terraform-state`, which keeps object versions (`versioning`
-  in `terraform/bootstrap/main.tf`): 30 of them, every one written before
-  step 2's apply finished on 2026-11-15 at 06:03 UTC.
-- **The local `terraform/terraform.tfvars`** of whoever applies by hand.
+  in `terraform/bootstrap/main.tf`): the 30 written before the move's apply
+  (#485) finished on 2026-11-15 at 06:03 UTC.
 
 A copy missed is still a live credential. Only rotating a secret makes every
 old copy of it worthless.
 
 ## Work
 
-1. Strip the four values from the tfvars secret: a new version of
-   `beats-terraform-tfvars` without `mongodb_connection_string`, `jwt_secret`,
-   `anthropic_api_key` and `github_client_secret`, every other line
-   byte-identical. Safe now that nothing declares them; before 2026-11-15 a
-   missing `jwt_secret` would have failed every API deploy. The local
-   `terraform.tfvars` loses the same four lines.
-2. Delete the old copies, once step 1 has a build behind it:
-   - **Every tfvars version before step 1's**
-     (`gcloud secrets versions destroy`).
+1. Delete the old copies, once a build has applied with version 9:
+   - **Tfvars versions 1 to 8** (`gcloud secrets versions destroy`).
    - **The state generations that still hold the values**: the noncurrent
-     generations of `beats/default.tfstate` written before step 2's apply
-     ended. Step 2's apply wrote more than one, and one written mid-apply can
+     generations of `beats/default.tfstate` written before the move's apply
+     ended. That apply wrote more than one, and one written mid-apply can
      predate the service's update, so each is checked for the plain env
      values rather than cut by time. The generations written since are the
      backups.
