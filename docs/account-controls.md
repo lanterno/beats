@@ -10,7 +10,8 @@ the break-glass path beside them.
 
 Each act means one thing, and they deliberately do not overlap:
 
-- **sign-out ends sessions** — devices stay paired;
+- **a logout ends one sign-in** — the browser's own, on every instance;
+- **sign-out everywhere ends every sign-in** — devices stay paired;
 - **revoking ends one device** (`DeviceRegistration.revoked`, which predates
   this work);
 - **suspension ends both.**
@@ -77,9 +78,37 @@ read newer than the cut and outlive it for good. A session token without
 such a token's `iat` would let a tab that renews every 55 minutes outlive
 every sign-out.
 
+## Logout, and sid
+
+A logout ends the sign-in it was taken with, on every instance, and nothing
+else: the account's other browsers stay signed in. Until 2026-11-15 it only
+added the token to the memory of the instance that took it (#451), so the
+next instance, or the same one after a restart, still took the token, and a
+refresh there minted a new one: a copy of a token outlived its logout for as
+long as someone kept refreshing it.
+
+Each session token carries a **`sid`**, set at sign-in and copied by every
+refresh, as `auth_time` is; `jti`, new on every refresh, names one token
+and could not serve. The logout records the sid on the account
+(`ended_sessions`, written by `account_access.end_session`) with an `until`:
+the session's TTL plus the cached lookup's below, past which no token of
+that sign-in can still be unexpired, since no instance refreshes one after
+reading the entry. The middleware refuses a token whose sid is listed (401
+`INVALID_TOKEN`). Every write drops the entries past their `until`, so the
+list holds about an hour of logouts. It is not a field of `User`, whose
+read-modify-write `update` would put a stale list back; one pipeline update
+writes it, so two logouts at once keep both entries.
+
+A token minted before `sid` existed is named by its `auth_time`
+(`signed-in-<auth_time>`, `session_id_of` in `beats/auth/session.py`), and
+its next refresh writes that name into `sid`, so nobody signs in again. Two
+such sign-ins by one account in the same second share the name, and a logout
+of one ends both.
+
 ## The cached lookup, and the day last seen
 
-Suspension and the sign-out cut are checked on every authenticated request.
+Suspension, the sign-out cut and the ended sign-ins are checked on every
+authenticated request.
 Done naively that is a Mongo round-trip per request, so the account's auth
 state is cached the way a device's revocation verdict is
 (`beats/auth/account_access.py`, the shape and reasoning of
