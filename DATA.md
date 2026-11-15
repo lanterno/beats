@@ -74,7 +74,9 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
 - **Single sign-on identities** (`identities[]` on the user): per linked
   OpenID Connect provider, its configured id, the `issuer` and `subject`
   the account is keyed on, the `name` and `email` the provider asserts
-  (refreshed on each sign-in, shown and never matched on) and `linked_at`
+  (refreshed on each sign-in, shown and never matched on) and `linked_at`;
+  and `sso_provisioned` on the user when a provider created the account,
+  whose display name then follows the `name` that provider asserts
 - Refresh-token records for JWT rotation
 
 No passwords are stored — Beats does not have a password login path.
