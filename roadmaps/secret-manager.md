@@ -67,9 +67,14 @@ project.
 
 ## Work
 
-1. Apply the four secret containers, then add each one's version by hand,
-   with today's values. Rotating is a separate decision. Do it afterwards if
-   at all, one secret at a time: rotating `JWT_SECRET` signs everyone out.
+1. **Done on 2026-11-15.** The four containers were applied (#479), and the
+   owner added each one's first version by hand from today's values: the live
+   service and the tfvars agreed on all four, and each version read back
+   identical. Nothing reads them until step 2, which nothing blocks now. The
+   values stay the owner's to add: an agent's attempt to copy them over was
+   refused by its permission check, which is the right place for that line
+   to be. Rotating is a separate decision. Do it afterwards if at all, one
+   secret at a time: rotating `JWT_SECRET` signs everyone out.
 2. In one change: the service account and its bindings, the env switched to
    references, and the four variables removed from `variables.tf`. The
    service `depends_on` the bindings, so its new revision isn't made before
