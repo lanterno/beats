@@ -154,14 +154,16 @@ resource "google_cloud_run_v2_service" "beats_operator" {
         value = tostring(var.max_instances)
       }
 
-      # Release history (api/src/beats/operator/releases.py): the commit both
-      # services were deployed with in this apply, and where the web app's
-      # version.json is served.
+      # The API's deploy state (api/src/beats/operator/deploy_state.py): the
+      # region its service is read in, with the service named above.
       env {
-        name  = "OPERATOR_API_COMMIT"
-        value = var.container_image_tag
+        name  = "OPERATOR_API_REGION"
+        value = var.region
       }
 
+      # Release history (api/src/beats/operator/releases.py): where the web
+      # app's version.json is served. The API's commit is read off the
+      # revision serving it, never assumed from this apply's tag.
       env {
         name  = "OPERATOR_WEB_ORIGIN"
         value = var.webauthn_origin
@@ -208,6 +210,22 @@ resource "google_project_iam_member" "operator_build_viewer" {
   project = var.project_id
   role    = "roles/cloudbuild.builds.viewer"
   member  = "serviceAccount:${google_service_account.beats_operator[0].email}"
+}
+
+# The API's deploy state: its service and its revisions, read-only, on that
+# one service. Safe since 2026-11-15, when the API's secrets moved into Secret
+# Manager and the revisions that carried them in their spec were deleted
+# (terraform/README.md § The API's Secrets): a revision's spec now names its
+# secrets, never holds them. A digest's commit tags are read through
+# operator_image_reader.
+resource "google_cloud_run_service_iam_member" "operator_api_viewer" {
+  count = var.operator_enabled ? 1 : 0
+
+  project  = var.project_id
+  location = google_cloud_run_service.beats_api.location
+  service  = google_cloud_run_service.beats_api.name
+  role     = "roles/run.viewer"
+  member   = "serviceAccount:${google_service_account.beats_operator[0].email}"
 }
 
 # The deploy freeze: one flag object in a small private bucket of its own —
