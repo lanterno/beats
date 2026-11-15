@@ -48,7 +48,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react-swc": "^4.3.3",
     "fake-indexeddb": "^6.2.6",
-    "jsdom": "^30.0.1",
+    "jsdom": "^31.0.0",
     "postcss": "^8.5.31",
     "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
