@@ -657,6 +657,64 @@ class TestErasure:
         assert "note" not in db.absences.find_one({"organisation_id": org["id"]})
         assert db.org_audit.find_one({"event": "account.erased", "subject_user_id": row["user_id"]})
 
+    def test_a_balance_withheld_for_kept_back_history_stays_withheld(self, client, auth_headers):
+        """A project connected with history before the share day: the
+        organisation never read the member's balance, which would carry the
+        hours kept back (rule 4). Erasure deletes those kept-back rows, and
+        must not make a balance appear in their place — one that was never
+        shown, and wrong, since its expected hours run from the contract's
+        start while its worked hours start at the share day — nor keep the
+        balance adjustments, before the share day or after it, since no
+        balance the organisation read was made of them (PRIVACY.md,
+        Deletion)."""
+        from beats.infrastructure.erasure import erase_account
+
+        org = _create_org(client, auth_headers)
+        member = _new_user()
+        member_id = _member_of(client, auth_headers, org["id"], member)
+        project = client.post(
+            "/api/projects/",
+            json={"name": "Day job", "kind": "day_job", "contract": {"terms": FULL_TIME}},
+            headers=member,
+        ).json()
+        _beat(client, member, project["id"], "2026-03-02T09:00:00", 60)  # before
+        _beat(client, member, project["id"], "2026-03-04T09:00:00", 120)  # shared
+        for day, hours in (("2026-03-02", 5), ("2026-03-05", -2)):
+            made = client.post(
+                f"/api/projects/{project['id']}/adjustments",
+                params={"tz": "UTC"},
+                json={"date": day, "kind": "delta", "hours": hours},
+                headers=member,
+            )
+            assert made.status_code in (200, 201), made.text
+        connected = client.post(
+            f"/api/organisations/{org['id']}/connect",
+            params={"tz": "UTC"},
+            json={"project_id": project["id"], "share_from": "2026-03-04"},
+            headers=member,
+        )
+        assert connected.status_code == 200, connected.text
+        [was] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert was["balance"] is None
+
+        async def run():
+            from pymongo import AsyncMongoClient
+
+            client_ = AsyncMongoClient(os.environ.get("DB_DSN", "mongodb://localhost:27017"))
+            try:
+                return await erase_account(
+                    client_[os.environ.get("DB_NAME", "beats_test")], member_id
+                )
+            finally:
+                await client_.close()
+
+        asyncio.run(run())
+
+        [row] = _members_of_record(_record(client, auth_headers, org["id"]), project["id"])
+        assert row["user_id"].startswith("erased:")
+        assert row["balance"] is None
+        assert _db().balance_adjustments.count_documents({"project_id": project["id"]}) == 0
+
     def test_a_deciders_erasure_leaves_no_raw_id_anywhere(self, client, auth_headers):
         """The module promises every column in the organisation naming the
         person gets the tombstone. Two were missed (#410): `entered_by` on
