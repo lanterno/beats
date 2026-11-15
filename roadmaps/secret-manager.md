@@ -1,113 +1,63 @@
-# The API's secrets, out of its spec
+# The API's secrets: the copies left behind
 
-**What is blocked:** the control plane's deploy-state row
-([docs/backoffice.md](../docs/backoffice.md) § *The pages*, and step 5
-below). That row reads the API's
-service and its revisions, and can't until this lands. Nothing else waits on it:
-the live health figures and the release history, shipped 2026-11-14,
-read Cloud Monitoring, Cloud Build and Firebase, none of which show the API's
-spec. It is still worth doing first, control plane or not: today anyone who can
-describe the Cloud Run service can read every user's session key.
+**What is blocked:** nothing. The control plane's deploy-state row (step 3)
+waited on the revisions from before the move, which carried the four values
+in the clear; they were deleted on 2026-11-15.
 
-**What blocks it:** nothing, since 2026-11-08. The apply creates secrets, a
-service account and IAM bindings, and Cloud Build's account may: it holds
-`roles/owner` ([terraform/README.md](../terraform/README.md) § *Operator
-Deployment*). A failed apply
-still blocks every API deploy, so the first build is watched.
+**What blocks it:** the owner, for steps 1 and 2. Step 1 writes a new
+version of the tfvars secret and step 2 deletes for good, and both are the
+owner's to run: an agent's attempt to copy these values was refused by its
+permission check, which is the right place for that line to be, and step 2
+cannot be undone.
 
-Written 2026-11-04, from the control plane's review.
+Written 2026-11-04, from the control plane's review. The move itself shipped
+on 2026-11-15 (#479, #485): the API reads its four secrets from Secret
+Manager by reference, as a service account of its own
+([terraform/README.md](../terraform/README.md) § *The API's Secrets*).
 
 ## What is true today
 
-`terraform/cloudrun.tf` sets four secrets as **plain environment values** on
-the v1 `google_cloud_run_service`:
+Since `beats-api-00182-rb5` (2026-11-15), the service's spec carries no
+secret, and the 181 revisions before it, whose specs did, were deleted the
+same day. The values are still in the other copies made before it:
 
-| Variable | Env | What it opens |
-|---|---|---|
-| `var.mongodb_connection_string` | `DB_DSN` | The whole database, read and write |
-| `var.jwt_secret` | `JWT_SECRET` | Every user's session: anyone holding it mints a token for any account |
-| `var.anthropic_api_key` | `ANTHROPIC_API_KEY` | The coach's spend |
-| `var.github_client_secret` | `GITHUB_CLIENT_SECRET` | The GitHub OAuth app |
+- **Every version of `beats-terraform-tfvars`** (8, all enabled), the latest
+  among them. Cloud Build still copies it into `terraform.tfvars` on every
+  build; nothing declares the four variables any more, so they only warn.
+- **The noncurrent generations of `beats/default.tfstate`** in
+  `beats-476914-terraform-state`, which keeps object versions (`versioning`
+  in `terraform/bootstrap/main.tf`): 30 of them, every one written before
+  step 2's apply finished on 2026-11-15 at 06:03 UTC.
+- **The local `terraform/terraform.tfvars`** of whoever applies by hand.
 
-A plain value sits in three places. It is in the service's spec and in every
-revision's spec, where `roles/run.viewer` reads it. It is in the Terraform
-state in `beats-476914-terraform-state`. And it is in `beats-terraform-tfvars`
-in Secret Manager, which Cloud Build copies into `terraform.tfvars` on every
-build.
-
-The API runs as the Compute Engine default service account (no
-`service_account_name` in `cloudrun.tf`), which holds `roles/editor` on the
-project.
-
-## The shape
-
-- **One Secret Manager secret per value**: `beats-db-dsn`, `beats-jwt-secret`,
-  `beats-anthropic-api-key`, `beats-github-client-secret`. Terraform manages
-  only the secret containers (`google_secret_manager_secret`) and their IAM.
-  **It never manages a version.** A value goes in by hand with
-  `gcloud secrets versions add`, steps in `terraform/README.md`. That takes the
-  values out of the state and the tfvars as well as the spec. A
-  `google_secret_manager_secret_version` fed from a tfvars variable would
-  leave them in the state, which is two of the three places.
-- **The service reads each one by reference**: `value_from { secret_key_ref
-  { name = …, key = "latest" } }` in the v1 resource, which supports it.
-  Pinning a version number instead would make a rotation a Terraform change.
-  `latest` makes it a new revision, so a rotation is `versions add` followed
-  by a redeploy.
-- **The API gets a service account of its own** (`beats-api`), with
-  `roles/secretmanager.secretAccessor` on those four secrets alone and
-  `roles/artifactregistry.reader` on the repository (today's
-  `cloudrun_reader` binding, moved). Not the Compute default:
-  `roles/editor` doesn't read secret payloads, and granting it would hand
-  them to everything else that runs as that account.
-- **The variables go** from `variables.tf` in the same change that switches
-  the env to references, and from the tfvars secret once that change has
-  deployed (§ *Work*, step 3). Two sources for one value is how a rotation
-  updates one and not the other.
+A copy missed is still a live credential. Only rotating a secret makes every
+old copy of it worthless.
 
 ## Work
 
-1. **Done on 2026-11-15.** The four containers were applied (#479), and the
-   owner added each one's first version by hand from today's values: the live
-   service and the tfvars agreed on all four, and each version read back
-   identical. Nothing reads them until step 2, which nothing blocks now. The
-   values stay the owner's to add: an agent's attempt to copy them over was
-   refused by its permission check, which is the right place for that line
-   to be. Rotating is a separate decision. Do it afterwards if at all, one
-   secret at a time: rotating `JWT_SECRET` signs everyone out.
-2. In one change: the service account and its bindings, the env switched to
-   references, and the four variables removed from `variables.tf`. The
-   service `depends_on` the bindings, so its new revision isn't made before
-   its account can read what it references. That revision is the first one
-   whose spec carries no secret.
-3. Strip the four values from the tfvars secret **after** step 2 has
-   deployed, never before. Until then `mongodb_connection_string` and
-   `jwt_secret` are required variables, and one missing from the tfvars
-   fails every API deploy. The other two default to an empty string, so
-   their absence would quietly empty the coach's key and GitHub's. A value
-   left for a variable that no longer exists only warns.
-4. Delete the old copies. Moving the values stops new ones being made; the
-   old ones stay where they were:
-   - **Old revisions** carry them in their spec. Delete the revisions from
-     before step 2 (`gcloud run revisions delete`). A rollback target is
-     whatever the deploy lock allows, which today is "revert on `main`", so
-     nothing is lost.
-   - **The tfvars secret's earlier versions** hold them. Destroy every
-     version before step 3's (`gcloud secrets versions destroy`).
-   - **The state bucket keeps object versions** (`versioning` in
-     `terraform/bootstrap/main.tf`), so every state written before step 2
-     still holds them. Delete the noncurrent generations of
-     `beats/default.tfstate` from before it. The generations written since
-     are the backups.
-   - **The local `terraform/terraform.tfvars`** of whoever applies by hand.
+1. Strip the four values from the tfvars secret: a new version of
+   `beats-terraform-tfvars` without `mongodb_connection_string`, `jwt_secret`,
+   `anthropic_api_key` and `github_client_secret`, every other line
+   byte-identical. Safe now that nothing declares them; before 2026-11-15 a
+   missing `jwt_secret` would have failed every API deploy. The local
+   `terraform.tfvars` loses the same four lines.
+2. Delete the old copies, once step 1 has a build behind it:
+   - **Every tfvars version before step 1's**
+     (`gcloud secrets versions destroy`).
+   - **The state generations that still hold the values**: the noncurrent
+     generations of `beats/default.tfstate` written before step 2's apply
+     ended. Step 2's apply wrote more than one, and one written mid-apply can
+     predate the service's update, so each is checked for the plain env
+     values rather than cut by time. The generations written since are the
+     backups.
 
-   A copy missed here is still a live credential. Only rotating a secret
-   makes every old copy of it worthless.
-5. **Then the control plane's deploy-state row** (moved here from the
-   control plane's roadmap on 2026-11-14, when the rest of it shipped): once
-   the API's spec carries no secret, reading the service is safe, and Today
-   can say whether the newest revision became ready instead of linking to
-   the Cloud Run console. The reads are what `api/scripts/deploy_lock.sh`
+   Irreversible, so the owner confirms each list before it is deleted.
+3. **Then the control plane's deploy-state row** (moved here from the
+   control plane's roadmap on 2026-11-14, when the rest of it shipped): with
+   no revision's spec carrying a secret, reading the service is safe, and
+   Today can say whether the newest revision became ready instead of linking
+   to the Cloud Run console. Nothing blocks it since the old revisions
+   went. The reads are what `api/scripts/deploy_lock.sh`
    reads — the API service and its revisions, the Artifact Registry tags,
    and `beats/deploy.lock` alone as an object get under a `resource.name`
    condition (a condition cannot narrow a list, so the operator never lists
