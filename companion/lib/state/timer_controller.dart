@@ -66,7 +66,9 @@ const noteLimit = 2000;
 /// [existing] with [text] after it, on the one line a note is (the web
 /// edits it in a single-line field): joined by "; ", or by a space after a
 /// sentence that ended. [text] is trimmed and its line breaks become
-/// spaces; an empty [text] leaves the note as it was.
+/// spaces; an empty [text] leaves the note as it was. `beatsd note` is the
+/// same rule (`appendNote` in daemon/cmd/beatsd/timer.go), and the tests
+/// of each hold the same cases.
 String appendToNote(String? existing, String text) {
   final add = text.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim();
   final have = (existing ?? '').trimRight();
