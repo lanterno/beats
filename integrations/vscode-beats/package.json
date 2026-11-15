@@ -92,7 +92,8 @@
   },
   "overrides": {
     "undici": ">=7.29.0 <8",
-    "js-yaml": ">=4.3.1 <5"
+    "js-yaml": ">=4.3.1 <5",
+    "minimatch": ">=11.0.1 <12"
   },
   "repository": {
     "type": "git",
