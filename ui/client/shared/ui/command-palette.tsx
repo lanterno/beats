@@ -9,7 +9,8 @@
 
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cn, fuzzyRank } from "@/shared/lib";
+import { cn } from "@/shared/lib/cn";
+import { fuzzyRank } from "@/shared/lib/fuzzyMatch";
 
 export interface CommandItem {
 	id: string;

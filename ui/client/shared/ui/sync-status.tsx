@@ -11,7 +11,8 @@
  */
 
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { cn, useSyncStatus } from "@/shared/lib";
+import { cn } from "@/shared/lib/cn";
+import { useSyncStatus } from "@/shared/lib/useSyncEngine";
 
 interface SyncStatusProps {
 	className?: string;
