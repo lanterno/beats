@@ -400,6 +400,49 @@ class TestWebAuthnAuthenticationVerificationGuards:
         assert payload["sub"] == "user-99"
         assert payload["email"] == "ahmed@example.com"
 
+    async def test_a_sign_in_logs_nothing_that_names_the_account(self, monkeypatch, caplog):
+        """PRIVACY.md promises that nothing downstream records which door
+        was used. A line naming the account on the passkey door — or one
+        beside it, from the session manager — is such a record, kept 30
+        days in Cloud Logging. The single sign-on door has the same pin in
+        `TestSSOAPI`."""
+        import logging
+
+        from beats.auth import webauthn as webauthn_module
+        from beats.domain.models import User
+
+        class _FakeAuth:
+            new_sign_count = 1
+
+        monkeypatch.setattr(
+            webauthn_module, "verify_authentication_response", lambda **_: _FakeAuth()
+        )
+        storage = _FakeCredentialStorage()
+        storage._creds.append(
+            (
+                "user-99",
+                StoredCredential(
+                    credential_id="cred-1",
+                    public_key="pk",
+                    sign_count=0,
+                    created_at="2026-04-01T00:00:00",
+                ),
+            )
+        )
+        sm = _sm()
+        sm.store_challenge(b"X" * 32, challenge_type="authentication")
+        user = User(id="user-99", email="ahmed@example.com")
+        wam = _wam(storage=storage, session=sm, user_repo=_FakeUserRepo([user]))
+
+        with caplog.at_level(logging.INFO, logger="beats"):
+            result = await wam.verify_authentication(credential={"id": "cred-1"})
+
+        assert result["verified"] is True
+        assert caplog.records, "the sign-in still says that it happened"
+        for record in caplog.records:
+            assert "user-99" not in record.getMessage()
+            assert "ahmed@example.com" not in record.getMessage()
+
     async def test_crypto_failure_wraps_to_value_error(self, monkeypatch):
         """When verify_authentication_response raises (signature
         mismatch, sign-count rollback, etc.), the broad except
