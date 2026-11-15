@@ -1,4 +1,3 @@
-import Carbon.HIToolbox
 import Cocoa
 import FlutterMacOS
 
@@ -11,9 +10,11 @@ import FlutterMacOS
 /// is real Flutter UI with the app's look, and it talks back over
 /// `companion/popover`. The engine starts on the first click, not at launch.
 ///
-/// ⌃⌥T, from any app, opens the popover on its quick-start field. It is a
-/// Carbon hot key, which needs no Accessibility permission. (The design's
-/// ⌥⌘Space is macOS's Finder search.)
+/// The global shortcuts (GlobalShortcuts.swift) land here: quick start
+/// (⌃⌥T by default) and a note on the running session open the popover on
+/// a field of their own, and starting the last project or stopping is the
+/// main window's, which answers whether there was anything to do; a beep
+/// says there was not. (The design's ⌥⌘Space is macOS's Finder search.)
 final class StatusItemController: NSObject, NSPopoverDelegate {
   static let mainChannelName = "companion/menubar"
   static let popoverChannelName = "companion/popover"
@@ -24,7 +25,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
   private var popoverEngine: FlutterEngine?
   private var popoverChannel: FlutterMethodChannel?
   private weak var window: NSWindow?
-  private var hotKey: EventHotKeyRef?
+  private let shortcuts = GlobalShortcuts()
 
   init(mainMessenger: FlutterBinaryMessenger, window: NSWindow) {
     mainChannel = FlutterMethodChannel(name: Self.mainChannelName, binaryMessenger: mainMessenger)
@@ -48,7 +49,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     mainChannel.setMethodCallHandler { [weak self] call, result in
       self?.handleMain(call, result)
     }
-    registerHotKey()
+    shortcuts.onPress = { [weak self] action in self?.shortcutPressed(action) }
     #if DEBUG
       // `open --env LIFEPETE_POPOVER=panel|palette …` opens the popover once
       // the item is up, so it can be looked at without clicking.
@@ -96,6 +97,17 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
       // The main window started or stopped something; an open popover
       // should show it now rather than at its next poll.
       popoverChannel?.invokeMethod("timer.refresh", arguments: nil)
+      result(nil)
+
+    case "shortcuts.set":
+      let bindings = GlobalShortcuts.bindings(fromDart: args["bindings"] as? [String: Any] ?? [:])
+      result(shortcuts.set(bindings).map(\.rawValue))
+
+    case "shortcuts.record":
+      shortcuts.record { combo in result(combo) }
+
+    case "shortcuts.cancelRecord":
+      shortcuts.cancelRecording()
       result(nil)
 
     default:
@@ -162,6 +174,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
 
   private func show(mode: String) {
     guard statusItem.isVisible, let button = statusItem.button else { return }
+    shownMode = mode
+    // A note is one line; the panel and the palette are lists.
+    popover.contentSize = NSSize(width: 360, height: mode == "note" ? 240 : 540)
     ensureEngine()
     popoverChannel?.invokeMethod("popover.show", arguments: ["mode": mode])
     NSApp.activate(ignoringOtherApps: true)
@@ -211,27 +226,30 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     mainChannel.invokeMethod("window.show", arguments: args)
   }
 
-  // MARK: The hot key
+  // MARK: The shortcuts
 
-  private func registerHotKey() {
-    var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-    let me = Unmanaged.passUnretained(self).toOpaque()
-    InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
-      guard let userData else { return noErr }
-      let controller = Unmanaged<StatusItemController>.fromOpaque(userData).takeUnretainedValue()
-      DispatchQueue.main.async { controller.hotKeyPressed() }
-      return noErr
-    }, 1, &spec, me, nil)
-    let id = EventHotKeyID(signature: OSType(0x4C50_4554), id: 1)  // 'LPET'
-    RegisterEventHotKey(
-      UInt32(kVK_ANSI_T), UInt32(controlKey | optionKey), id, GetApplicationEventTarget(), 0, &hotKey)
+  private var shownMode: String?
+
+  private func shortcutPressed(_ action: GlobalShortcuts.Action) {
+    switch action {
+    case .palette:
+      toggle(mode: "palette")
+    case .note:
+      toggle(mode: "note")
+    case .startLast, .stop:
+      mainChannel.invokeMethod("shortcut.pressed", arguments: ["action": action.rawValue]) { answer in
+        if (answer as? Bool) != true { NSSound.beep() }
+      }
+    }
   }
 
-  private func hotKeyPressed() {
-    if popover.isShown {
+  /// The same shortcut again closes what it opened; another one switches
+  /// the open popover over to its own field.
+  private func toggle(mode: String) {
+    if popover.isShown, shownMode == mode {
       popover.performClose(nil)
     } else {
-      show(mode: "palette")
+      show(mode: mode)
     }
   }
 }

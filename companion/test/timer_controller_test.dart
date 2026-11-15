@@ -51,6 +51,7 @@ class FakeApi extends ApiClient {
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) async {
     calls.add('update $id $projectId ${start.toIso8601String()} end=$end');

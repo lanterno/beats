@@ -12,6 +12,8 @@ import '../services/mac_ambient.dart';
 import '../services/notifications.dart';
 import '../services/offline_api.dart';
 import '../services/settings_story.dart';
+import '../services/shortcuts.dart';
+import '../services/status_menu.dart';
 import '../services/sync_story.dart';
 import '../services/token_storage.dart';
 import '../state/hour.dart';
@@ -173,11 +175,12 @@ class _Group extends StatelessWidget {
 class _Row extends StatelessWidget {
   final String title;
   final String? subtitle;
+  final Color? subtitleColor;
   final Widget? leading;
   final Widget? trailing;
   final Widget? below;
 
-  const _Row({required this.title, this.subtitle, this.leading, this.trailing, this.below});
+  const _Row({required this.title, this.subtitle, this.subtitleColor, this.leading, this.trailing, this.below});
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +195,7 @@ class _Row extends StatelessWidget {
               Text(title, style: SkyType.body(15)),
               if (subtitle != null) ...[
                 const SizedBox(height: 2),
-                Text(subtitle!, style: SkyType.body(13).copyWith(color: p.inkMuted)),
+                Text(subtitle!, style: SkyType.body(13).copyWith(color: subtitleColor ?? p.inkMuted)),
               ],
             ]),
           ),
@@ -271,7 +274,7 @@ class _GeneralTabState extends State<_GeneralTab> {
     final prefs = _prefs;
     if (prefs == null) return const SizedBox(height: 200);
     final mac = Platform.isMacOS;
-    return ValueListenableBuilder(
+    final general = ValueListenableBuilder(
       valueListenable: widget.hour,
       builder: (context, hour, _) => _Group([
         if (mac && _atLogin != null)
@@ -301,12 +304,6 @@ class _GeneralTabState extends State<_GeneralTab> {
               },
             ),
           ),
-        if (mac)
-          const _Row(
-            title: 'Quick start shortcut',
-            subtitle: 'Opens the palette from any app',
-            trailing: Chip2('⌃⌥T', bold: true),
-          ),
         _Row(
           title: 'Hour',
           trailing: SegmentedPills<Hour>(
@@ -318,6 +315,131 @@ class _GeneralTabState extends State<_GeneralTab> {
             value: hour,
             onChanged: widget.hour.set,
           ),
+        ),
+      ]),
+    );
+    if (!mac) return general;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      general,
+      const _SectionLabel('Shortcuts, from any app'),
+      const _ShortcutsGroup(),
+    ]);
+  }
+}
+
+/// Each global shortcut (services/shortcuts.dart), changed by pressing the
+/// new keys, turned off, or put back. A combination another action has, or
+/// one without ⌃, ⌥ or ⌘, is refused here; one another app holds, macOS
+/// refuses, and the row says so.
+class _ShortcutsGroup extends StatefulWidget {
+  const _ShortcutsGroup();
+
+  @override
+  State<_ShortcutsGroup> createState() => _ShortcutsGroupState();
+}
+
+class _ShortcutsGroupState extends State<_ShortcutsGroup> {
+  ShortcutAction? _recording;
+  ShortcutAction? _problemFor;
+  String? _problem;
+
+  @override
+  void dispose() {
+    if (_recording != null) unawaited(StatusMenu.cancelRecording());
+    super.dispose();
+  }
+
+  Future<void> _record(ShortcutAction action) async {
+    if (_recording != null) await StatusMenu.cancelRecording();
+    setState(() {
+      _recording = action;
+      _problemFor = null;
+    });
+    final combo = KeyCombo.fromJson(await StatusMenu.recordShortcut());
+    if (!mounted || _recording != action) return;
+    setState(() => _recording = null);
+    if (combo != null) await _set(action, combo);
+  }
+
+  Future<void> _cancel() async {
+    setState(() => _recording = null);
+    await StatusMenu.cancelRecording();
+  }
+
+  Future<void> _set(ShortcutAction action, KeyCombo? combo) async {
+    final current = ShortcutsInForce.shortcuts.value;
+    final why = combo == null ? null : current.refusal(action, combo);
+    if (why != null) {
+      setState(() {
+        _problemFor = action;
+        _problem = why;
+      });
+      return;
+    }
+    final next = current.withBinding(action, combo);
+    await next.save();
+    await ShortcutsInForce.apply(next);
+    if (mounted) setState(() => _problemFor = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.sky;
+    return ListenableBuilder(
+      listenable: Listenable.merge([ShortcutsInForce.shortcuts, ShortcutsInForce.refused]),
+      builder: (context, _) {
+        final keys = ShortcutsInForce.shortcuts.value;
+        final refused = ShortcutsInForce.refused.value;
+        return _Group([
+          for (final a in ShortcutAction.values)
+            _row(context, p, a, keys[a], refused.contains(a)),
+        ]);
+      },
+    );
+  }
+
+  Widget _row(BuildContext context, SkyPalette p, ShortcutAction a, KeyCombo? combo, bool refused) {
+    final recording = _recording == a;
+    final fallback = defaultShortcuts[a]!;
+    final String subtitle;
+    Color? tone;
+    if (recording) {
+      subtitle = 'Press the new keys, or Esc to keep ${combo?.label ?? 'it off'}';
+    } else if (_problemFor == a) {
+      subtitle = _problem!;
+      tone = p.persimmonInk;
+    } else if (refused && combo != null) {
+      subtitle = 'Another app uses ${combo.label}; choose other keys';
+      tone = p.persimmonInk;
+    } else {
+      subtitle = a.subtitle;
+    }
+    return _Row(
+      title: a.title,
+      subtitle: subtitle,
+      subtitleColor: tone,
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        Chip2(
+          recording ? '…' : combo?.label ?? 'Off',
+          bold: combo != null,
+          background: recording ? p.sun.withValues(alpha: 0.3) : null,
+          foreground: tone,
+        ),
+        const SizedBox(width: 4),
+        if (recording)
+          LinkButton(label: 'Cancel', onPressed: _cancel)
+        else
+          LinkButton(label: 'Change', onPressed: () => _record(a)),
+        // A menu answers null when dismissed, so "off" is a value of its own.
+        PopupMenuButton<bool>(
+          tooltip: 'More for ${a.title}',
+          icon: Icon(Icons.more_horiz_rounded, size: 18, color: p.inkMuted),
+          enabled: !recording,
+          onSelected: (useDefault) => _set(a, useDefault ? fallback : null),
+          itemBuilder: (context) => [
+            if (combo != null) const PopupMenuItem(value: false, child: Text('Turn off')),
+            if (combo != fallback) PopupMenuItem(value: true, child: Text('Use ${fallback.label}')),
+          ],
         ),
       ]),
     );

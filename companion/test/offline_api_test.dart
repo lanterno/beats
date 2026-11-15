@@ -132,6 +132,7 @@ class Server extends ApiClient {
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) =>
       _write(clientId, () {

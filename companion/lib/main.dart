@@ -11,6 +11,7 @@ import 'services/notification_poller.dart';
 import 'services/notifications.dart';
 import 'services/offline_api.dart';
 import 'services/sample_api.dart';
+import 'services/shortcuts.dart';
 import 'services/status_menu.dart';
 import 'services/token_storage.dart';
 import 'services/tray_service.dart';
@@ -153,7 +154,34 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    if (Platform.isMacOS) {
+      StatusMenu.onShortcut(_onShortcut);
+      unawaited(ShortcutBindings.load().then(ShortcutsInForce.apply));
+    }
     _checkPairing();
+  }
+
+  /// The global shortcuts the window acts on (StatusItemController.swift),
+  /// read against the timer as the API has it now, whichever device last
+  /// moved it. False when there was nothing to do: unpaired, nothing to
+  /// stop, no last project or one already running, or the change failed.
+  Future<bool> _onShortcut(String action) async {
+    final timer = _timer;
+    if (timer == null) return false;
+    await timer.refresh();
+    if (!mounted) return false;
+    switch (action) {
+      case 'startLast':
+        final project = timer.lastProject;
+        if (project == null || timer.running) return false;
+        await TimerActions.start(context, timer, project);
+        return timer.current?.id == project.id;
+      case 'stop':
+        if (!timer.running) return false;
+        await TimerActions.stop(context, timer);
+        return !timer.running;
+    }
+    return false;
   }
 
   bool _routed = false;

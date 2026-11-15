@@ -50,6 +50,7 @@ class SampleApi extends ApiClient {
   };
 
   String? _running = 'northwind';
+  String? _runningNote;
   late DateTime _since;
   final _beats = <Map<String, dynamic>>[];
   String? _feedback;
@@ -92,7 +93,10 @@ class SampleApi extends ApiClient {
 
   @override
   Future<Map<String, dynamic>> getTimerStatus() async => _running == null
-      ? {'isBeating': false}
+      ? {
+          'isBeating': false,
+          if (_beats.isNotEmpty) 'last_beat': {'id': _beats.last['id'], 'project_id': _beats.last['project_id']},
+        }
       : {'isBeating': true, 'project': _project(_running!), 'since': _since.toIso8601String()};
 
   @override
@@ -110,9 +114,11 @@ class SampleApi extends ApiClient {
   Future<Map<String, dynamic>> stopTimer({String? stopTime, ExpectedBeat? expected, String? clientId}) async {
     final project = _running;
     if (project == null) throw ApiException(409, 'Nothing is running.');
-    final beat = _beat(project, _since, stopTime == null ? _clock() : DateTime.parse(stopTime));
+    final beat = _beat(project, _since, stopTime == null ? _clock() : DateTime.parse(stopTime))
+      ..['note'] = _runningNote;
     _beats.add(beat);
     _running = null;
+    _runningNote = null;
     return Map.of(beat);
   }
 
@@ -122,7 +128,8 @@ class SampleApi extends ApiClient {
     return [
       for (final b in _beats)
         if (on(_at(b, 'start'))) Map.of(b),
-      if (_running != null && on(_since)) {'id': 'sample-running', 'project_id': _running, 'start': _since.toIso8601String(), 'end': null},
+      if (_running != null && on(_since))
+        {'id': 'sample-running', 'project_id': _running, 'start': _since.toIso8601String(), 'end': null, 'note': _runningNote},
     ];
   }
 
@@ -145,11 +152,13 @@ class SampleApi extends ApiClient {
     required DateTime start,
     DateTime? end,
     ExpectedBeat? expected,
+    String? note,
     String? clientId,
   }) async {
     if (id == 'sample-running') {
       _running = projectId;
       _since = start.toUtc();
+      if (note != null) _runningNote = note.isEmpty ? null : note;
       return {};
     }
     final beat = _beats.firstWhere((b) => b['id'] == id, orElse: () => throw ApiException(404, 'No such session.'));
@@ -163,6 +172,7 @@ class SampleApi extends ApiClient {
         ..['project_id'] = projectId
         ..['start'] = start.toUtc().toIso8601String()
         ..['end'] = end.toUtc().toIso8601String();
+      if (note != null) beat['note'] = note.isEmpty ? null : note;
     }
     return {};
   }
