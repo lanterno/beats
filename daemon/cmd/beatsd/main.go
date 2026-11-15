@@ -475,6 +475,12 @@ func run(args []string) int {
 			return 1
 		}
 
+	case "note":
+		if err := runNote(cfg, args); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			return 1
+		}
+
 	case "config":
 		var asJSON bool
 		for i := 1; i < len(args); i++ {
@@ -774,6 +780,8 @@ Commands:
                   --json           emit {action, project_id, project_name} as JSON
   stop          Stop the running timer and print the logged duration
                   --json           emit {action, duration_minutes} as JSON
+  note <text>   Add a line to the running session's note
+                  --json           emit {action, project_id, project_name, note, organisation} as JSON
   unpair        Remove the device token from the keychain
   version       Print version info
                   --json           emit version + build info as a JSON object (for piping into jq)

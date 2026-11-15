@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ahmedElghable/beats/daemon/internal/client"
 	"github.com/ahmedElghable/beats/daemon/internal/config"
@@ -14,7 +18,7 @@ import (
 // parseStartArgs splits the `start` command's trailing arguments (args
 // AFTER the "start" verb) into a project hint and the --json flag. Non-flag
 // tokens are joined with a space so `beatsd start side project` works
-// without quoting.
+// without quoting. `note` reads its text the same way.
 func parseStartArgs(args []string) (hint string, asJSON bool) {
 	var parts []string
 	for _, a := range args {
@@ -192,5 +196,124 @@ func runStop(cfg *config.Config, args []string) error {
 		return err
 	}
 	fmt.Println(formatStopResult(b, asJSON))
+	return nil
+}
+
+// noteLimit is the most characters a note may hold (UpdateBeatRequest in
+// the API's schemas), counted as the API counts them: code points.
+const noteLimit = 2000
+
+var noteLineBreak = regexp.MustCompile(`\s*\n\s*`)
+
+// appendNote is existing with text after it, on the one line a note is (the
+// web edits it in a single-line field): joined by "; ", or by a space after
+// a sentence that ended. text is trimmed and its line breaks become spaces;
+// an empty text leaves the note as it was. The companion's appendToNote
+// (companion/lib/state/timer_controller.dart) is the same rule, and the
+// tests of each hold the same cases.
+func appendNote(existing, text string) string {
+	add := strings.TrimSpace(noteLineBreak.ReplaceAllString(text, " "))
+	have := strings.TrimRightFunc(existing, unicode.IsSpace)
+	if add == "" {
+		return have
+	}
+	if have == "" {
+		return add
+	}
+	last, _ := utf8.DecodeLastRuneInString(have)
+	if strings.ContainsRune(".;:!?…", last) {
+		return have + " " + add
+	}
+	return have + "; " + add
+}
+
+// noted is what `note` wrote: the project the running session is on, and
+// the note as it now reads.
+type noted struct {
+	project client.Project
+	note    string
+}
+
+// addToNote puts text after the running session's note (appendNote). The
+// note is read and written whole, so the write names the session as it
+// was read, and one another device changed meanwhile is refused rather
+// than rewritten.
+func addToNote(ctx context.Context, c *client.Client, text string) (noted, error) {
+	status, err := c.GetTimerStatus(ctx)
+	if err != nil {
+		return noted{}, err
+	}
+	if !status.IsBeating || status.Project == nil {
+		return noted{}, fmt.Errorf("nothing is running")
+	}
+	beats, err := c.GetBeats(ctx, status.Project.ID, status.Since)
+	if err != nil {
+		return noted{}, err
+	}
+	var running *client.Beat
+	for i := range beats {
+		if beats[i].End == nil {
+			running = &beats[i]
+			break
+		}
+	}
+	if running == nil {
+		return noted{}, fmt.Errorf("the running session was not found")
+	}
+	note := appendNote(running.Note, text)
+	if utf8.RuneCountInString(note) > noteLimit {
+		return noted{}, fmt.Errorf("that would take the note past %d characters", noteLimit)
+	}
+	if err := c.SetBeatNote(ctx, *running, note); err != nil {
+		if client.ErrorCode(err) == "BEAT_CHANGED" {
+			return noted{}, fmt.Errorf("the session changed on another device meanwhile; nothing was written, try again")
+		}
+		return noted{}, err
+	}
+	return noted{project: *status.Project, note: note}, nil
+}
+
+// formatNoteResult renders the outcome of a `note`. On an organisation's
+// project it says who reads the note, as every input that writes one does.
+func formatNoteResult(n noted, asJSON bool) string {
+	var org *string // null in JSON on a personal project
+	if n.project.Organisation != nil {
+		org = &n.project.Organisation.Name
+	}
+	if asJSON {
+		out, _ := json.Marshal(map[string]any{
+			"action":       "note",
+			"project_id":   n.project.ID,
+			"project_name": n.project.Name,
+			"note":         n.note,
+			"organisation": org,
+		})
+		return string(out)
+	}
+	line := fmt.Sprintf("Added to the note on %s", n.project.Name)
+	if org != nil {
+		line += fmt.Sprintf(" — %s can read this note", *org)
+	}
+	return line
+}
+
+// runNote implements `beatsd note <text> [--json]`: add a line to the
+// running session's note.
+func runNote(cfg *config.Config, args []string) error {
+	text, asJSON := parseStartArgs(args[1:])
+	if text == "" {
+		return fmt.Errorf("usage: beatsd note <text>")
+	}
+	c, ctx, cancel, err := authedClient(cfg, 10*time.Second)
+	if err != nil {
+		return err
+	}
+	defer cancel()
+
+	n, err := addToNote(ctx, c, text)
+	if err != nil {
+		return err
+	}
+	fmt.Println(formatNoteResult(n, asJSON))
 	return nil
 }

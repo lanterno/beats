@@ -191,6 +191,15 @@ type Project struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Archived bool   `json:"archived"`
+	// The organisation that owns the project, nil on a personal one. A
+	// note written on its project is part of its record, so whatever writes
+	// one says so (docs/organisations.md).
+	Organisation *ProjectOrganisation `json:"organisation"`
+}
+
+// ProjectOrganisation names the organisation that owns a project.
+type ProjectOrganisation struct {
+	Name string `json:"name"`
 }
 
 // GetProjects lists the user's projects (active and archived). Used by
@@ -224,6 +233,55 @@ func (c *Client) StopTimer(ctx context.Context) (*StoppedBeat, error) {
 		return nil, err
 	}
 	return beat, nil
+}
+
+// TimerStatus is GET /api/timer/status: the running timer's project and
+// the instant it started, or IsBeating false and neither.
+type TimerStatus struct {
+	IsBeating bool      `json:"isBeating"`
+	Project   *Project  `json:"project"`
+	Since     time.Time `json:"since"`
+}
+
+// GetTimerStatus reads the timer as the API has it now, whichever device
+// last moved it.
+func (c *Client) GetTimerStatus(ctx context.Context) (*TimerStatus, error) {
+	return fetch[*TimerStatus](ctx, c, http.MethodGet, "/api/timer/status", nil, "timer status")
+}
+
+// Beat is one session as GET /api/beats/ lists it: what a write against it
+// sends back, and its note. End is nil while it runs; a null note is "".
+type Beat struct {
+	ID        string     `json:"id"`
+	ProjectID string     `json:"project_id"`
+	Start     time.Time  `json:"start"`
+	End       *time.Time `json:"end"`
+	Note      string     `json:"note"`
+}
+
+// GetBeats lists a project's sessions that started on day, a UTC date: the
+// API files a session under the UTC day it started on.
+func (c *Client) GetBeats(ctx context.Context, projectID string, day time.Time) ([]Beat, error) {
+	q := url.Values{}
+	q.Set("project_id", projectID)
+	q.Set("date_filter", day.UTC().Format("2006-01-02"))
+	return fetch[[]Beat](ctx, c, http.MethodGet, "/api/beats/?"+q.Encode(), nil, "list sessions")
+}
+
+// SetBeatNote replaces b's note and nothing else. It sends b as it was
+// read, so the API applies it only while the session is still that one
+// (409 BEAT_CHANGED otherwise) rather than rewrite what another device
+// changed in between.
+func (c *Client) SetBeatNote(ctx context.Context, b Beat, note string) error {
+	_, err := c.do(ctx, http.MethodPut, "/api/beats/", map[string]any{
+		"id":         b.ID,
+		"project_id": b.ProjectID,
+		"start":      b.Start,
+		"end":        b.End,
+		"note":       note,
+		"expected":   map[string]any{"project_id": b.ProjectID, "start": b.Start, "end": b.End},
+	}, "update session")
+	return err
 }
 
 // ExchangePairCode exchanges a pairing code for a device token.
