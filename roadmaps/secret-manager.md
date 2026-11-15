@@ -1,8 +1,9 @@
 # The API's secrets: the copies left behind
 
-**What is blocked:** nothing. The control plane's deploy-state row (step 3)
-waited on the revisions from before the move, which carried the four values
-in the clear; they were deleted on 2026-11-15.
+**What is blocked:** nothing. The control plane's deploy-state row waited
+on the revisions from before the move, which carried the four values in the
+clear; they were deleted on 2026-11-15, and the row shipped the same day
+(#487; [docs/backoffice.md](../docs/backoffice.md) § *The pages*, Today).
 
 **What blocks it:** the owner, for steps 1 and 2. Step 1 writes a new
 version of the tfvars secret and step 2 deletes for good, and both are the
@@ -52,18 +53,6 @@ old copy of it worthless.
      backups.
 
    Irreversible, so the owner confirms each list before it is deleted.
-3. **Then the control plane's deploy-state row** (moved here from the
-   control plane's roadmap on 2026-11-14, when the rest of it shipped): with
-   no revision's spec carrying a secret, reading the service is safe, and
-   Today can say whether the newest revision became ready instead of linking
-   to the Cloud Run console. Nothing blocks it since the old revisions
-   went. The reads are what `api/scripts/deploy_lock.sh`
-   reads — the API service and its revisions, the Artifact Registry tags,
-   and `beats/deploy.lock` alone as an object get under a `resource.name`
-   condition (a condition cannot narrow a list, so the operator never lists
-   the state bucket) — granted to the `beats-operator` service account in
-   `terraform/operator.tf`, gated on `operator_enabled`. The Releases page's
-   "as deployed" label on the API's commit goes then, replaced by the truth.
 
 ## What must not happen
 
