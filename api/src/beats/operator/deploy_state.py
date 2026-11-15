@@ -237,7 +237,12 @@ class LiveCloudRun:
 
 class DeployStateCache:
     """The last answer, and when. Read again past the bound; if that fails,
-    the last state marked stale, or unavailable when there never was one."""
+    the last state marked stale, or unavailable when there never was one.
+
+    Two routes share it, and Today asks both at once (`/deploy-state` and
+    `/releases`), so a caller that finds a read under way waits for it: on a
+    cold instance the second would otherwise answer "unavailable", and the
+    page say the API's commit is unknown."""
 
     def __init__(self, *, seconds: float = CACHE_SECONDS):
         self._seconds = seconds
@@ -245,18 +250,20 @@ class DeployStateCache:
         self._as_of: datetime | None = None
         self._read_at = 0.0  # monotonic, of the last attempt, success or not
         self._failed = False
+        self._reading = asyncio.Lock()
 
     async def report(self, source: CloudRunSource | None) -> DeployStateReport:
         if source is None:
             return DeployStateReport("unavailable", None, None)
-        if self._read_at == 0.0 or time.monotonic() - self._read_at >= self._seconds:
-            self._read_at = time.monotonic()
-            try:
-                self._deploy = await read_deploy_state(source)
-                self._as_of = datetime.now(UTC)
-                self._failed = False
-            except Exception:  # noqa: BLE001 — a Google failure is a state, not a crash
-                self._failed = True
+        async with self._reading:
+            if self._read_at == 0.0 or time.monotonic() - self._read_at >= self._seconds:
+                self._read_at = time.monotonic()
+                try:
+                    self._deploy = await read_deploy_state(source)
+                    self._as_of = datetime.now(UTC)
+                    self._failed = False
+                except Exception:  # noqa: BLE001 — a Google failure is a state, not a crash
+                    self._failed = True
         if self._deploy is None:
             return DeployStateReport("unavailable", None, None)
         return DeployStateReport("stale" if self._failed else "live", self._as_of, self._deploy)
