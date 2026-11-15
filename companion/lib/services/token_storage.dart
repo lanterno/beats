@@ -84,10 +84,14 @@ class TokenStorage {
   /// deployments commonly host the API and the SPA on different hosts
   /// (api.example.com vs app.example.com): the one saved at pairing, else
   /// the build's, else null, and then the links into it are hidden. Used by
-  /// Flow's "open in browser" links and Settings' account link.
+  /// Flow's "open in browser" links and Settings' account link. A saved
+  /// empty string is "none, not even the build's": what pairing from a QR
+  /// for another server with no web address saves (qr_pairing.dart).
   Future<String?> loadWebUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_webUrlKey) ?? (builtInWebUrl.isEmpty ? null : builtInWebUrl);
+    final saved = prefs.getString(_webUrlKey);
+    if (saved != null) return saved.isEmpty ? null : saved;
+    return builtInWebUrl.isEmpty ? null : builtInWebUrl;
   }
 
   Future<void> saveWebUrl(String url) async {

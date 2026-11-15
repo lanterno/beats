@@ -34,6 +34,10 @@ class _PairingScreenState extends State<PairingScreen> {
   final _storage = TokenStorage();
   bool _loading = false;
   bool _ownServer = false;
+  // The server a scanned QR named with no web app: pairing with it clears
+  // the stored web address rather than keep linking into another one.
+  // Pairing with any other, typed after the scan, leaves it alone.
+  String? _apiWithoutWeb;
   String? _error;
 
   @override
@@ -59,21 +63,61 @@ class _PairingScreenState extends State<PairingScreen> {
   /// (iOS / Android). Desktops show the code-entry path only.
   bool get _qrSupported => Platform.isIOS || Platform.isAndroid;
 
-  /// Push the QR scanner; on success, autofill the code (and the API
-  /// URL when the QR carried one) and immediately attempt to pair.
+  /// Push the QR scanner; on success, autofill the code (and the server's
+  /// addresses when the QR carried them) and immediately attempt to pair.
+  /// A QR naming another server than the one this device would use asks
+  /// first (#325): everything the device records afterwards goes there.
   Future<void> _scanQr() async {
     final result = await Navigator.of(context).push<QrPairingPayload?>(
       MaterialPageRoute(builder: (_) => const QrPairingScreen()),
     );
     if (result == null || !mounted) return;
+    final current = _apiUrlController.text.trim();
+    if (qrChangesServer(result.apiUrl, current.isEmpty ? null : current)) {
+      if (!await _confirmServer(result.apiUrl!)) return;
+      if (!mounted) return;
+    }
+    final web = webUrlAfterScan(result);
     setState(() {
       _codeController.text = result.code;
       if (result.apiUrl != null) {
         _apiUrlController.text = result.apiUrl!;
       }
+      if (web != null) _webUrlController.text = web;
+      _apiWithoutWeb = web == '' ? result.apiUrl : null;
       _error = null;
     });
     await _pair();
+  }
+
+  Future<bool> _confirmServer(String apiUrl) async {
+    final p = context.sky;
+    final uri = Uri.tryParse(apiUrl);
+    final host = uri == null || uri.host.isEmpty ? apiUrl : uri.host;
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Pair with $host?', style: SkyType.display(20)),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Text(
+            'This code is from $host, not the server $appName would use otherwise. '
+            'Everything this device records would go there: your timers, and health data '
+            'if you allow it. Pair only if you run that server or trust whoever does.',
+            style: SkyType.body(14, height: 1.6).copyWith(color: p.inkMuted),
+          ),
+        ),
+        actions: [
+          SkyButton(label: 'Cancel', onPressed: () => Navigator.pop(ctx, false)),
+          SkyButton(
+            label: 'Pair with $host',
+            kind: SkyButtonKind.dark,
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    return yes == true;
   }
 
   Future<void> _pair() async {
@@ -101,10 +145,14 @@ class _PairingScreenState extends State<PairingScreen> {
       await _storage.saveToken(result.deviceToken);
       await _storage.saveApiUrl(apiUrl);
       // Web URL is optional — if blank, leave the saved/default value alone
-      // so a user who only filled in the API field doesn't clobber it.
+      // so a user who only filled in the API field doesn't clobber it. The
+      // exception is a QR for a server that named no web app, which clears
+      // it (an empty saved value is "none", token_storage.dart).
       final webUrl = _webUrlController.text.trim();
       if (webUrl.isNotEmpty) {
         await _storage.saveWebUrl(webUrl);
+      } else if (apiUrl == _apiWithoutWeb) {
+        await _storage.saveWebUrl('');
       }
       if (mounted) widget.onPaired();
     } on ApiException catch (e) {
