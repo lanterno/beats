@@ -19,6 +19,17 @@ CHALLENGE_TTL = 300
 SESSION_TTL = 3600
 
 
+def session_id_of(payload: dict[str, Any]) -> str:
+    """The sign-in a validated session token belongs to.
+
+    Its `sid` claim; a token minted before the claim existed is named by its
+    `auth_time` instead, which its refreshes copy too, and the next refresh
+    writes that name into `sid`. Two such sign-ins by one account in the same
+    second share the name, so a logout of one ends both: the safe side.
+    """
+    return payload.get("sid") or f"signed-in-{payload['auth_time']}"
+
+
 class Challenge(BaseModel):
     """A WebAuthn challenge with expiration."""
 
@@ -133,8 +144,17 @@ class SessionManager:
             return None
         return self._pending_registrations.get(challenge_b64)
 
+    @property
+    def session_ttl(self) -> int:
+        """Seconds a session token lives unless it is refreshed."""
+        return self._session_ttl
+
     def create_session_token(
-        self, user_id: str, email: str = "", auth_time: int | None = None
+        self,
+        user_id: str,
+        email: str = "",
+        auth_time: int | None = None,
+        session_id: str | None = None,
     ) -> str:
         """Create a JWT session token.
 
@@ -145,6 +165,12 @@ class SessionManager:
         That is what lets a sign-out-everywhere cut (`sessions_valid_after`
         on the account) hold: compared against `iat`, which every refresh
         renews, an actively refreshed session would outlive it for good.
+
+        `session_id` (the `sid` claim) names the sign-in the same way: new at
+        sign-in, copied by every refresh. A logout ends that one sign-in on
+        every instance by recording it on the account (`end_session` in
+        auth/account_access.py), where `jti`, new on every refresh, could
+        only ever name one token.
         """
         now = datetime.now(UTC)
         payload: dict[str, Any] = {
@@ -152,6 +178,7 @@ class SessionManager:
             "iat": now,
             "exp": now + timedelta(seconds=self._session_ttl),
             "auth_time": int(now.timestamp()) if auth_time is None else auth_time,
+            "sid": session_id or uuid.uuid4().hex,
             "type": "session",
             "jti": str(uuid.uuid4()),
         }
@@ -234,9 +261,12 @@ class SessionManager:
         email = payload.get("email", "")
 
         # Revoke the old token and issue a new one. The sign-in behind the
-        # session travels with it: see create_session_token on auth_time.
+        # session travels with it: see create_session_token on auth_time and
+        # sid.
         self.revoke_token(token)
-        return self.create_session_token(user_id, email, auth_time=payload["auth_time"])
+        return self.create_session_token(
+            user_id, email, auth_time=payload["auth_time"], session_id=session_id_of(payload)
+        )
 
     def revoke_token(self, token: str) -> None:
         """Add a token to the revocation list. It stays until its natural expiry."""

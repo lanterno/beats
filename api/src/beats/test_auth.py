@@ -10,6 +10,7 @@ import time
 
 import jwt
 
+from beats.auth.session import session_id_of
 from beats.auth_fakes import JWT_SECRET, _sm
 
 # SessionManager — JWT tokens, WebAuthn challenges, revocation
@@ -246,6 +247,61 @@ class TestSessionManagerAuthTime:
         )
         assert sm.validate_session_token(legacy) is None
         assert sm.refresh_token(legacy) is None
+
+
+class TestSessionManagerSessionId:
+    """sid names the sign-in behind a session, as auth_time dates it: new at
+    sign-in, copied by every refresh. A logout ends the sign-in by its sid on
+    every instance, so a refresh that dropped or renewed it would let a copy
+    of the token outlive the logout."""
+
+    def test_two_sign_ins_in_the_same_second_are_told_apart(self):
+        sm = _sm()
+        a = sm.validate_session_token(sm.create_session_token("user-1"))
+        b = sm.validate_session_token(sm.create_session_token("user-1"))
+        assert a is not None
+        assert b is not None
+        assert session_id_of(a) != session_id_of(b)
+
+    def test_refresh_copies_the_sign_in(self):
+        sm = _sm()
+        old = sm.create_session_token("user-1")
+        new = sm.refresh_token(old)
+        assert new is not None
+        old_payload = jwt.decode(old, JWT_SECRET, algorithms=["HS256"])
+        new_payload = sm.validate_session_token(new)
+        assert new_payload is not None
+        assert session_id_of(new_payload) == session_id_of(old_payload)
+
+    def test_a_token_from_before_sid_is_named_by_its_sign_in_and_keeps_the_name(self):
+        """Tokens minted before the claim existed must still be endable by a
+        logout, and must not change name when refreshed, or the refreshed
+        token would escape a logout taken with the old one."""
+        import uuid
+        from datetime import UTC, datetime, timedelta
+
+        sm = _sm()
+        now = datetime.now(UTC)
+        signed_in_at = int(now.timestamp()) - 600
+        legacy = jwt.encode(
+            {
+                "sub": "user-1",
+                "iat": now,
+                "exp": now + timedelta(hours=1),
+                "auth_time": signed_in_at,
+                "type": "session",
+                "jti": str(uuid.uuid4()),
+            },
+            JWT_SECRET,
+            algorithm="HS256",
+        )
+        legacy_payload = sm.validate_session_token(legacy)
+        assert legacy_payload is not None
+        refreshed = sm.refresh_token(legacy)
+        assert refreshed is not None
+        refreshed_payload = sm.validate_session_token(refreshed)
+        assert refreshed_payload is not None
+        assert session_id_of(refreshed_payload) == session_id_of(legacy_payload)
 
 
 class TestSessionManagerChallenges:

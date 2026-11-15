@@ -98,6 +98,80 @@ class TestLogoutAndTokenRevocation:
         )
 
 
+class TestLogoutOnEveryInstance:
+    """A logout ends its sign-in on every instance, not only on the one that
+    took it and holds the token in memory. Another instance is played by
+    emptying this process's memory of revoked tokens and cached accounts:
+    what is left is what every instance reads, the account."""
+
+    def _sign_in(self, user_id: str) -> str:
+        from beats.auth.session import SessionManager
+        from beats.settings import settings
+
+        return SessionManager(settings.jwt_secret).create_session_token(user_id)
+
+    @staticmethod
+    def _as_another_instance() -> None:
+        from beats.api.routers.auth import _session_manager
+        from beats.auth import account_access
+
+        _session_manager._revoked_tokens.clear()
+        account_access.clear()
+
+    @staticmethod
+    def _bearer(token: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_a_logged_out_token_is_refused_by_an_instance_that_did_not_take_it(
+        self, client, auth_info
+    ):
+        token = self._sign_in(auth_info["user_id"])
+        other_sign_in = self._sign_in(auth_info["user_id"])
+        assert client.post("/api/account/logout", headers=self._bearer(token)).status_code == 204
+
+        self._as_another_instance()
+
+        assert client.get("/api/projects/", headers=self._bearer(token)).status_code == 401
+        assert client.post("/api/account/refresh", headers=self._bearer(token)).status_code == 401
+        # Only that sign-in ended.
+        assert client.get("/api/projects/", headers=self._bearer(other_sign_in)).status_code == 200
+
+    def test_a_copy_from_before_a_refresh_ends_with_the_logout(self, client, auth_info):
+        """The copied token: someone holds the session's token from before
+        the owner's tab refreshed it. The owner logs out with the new one;
+        the copy, and anything refreshed from it elsewhere, is refused."""
+        copy = self._sign_in(auth_info["user_id"])
+        refreshed = client.post("/api/account/refresh", headers=self._bearer(copy))
+        assert refreshed.status_code == 200
+        current = refreshed.json()["token"]
+        logout = client.post("/api/account/logout", headers=self._bearer(current))
+        assert logout.status_code == 204
+
+        self._as_another_instance()
+
+        assert client.get("/api/projects/", headers=self._bearer(copy)).status_code == 401
+        assert client.post("/api/account/refresh", headers=self._bearer(copy)).status_code == 401
+
+    def test_the_account_keeps_only_the_sign_ins_whose_tokens_may_still_live(
+        self, client, auth_info, mongo
+    ):
+        """Each logout adds an entry; one past the last token it could cover
+        is dropped by the next write, so the list cannot grow without end."""
+        from bson import ObjectId
+
+        oid = ObjectId(auth_info["user_id"])
+        past = datetime(2020, 1, 1, tzinfo=UTC)
+        mongo.users.update_one(
+            {"_id": oid}, {"$set": {"ended_sessions": [{"session_id": "old", "until": past}]}}
+        )
+        token = self._sign_in(auth_info["user_id"])
+        assert client.post("/api/account/logout", headers=self._bearer(token)).status_code == 204
+
+        ended = mongo.users.find_one({"_id": oid})["ended_sessions"]
+        assert "old" not in [e["session_id"] for e in ended]
+        assert len(ended) == 1
+
+
 class TestAccountAPI:
     """/api/account/{me,refresh,credentials} — auth-critical endpoints
     consumed by every authenticated client surface (UI, companion, daemon

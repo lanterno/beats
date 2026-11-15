@@ -98,7 +98,9 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Revoke the current session token.
+         * @description End the current sign-in: this token, and every token refreshed from
+         *     the same sign-in, on every instance (docs/account-controls.md § Logout).
+         *     The account's other sign-ins are untouched.
          */
         post: operations["logout_api_account_logout_post"];
         delete?: never;

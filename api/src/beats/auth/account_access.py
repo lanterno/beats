@@ -13,6 +13,10 @@ way `device_access` caches a device's, with the same reasoning:
 - process-local by design. A second API process keeps its own copy, which is
   sound for a bound this short.
 
+The entry carries the sign-ins a logout has ended (`ended_sessions`), so a
+logout holds on every instance within the same TTL rather than only on the
+one that took it; `end_session` writes them.
+
 The entry also carries the day the account was last seen, so the middleware
 can stamp `last_seen_on` at most once a day instead of on every request — and
 the account's ceilings (`account_limits`, docs/account-controls.md § Per-account limits)
@@ -41,6 +45,9 @@ class AccountAccess:
     suspended_at: datetime | None = None
     suspended_kind: str | None = None
     sessions_valid_after: datetime | None = None
+    # The `sid` of each sign-in a logout ended whose last token may still be
+    # unexpired (auth/session.py, session_id_of).
+    ended_sessions: frozenset[str] = frozenset()
     last_seen_on: date | None = None
     # The account's own ceilings, off its `account_limits` document. None
     # means no override: the global setting decides.
@@ -123,16 +130,28 @@ async def lookup(db: AsyncDatabase, user_id: str) -> AccountAccess:
         return MISSING
     doc = await db.users.find_one(
         {"_id": oid},
-        projection=["suspended_at", "suspended_kind", "sessions_valid_after", "last_seen_on"],
+        projection=[
+            "suspended_at",
+            "suspended_kind",
+            "sessions_valid_after",
+            "ended_sessions",
+            "last_seen_on",
+        ],
     )
     if doc is None:
         return MISSING
+    now = datetime.now(UTC)
     limits = await db.account_limits.find_one({"user_id": user_id}) or {}
     return AccountAccess(
         exists=True,
         suspended_at=_as_datetime(doc.get("suspended_at")),
         suspended_kind=doc.get("suspended_kind"),
         sessions_valid_after=_as_datetime(doc.get("sessions_valid_after")),
+        ended_sessions=frozenset(
+            e["session_id"]
+            for e in doc.get("ended_sessions", [])
+            if (until := _as_datetime(e.get("until"))) is not None and until > now
+        ),
         last_seen_on=_as_date(doc.get("last_seen_on")),
         coach_monthly_budget_usd=limits.get("coach_monthly_budget_usd"),
         writes_per_minute_beats=limits.get("writes_per_minute_beats"),
@@ -140,6 +159,45 @@ async def lookup(db: AsyncDatabase, user_id: str) -> AccountAccess:
         imports_per_hour=limits.get("imports_per_hour"),
         webhooks_disabled=bool(limits.get("webhooks_disabled", False)),
     )
+
+
+async def end_session(db: AsyncDatabase, user_id: str, session_id: str, until: datetime) -> None:
+    """Record on the account that a logout ended one sign-in, so every
+    instance refuses its tokens, not only the one that took the logout.
+
+    `until` is when the last token that sign-in could still have is past its
+    expiry; the entry is pointless after it, and every write drops the entries
+    already past theirs, so the list holds at most the sign-ins ended in the
+    last hour or so. One pipeline update, so two logouts at once cannot lose
+    each other's entry. The ended sessions are deliberately not a field of
+    `User`: its read-modify-write `update` would put a stale list back.
+    """
+    try:
+        oid = ObjectId(user_id)
+    except InvalidId:
+        return
+    now = datetime.now(UTC)
+    await db.users.update_one(
+        {"_id": oid},
+        [
+            {
+                "$set": {
+                    "ended_sessions": {
+                        "$concatArrays": [
+                            {
+                                "$filter": {
+                                    "input": {"$ifNull": ["$ended_sessions", []]},
+                                    "cond": {"$gt": ["$$this.until", now]},
+                                }
+                            },
+                            [{"session_id": session_id, "until": until}],
+                        ]
+                    }
+                }
+            }
+        ],
+    )
+    forget(user_id)
 
 
 async def resolve(db: AsyncDatabase, user_id: str) -> AccountAccess:

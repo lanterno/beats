@@ -27,7 +27,9 @@ Infrastructure in [CLAUDE.md](./CLAUDE.md).
   written at most once a day); and, when the operator has acted on the
   account, its suspension (`suspended_at`, `suspended_kind`, who suspended it
   and the operator's reason — shown to nobody) and the sign-out-everywhere
-  cut (`sessions_valid_after`)
+  cut (`sessions_valid_after`); and the sign-ins a logout ended in about the
+  last hour (`ended_sessions`: a random id per sign-in and when the entry
+  lapses, nothing about the browser)
 - **Account limits** (`account_limits`): one document per account, only when
   the operator has overridden something — a coach budget, write ceilings, an
   import ceiling, webhooks off — with when and by whom. Keyed on the account

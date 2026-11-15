@@ -1,6 +1,7 @@
 """Account router for authenticated user endpoints (profile, credentials, session)."""
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -17,9 +18,12 @@ from beats.api.routers.sso import (
     sso_error,
     start_flow,
 )
+from beats.auth import account_access
 from beats.auth.oidc import OIDCRegistry
+from beats.auth.session import session_id_of
 from beats.auth.sso_accounts import SSOAccountError, SSOLastCredential, SSONotLinked
 from beats.domain.models import User
+from beats.infrastructure.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +76,25 @@ def _user_response(user: User, registry: OIDCRegistry) -> UserResponse:
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("10/minute")
-async def logout(request: Request) -> None:
-    """Revoke the current session token."""
+async def logout(request: Request, user_id: CurrentUserId) -> None:
+    """End the current sign-in: this token, and every token refreshed from
+    the same sign-in, on every instance (docs/account-controls.md § Logout).
+    The account's other sign-ins are untouched."""
     auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        _session_manager.revoke_token(token)
+    if not auth_header.startswith("Bearer "):
+        return
+    token = auth_header[7:]
+    payload = _session_manager.validate_session_token(token)
+    # At once on this instance; through the account on every other one.
+    _session_manager.revoke_token(token)
+    if payload is None:
+        return
+    # The last token this sign-in could hold was refreshed no later than an
+    # instance's cached account entry is stale, and lives a session's TTL.
+    until = datetime.now(UTC) + timedelta(
+        seconds=_session_manager.session_ttl + account_access.TTL_SECONDS
+    )
+    await account_access.end_session(Database.get_db(), user_id, session_id_of(payload), until)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
