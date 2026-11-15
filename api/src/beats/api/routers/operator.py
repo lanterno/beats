@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from beats.operator.dependencies import CommandContextDep, CurrentOperator, OperatorReadsDep
 from beats.operator.deploy_freeze import FreezeUnreachable
+from beats.operator.deploy_state import DeployStateReport
 from beats.operator.health import HealthReport
 from beats.operator.reads import (
     AbuseReport,
@@ -227,18 +228,28 @@ async def health(request: Request, operator: CurrentOperator) -> HealthReport:
     )
 
 
+@router.get("/deploy-state", response_model=DeployStateReport)
+async def deploy_state(request: Request, operator: CurrentOperator) -> DeployStateReport:
+    """Which revision of the API serves, the commit it runs, and whether the
+    newest revision became ready, in Cloud Run's words when it did not.
+    Cached a minute; a Google failure answers the last state and its age,
+    and with no region configured it answers "unavailable"."""
+    state = request.app.state
+    return await state.deploy_state_cache.report(state.deploy_state_source)
+
+
 @router.get("/releases", response_model=ReleasesReport)
 async def releases(request: Request, operator: CurrentOperator) -> ReleasesReport:
     """What shipped: the API's builds newest first with their commits, the
-    commit the API was deployed with, and the web app's live commit. Each
-    source answers on its own, and one that fails is named rather than
+    commit the API's serving revision runs, and the web app's live commit.
+    Each source answers on its own, and one that fails is named rather than
     breaking the rest. Nothing here moves traffic."""
     state = request.app.state
-    settings = state.operator_settings
+    deployed = await state.deploy_state_cache.report(state.deploy_state_source)
     return await state.releases_cache.report(
         state.release_source,
-        api_commit=settings.api_commit or None,
-        repository=settings.github_repository,
+        api_commit=deployed.deploy.serving_commit if deployed.deploy else None,
+        repository=state.operator_settings.github_repository,
     )
 
 

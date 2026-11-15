@@ -95,10 +95,14 @@ class OperatorSettings(BaseSettings):
         default=None, validation_alias="OPERATOR_API_MAX_INSTANCES"
     )
 
-    # Release history (operator/releases.py). The commit and the web origin
-    # are set by Terraform; the repository has the project's own as default.
-    # Unset, each reads as "unknown" and the rest of the page still answers.
-    api_commit: str = Field(default="", validation_alias="OPERATOR_API_COMMIT")
+    # The API's deploy state (operator/deploy_state.py): the region its
+    # service is read in, set by Terraform. Unset, the state reads as
+    # "unavailable", and so does the API's commit on the releases page.
+    api_region: str = Field(default="", validation_alias="OPERATOR_API_REGION")
+
+    # Release history (operator/releases.py). The web origin is set by
+    # Terraform; the repository has the project's own as default. Unset, the
+    # web app's commit reads as "unknown" and the rest of the page answers.
     web_origin: str = Field(default="", validation_alias="OPERATOR_WEB_ORIGIN")
     # The deploy freeze's bucket (operator/deploy_freeze.py), set by Terraform.
     freeze_bucket: str = Field(default="", validation_alias="OPERATOR_FREEZE_BUCKET")
