@@ -1,7 +1,7 @@
 /**
  * Releases (docs/backoffice.md § The pages, Releases): when something breaks,
- * what shipped just before it. The API's builds newest first, the commit it
- * was deployed with, and the web app's live commit. No control here moves
+ * what shipped just before it. The API's builds newest first, the commit its
+ * serving revision runs, and the web app's live commit. No control here moves
  * traffic: a bad release is reverted on main, which the runbook says.
  */
 
@@ -149,7 +149,7 @@ export function Releases() {
 			<Panel
 				raised
 				title="API builds"
-				note="Newest first. The live one is what the API was deployed with: a revision that failed to start would leave the previous one serving. One the deploy freeze held back is red in Cloud Build and was never deployed."
+				note="Newest first. The live one is the commit the API's serving revision runs, so a revision that failed to start leaves the one before it live. One the deploy freeze held back is red in Cloud Build and was never deployed."
 			>
 				<Table
 					head={[day("Started"), "Commit", "What", "Build", ""]}
@@ -161,7 +161,7 @@ export function Releases() {
 							{buildLabel(b)}
 						</Chip>,
 						b.live ? (
-							<Chip key="l">Live, as deployed</Chip>
+							<Chip key="l">Live</Chip>
 						) : isBad(b) ? (
 							<Link key="r" to="/runbooks/bad-release" className="link">
 								What to do

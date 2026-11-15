@@ -528,10 +528,26 @@ cannot keep.
   a window; the back office's last few commands; storage and this month's
   coach spend; and one link — the accounts a per-account write limit refused,
   which is a log query because nothing stores a refusal (see *Trust and
-  safety* below). The deploy-state card links to the Cloud Run console until
-  roadmaps/secret-manager.md lands. Every panel but the queue fails on its
-  own, the *Shipped* one included, and *What customers see* says when the
-  status file cannot be read or reached rather than offer a publish.
+  safety* below). *Shipped* says what each half runs and whether the API's
+  newest revision became ready (shipped 2026-11-15;
+  `GET /api/operator/deploy-state`, `operator/deploy_state.py`): serving, and
+  since when; still starting, with the revision serving meanwhile; or failed,
+  in Cloud Run's own words, with the revision left serving and its logs a
+  console link away. It reads what `decide` in `api/scripts/deploy_lock.sh`
+  reads, less the lock: the API's service, the serving revision when it is
+  not the newest, and the registry's tags on that revision's digest, whose one
+  commit tag is its commit (none, or several, is unknown, never a guess). The
+  grants are `roles/run.viewer` on the API's service alone
+  (`operator_api_viewer` in `terraform/operator.tf`) and the image reader the
+  operator holds already; `beats/deploy.lock` stays unread, since the
+  operator holds nothing on the Terraform state bucket (*Deploy freeze*).
+  Reading a revision became safe on 2026-11-15, when the API's secrets moved
+  into Secret Manager and the revisions whose spec carried them were deleted
+  ([terraform/README.md](../terraform/README.md) § *The API's Secrets*).
+  Cached a minute like health: a failure keeps the last answer, dated, and
+  with none the panel links the Cloud Run console. Every panel but the queue
+  fails on its own, the *Shipped* one included, and *What customers see* says
+  when the status file cannot be read or reached rather than offer a publish.
 - **Work queue** (`GET /api/operator/queue`): the rows behind the Attention
   counts (`GET /api/operator/attention`), ids and dates only, each with a due date from the constants in
   `operator/reads.py` (`queue_due`). The conditions are organisations with no
@@ -752,22 +768,22 @@ cannot keep.
   breaks, what shipped just before it. The API's last ten builds from Cloud
   Build's `builds.list` (`roles/cloudbuild.builds.viewer`, gated on
   `operator_enabled`), each with its commit and GitHub subject; the commit
-  the API was deployed with, the operator's own image tag set by Terraform
-  (`OPERATOR_API_COMMIT`) and labelled "as deployed", since a revision that
-  failed to become ready leaves the previous one serving; and the web app's
+  the API's serving revision runs, from the deploy state Today reads (until
+  2026-11-15 it was the operator's own image tag, labelled "as deployed",
+  which named the newest revision's commit even when that revision failed and
+  left the one before it serving); and the web app's
   live commit, from the `version.json` its build writes (`ui/vite.config.ts`,
   only when `VITE_GIT_SHA` is set), fetched from `OPERATOR_WEB_ORIGIN`. A
   web app on another commit than the API is normal and said so. One build is
-  live, the newest green build of the deployed commit, and a deployed tag
-  that is not a commit (`latest`) reads as unknown. Each source answers on
+  live, the newest green build of the serving commit, and a serving commit
+  the deploy state cannot name reads as unknown. Each source answers on
   its own, cached a minute (`ReleasesCache`), and they are read side by side
   over one client: one that fails keeps its last answer and is named, and
   subjects are cached for good. GitHub's 404 and 422 both mean a commit it
   does not have; a rate limit quiets GitHub until it resets; and one subject
-  that fails holds up none of the others. Nothing moves traffic, and nothing
-  reads the API's Cloud Run service; a bad build links to the runbook for
-  reverting on `main`, and a build the freeze held reads as held, beside the
-  build to re-run (*Deploy freeze* above). A build viewer can read every
+  that fails holds up none of the others. Nothing moves traffic; a bad build
+  links to the runbook for reverting on `main`, and a build the freeze held
+  reads as held, beside the build to re-run (*Deploy freeze* above). A build viewer can read every
   step's arguments, so `api/cloudbuild.yaml` must never put a secret in one.
   Firebase's own release list is deliberately not read: `version.json`
   already says what is live, without another grant or a site id. Today says

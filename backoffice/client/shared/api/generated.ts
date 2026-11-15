@@ -295,6 +295,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/deploy-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Deploy State
+         * @description Which revision of the API serves, the commit it runs, and whether the
+         *     newest revision became ready, in Cloud Run's words when it did not.
+         *     Cached a minute; a Google failure answers the last state and its age,
+         *     and with no region configured it answers "unavailable".
+         */
+        get: operations["deploy_state_api_operator_deploy_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/deployment": {
         parameters: {
             query?: never;
@@ -489,8 +512,8 @@ export interface paths {
         /**
          * Releases
          * @description What shipped: the API's builds newest first with their commits, the
-         *     commit the API was deployed with, and the web app's live commit. Each
-         *     source answers on its own, and one that fails is named rather than
+         *     commit the API's serving revision runs, and the web app's live commit.
+         *     Each source answers on its own, and one that fails is named rather than
          *     breaking the rest. Nothing here moves traffic.
          */
         get: operations["releases_api_operator_releases_get"];
@@ -902,6 +925,34 @@ export interface components {
             day: string;
             /** Value */
             value: number;
+        };
+        /** DeployState */
+        DeployState: {
+            /** Newest */
+            newest: ("serving" | "starting" | "failed") | null;
+            /** Newest Commit */
+            newest_commit: string | null;
+            /** Newest Revision */
+            newest_revision: string | null;
+            /** Problem */
+            problem: string | null;
+            /** Serving Commit */
+            serving_commit: string | null;
+            /** Serving Revision */
+            serving_revision: string | null;
+            /** Serving Since */
+            serving_since: string | null;
+        };
+        /** DeployStateReport */
+        DeployStateReport: {
+            /** As Of */
+            as_of: string | null;
+            deploy: components["schemas"]["DeployState"] | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "live" | "stale" | "unavailable";
         };
         /** Deployment */
         Deployment: {
@@ -1791,6 +1842,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FreezeState"];
+                };
+            };
+        };
+    };
+    deploy_state_api_operator_deploy_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployStateReport"];
                 };
             };
         };

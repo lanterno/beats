@@ -16,12 +16,11 @@ answering, behind one narrow port (`ReleaseSource`):
   commit's subject never changes. A commit GitHub does not know is cached as
   unknown, so it is asked about once.
 
-The API's own commit is the operator's image tag, which Terraform gives both
-services in one apply: "as deployed", since a revision that failed to become
-ready leaves the API on the previous one. A tag that is not a sha (a hand
-`terraform apply` leaves `container_image_tag` at its default, `latest`)
-reads as unknown and is never sent to GitHub. Nothing here moves traffic, and
-nothing reads the API's Cloud Run service, whose spec carries its secrets.
+The API's own commit is the one its serving revision runs, from the deploy
+state (operator/deploy_state.py), so a revision that failed to become ready
+leaves the previous commit live here as it does in Cloud Run. One that state
+cannot name reads as unknown and is never sent to GitHub. Nothing here moves
+traffic.
 
 **Read at once.** The three sources are asked side by side, and the subjects
 the builds bring with them likewise, over one long-lived client, so a page's
@@ -31,9 +30,8 @@ limited quiets every subject until the time it names, since the address is
 Cloud Run's, shared, and the unauthenticated limit is 60 an hour.
 
 **Little to configure.** The project and token come from the metadata server;
-the web origin and the API's commit are set by Terraform; the repository has
-a default. Off Google Cloud the builds answer "unavailable" and the rest still
-answers what it can.
+the web origin is set by Terraform; the repository has a default. Off Google
+Cloud the builds answer "unavailable" and the rest still answers what it can.
 """
 
 import asyncio
@@ -75,8 +73,7 @@ class ReleaseRow:
     created_at: datetime | None
     finished_at: datetime | None
     log_url: str | None
-    # The commit the API was last deployed with. "As deployed": a revision
-    # that never became ready is not caught here.
+    # The build of the commit the API's serving revision runs.
     live: bool
     # Held back by the deploy freeze rather than failed: `status` is still
     # Cloud Build's FAILURE, and a page must not call it a bad release.

@@ -2,18 +2,24 @@
  * Today: the reason to open the control plane (docs/backoffice.md § The pages). One sentence saying what matters, the next things due off the queue,
  * the jobs waiting out a window, the last few things the back office did, and
  * what the platform costs. Every figure is one of the reads the other pages
- * already make; the mock's incident and release panels wait for their own
- * stages, and the deploy-state card waits on roadmaps/secret-manager.md.
+ * already make, and Shipped says whether the API's newest revision became
+ * ready; the mock's incident panel waits for its own stage.
  */
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { get } from "@/shared/api/client";
-import type { CapacityReport, PublicStatus, QueueRow, ReleasesReport } from "@/shared/api/schema";
+import type {
+	CapacityReport,
+	DeployStateReport,
+	PublicStatus,
+	QueueRow,
+	ReleasesReport,
+} from "@/shared/api/schema";
 import { useConsole } from "@/shared/lib/console";
 import { dollars, formatBytes, minuteOf } from "@/shared/lib/format";
 import { bucketOf, dueLabel, KINDS } from "@/shared/lib/queue";
-import { releasesHeadline } from "@/shared/lib/releases";
+import { deploySentence, releasesHeadline } from "@/shared/lib/releases";
 import {
 	buttonClass,
 	Chip,
@@ -149,11 +155,24 @@ export function Today() {
 		queryKey: ["releases"],
 		queryFn: () => get<ReleasesReport>("/api/operator/releases"),
 	});
+	const deploy = useQuery({
+		queryKey: ["deploy-state"],
+		queryFn: () => get<DeployStateReport>("/api/operator/deploy-state"),
+	});
 	const capacity = useQuery({
 		queryKey: ["capacity"],
 		queryFn: () => get<CapacityReport>("/api/operator/capacity"),
 	});
 	const links = useConsole();
+	const cloudRun = links ? (
+		<a href={links.cloudRun} className="link">
+			the Cloud Run console
+		</a>
+	) : (
+		"the Cloud Run console"
+	);
+	// Unread, or unreadable here: the console is the one to ask.
+	const deployed = deploy.data ? deploySentence(deploy.data) : null;
 	// The queue is the page's sentence; without it there is no page. The other
 	// panels fail on their own, so one broken read does not hide the rest.
 	if (queue.error) return <Failed error={queue.error} onRetry={() => queue.refetch()} />;
@@ -288,16 +307,17 @@ export function Today() {
 							<Link to="/releases" className="link">
 								Every release
 							</Link>
-							. Whether a revision became ready waits on the API's secrets leaving its Cloud Run
-							spec; until then,{" "}
-							{links ? (
-								<a href={links.cloudRun} className="link">
-									the Cloud Run console
-								</a>
+							.{" "}
+							{deployed ? (
+								<>
+									{deployed}
+									{deploy.data?.deploy?.newest === "failed" ? (
+										<> Its logs are in {cloudRun}.</>
+									) : null}
+								</>
 							) : (
-								"the Cloud Run console"
-							)}{" "}
-							says.
+								<>Whether the newest revision became ready, {cloudRun} says.</>
+							)}
 						</Prose>
 					)}
 				</Panel>

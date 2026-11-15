@@ -31,7 +31,9 @@ export type ErasureRequestState = components["schemas"]["ErasureRequestState"];
 export type QueueRow = components["schemas"]["QueueRow"];
 /** Live health from Cloud Monitoring: live, stale (with its age) or unavailable. */
 export type HealthReport = components["schemas"]["HealthReport"];
-/** What shipped: the API's builds, the commit deployed, the web app's live commit. */
+/** Which revision of the API serves, its commit, and whether the newest became ready. */
+export type DeployStateReport = components["schemas"]["DeployStateReport"];
+/** What shipped: the API's builds, the commit serving, the web app's live commit. */
 export type ReleasesReport = components["schemas"]["ReleasesReport"];
 export type ReleaseRow = components["schemas"]["ReleaseRow"];
 /** The newest commit the deploy freeze held back that nothing has shipped since. */

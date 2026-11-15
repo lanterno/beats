@@ -4,7 +4,8 @@
  * said as a fact, not a problem.
  */
 
-import type { HeldBuild, ReleaseRow, ReleasesReport } from "@/shared/api/schema";
+import type { DeployStateReport, HeldBuild, ReleaseRow, ReleasesReport } from "@/shared/api/schema";
+import { minuteOf } from "./format";
 
 export const short = (sha: string | null | undefined): string =>
 	sha ? sha.slice(0, 7) : "unknown";
@@ -57,7 +58,7 @@ export function rerunAdvice(rerun: HeldBuild | null | undefined, frozen: boolean
 /** The page's first sentence: what each half is running. */
 export function releasesHeadline(report: ReleasesReport): string {
 	const api = report.api_commit
-		? `The API was deployed at ${short(report.api_commit)}`
+		? `The API serves ${short(report.api_commit)}`
 		: "The API's commit is unknown";
 	if (!report.web_commit) return `${api}; the web app's is unknown.`;
 	if (report.web_commit === report.api_commit)
@@ -76,4 +77,37 @@ export function unanswered(report: ReleasesReport): string | null {
 	const names = (report.unavailable ?? []).map((s) => SOURCES[s] ?? s);
 	if (names.length === 0) return null;
 	return `No answer from ${names.join(", ")}. What is shown is the last answer, if there was one.`;
+}
+
+/**
+ * Whether the API's newest revision became ready, and what serves meanwhile
+ * (docs/backoffice.md § The pages, Today). Null when the state cannot be read
+ * here, where the Cloud Run console is the one to ask. Cloud Run's own words
+ * for a failure are quoted whole.
+ */
+export function deploySentence(report: DeployStateReport): string | null {
+	const d = report.deploy;
+	if (!d) return null;
+	const commit = (sha: string | null) => (sha ? short(sha) : "an unknown commit");
+	const serving = d.serving_revision
+		? `${d.serving_revision} serves ${commit(d.serving_commit)}`
+		: null;
+	const newest = `${d.newest_revision} with ${commit(d.newest_commit)}`;
+	let sentence: string;
+	if (!d.newest_revision) {
+		sentence = "The API has no revision.";
+	} else if (d.newest === "serving") {
+		const since = d.serving_since ? `, since ${minuteOf(d.serving_since)}` : "";
+		sentence = `The newest revision, ${d.serving_revision}, became ready and serves ${commit(d.serving_commit)}${since}.`;
+	} else if (d.newest === "starting") {
+		sentence = `${newest} is starting; ${serving ? `${serving} meanwhile` : "nothing serves yet"}.`;
+	} else {
+		const why = d.problem ? ` Cloud Run says: “${d.problem.trim()}”` : "";
+		sentence = serving
+			? `The newest revision, ${newest}, did not become ready, so ${serving} still.${why}`
+			: `The newest revision, ${newest}, did not become ready, and no revision serves.${why}`;
+	}
+	return report.state === "stale"
+		? `${sentence} That is as of ${minuteOf(report.as_of)}; Cloud Run has not answered since.`
+		: sentence;
 }
