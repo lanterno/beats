@@ -17,9 +17,21 @@ func sample(start time.Time, offsetSec int, bundle string) collector.Sample {
 	}
 }
 
+// newTracker is NewTracker with the alert recorded instead of shown.
+// Through notify.Send, every run of this suite put two real "Drift
+// detected" alerts on the screen of whoever ran it.
+func newTracker(fired *[]DriftEvent) (*Tracker, *[]string) {
+	var alerts []string
+	tracker := NewTrackerWithNotifier(
+		func(ev DriftEvent) { *fired = append(*fired, ev) },
+		func(title, body string) { alerts = append(alerts, title+": "+body) },
+	)
+	return tracker, &alerts
+}
+
 func TestShield_NoTimer_NoDrift(t *testing.T) {
 	var fired []DriftEvent
-	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+	tracker, _ := newTracker(&fired)
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 	for i := 0; i < 60; i += 5 {
@@ -32,7 +44,7 @@ func TestShield_NoTimer_NoDrift(t *testing.T) {
 
 func TestShield_DriftFiresExactlyOnceAtLeave(t *testing.T) {
 	var fired []DriftEvent
-	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+	tracker, alerts := newTracker(&fired)
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 
@@ -57,11 +69,17 @@ func TestShield_DriftFiresExactlyOnceAtLeave(t *testing.T) {
 	if fired[0].Duration != 45*time.Second {
 		t.Errorf("expected final duration 45s, got %s", fired[0].Duration)
 	}
+	// The alert came once, when the threshold was crossed, so it gives
+	// the time then rather than the session's final 45s.
+	want := "Drift detected: You've been on Twitter for 30s while your timer is running."
+	if len(*alerts) != 1 || (*alerts)[0] != want {
+		t.Errorf("alerts: got %q, want one: %q", *alerts, want)
+	}
 }
 
 func TestShield_DriftDoesNotFireBelowThreshold(t *testing.T) {
 	var fired []DriftEvent
-	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+	tracker, alerts := newTracker(&fired)
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 
@@ -70,6 +88,9 @@ func TestShield_DriftDoesNotFireBelowThreshold(t *testing.T) {
 	tracker.OnSample(sample(start, 10, "com.twitter.twitter-mac"), true)
 	tracker.OnSample(sample(start, 20, "com.twitter.twitter-mac"), true)
 	tracker.OnSample(sample(start, 25, "com.apple.dt.Xcode"), true)
+	if len(*alerts) != 0 {
+		t.Errorf("alerted below the threshold: %q", *alerts)
+	}
 
 	if len(fired) != 0 {
 		t.Errorf("drift fired below threshold: %d events", len(fired))
@@ -78,7 +99,7 @@ func TestShield_DriftDoesNotFireBelowThreshold(t *testing.T) {
 
 func TestShield_NonDistractionApp_NoDrift(t *testing.T) {
 	var fired []DriftEvent
-	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+	tracker, _ := newTracker(&fired)
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 	for i := 0; i <= 120; i += 5 {
@@ -91,7 +112,7 @@ func TestShield_NonDistractionApp_NoDrift(t *testing.T) {
 
 func TestShield_TimerStops_ResetsState(t *testing.T) {
 	var fired []DriftEvent
-	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+	tracker, alerts := newTracker(&fired)
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 
@@ -111,6 +132,9 @@ func TestShield_TimerStops_ResetsState(t *testing.T) {
 	if len(fired) != 0 {
 		t.Errorf("drift fired across a timer-stop boundary: %d events", len(fired))
 	}
+	if len(*alerts) != 0 {
+		t.Errorf("alerted across a timer-stop boundary: %q", *alerts)
+	}
 }
 
 func TestShield_LongDriftDoesNotEmitOnEverySample(t *testing.T) {
@@ -122,7 +146,7 @@ func TestShield_LongDriftDoesNotEmitOnEverySample(t *testing.T) {
 	// a separate API record. Even with the realistic 5s cadence,
 	// the leave-sample's emit was a second copy. Both regressed.
 	var fired []DriftEvent
-	tracker := NewTracker(func(ev DriftEvent) { fired = append(fired, ev) })
+	tracker, alerts := newTracker(&fired)
 
 	start := time.Date(2026, 4, 30, 12, 0, 0, 0, time.UTC)
 
@@ -139,6 +163,9 @@ func TestShield_LongDriftDoesNotEmitOnEverySample(t *testing.T) {
 	}
 	if fired[0].Duration != 301*time.Second {
 		t.Errorf("expected final 301s duration, got %s", fired[0].Duration)
+	}
+	if len(*alerts) != 1 {
+		t.Errorf("a five-minute drift should alert once, got %d: %q", len(*alerts), *alerts)
 	}
 }
 
