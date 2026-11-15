@@ -51,6 +51,10 @@ export default defineConfig(() => ({
 		},
 		VitePWA({
 			registerType: "autoUpdate",
+			// The app registers the worker itself (client/app/release.ts), so that
+			// an open page also moves onto a new release; the plugin's script would
+			// only register it.
+			injectRegister: false,
 			includeAssets: [
 				"favicon.svg",
 				"favicon.ico",
@@ -91,6 +95,11 @@ export default defineConfig(() => ({
 				],
 			},
 			workbox: {
+				// A new worker takes over every open page at once. The plugin sets
+				// both only when it registers the worker itself, and with
+				// `injectRegister: false` a new worker would wait for every tab to close.
+				skipWaiting: true,
+				clientsClaim: true,
 				globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
 				// Deletes the `api-cache` an older worker left on the device (see below).
 				importScripts: ["sw-retired-caches.js"],
