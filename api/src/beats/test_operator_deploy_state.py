@@ -3,6 +3,7 @@ revision serves and its commit when the newest failed or is still starting,
 and the cache that keeps the last answer. The route is test_operator.py's,
 over a fake of the port."""
 
+import asyncio
 from typing import Any
 
 from beats.operator.deploy_state import (
@@ -62,6 +63,21 @@ class _CloudRun:
     async def tags(self, digest_ref: str) -> list[str]:
         assert digest_ref == DIGEST
         return self.tag_list
+
+
+class _SlowCloudRun(_CloudRun):
+    """A service read that waits to be released, so a second caller arrives
+    while it is in flight."""
+
+    def __init__(self, body: dict[str, Any]):
+        super().__init__(body)
+        self.released = asyncio.Event()
+        self.reads = 0
+
+    async def service(self) -> dict[str, Any]:
+        self.reads += 1
+        await self.released.wait()
+        return await super().service()
 
 
 class TestReadingTheState:
@@ -135,6 +151,20 @@ class TestCache:
         assert report.state == "stale"
         assert report.deploy is not None
         assert report.deploy.serving_commit == A
+
+    async def test_a_caller_during_the_first_read_waits_for_it(self):
+        """Today asks /deploy-state and /releases at once; on a cold cache the
+        second answered "unavailable" while the first read was in flight, and
+        the page said the API's commit was unknown."""
+        source = _SlowCloudRun(service(newest="r-2", serving="r-2", ready="True", image=f"x:{A}"))
+        cache = DeployStateCache()
+        first = asyncio.create_task(cache.report(source))
+        second = asyncio.create_task(cache.report(source))
+        await asyncio.sleep(0)
+        source.released.set()
+        reports = await asyncio.gather(first, second)
+        assert [r.state for r in reports] == ["live", "live"]
+        assert source.reads == 1
 
     async def test_no_answer_yet_and_no_source_are_both_unavailable(self):
         source = _CloudRun({})
