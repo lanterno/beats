@@ -800,10 +800,69 @@ class TestOperatorHealthRoute:
         assert body == {**body, "state": "unavailable", "figures": None}
 
 
+class _CloudRun:
+    """Cloud Run with its newest revision serving the image given."""
+
+    def __init__(self, serving_image: str):
+        self.image = serving_image
+
+    async def service(self):
+        return {
+            "spec": {"template": {"spec": {"containers": [{"image": self.image}]}}},
+            "status": {
+                "latestCreatedRevisionName": "beats-api-00007-abc",
+                "latestReadyRevisionName": "beats-api-00007-abc",
+                "conditions": [{"type": "Ready", "status": "True"}],
+            },
+        }
+
+    async def revision(self, name):
+        raise AssertionError("the newest revision serves: no revision is read")
+
+    async def tags(self, digest_ref):
+        raise AssertionError("the newest revision serves: no tag is read")
+
+
+class TestOperatorDeployStateRoute:
+    """GET /api/operator/deploy-state over a fake of the port."""
+
+    def test_the_state_names_the_serving_revision_and_its_commit(self, operator_client):
+        from beats.operator.deploy_state import DeployStateCache
+
+        sha = "e" * 40
+        state = operator_client.app.state
+        was = (state.deploy_state_source, state.deploy_state_cache)
+        state.deploy_state_source = _CloudRun(serving_image=f"r:{sha}")
+        state.deploy_state_cache = DeployStateCache(seconds=0)
+        try:
+            body = operator_client.get("/api/operator/deploy-state").json()
+        finally:
+            state.deploy_state_source, state.deploy_state_cache = was
+        assert body["state"] == "live"
+        assert body["deploy"] == {
+            **body["deploy"],
+            "serving_revision": "beats-api-00007-abc",
+            "serving_commit": sha,
+            "newest": "serving",
+            "problem": None,
+        }
+
+    def test_with_no_region_configured_it_is_unavailable(self, operator_client):
+        state = operator_client.app.state
+        was = state.deploy_state_source
+        state.deploy_state_source = None
+        try:
+            body = operator_client.get("/api/operator/deploy-state").json()
+        finally:
+            state.deploy_state_source = was
+        assert body == {"state": "unavailable", "as_of": None, "deploy": None}
+
+
 class TestOperatorReleasesRoute:
     """GET /api/operator/releases over a fake of the port."""
 
     def test_the_report_names_the_live_build_and_what_did_not_answer(self, operator_client):
+        from beats.operator.deploy_state import DeployStateCache
         from beats.operator.releases import Build, ReleasesCache
 
         sha = "d" * 40
@@ -819,13 +878,26 @@ class TestOperatorReleasesRoute:
                 return "api: the change"
 
         state = operator_client.app.state
-        was = (state.release_source, state.releases_cache, state.operator_settings.api_commit)
+        was = (
+            state.release_source,
+            state.releases_cache,
+            state.deploy_state_source,
+            state.deploy_state_cache,
+        )
         state.release_source, state.releases_cache = _Fake(), ReleasesCache(seconds=0)
-        state.operator_settings.api_commit = sha
+        # The live build is the serving revision's commit, read off Cloud Run.
+        state.deploy_state_source = _CloudRun(serving_image=f"r:{sha}")
+        state.deploy_state_cache = DeployStateCache(seconds=0)
         try:
             body = operator_client.get("/api/operator/releases").json()
         finally:
-            state.release_source, state.releases_cache, state.operator_settings.api_commit = was
+            (
+                state.release_source,
+                state.releases_cache,
+                state.deploy_state_source,
+                state.deploy_state_cache,
+            ) = was
+        assert body["api_commit"] == sha
         assert body["builds"][0]["live"] is True
         assert body["builds"][0]["subject"] == "api: the change"
         assert body["unavailable"] == ["web"]
