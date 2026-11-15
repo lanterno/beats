@@ -150,9 +150,11 @@ device-token auth as the Go daemon. Pairing flow:
 1. The web's Settings → Daemon generates a 6-char code (`POST /api/device/pair/code`)
 2. The app sends it to `POST /api/device/pair/exchange` (public) and receives a long-lived
    device token. Phones can scan a QR instead of typing; `parseQrPairingPayload` takes a bare
-   code, a `beats://pair/CODE` link or `{"code", "api"}` JSON, and the web's Settings → Daemon draws
-   that QR beside the code. A QR naming another host re-points the app without
-   asking (#325)
+   code, a `beats://pair/CODE` link or `{"code", "api", "web"}` JSON, and the web's Settings → Daemon draws
+   that QR beside the code. A QR naming another server than the one the app would use asks
+   first, showing its host (`qrChangesServer`): everything the device records afterwards goes
+   there. A QR naming a server but no web app clears the stored web address, so the app does
+   not keep linking into lifepete.com (`webUrlAfterScan`)
 3. The token sits in OS secure storage via `flutter_secure_storage` (Keychain, Android's
    EncryptedSharedPreferences, libsecret, DPAPI), behind a `SecureStore` interface tests can
    replace. API URLs stay in `shared_preferences`: not secrets, and they should survive a
