@@ -161,6 +161,15 @@ the code, not the page: `13e6f9d7` took the provider and the person out of
 the sign-in log line in `api/src/beats/api/routers/sso.py`, and the comment
 there and that commit's message say why both had to go.
 
+On 2026-11-15 #480 checked every sentence against the code again and
+changed the ones still wrong: who reads the whole contract and who enters
+time, who gets a copy when an organisation is deleted, the retention
+period, what erasure keeps, and what single sign-on stores. It also took
+the account out of the passkey sign-in and session log lines. #481 did the
+same for the passkey registration line and the join page's copy. Their PR
+bodies say what each sentence was checked against, and the owner's reading
+covers their diffs too.
+
 **When the owner has read it**, delete this section. If a sentence needs
 changing, that is a `docs(legal):` commit of its own, not a reopening of
 the epic.
@@ -346,4 +355,24 @@ Where: path/to/file.py:~line (function)
 What is wrong, why it matters, and what you would do about it.
 ```
 
-None yet.
+### An employer's balance adjustment replaces the member's own on the same day
+Labels: api, decision
+Where: api/src/beats/infrastructure/contract_repositories.py:~138 (`upsert`), api/src/beats/domain/employment.py (adjustments on a managed contract)
+A contract holds one balance adjustment a day, and a write is a replace
+keyed on (user, project, date). Once the organisation manages a contract,
+its adjustment on a day the member had already adjusted, before management,
+silently replaces the member's. PRIVACY.md says what you write is deleted
+by you and by nobody else. Either refuse the employer's write on such a day
+(409, naming the member's entry), or keep both and say which one the
+balance reads; it is a decision, not a fix. Found 2026-11-15 (#480).
+
+### "What it can see" does not show the organisation's audit entries about the member
+Labels: ui, api, enhancement
+Where: ui/client/pages/organisations/Organisation.tsx (§ What … can see)
+The organisation's audit log names the member in entries about them
+(entered time, approvals, contract writes), and admins read it. The member's
+page that lists what the organisation holds does not show those entries, so
+"you can always read exactly what it holds" is not quite so. Either serve
+the member the audit entries about them, or say on that page that the
+organisation keeps a log of what it did on their projects. Found
+2026-11-15 (#480).

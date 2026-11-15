@@ -123,6 +123,17 @@ either way: the entries on the person's own timeline, those on its
 projects included, stay theirs to read, as does everything the gate never
 closes. Ask the owner when the build starts.
 
+An account a provider created has a made-up address,
+`<provider id>-<hash>@sso.invalid` (`sso_email_for` in
+`api/src/beats/auth/sso_accounts.py`), and an organisation that account
+joins sees that address as the member's email (`_identity` in
+`api/src/beats/domain/organisations.py`). So the organisation can read off
+which provider made the account: not the door of any one sign-in, but
+close to it, and it is exactly what this design must not lean on. Decide
+before the build whether the organisation is shown the account's name
+alone for such an account, or an address with no provider in it. Found
+2026-11-15 while checking PRIVACY.md against the code (#480).
+
 ---
 
 ## #343 — SCIM provisioning
