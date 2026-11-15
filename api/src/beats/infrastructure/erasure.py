@@ -17,7 +17,13 @@ What survives, and in what shape:
 - **Absences** stamped the same way: date, type, half day. The note goes.
 - **Balance adjustments** on the organisation's projects: date, kind, hours.
   The note goes. They are kept because the balance the employer read is made
-  of them.
+  of them, and so only where it read one. On a project connected with
+  history kept back (rule 4) the balance is withheld, and nothing the
+  organisation read was made of them: they go with the rest, and the
+  assignment is marked `balance_withheld`, because the kept-back rows that
+  withheld the balance go too, and without the mark a balance would appear
+  in the record that was never shown, its expected hours counted from the
+  contract's start and its worked hours from the share day.
 - **The assignment**: the contract stays — the terms the hours were worked
   under are part of the record — and the personal goal and local repo paths
   go.
@@ -57,8 +63,13 @@ from bson import ObjectId
 from pymongo.asynchronous.database import AsyncDatabase
 
 from beats.domain.models import ActorKind, MembershipEnd
+from beats.domain.models_organisations import Organisation, OrgAssignment
+from beats.domain.organisation_record import organisation_zone
+from beats.domain.retention import effective_retention_years, retention_cutoff
 from beats.infrastructure.operator_store import MongoErasureRequests
+from beats.infrastructure.organisation_records import MongoOrganisationRecords
 from beats.infrastructure.organisations import record_org_audit
+from beats.infrastructure.repositories import serialize_from_document
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +89,36 @@ class ErasureReport(NamedTuple):
 
 def tombstone(membership_id: str) -> str:
     return f"erased:{membership_id}"
+
+
+async def _withheld_balances(
+    db: AsyncDatabase, org_id: str, user_id: str, assignments: list[dict[str, Any]]
+) -> set[str]:
+    """The projects whose balance the organisation cannot read today: the
+    record's own test (`member_balance`), asked before the rows it reads
+    are deleted."""
+    doc = await db.organisations.find_one({"_id": ObjectId(org_id)})
+    if doc is None:
+        return set()
+    organisation = Organisation(**serialize_from_document(doc))
+    expired_before = retention_cutoff(
+        datetime.now(organisation_zone(organisation)).date(),
+        effective_retention_years(organisation.retention_years, organisation.holiday_country),
+    )
+    records = MongoOrganisationRecords(db)
+    withheld: set[str] = set()
+    for doc in assignments:
+        assignment = OrgAssignment(**serialize_from_document(doc))
+        if await records.has_unshared(
+            org_id,
+            assignment.project_id,
+            user_id,
+            private_before=assignment.private_before,
+            private_before_day=assignment.private_before_day,
+            expired_before=expired_before,
+        ):
+            withheld.add(assignment.project_id)
+    return withheld
 
 
 async def erase_account(
@@ -103,12 +144,12 @@ async def erase_account(
         stone = tombstone(str(membership["_id"]))
         organisations.append(org_id)
 
-        project_ids = [
-            a["project_id"]
-            for a in await db.org_assignments.find(
-                {"organisation_id": org_id, "user_id": user_id}, {"project_id": 1}
-            ).to_list(length=None)
-        ]
+        assignment_docs = await db.org_assignments.find(
+            {"organisation_id": org_id, "user_id": user_id}
+        ).to_list(length=None)
+        project_ids = [a["project_id"] for a in assignment_docs]
+        # Asked first, while the kept-back rows that answer it still exist.
+        withheld = await _withheld_balances(db, org_id, user_id, assignment_docs)
 
         beats = await db.timeLogs.update_many(
             {"user_id": user_id, "organisation_id": org_id},
@@ -122,9 +163,12 @@ async def erase_account(
         )
         keep("absences", absences.modified_count)
 
-        if project_ids:
+        # Only behind a balance the organisation read; the rest go in the
+        # sweep below, still under the account's id.
+        read_balance = [pid for pid in project_ids if pid not in withheld]
+        if read_balance:
             adjustments = await db.balance_adjustments.update_many(
-                {"user_id": user_id, "project_id": {"$in": project_ids}},
+                {"user_id": user_id, "project_id": {"$in": read_balance}},
                 {"$set": {"user_id": stone}, "$unset": dict.fromkeys(_ADJUSTMENT_PERSONAL, "")},
             )
             keep("balance_adjustments", adjustments.modified_count)
@@ -146,6 +190,15 @@ async def erase_account(
             {"organisation_id": org_id}, {"$pull": {"member_ids": user_id}}
         )
 
+        if withheld:
+            await db.org_assignments.update_many(
+                {
+                    "organisation_id": org_id,
+                    "user_id": user_id,
+                    "project_id": {"$in": list(withheld)},
+                },
+                {"$set": {"balance_withheld": True}},
+            )
         assignments = await db.org_assignments.update_many(
             {"organisation_id": org_id, "user_id": user_id},
             [

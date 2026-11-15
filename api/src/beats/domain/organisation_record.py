@@ -146,7 +146,7 @@ async def member_balance(
     expired_before: date,
 ) -> MemberBalance | None:
     contract = assignment.contract
-    if contract is None or assignment.project_id is None:
+    if contract is None or assignment.project_id is None or assignment.balance_withheld:
         return None
     # A balance sums every hour since the contract began. On a connected
     # project with hours before the day the member chose to share from,
