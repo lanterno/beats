@@ -235,7 +235,11 @@ class SessionManager:
             payload = jwt.decode(token, self._jwt_secret, algorithms=["HS256"])
 
             if payload.get("type") != "session":
-                logger.warning("Token type is not 'session'")
+                # Routine, not a warning: the middleware tries every bearer
+                # token as a session first, so each request with a device
+                # token lands here before its own check (server.py). As a
+                # warning it was nearly every line the API logged.
+                logger.debug("Token type is not 'session'")
                 return None
 
             # A token minted before `auth_time` existed. Refused rather than
