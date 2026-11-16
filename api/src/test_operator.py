@@ -293,6 +293,8 @@ class TestOperatorWall:
             ("GET", f"/api/operator/organisations/{planted['org_id']}/audit", None),
             ("GET", "/api/operator/abuse", None),
             ("GET", "/api/operator/capacity", None),
+            ("GET", "/api/operator/accounts", None),
+            ("GET", "/api/operator/hours?unit=month&periods=120", None),
             ("GET", "/api/operator/audit", None),
             ("GET", "/api/operator/jobs", None),
         ]
@@ -337,6 +339,25 @@ class TestOperatorWall:
         audit = operator_client.get(f"/api/operator/organisations/{planted['org_id']}/audit").json()
         assert audit[0]["event"] == "timesheet.reopened"
         assert "details" not in audit[0]
+
+        people = operator_client.get("/api/operator/accounts").json()
+        row = next(r for r in people["rows"] if r["id"] == planted["user_id"])
+        assert row["email"] == "wall@example.test"
+        assert row["projects"] == 1
+        assert row["sessions"] == 1
+        assert set(row) == {
+            "id",
+            "email",
+            "created_at",
+            "last_seen_on",
+            "suspended",
+            "projects",
+            "sessions",
+        }
+
+        hours = operator_client.get("/api/operator/hours").json()
+        assert hours["total_hours"] == 1.0
+        assert hours["total_sessions"] == 1
 
     def test_a_visitors_address_is_in_no_response_and_no_document(
         self, operator_client, planted, mongo, test_client
