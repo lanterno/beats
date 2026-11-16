@@ -128,3 +128,26 @@ func TestStopTimerError(t *testing.T) {
 		t.Fatal("expected error on 400")
 	}
 }
+
+func TestGetBeats_AsksForTheProjectOnItsUTCDay(t *testing.T) {
+	var path, project, day string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path, project, day = r.URL.Path, r.URL.Query().Get("project_id"), r.URL.Query().Get("date_filter")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`[{"id":"b1","project_id":"p1","start":"2026-11-15T23:30:00Z","end":null,"note":null}]`))
+	}))
+	defer srv.Close()
+
+	// Half past midnight in Berlin is still the 15th where the API files it.
+	since := time.Date(2026, 11, 16, 0, 30, 0, 0, time.FixedZone("CET", 3600))
+	beats, err := New(srv.URL, "tok").GetBeats(context.Background(), "p1", since)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "/api/beats/" || project != "p1" || day != "2026-11-15" {
+		t.Errorf("asked for %s project=%q day=%q", path, project, day)
+	}
+	if len(beats) != 1 || beats[0].End != nil || beats[0].Note != "" {
+		t.Errorf("got %+v", beats)
+	}
+}

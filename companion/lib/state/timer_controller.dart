@@ -58,13 +58,17 @@ class Project {
   }
 }
 
-/// The most a note holds (`UpdateBeatRequest.note` in the API).
+/// The most a note holds (`UpdateBeatRequest.note` in the API), in
+/// characters as the API counts them: code points, so an emoji is one, not
+/// the two UTF-16 units of `String.length`.
 const noteLimit = 2000;
 
 /// [existing] with [text] after it, on the one line a note is (the web
 /// edits it in a single-line field): joined by "; ", or by a space after a
 /// sentence that ended. [text] is trimmed and its line breaks become
-/// spaces; an empty [text] leaves the note as it was.
+/// spaces; an empty [text] leaves the note as it was. `beatsd note` is the
+/// same rule (`appendNote` in daemon/cmd/beatsd/timer.go), and the tests
+/// of each hold the same cases.
 String appendToNote(String? existing, String text) {
   final add = text.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim();
   final have = (existing ?? '').trimRight();
@@ -353,7 +357,7 @@ class TimerController extends ChangeNotifier {
       throw const NoteRefused('That start is still on its way to the server; add to its note once it has synced.');
     }
     final note = appendToNote(active['note'] as String?, text);
-    if (note.length > noteLimit) {
+    if (note.runes.length > noteLimit) {
       throw const NoteRefused('That would take the note past $noteLimit characters.');
     }
     final start = DateTime.parse(active['start'] as String);

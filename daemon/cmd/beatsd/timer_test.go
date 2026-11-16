@@ -1,6 +1,11 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -123,5 +128,192 @@ func TestFormatStopResult(t *testing.T) {
 	got := formatStopResult(b, true)
 	if !strings.Contains(got, `"action":"stop"`) || !strings.Contains(got, `"duration_minutes":90`) {
 		t.Errorf("json missing fields: %s", got)
+	}
+}
+
+// --- note ---
+
+// The same cases as appendToNote's in companion/test/timer_controller_test.dart:
+// one rule, two implementations.
+func TestAppendNote(t *testing.T) {
+	tests := []struct{ existing, text, want string }{
+		// A first line is the note.
+		{"", "called Ana", "called Ana"},
+		{"  ", " called Ana ", "called Ana"},
+		// It stays on the one line a note is.
+		{"Sprint review", "called Ana", "Sprint review; called Ana"},
+		{"Sprint review.", "Called Ana", "Sprint review. Called Ana"},
+		{"Sprint review", "called\nAna", "Sprint review; called Ana"},
+		// An empty line leaves the note as it was.
+		{"Sprint review", "   ", "Sprint review"},
+	}
+	for _, tc := range tests {
+		if got := appendNote(tc.existing, tc.text); got != tc.want {
+			t.Errorf("appendNote(%q, %q) = %q, want %q", tc.existing, tc.text, got, tc.want)
+		}
+	}
+}
+
+// noteAPI is the three calls `note` makes: the timer status, the running
+// project's sessions on a day, and the write. puts records each write's body.
+type noteAPI struct {
+	status string
+	beats  string
+	put    func(w http.ResponseWriter)
+	puts   []map[string]any
+}
+
+func (a *noteAPI) serve(t *testing.T) *client.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/timer/status":
+			fmt.Fprint(w, a.status)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/beats/":
+			fmt.Fprint(w, a.beats)
+		case r.Method == http.MethodPut && r.URL.Path == "/api/beats/":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			a.puts = append(a.puts, body)
+			if a.put != nil {
+				a.put(w)
+				return
+			}
+			fmt.Fprint(w, `{}`)
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return client.New(srv.URL, "tok")
+}
+
+const runningKite = `{"isBeating": true, "since": "2026-11-16T08:00:00.250000Z",
+	"project": {"id": "p1", "name": "Kite", "archived": false, "organisation": null}}`
+
+func TestAddToNote_WritesTheRunningSessionAsItWasRead(t *testing.T) {
+	api := &noteAPI{
+		status: runningKite,
+		// The morning's finished session comes first; the one without an end runs.
+		beats: `[
+			{"id": "b0", "project_id": "p1", "start": "2026-11-16T06:00:00Z", "end": "2026-11-16T07:00:00Z", "note": "earlier"},
+			{"id": "b1", "project_id": "p1", "start": "2026-11-16T08:00:00.250000Z", "end": null, "note": "Sprint review"}
+		]`,
+	}
+	n, err := addToNote(context.Background(), api.serve(t), "called Ana")
+	if err != nil {
+		t.Fatalf("addToNote: %v", err)
+	}
+	if n.note != "Sprint review; called Ana" || n.project.Name != "Kite" {
+		t.Errorf("got %+v", n)
+	}
+	if len(api.puts) != 1 {
+		t.Fatalf("expected one write, got %d", len(api.puts))
+	}
+	put := api.puts[0]
+	if put["id"] != "b1" || put["note"] != "Sprint review; called Ana" || put["end"] != nil {
+		t.Errorf("write: %v", put)
+	}
+	// The API compares the instant exactly, fraction of a second included.
+	expected, _ := put["expected"].(map[string]any)
+	if expected["project_id"] != "p1" || expected["start"] != "2026-11-16T08:00:00.25Z" || expected["end"] != nil {
+		t.Errorf("expected: %v", expected)
+	}
+}
+
+func TestAddToNote_RefusesWithoutWriting(t *testing.T) {
+	long := strings.Repeat("€", 1990) // 1990 characters, 5970 bytes
+	tests := []struct {
+		name    string
+		api     *noteAPI
+		text    string
+		wantErr string
+	}{
+		{
+			name:    "nothing running",
+			api:     &noteAPI{status: `{"isBeating": false, "last_beat": {"id": "b0", "project_id": "p1", "end": "2026-11-16T07:00:00Z"}}`},
+			text:    "called Ana",
+			wantErr: "nothing is running",
+		},
+		{
+			name:    "the running session is not on its day",
+			api:     &noteAPI{status: runningKite, beats: `[]`},
+			text:    "called Ana",
+			wantErr: "not found",
+		},
+		{
+			name: "past the limit",
+			api: &noteAPI{status: runningKite, beats: `[{"id": "b1", "project_id": "p1",
+				"start": "2026-11-16T08:00:00Z", "end": null, "note": "` + long + `"}]`},
+			text:    "called Ana", // "; called Ana" makes 2002
+			wantErr: "past 2000 characters",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := addToNote(context.Background(), tc.api.serve(t), tc.text)
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("got %v, want an error containing %q", err, tc.wantErr)
+			}
+			if len(tc.api.puts) != 0 {
+				t.Errorf("wrote %v", tc.api.puts)
+			}
+		})
+	}
+}
+
+func TestAddToNote_CountsCharactersNotBytes(t *testing.T) {
+	// 1988 euro signs and "; called Ana" are 2000 characters, the most a
+	// note holds, though nearly three times as many bytes.
+	api := &noteAPI{status: runningKite, beats: `[{"id": "b1", "project_id": "p1",
+		"start": "2026-11-16T08:00:00Z", "end": null, "note": "` + strings.Repeat("€", 1988) + `"}]`}
+	if _, err := addToNote(context.Background(), api.serve(t), "called Ana"); err != nil {
+		t.Fatalf("a note of exactly 2000 characters was refused: %v", err)
+	}
+	if len(api.puts) != 1 {
+		t.Errorf("expected one write, got %d", len(api.puts))
+	}
+}
+
+func TestAddToNote_ASessionChangedElsewhereIsSaidSo(t *testing.T) {
+	api := &noteAPI{
+		status: runningKite,
+		beats:  `[{"id": "b1", "project_id": "p1", "start": "2026-11-16T08:00:00Z", "end": null, "note": null}]`,
+		put: func(w http.ResponseWriter) {
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprint(w, `{"detail": "The session changed", "code": "BEAT_CHANGED"}`)
+		},
+	}
+	_, err := addToNote(context.Background(), api.serve(t), "called Ana")
+	if err == nil || !strings.Contains(err.Error(), "another device") {
+		t.Errorf("got %v", err)
+	}
+}
+
+func TestFormatNoteResult_SaysWhoReadsTheNote(t *testing.T) {
+	kite := client.Project{ID: "p1", Name: "Kite"}
+	acme := client.Project{ID: "p2", Name: "Payroll", Organisation: &client.ProjectOrganisation{Name: "Acme"}}
+
+	if got := formatNoteResult(noted{project: kite, note: "x"}, false); got != "Added to the note on Kite" {
+		t.Errorf("personal: %q", got)
+	}
+	if got := formatNoteResult(noted{project: acme, note: "x"}, false); got != "Added to the note on Payroll — Acme can read this note" {
+		t.Errorf("organisation's: %q", got)
+	}
+
+	var out map[string]any
+	if err := json.Unmarshal([]byte(formatNoteResult(noted{project: kite, note: "a; b"}, true)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["action"] != "note" || out["note"] != "a; b" || out["organisation"] != nil {
+		t.Errorf("personal JSON: %v", out)
+	}
+	if err := json.Unmarshal([]byte(formatNoteResult(noted{project: acme}, true)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["organisation"] != "Acme" {
+		t.Errorf("organisation's JSON: %v", out)
 	}
 }
