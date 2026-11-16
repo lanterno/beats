@@ -362,6 +362,108 @@
         "title": "AccountMatch",
         "type": "object"
       },
+      "AccountRow": {
+        "description": "One account on the People page: who, since when, when last seen,\nits state, and how big \u2014 never what it holds. `last_seen_on` is the\nday, stamped at most once a day (auth/account_access.py), so it is the\nday of the last sign-in or later, not the last request's time.",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen On"
+          },
+          "projects": {
+            "title": "Projects",
+            "type": "integer"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "created_at",
+          "last_seen_on",
+          "suspended",
+          "projects",
+          "sessions"
+        ],
+        "title": "AccountRow",
+        "type": "object"
+      },
+      "AccountsReport": {
+        "description": "Every account, newest first, under the counts the page opens on.\n`total` is every account there is; `rows` is at most the limit asked\nfor, so the page can say when it shows fewer.",
+        "properties": {
+          "created_last_30d": {
+            "title": "Created Last 30D",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AccountRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "seen_last_30d": {
+            "title": "Seen Last 30D",
+            "type": "integer"
+          },
+          "seen_last_7d": {
+            "title": "Seen Last 7D",
+            "type": "integer"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "created_last_30d",
+          "seen_last_7d",
+          "seen_last_30d",
+          "suspended",
+          "rows"
+        ],
+        "title": "AccountsReport",
+        "type": "object"
+      },
       "AttentionCounts": {
         "description": "The landing page: each count links to the thing.",
         "properties": {
@@ -1543,6 +1645,97 @@
         "title": "HeldBuild",
         "type": "object"
       },
+      "HoursBucket": {
+        "description": "Hours logged across the platform in one UTC day, ISO week (Monday)\nor month, by the day each finished session started on \u2014 the API's own\nrule for which day a session belongs to \u2014 with how many sessions made\nthem and how many accounts logged any. `period` is the bucket's first\nday.",
+        "properties": {
+          "accounts": {
+            "title": "Accounts",
+            "type": "integer"
+          },
+          "hours": {
+            "title": "Hours",
+            "type": "number"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "period",
+          "hours",
+          "sessions",
+          "accounts"
+        ],
+        "title": "HoursBucket",
+        "type": "object"
+      },
+      "HoursReport": {
+        "description": "Hours logged, all told and over time. A running timer is in no\nfigure; a session with no end is not yet hours.",
+        "properties": {
+          "accounts_ever": {
+            "title": "Accounts Ever",
+            "type": "integer"
+          },
+          "accounts_last_30d": {
+            "title": "Accounts Last 30D",
+            "type": "integer"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/HoursBucket"
+            },
+            "title": "Buckets",
+            "type": "array"
+          },
+          "periods": {
+            "title": "Periods",
+            "type": "integer"
+          },
+          "since": {
+            "title": "Since",
+            "type": "string"
+          },
+          "this_month_hours": {
+            "title": "This Month Hours",
+            "type": "number"
+          },
+          "total_hours": {
+            "title": "Total Hours",
+            "type": "number"
+          },
+          "total_sessions": {
+            "title": "Total Sessions",
+            "type": "integer"
+          },
+          "unit": {
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "unit",
+          "periods",
+          "since",
+          "total_hours",
+          "total_sessions",
+          "accounts_ever",
+          "accounts_last_30d",
+          "this_month_hours",
+          "buckets"
+        ],
+        "title": "HoursReport",
+        "type": "object"
+      },
       "LogErasureRequestArgs": {
         "properties": {
           "received_on": {
@@ -2573,6 +2766,52 @@
         ]
       }
     },
+    "/api/operator/accounts": {
+      "get": {
+        "description": "Every account, newest first: address, created, the day last seen,\nstate, and how many projects and sessions it holds \u2014 the People page,\nfor the people who run and market the product (decided 2026-11-16,\ndocs/backoffice.md \u00a7 The pages). Counts and dates, never a name of\nanything inside an account.",
+        "operationId": "accounts_api_operator_accounts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountsReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accounts",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
     "/api/operator/accounts/lookup": {
       "post": {
         "description": "Every account an address matches, case-insensitively \u2014 `Ana@` and\n`ana@` can be two accounts, and a mail from either spelling must find\nboth. A read, despite the POST: the body keeps the address out of the\nrequest log.",
@@ -3107,6 +3346,72 @@
           }
         },
         "summary": "Health",
+        "tags": [
+          "operator"
+        ]
+      }
+    },
+    "/api/operator/hours": {
+      "get": {
+        "description": "Hours logged across the platform: all told, this month, and in\nbuckets of a day, a week or a month ending on today's, UTC, as many as\nasked for within the unit's bound. A running timer is in no figure.",
+        "operationId": "hours_api_operator_hours_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "unit",
+            "required": false,
+            "schema": {
+              "default": "day",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "title": "Unit",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "periods",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Periods"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HoursReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hours",
         "tags": [
           "operator"
         ]
