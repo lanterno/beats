@@ -13,6 +13,7 @@ built, and why.
 | [backoffice-records.md](backoffice-records.md) | Five records the control plane does not keep and nobody has decided whether it should: a reason on every command, incidents, restrictions in force, an audit of each lookup, snoozing a queue row |
 | [database-ceiling.md](database-ceiling.md) | How full the database is against the free tier's 0.5 GB: Capacity draws the pace, and waits on where to learn the limit |
 | [secret-manager.md](secret-manager.md) | The copies of the API's four secrets that the move into Secret Manager (shipped 2026-11-15) left behind in the tfvars versions and state generations |
+| [bundled-daemon.md](bundled-daemon.md) | `beatsd` inside the desktop app on macOS, Windows and Linux: one install and one pairing, off until turned on. Waits on Developer ID signing (#300) on the Mac and on a first installer elsewhere |
 | [billing.md](billing.md) | Invoices — the one unbuilt idea left from billing, and the two decisions already made that shape it |
 | [legal/](legal/) | Three drafts for #352, awaiting counsel: a processing agreement, a works-council sheet, a DPIA template |
 
