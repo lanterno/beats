@@ -603,8 +603,10 @@ cannot keep.
 - **Accounts**: found by exact email (case-insensitive — sign-up stores an
   address as typed under a unique index with no collation, so `Ana@` and
   `ana@` can be two accounts and a mail from either spelling must find both)
-  or by id; never a browsable list or a prefix search, which would serve
-  fishing. One account shows its states, counts, a storage estimate
+  or by id; no prefix search, which would serve fishing, and no search over
+  anything anyone wrote. Until 2026-11-16 there was no browsable list
+  either; *People* (below) is now that list, by decision, and this page
+  stays the way in from a support mail. One account shows its states, counts, a storage estimate
   (`$bsonSize` summed per user-keyed collection, computed for one account on
   this page only, never for a list), coach spend against its cap, connected
   integrations — and its actions. Which identities it holds per provider is
@@ -624,6 +626,38 @@ cannot keep.
   now would find its closing day come — are links into their reviews,
   offered only while no owner is left. A queued deletion is read off the job
   queue and shown on the list and the page, with the review that cancels it.
+- **People** and **Hours logged** (shipped 2026-11-16, the *Growth* group):
+  the two pages for the people who run and market the product rather than
+  operate it, who need to know who the users are, whether they come back,
+  and how much the product is used — a reading the operator alone never
+  needed, which is why the back office had no list of accounts until now.
+  The owner decided to serve them from here, as `viewer`s on the
+  allowlist, rather than from a second surface or a `mongosh` session.
+  The line holds unchanged: both pages show the left-hand column only.
+  *People* (`GET /api/operator/accounts`) is every account newest first —
+  address, created, the day last seen (stamped at most once a day, so it is
+  the day of the last sign-in or later), state, and how many projects and
+  sessions it holds — under four counts (accounts, new in 30 days, here in
+  7 and in 30), sorted by the column the reader picks, each row opening the
+  account's page; the API answers at most the `limit` asked for (500 by
+  default, 2000 at most) beside the whole count, and the page says when it
+  shows fewer. An organisation's project, which has no `user_id`, is in
+  nobody's count. *Hours logged* (`GET /api/operator/hours?unit=&periods=`)
+  is what the product has tracked across everyone: hours all told, this UTC
+  month, sessions all told, accounts that ever logged any and in the last
+  30 days, and hours in buckets of a day, an ISO week (Monday) or a month
+  ending on today's, as many as asked for within the unit's bound
+  (`HOURS_MAX_PERIODS` in `operator/reads.py`: 400 days, 110 weeks, 120
+  months), each bucket with its sessions and the accounts that logged any.
+  A session counts on the UTC day it started, once it has ended — the API's
+  own rule for which day a session belongs to — and a running timer is in
+  no figure. The pipelines are `infrastructure/operator_usage.py`, carved
+  beside `operator_reads.py` at the size ceiling, and the wall test reads
+  both pages. Deliberately not here: who logged the hours in a bucket (the
+  bucket says how many accounts, never which), a per-account hours column
+  on *People* (sessions are a count of rows, hours would be a reading of
+  what is in them — the account page has the same count and no more), and
+  a timezone other than UTC.
 - **Trust and safety**: outliers rather than guessed thresholds — coach spend, flow
   windows today, sessions created, report links minted (the only public path
   serving a user's data), webhook destinations by domain (outbound HTTP from
