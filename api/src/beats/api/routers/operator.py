@@ -24,14 +24,18 @@ from beats.operator.deploy_freeze import FreezeUnreachable
 from beats.operator.deploy_state import DeployStateReport
 from beats.operator.health import HealthReport
 from beats.operator.reads import (
+    HOURS_DEFAULT_PERIODS,
     AbuseReport,
     AccountDetail,
     AccountMatch,
+    AccountsReport,
     AttentionCounts,
     CapacityReport,
     ControlState,
     DayFigure,
     ErasureRequestState,
+    HoursReport,
+    HoursUnit,
     OrganisationDetail,
     OrganisationSummary,
     OrgAuditRow,
@@ -106,6 +110,33 @@ async def lookup_accounts(
             )
         ]
     return await reads.find_accounts(body.email)
+
+
+@router.get("/accounts", response_model=AccountsReport)
+async def accounts(
+    operator: CurrentOperator,
+    reads: OperatorReadsDep,
+    limit: int = Query(default=500, ge=1, le=2000),
+) -> AccountsReport:
+    """Every account, newest first: address, created, the day last seen,
+    state, and how many projects and sessions it holds — the People page,
+    for the people who run and market the product (decided 2026-11-16,
+    docs/backoffice.md § The pages). Counts and dates, never a name of
+    anything inside an account."""
+    return await reads.accounts(limit)
+
+
+@router.get("/hours", response_model=HoursReport)
+async def hours(
+    operator: CurrentOperator,
+    reads: OperatorReadsDep,
+    unit: HoursUnit = Query(default="day"),
+    periods: int | None = Query(default=None, ge=1),
+) -> HoursReport:
+    """Hours logged across the platform: all told, this month, and in
+    buckets of a day, a week or a month ending on today's, UTC, as many as
+    asked for within the unit's bound. A running timer is in no figure."""
+    return await reads.hours(unit, periods or HOURS_DEFAULT_PERIODS[unit])
 
 
 @router.get("/accounts/{user_id}", response_model=AccountDetail)

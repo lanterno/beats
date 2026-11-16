@@ -25,6 +25,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 
 from beats.coach.pricing import cache_saving_usd
+from beats.infrastructure import operator_usage
 from beats.infrastructure.database_sizes import MongoDatabaseSizes, collection_stats
 from beats.operator.growth import database_growth, with_growth
 from beats.operator.reads import (
@@ -40,6 +41,7 @@ from beats.operator.reads import (
     AccountDetail,
     AccountFigure,
     AccountMatch,
+    AccountsReport,
     AttentionCounts,
     CapacityReport,
     CoachCostDay,
@@ -50,6 +52,8 @@ from beats.operator.reads import (
     DeviceSummary,
     DomainFigure,
     ErasureRequestState,
+    HoursReport,
+    HoursUnit,
     MembershipSummary,
     OrganisationDetail,
     OrganisationSummary,
@@ -496,6 +500,14 @@ class MongoOperatorReads:
 
     async def jobs(self, limit: int = 200) -> list[dict]:
         return await self._own_rows("operator_jobs", "queued_at", limit)
+
+    # ── people and hours (operator_usage.py) ─────────────────────────
+
+    async def accounts(self, limit: int = 500) -> AccountsReport:
+        return await operator_usage.accounts(self._db, limit)
+
+    async def hours(self, unit: HoursUnit, periods: int) -> HoursReport:
+        return await operator_usage.hours(self._db, unit, periods)
 
     # ── accounts ────────────────────────────────────────────────────
 

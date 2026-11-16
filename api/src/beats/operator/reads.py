@@ -408,6 +408,80 @@ class CapacityReport:
     connections: DatabaseConnections | None = None
 
 
+# Hours logged are read in buckets of one of these units, UTC, and this many
+# buckets at most: a year and a bit of days, two years of weeks, ten of months
+# — bounded, so the answer is one small list however long the platform runs.
+HoursUnit = Literal["day", "week", "month"]
+HOURS_MAX_PERIODS: dict[str, int] = {"day": 400, "week": 110, "month": 120}
+# How many buckets the page opens on, per unit.
+HOURS_DEFAULT_PERIODS: dict[str, int] = {"day": 30, "week": 26, "month": 12}
+
+
+@dataclass(frozen=True)
+class AccountRow:
+    """One account on the People page: who, since when, when last seen,
+    its state, and how big — never what it holds. `last_seen_on` is the
+    day, stamped at most once a day (auth/account_access.py), so it is the
+    day of the last sign-in or later, not the last request's time."""
+
+    id: str
+    email: str
+    created_at: datetime | None
+    last_seen_on: date | None
+    suspended: bool
+    projects: int
+    sessions: int
+
+
+@dataclass(frozen=True)
+class AccountsReport:
+    """Every account, newest first, under the counts the page opens on.
+    `total` is every account there is; `rows` is at most the limit asked
+    for, so the page can say when it shows fewer."""
+
+    total: int
+    created_last_30d: int
+    seen_last_7d: int
+    seen_last_30d: int
+    suspended: int
+    rows: list[AccountRow]
+
+
+@dataclass(frozen=True)
+class HoursBucket:
+    """Hours logged across the platform in one UTC day, ISO week (Monday)
+    or month, by the day each finished session started on — the API's own
+    rule for which day a session belongs to — with how many sessions made
+    them and how many accounts logged any. `period` is the bucket's first
+    day."""
+
+    period: str
+    hours: float
+    sessions: int
+    accounts: int
+
+
+@dataclass(frozen=True)
+class HoursReport:
+    """Hours logged, all told and over time. A running timer is in no
+    figure; a session with no end is not yet hours."""
+
+    unit: HoursUnit
+    periods: int
+    # The first bucket's first day: the page draws every bucket from here,
+    # the quiet ones at nothing.
+    since: str
+    total_hours: float
+    total_sessions: int
+    # Accounts that ever logged a finished session.
+    accounts_ever: int
+    # Accounts that logged one in the last 30 days.
+    accounts_last_30d: int
+    this_month_hours: float
+    # Oldest first; a bucket nothing was logged in has no row.
+    buckets: list[HoursBucket]
+
+
 class OperatorReads(Protocol):
     """The aggregates the operator's pages read, and nothing else."""
 
@@ -427,3 +501,5 @@ class OperatorReads(Protocol):
     ) -> list[OrgAuditRow]: ...
     async def abuse(self) -> AbuseReport: ...
     async def capacity(self) -> CapacityReport: ...
+    async def accounts(self, limit: int = 500) -> AccountsReport: ...
+    async def hours(self, unit: HoursUnit, periods: int) -> HoursReport: ...
