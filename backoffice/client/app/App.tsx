@@ -21,8 +21,10 @@ import { Accounts } from "@/pages/Accounts";
 import { Audit } from "@/pages/Audit";
 import { Capacity } from "@/pages/Capacity";
 import { Compliance } from "@/pages/Compliance";
+import { Hours } from "@/pages/Hours";
 import { Jobs } from "@/pages/Jobs";
 import { Organisation, Organisations } from "@/pages/Organisations";
+import { People } from "@/pages/People";
 import { Queue } from "@/pages/Queue";
 import { Releases } from "@/pages/Releases";
 import { Review } from "@/pages/Review";
@@ -87,6 +89,15 @@ const GROUPS = [
 			{ to: "/accounts", label: "Accounts", Icon: PersonIcon },
 			{ to: "/organisations", label: "Organisations", Icon: BuildingIcon },
 			{ to: "/trust", label: "Trust and safety", Icon: ShieldIcon },
+		],
+	},
+	{
+		// How the product is doing, for the people who run and market it
+		// (decided 2026-11-16): who the users are and how much they log.
+		label: "Growth",
+		items: [
+			{ to: "/people", label: "People", Icon: PersonIcon },
+			{ to: "/hours", label: "Hours logged", Icon: ClockIcon },
 		],
 	},
 	{
@@ -267,6 +278,8 @@ function Shell() {
 						<Route path="/organisations" element={<Organisations />} />
 						<Route path="/organisations/:id" element={<Organisation />} />
 						<Route path="/trust" element={<Trust />} />
+						<Route path="/people" element={<People />} />
+						<Route path="/hours" element={<Hours />} />
 						<Route path="/capacity" element={<Capacity />} />
 						<Route path="/releases" element={<Releases />} />
 						<Route path="/jobs" element={<Jobs />} />

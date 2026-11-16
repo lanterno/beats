@@ -44,3 +44,10 @@ export type FreezeState = components["schemas"]["FreezeState"];
 export type PublicStatus = components["schemas"]["PublicStatus"];
 /** The Google Cloud project and the API's service, for the console links. */
 export type Deployment = components["schemas"]["Deployment"];
+/** Every account with its dates and counts, under the People page's totals. */
+export type AccountsReport = components["schemas"]["AccountsReport"];
+export type AccountRow = components["schemas"]["AccountRow"];
+/** Hours logged all told and in UTC buckets of a day, a week or a month. */
+export type HoursReport = components["schemas"]["HoursReport"];
+export type HoursBucket = components["schemas"]["HoursBucket"];
+export type HoursUnit = HoursReport["unit"];
