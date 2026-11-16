@@ -47,6 +47,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Accounts
+         * @description Every account, newest first: address, created, the day last seen,
+         *     state, and how many projects and sessions it holds — the People page,
+         *     for the people who run and market the product (decided 2026-11-16,
+         *     docs/backoffice.md § The pages). Counts and dates, never a name of
+         *     anything inside an account.
+         */
+        get: operations["accounts_api_operator_accounts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/accounts/lookup": {
         parameters: {
             query?: never;
@@ -385,6 +409,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hours
+         * @description Hours logged across the platform: all told, this month, and in
+         *     buckets of a day, a week or a month ending on today's, UTC, as many as
+         *     asked for within the unit's bound. A running timer is in no figure.
+         */
+        get: operations["hours_api_operator_hours_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/jobs": {
         parameters: {
             query?: never;
@@ -686,6 +732,49 @@ export interface components {
             last_seen_on: string | null;
             /** Suspended */
             suspended: boolean;
+        };
+        /**
+         * AccountRow
+         * @description One account on the People page: who, since when, when last seen,
+         *     its state, and how big — never what it holds. `last_seen_on` is the
+         *     day, stamped at most once a day (auth/account_access.py), so it is the
+         *     day of the last sign-in or later, not the last request's time.
+         */
+        AccountRow: {
+            /** Created At */
+            created_at: string | null;
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+            /** Last Seen On */
+            last_seen_on: string | null;
+            /** Projects */
+            projects: number;
+            /** Sessions */
+            sessions: number;
+            /** Suspended */
+            suspended: boolean;
+        };
+        /**
+         * AccountsReport
+         * @description Every account, newest first, under the counts the page opens on.
+         *     `total` is every account there is; `rows` is at most the limit asked
+         *     for, so the page can say when it shows fewer.
+         */
+        AccountsReport: {
+            /** Created Last 30D */
+            created_last_30d: number;
+            /** Rows */
+            rows: components["schemas"]["AccountRow"][];
+            /** Seen Last 30D */
+            seen_last_30d: number;
+            /** Seen Last 7D */
+            seen_last_7d: number;
+            /** Suspended */
+            suspended: number;
+            /** Total */
+            total: number;
         };
         /**
          * AttentionCounts
@@ -1101,6 +1190,52 @@ export interface components {
             sha: string;
             /** Subject */
             subject: string | null;
+        };
+        /**
+         * HoursBucket
+         * @description Hours logged across the platform in one UTC day, ISO week (Monday)
+         *     or month, by the day each finished session started on — the API's own
+         *     rule for which day a session belongs to — with how many sessions made
+         *     them and how many accounts logged any. `period` is the bucket's first
+         *     day.
+         */
+        HoursBucket: {
+            /** Accounts */
+            accounts: number;
+            /** Hours */
+            hours: number;
+            /** Period */
+            period: string;
+            /** Sessions */
+            sessions: number;
+        };
+        /**
+         * HoursReport
+         * @description Hours logged, all told and over time. A running timer is in no
+         *     figure; a session with no end is not yet hours.
+         */
+        HoursReport: {
+            /** Accounts Ever */
+            accounts_ever: number;
+            /** Accounts Last 30D */
+            accounts_last_30d: number;
+            /** Buckets */
+            buckets: components["schemas"]["HoursBucket"][];
+            /** Periods */
+            periods: number;
+            /** Since */
+            since: string;
+            /** This Month Hours */
+            this_month_hours: number;
+            /** Total Hours */
+            total_hours: number;
+            /** Total Sessions */
+            total_sessions: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "day" | "week" | "month";
         };
         /** LogErasureRequestArgs */
         LogErasureRequestArgs: {
@@ -1531,6 +1666,37 @@ export interface operations {
             };
         };
     };
+    accounts_api_operator_accounts_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountsReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     lookup_accounts_api_operator_accounts_lookup_post: {
         parameters: {
             query?: never;
@@ -1922,6 +2088,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthReport"];
+                };
+            };
+        };
+    };
+    hours_api_operator_hours_get: {
+        parameters: {
+            query?: {
+                unit?: "day" | "week" | "month";
+                periods?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HoursReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
