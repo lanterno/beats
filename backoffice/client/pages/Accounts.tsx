@@ -1,8 +1,9 @@
 /**
- * Found by exact address or id, never browsed: the common entry is a support
- * or erasure mail carrying a full address, and an exact match is useless for
- * fishing. The address travels in the POST body, never a URL a request log
- * keeps for thirty days.
+ * Found by exact address or id: the common entry is a support or erasure
+ * mail carrying a full address, and an exact match finds both spellings of
+ * it. The address travels in the POST body, never a URL a request log keeps
+ * for thirty days. The list of everyone is the People page (since
+ * 2026-11-16); this page is for the account you came for.
  *
  * Opening an account is a read, and reads are not recorded — the page says
  * so, because the absence is a decision and not an oversight. "You opened
@@ -84,7 +85,7 @@ export function Accounts() {
 	return (
 		<Page
 			title="Who are you looking for?"
-			lead="You need the whole address or the account id. There is no list of people here and no search over what they wrote, so you only ever open the account you came for."
+			lead="You need the whole address or the account id. There is no search over what anyone wrote; to browse everyone, with their dates and counts, open People."
 		>
 			<Panel raised>
 				<form className="flex flex-wrap items-end gap-3 px-6 pt-5 pb-4" onSubmit={submit}>

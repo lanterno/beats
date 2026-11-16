@@ -41,6 +41,8 @@ export const PAGES: Destination[] = [
 	{ label: "Accounts", to: "/accounts" },
 	{ label: "Organisations", to: "/organisations" },
 	{ label: "Trust and safety", to: "/trust" },
+	{ label: "People", to: "/people" },
+	{ label: "Hours logged", to: "/hours" },
 	{ label: "Jobs and windows", to: "/jobs" },
 	{ label: "Capacity and cost", to: "/capacity" },
 	{ label: "Releases", to: "/releases" },
