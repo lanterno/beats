@@ -277,6 +277,7 @@ export function DayBars({
 	said,
 	unit = "Count",
 	show = String,
+	each = "day",
 }: {
 	days: Array<{ day: string; value: number }>;
 	said: string;
@@ -284,6 +285,8 @@ export function DayBars({
 	unit?: string;
 	/** How one reads, where a bare number is not it. */
 	show?: (value: number) => string;
+	/** What one bar is, when it is not a day: "week", "month". */
+	each?: string;
 }) {
 	const [hovered, setHovered] = useState<number | null>(null);
 	const peak = Math.max(...days.map((d) => d.value), 1);
@@ -326,11 +329,14 @@ export function DayBars({
 			{dated.length > 0 ? (
 				<details className="mt-2 text-[14px]">
 					<summary className="link flex h-10 w-fit cursor-pointer items-center">
-						See every day
+						See every {each}
 					</summary>
 					<div className="-mx-6 mt-1 max-h-72 overflow-y-auto">
 						<Table
-							head={[day("Day"), figure(unit)]}
+							head={[
+								day(each === "day" ? "Day" : `${each[0].toUpperCase()}${each.slice(1)} from`),
+								figure(unit),
+							]}
 							rows={dated.map((d) => [d.day, show(d.value)])}
 							empty={null}
 						/>

@@ -113,7 +113,7 @@ export function Hours() {
 						onChange={setPeriods}
 					/>
 				</div>
-				<DayBars days={drawn} said={said} unit="Hours" show={hoursOf} />
+				<DayBars days={drawn} said={said} unit="Hours" show={hoursOf} each={spec.one} />
 				<Prose>{said}</Prose>
 			</Panel>
 		</Page>
